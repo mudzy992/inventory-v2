@@ -2,7 +2,8 @@
 
 ## 2026-05-29
 
-- Inicijalni plan kreiran (faze 0–7, identitet, monorepo struktura, Traefik/Docker spec).
-- Frontend prototip analiziran iz postojećeg Vite projekta (org, equipment, transfers, QR, 3 uloge).
-- Odluka: bez mobile modula; stack NestJS + Prisma 7 + MySQL + React Vite.
-- DNS predlog: `opremnica.ba101.top`, API prefix `/backend`, TLS `websecure` + `le`.
+- Rebrand: **Inventory v2** (`inventory-v2.ba101.top`, `mudzy992/inventory-v2`).
+- Faza 0: monorepo u `Documents\GitHub\inventory-v2`, frontend + backend placeholder.
+- Eksterni MySQL (bez DB kontejnera); `.env` kreiran lokalno (nije u gitu).
+- Design tokens (primary #1d4ed8, accent #0d9488, …).
+- Docker compose + Traefik labele za produkciju.

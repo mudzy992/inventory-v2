@@ -3,7 +3,9 @@
 ## Faza 0 — Foundation
 - [x] Premjestiti postojeći kod u `frontend/` (GitHub path)
 - [x] `git init` + `.gitignore`
-- [ ] GitHub repo `mudzy992/inventory-v2` + push
+- [x] `git init` + commit na `main`
+- [x] `origin` → `https://github.com/mudzy992/inventory-v2.git`
+- [ ] Push (GitHub Desktop ili `git push -u origin main` nakon kreiranja repoa na GitHubu)
 - [x] `.cursor/rules/00_project.mdc` + `.cursorrules`
 - [x] `.env.example` + `.env` + `README.md`
 - [x] Color scheme (design-tokens.md)

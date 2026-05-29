@@ -13,7 +13,8 @@
 - `docker-compose.yml`, `docker-compose.prod.yml` (Traefik labele, bez MySQL servisa)
 - Design tokens + `index.css` @theme
 - Plan folder `.cursor/plans/inventory-v2/`
-- Git push na `mudzy992/inventory-v2` (ako gh uspije)
+- Git: `main` commit `eaafaa2`, remote `origin` → `mudzy992/inventory-v2`
+- **Push:** kreiraj prazan repo `inventory-v2` na GitHubu (mudzy992), zatim `git push -u origin main` ili GitHub Desktop
 
 ## Sljedeće
 
