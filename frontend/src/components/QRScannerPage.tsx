@@ -1,0 +1,154 @@
+import { useState } from 'react';
+import { useStore } from '../useStore';
+import { QrCode, Search, Package, Camera, X } from 'lucide-react';
+import { EquipmentCard } from './EquipmentCard';
+import { isAdmin } from '../store';
+
+export function QRScannerPage() {
+  const [state] = useStore();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEquipId, setSelectedEquipId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const admin = isAdmin();
+
+  // Parse QR code data or search by inventory number
+  function handleSearch() {
+    setError('');
+    if (!searchQuery.trim()) return;
+
+    // Try to parse QR format: INVENTAR:INV-XXX|id
+    let searchTerm = searchQuery.trim();
+    if (searchTerm.startsWith('INVENTAR:')) {
+      const parts = searchTerm.replace('INVENTAR:', '').split('|');
+      searchTerm = parts[0];
+    }
+
+    // Search by inventory number
+    const found = state.equipment.find(e => 
+      e.inventoryNumber.toLowerCase() === searchTerm.toLowerCase() ||
+      e.id === searchTerm
+    );
+
+    if (found) {
+      setSelectedEquipId(found.id);
+      setSearchQuery('');
+    } else {
+      setError(`Oprema sa oznakom "${searchTerm}" nije pronađena.`);
+    }
+  }
+
+  // Filter equipment for quick access
+  const recentEquipment = state.equipment
+    .filter(e => e.status === 'zaduzeno')
+    .slice(0, 6);
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <QrCode size={28} className="text-blue-500" /> QR Skener
+        </h1>
+        <p className="text-gray-500 mt-1">Skenirajte ili unesite inventurni broj za pregled opreme</p>
+      </div>
+
+      {/* Camera placeholder - in real app would have actual camera scanning */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-6">
+        <div className="max-w-md mx-auto">
+          {/* Camera preview placeholder */}
+          <div className="bg-gray-900 rounded-2xl aspect-square flex flex-col items-center justify-center mb-6 relative overflow-hidden">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-48 h-48 border-2 border-white/30 rounded-2xl">
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-lg" />
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-lg" />
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-lg" />
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-lg" />
+              </div>
+            </div>
+            <Camera size={48} className="text-white/30 mb-4 relative z-10" />
+            <p className="text-white/50 text-sm text-center px-4 relative z-10">
+              U produkcijskoj verziji ovdje bi bio prikaz kamere za skeniranje QR koda
+            </p>
+          </div>
+
+          {/* Manual input */}
+          <div className="text-center mb-4">
+            <p className="text-sm text-gray-400 mb-2">ili unesite inventurni broj ručno:</p>
+          </div>
+
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <QrCode size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                placeholder="INV-RS-2024-0001 ili QR kod..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+            </div>
+            <button
+              onClick={handleSearch}
+              className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <Search size={18} /> Traži
+            </button>
+          </div>
+
+          {error && (
+            <div className="mt-4 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+              <X size={16} /> {error}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Quick access - recent/sample equipment */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+          <Package size={20} className="text-gray-400" /> Brzi pristup opremi
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {recentEquipment.map(eq => {
+            const cat = state.categories.find(c => c.id === eq.categoryId);
+            const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
+            return (
+              <button
+                key={eq.id}
+                onClick={() => setSelectedEquipId(eq.id)}
+                className="text-left border border-gray-100 rounded-xl p-4 hover:border-blue-200 hover:bg-blue-50 transition-colors group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                    <QrCode size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono text-sm font-medium text-gray-800 truncate">{eq.inventoryNumber}</p>
+                    <p className="text-xs text-gray-500 truncate">{cat?.name}</p>
+                    {holder && (
+                      <p className="text-xs text-gray-400 truncate mt-0.5">
+                        {holder.firstName} {holder.lastName}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {recentEquipment.length === 0 && (
+          <p className="text-center text-gray-400 py-8">Nema zadužene opreme</p>
+        )}
+      </div>
+
+      {/* Equipment Card Modal */}
+      {selectedEquipId && (
+        <EquipmentCard
+          equipmentId={selectedEquipId}
+          onClose={() => setSelectedEquipId(null)}
+          showTransferActions={admin}
+        />
+      )}
+    </div>
+  );
+}

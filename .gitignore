@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Env (keep example)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# IDE
+.idea/
+*.swp
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Prisma
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# Test / coverage
+coverage/
+
+# OS
+Thumbs.db

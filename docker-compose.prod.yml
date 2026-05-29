@@ -1,0 +1,52 @@
+# Produkcija — Traefik (mreža web), TLS le, host inventory-v2.ba101.top
+# MySQL: eksterni server preko DATABASE_URL u .env
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - backend_uploads:/app/uploads
+    networks:
+      - web
+      - internal
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.inventory-v2-api.rule=Host(`inventory-v2.ba101.top`) && PathPrefix(`/backend`)
+      - traefik.http.routers.inventory-v2-api.entrypoints=websecure
+      - traefik.http.routers.inventory-v2-api.tls=true
+      - traefik.http.routers.inventory-v2-api.tls.certresolver=le
+      - traefik.http.routers.inventory-v2-api.priority=100
+      - traefik.http.services.inventory-v2-api.loadbalancer.server.port=3000
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: https://inventory-v2.ba101.top/backend
+        VITE_APP_NAME: Inventory v2
+    networks:
+      - web
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.inventory-v2-web.rule=Host(`inventory-v2.ba101.top`)
+      - traefik.http.routers.inventory-v2-web.entrypoints=websecure
+      - traefik.http.routers.inventory-v2-web.tls=true
+      - traefik.http.routers.inventory-v2-web.tls.certresolver=le
+      - traefik.http.services.inventory-v2-web.loadbalancer.server.port=80
+
+networks:
+  web:
+    external: true
+  internal:
+    driver: bridge
+
+volumes:
+  backend_uploads:

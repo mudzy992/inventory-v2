@@ -1,0 +1,16 @@
+---
+description: Inventory v2 project baseline
+globs:
+alwaysApply: true
+---
+
+# Inventory v2
+
+- Monorepo: `backend/` + `frontend/` only (no mobile).
+- Stack: NestJS, TypeScript strict, Prisma 7, MySQL (external server via env).
+- Frontend: React 19, Vite, Tailwind 4, BS default i18n.
+- Deploy: `inventory-v2.ba101.top`, API prefix `/backend`, Traefik `web` + `websecure` + `le`.
+- Plan: `.cursor/plans/inventory-v2/` — plan-first for multi-phase work.
+- Matrices: `.cursor/docs/matrices/*/MATRIX.md` — update on logic changes.
+- Secrets: never commit `.env`; user fills DATABASE_* and JWT_SECRET.
+- Realtime: Socket.IO required for notifications (phase 5).
