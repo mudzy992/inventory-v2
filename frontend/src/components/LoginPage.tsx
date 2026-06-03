@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lock, User, AlertCircle, Info, CheckCircle2 } from 'lucide-react';
+import { Lock, User, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { buildCompanyAddressLine, companyHeaderFromSettings } from '../helpers/company-header.util';
@@ -120,18 +120,6 @@ export function LoginPage({ onLoginSuccess, setupSuccessMessage }: LoginPageProp
             )}
           </button>
         </form>
-
-        {import.meta.env.DEV && (
-          <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
-            <div className="flex items-start gap-2">
-              <Info size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-blue-800">
-                <p className="font-semibold mb-2">Dev demo podaci:</p>
-                <p>Pokrenite `npm run db:seed:demo` u backend folderu.</p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </PremiumAuthLayout>
   );

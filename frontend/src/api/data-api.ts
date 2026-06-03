@@ -77,8 +77,9 @@ export const fetchAppState = async (role: UserRole): Promise<AppState> => {
     ]);
   const users =
     role === 'admin' ? (await apiRequest<UserListDto[]>('/users')).map(mapUser) : [];
+  const normalizedCantons = cantons.map(({ cities: _nested, ...canton }) => canton);
   return {
-    cantons,
+    cantons: normalizedCantons,
     cities,
     warehouses,
     orgUnits,

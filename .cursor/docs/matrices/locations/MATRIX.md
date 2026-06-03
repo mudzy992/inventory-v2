@@ -24,7 +24,7 @@
 
 ## UI
 
-- Admin: stranica **Lokacije** — tab Registar (hijerarhija kanton → gradovi, edit/delete), tabovi Kantoni/Gradovi za brzo dodavanje
+- Admin: stranica **Lokacije** — tab Registar (hijerarhija kanton → gradovi, edit/delete; broj u zaglavlju = broj prikazanih redova), tab Kantoni (dodavanje + lista svih kantona), tab Gradovi za brzo dodavanje
 - **Organizacija**: picker grada za `direkcija`, `distribucija`, `podrucje`, `podruznica`; djeca prikazuju naslijeđeni grad (read-only)
 
 ## Evidentičar

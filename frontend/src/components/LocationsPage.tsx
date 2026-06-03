@@ -18,6 +18,10 @@ import { PageTabs } from './ui/page-tabs';
 import { ModalRoot } from './ui/modal-root';
 import { inputClass, selectClass } from './ui/form-styles';
 import type { Canton, City } from '../types';
+import {
+  buildLocationRegistry,
+  formatCantonDisplayName,
+} from '../utils/location-registry.util';
 
 type LocationsTab = 'cantons' | 'cities' | 'registry';
 
@@ -46,12 +50,11 @@ export const LocationsPage = () => {
   const [editCode, setEditCode] = useState('');
   const [editCantonId, setEditCantonId] = useState('');
 
-  const cantonsWithCities = useMemo(() => {
-    return state.cantons.map((canton) => ({
-      ...canton,
-      cities: state.cities.filter((city) => city.cantonId === canton.id).sort((a, b) => a.name.localeCompare(b.name)),
-    }));
-  }, [state.cantons, state.cities]);
+  const locationRegistry = useMemo(
+    () => buildLocationRegistry(state.cantons, state.cities),
+    [state.cantons, state.cities],
+  );
+  const { rows: cantonsWithCities, stats: registryStats } = locationRegistry;
 
   const handleAddCanton = async () => {
     if (!cantonName.trim()) return;
@@ -161,17 +164,35 @@ export const LocationsPage = () => {
         onChange={setTab}
       />
       {tab === 'cantons' ? (
-        <FormCard title="Novi kanton">
-          <input
-            value={cantonName}
-            onChange={(e) => setCantonName(e.target.value)}
-            placeholder="Npr. Kanton Sarajevo"
-            className={inputClass}
-          />
-          <Button onClick={() => void handleAddCanton()}>
-            <Plus size={14} /> Dodaj kanton
-          </Button>
-        </FormCard>
+        <div className="space-y-4">
+          <FormCard title="Novi kanton">
+            <input
+              value={cantonName}
+              onChange={(e) => setCantonName(e.target.value)}
+              placeholder="Npr. Kanton Sarajevo"
+              className={inputClass}
+            />
+            <Button onClick={() => void handleAddCanton()}>
+              <Plus size={14} /> Dodaj kanton
+            </Button>
+          </FormCard>
+          {state.cantons.length > 0 ? (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="font-medium text-gray-900 text-sm">Svi kantoni</h2>
+                <span className="text-xs text-gray-500">{registryStats.cantonCount} ukupno</span>
+              </div>
+              <ul className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                {cantonsWithCities.map((canton, index) => (
+                  <li key={`${canton.id}-${index}`} className="px-4 py-2.5 text-sm text-gray-700 flex gap-3">
+                    <span className="text-xs text-gray-400 tabular-nums w-5 shrink-0">{index + 1}.</span>
+                    <span className="min-w-0 truncate">{formatCantonDisplayName(canton.name)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
       ) : null}
       {tab === 'cities' ? (
         <FormCard title="Novi grad">
@@ -193,21 +214,29 @@ export const LocationsPage = () => {
         </FormCard>
       ) : null}
       {tab === 'registry' ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
             <h2 className="font-medium text-gray-900">Hijerarhija lokacija</h2>
-            <span className="text-xs text-gray-500">
-              {state.cantons.length} kantona · {state.cities.length} gradova
+            <span className="text-xs text-gray-500 shrink-0">
+              {registryStats.cantonCount} kantona · {registryStats.cityCount} gradova
             </span>
           </div>
+          {registryStats.hasDuplicateCantonIds ||
+          registryStats.rawCantonCount !== registryStats.cantonCount ? (
+            <p className="px-4 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-100">
+              Učitano je {registryStats.rawCantonCount} zapisa kantona, ali se prikazuje{' '}
+              {registryStats.cantonCount} zbog duplikata ID. Osvježite stranicu; ako se ponovi,
+              provjerite podatke u bazi.
+            </p>
+          ) : null}
           {cantonsWithCities.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-12">Nema kantona. Dodajte kanton u tabu Kantoni.</p>
           ) : (
             <div className="divide-y divide-gray-50">
-              {cantonsWithCities.map((canton) => {
+              {cantonsWithCities.map((canton, index) => {
                 const isExpanded = expandedCantons.has(canton.id);
                 return (
-                  <div key={canton.id}>
+                  <div key={`${canton.id}-${index}`}>
                     <div className="flex items-center gap-2 px-4 py-3 hover:bg-gray-50">
                       <button
                         type="button"
@@ -217,9 +246,14 @@ export const LocationsPage = () => {
                       >
                         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                       </button>
+                      <span className="text-xs text-gray-400 tabular-nums w-5 shrink-0 text-right">
+                        {index + 1}
+                      </span>
                       <MapPin size={16} className="text-blue-500 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-800">{canton.name}</p>
+                        <p className="font-medium text-gray-800">
+                          {formatCantonDisplayName(canton.name)}
+                        </p>
                         <p className="text-xs text-gray-400">
                           {canton.cities.length} gradova
                           {canton.code ? ` · ${canton.code}` : ''}
@@ -284,6 +318,11 @@ export const LocationsPage = () => {
               })}
             </div>
           )}
+          {cantonsWithCities.length > 0 ? (
+            <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100 bg-gray-50/80">
+              Prikazano {registryStats.cantonCount} kantona u hijerarhiji.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
