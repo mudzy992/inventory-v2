@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { useStore } from '../useStore';
+import { useStore, useRefreshData } from '../useStore';
+import { createCategoryApi, deleteCategoryApi, updateCategoryApi } from '../api/data-api';
+import { ApiError } from '../api/client';
+import { useToast } from '../contexts/toast-context';
 import { Plus, Edit2, Trash2, ChevronDown, ChevronRight, Settings, Folder, FolderOpen, Layers } from 'lucide-react';
 import { getParentCategories, getSubCategories, getEquipmentStats } from '../store';
 import { v4 as uuidv4 } from 'uuid';
@@ -79,7 +82,9 @@ function FieldEditor({ fields, onChange, label }: { fields: CategoryField[]; onC
 }
 
 export function CategoriesPage() {
-  const [state, setState] = useStore();
+  const [state] = useStore();
+  const refresh = useRefreshData();
+  const { toastError } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [expandedParentId, setExpandedParentId] = useState<string | null>(null);
@@ -124,46 +129,49 @@ export function CategoriesPage() {
     setShowForm(true);
   }
 
-  function handleSave() {
+  const handleSave = async () => {
     if (!fName.trim()) return;
-    if (editing) {
-      setState(prev => ({
-        ...prev,
-        categories: prev.categories.map(c =>
-          c.id === editing.id
-            ? { ...c, name: fName.trim(), description: fDesc.trim(), parentId: fParentId, fields: fFields, optionalFields: fOptFields }
-            : c
-        ),
-      }));
-    } else {
-      const newCat: Category = {
-        id: uuidv4(),
+    try {
+      const payload = {
         name: fName.trim(),
         description: fDesc.trim(),
         parentId: fParentId,
         fields: fFields,
         optionalFields: fOptFields,
       };
-      setState(prev => ({ ...prev, categories: [...prev.categories, newCat] }));
+      if (editing) {
+        await updateCategoryApi(editing.id, payload);
+      } else {
+        await createCategoryApi(payload);
+      }
+      await refresh();
+      setShowForm(false);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri spremanju';
+      toastError(message);
     }
-    setShowForm(false);
-  }
+  };
 
-  function handleDelete(id: string) {
-    const hasEquipment = state.equipment.some(e => e.categoryId === id);
-    const hasSubCategories = state.categories.some(c => c.parentId === id);
-    
+  const handleDelete = async (id: string) => {
+    const hasEquipment = state.equipment.some((e) => e.categoryId === id);
+    const hasSubCategories = state.categories.some((c) => c.parentId === id);
     if (hasEquipment) {
-      alert('Nije moguće obrisati kategoriju koja sadrži opremu.');
+      toastError('Nije moguće obrisati kategoriju koja sadrži opremu.');
       return;
     }
     if (hasSubCategories) {
-      alert('Nije moguće obrisati kategoriju koja ima podkategorije. Prvo obrišite podkategorije.');
+      toastError('Nije moguće obrisati kategoriju koja ima podkategorije. Prvo obrišite podkategorije.');
       return;
     }
     if (!confirm('Obrisati ovu kategoriju?')) return;
-    setState(prev => ({ ...prev, categories: prev.categories.filter(c => c.id !== id) }));
-  }
+    try {
+      await deleteCategoryApi(id);
+      await refresh();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri brisanju';
+      toastError(message);
+    }
+  };
 
   return (
     <div>

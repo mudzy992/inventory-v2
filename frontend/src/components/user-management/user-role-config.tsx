@@ -1,0 +1,35 @@
+import { ClipboardList, Package, Shield, User } from 'lucide-react';
+import type { ReactNode } from 'react';
+import type { UserRole } from '../../types';
+
+export const USER_ROLE_OPTIONS: UserRole[] = ['admin', 'evidenticar', 'skladistar', 'user'];
+
+export const USER_ROLE_META: Record<
+  UserRole,
+  { label: string; color: string; icon: ReactNode; description: string }
+> = {
+  admin: {
+    label: 'Administrator',
+    color: 'bg-amber-100 text-amber-800',
+    icon: <Shield size={12} />,
+    description: 'Puna konfiguracija sistema',
+  },
+  evidenticar: {
+    label: 'Evidentičar',
+    color: 'bg-purple-100 text-purple-800',
+    icon: <ClipboardList size={12} />,
+    description: 'Evidencija po gradu i kategoriji opreme',
+  },
+  skladistar: {
+    label: 'Skladištar',
+    color: 'bg-teal-100 text-teal-800',
+    icon: <Package size={12} />,
+    description: 'Evidencija ulaza i stanja na skladištu',
+  },
+  user: {
+    label: 'Korisnik',
+    color: 'bg-gray-100 text-gray-800',
+    icon: <User size={12} />,
+    description: 'Pregled vlastitog zaduženja i QR',
+  },
+};

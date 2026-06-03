@@ -1,19 +1,58 @@
 import { useState, useMemo } from 'react';
-import { useStore } from '../useStore';
-import { Plus, Search, Eye, Edit2, Filter, QrCode } from 'lucide-react';
+import { useStore, useRefreshData } from '../useStore';
+import { createEquipmentApi, updateEquipmentApi } from '../api/data-api';
+import { ApiError } from '../api/client';
+import { useToast } from '../contexts/toast-context';
+import { Plus, Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon } from 'lucide-react';
+import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser, equipmentMatchesScope } from '../store';
+import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, formatDate, getEmployeeFullName } from '../helpers';
 import { v4 as uuidv4 } from 'uuid';
 import type { Equipment } from '../types';
 import { EquipmentCard } from './EquipmentCard';
+import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
+import { getUserWarehouseIds } from '../helpers/org-warehouse.util';
+import {
+  InventoryFreezeActionHint,
+  useInventoryFreezeActive,
+} from './inventory-count/inventory-freeze-action-hint';
+import type { PageId } from './Layout';
+import { PageTabs } from './ui/page-tabs';
 
-export function EquipmentPage() {
-  const [state, setState] = useStore();
+interface EquipmentPageProps {
+  onNavigate?: (page: PageId) => void;
+}
+
+export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
+  const [state] = useStore();
+  const refresh = useRefreshData();
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
   const [viewItemId, setViewItemId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showLabels, setShowLabels] = useState(false);
+  const admin = isAdmin();
+  const evidenticar = isEvidenticar();
+  const skladistar = isSkladistar();
+  const user = getCurrentUser();
+  const { toastError } = useToast();
+  const canManage = admin || evidenticar;
+  const isFrozen = useInventoryFreezeActive();
+  const [viewMode, setViewMode] = useState<'list' | 'warehouses'>('list');
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
+  const myWarehouseIds = useMemo(
+    () => getUserWarehouseIds(user?.role, user?.id, user?.registrarScopes ?? [], state.warehouses),
+    [state.warehouses, user?.id, user?.registrarScopes, user?.role],
+  );
+  const myWarehouses = useMemo(() => {
+    if (admin) {
+      return state.warehouses;
+    }
+    return state.warehouses.filter((row) => myWarehouseIds.has(row.id));
+  }, [admin, myWarehouseIds, state.warehouses]);
 
   // Form state
   const [fCategoryId, setFCategoryId] = useState('');
@@ -22,19 +61,29 @@ export function EquipmentPage() {
   const [fContract, setFContract] = useState('');
   const [fEntryDate, setFEntryDate] = useState('');
   const [fNotes, setFNotes] = useState('');
+  const [fWarehouseId, setFWarehouseId] = useState('');
+
+  const formWarehouses = useMemo(() => {
+    if (skladistar && !admin) {
+      return state.warehouses.filter((row) => myWarehouseIds.has(row.id));
+    }
+    return state.warehouses.filter((row) => row.isActive !== false);
+  }, [admin, myWarehouseIds, skladistar, state.warehouses]);
 
   const filtered = useMemo(() => {
     return state.equipment.filter(eq => {
+      if (evidenticar && !admin && !equipmentMatchesScope(eq, state, user)) {
+        return false;
+      }
       const cat = state.categories.find(c => c.id === eq.categoryId);
       const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
       const searchStr = `${eq.inventoryNumber} ${cat?.name || ''} ${holder ? `${holder.firstName} ${holder.lastName}` : ''} ${Object.values(eq.specifications).join(' ')}`.toLowerCase();
-      
       const matchSearch = search === '' || searchStr.includes(search.toLowerCase());
       const matchCat = filterCategory === '' || eq.categoryId === filterCategory;
       const matchStatus = filterStatus === '' || eq.status === filterStatus;
       return matchSearch && matchCat && matchStatus;
     });
-  }, [state.equipment, state.categories, state.employees, search, filterCategory, filterStatus]);
+  }, [state, admin, evidenticar, user, search, filterCategory, filterStatus]);
 
   const selectedCategory = state.categories.find(c => c.id === fCategoryId);
 
@@ -47,6 +96,7 @@ export function EquipmentPage() {
     setFContract('');
     setFEntryDate(new Date().toISOString().slice(0, 10));
     setFNotes('');
+    setFWarehouseId(formWarehouses[0]?.id ?? '');
     setShowForm(true);
   }
 
@@ -58,67 +108,51 @@ export function EquipmentPage() {
     setFContract(eq.contractNumber || '');
     setFEntryDate(eq.entryDate);
     setFNotes(eq.notes || '');
+    setFWarehouseId(eq.warehouseId ?? '');
     setShowForm(true);
   }
 
-  function handleSave() {
+  const handleSave = async () => {
     if (!fCategoryId || !fInventoryNumber.trim()) return;
-
-    const existing = state.equipment.find(e => e.inventoryNumber === fInventoryNumber.trim() && e.id !== editing?.id);
-    if (existing) {
-      alert('Inventurni broj već postoji!');
+    const status = editing?.status ?? 'skladiste';
+    if (status === 'skladiste' && !fWarehouseId) {
+      toastError('Odaberite skladište za opremu na skladištu.');
       return;
     }
-
-    const cat = state.categories.find(c => c.id === fCategoryId);
-    if (cat) {
-      const allFields = [...cat.fields, ...cat.optionalFields];
-      for (const field of allFields) {
-        if (field.unique && fSpecs[field.id]) {
-          const duplicate = state.equipment.find(e =>
-            e.id !== editing?.id &&
-            e.categoryId === fCategoryId &&
-            e.specifications[field.id] === fSpecs[field.id]
-          );
-          if (duplicate) {
-            alert(`Polje "${field.name}" mora biti unikatno! Vrijednost "${fSpecs[field.id]}" već postoji.`);
-            return;
-          }
-        }
+    const payload = {
+      categoryId: fCategoryId,
+      inventoryNumber: fInventoryNumber.trim(),
+      specifications: fSpecs,
+      status,
+      contractNumber: fContract || undefined,
+      entryDate: fEntryDate,
+      notes: fNotes || undefined,
+      warehouseId: status === 'skladiste' ? fWarehouseId : undefined,
+    };
+    try {
+      if (editing) {
+        await updateEquipmentApi(editing.id, payload);
+      } else {
+        await createEquipmentApi(payload);
       }
+      await refresh();
+      setShowForm(false);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri spremanju';
+      toastError(message);
     }
+  };
 
-    if (editing) {
-      setState(prev => ({
-        ...prev,
-        equipment: prev.equipment.map(e =>
-          e.id === editing.id
-            ? {
-                ...e,
-                categoryId: fCategoryId,
-                inventoryNumber: fInventoryNumber.trim(),
-                specifications: fSpecs,
-                contractNumber: fContract || undefined,
-                entryDate: fEntryDate,
-                notes: fNotes || undefined,
-              }
-            : e
-        ),
-      }));
-    } else {
-      const newEq: Equipment = {
-        id: uuidv4(),
-        categoryId: fCategoryId,
-        inventoryNumber: fInventoryNumber.trim(),
-        specifications: fSpecs,
-        status: 'skladiste',
-        contractNumber: fContract || undefined,
-        entryDate: fEntryDate,
-        notes: fNotes || undefined,
-      };
-      setState(prev => ({ ...prev, equipment: [...prev.equipment, newEq] }));
-    }
-    setShowForm(false);
+  if (selectedWarehouseId) {
+    return (
+      <WarehouseDetailView
+        warehouseId={selectedWarehouseId}
+        onBack={() => setSelectedWarehouseId(null)}
+        canEditContext={admin}
+        canManageDestruction={admin || skladistar}
+        onNavigate={onNavigate}
+      />
+    );
   }
 
   return (
@@ -126,13 +160,72 @@ export function EquipmentPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Oprema</h1>
-          <p className="text-gray-500 mt-1">Evidencija kompletne opreme — skladište, zaduženja, rashod</p>
+          <p className="text-gray-500 mt-1">
+            Evidencija opreme. Naljepnice: označite redove u tabeli (checkbox), zatim „Štampaj naljepnice“.
+          </p>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium">
-          <Plus size={16} /> Nova oprema
-        </button>
+        <div className="flex gap-2">
+          {selectedIds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowLabels(true)}
+              className="flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium"
+            >
+              <Printer size={16} /> Štampaj naljepnice ({selectedIds.size})
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={openAdd}
+              disabled={isFrozen}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+            >
+              <Plus size={16} /> Nova oprema
+            </button>
+          )}
+        </div>
       </div>
 
+      <InventoryFreezeActionHint onOpenInventory={onNavigate} />
+
+      {(evidenticar || admin) && (
+        <PageTabs
+          tabs={[
+            { id: 'list', label: 'Sva oprema', icon: List },
+            { id: 'warehouses', label: 'Po skladištima', icon: WarehouseIcon },
+          ]}
+          activeTab={viewMode}
+          onChange={setViewMode}
+          className="mb-4"
+        />
+      )}
+
+      {viewMode === 'warehouses' ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {myWarehouses.map((warehouse) => {
+            const count = state.equipment.filter(
+              (row) => row.warehouseId === warehouse.id && row.status === 'skladiste',
+            ).length;
+            return (
+              <button
+                key={warehouse.id}
+                type="button"
+                onClick={() => setSelectedWarehouseId(warehouse.id)}
+                className="text-left bg-white border border-gray-100 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition"
+              >
+                <p className="font-medium text-gray-900">{warehouse.name}</p>
+                <p className="text-xs text-gray-500 mt-1">{count} na skladištu</p>
+              </button>
+            );
+          })}
+          {myWarehouses.length === 0 ? (
+            <p className="text-sm text-gray-500 col-span-full">Nema skladišta u vašem opsegu.</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {viewMode === 'list' ? (
+        <>
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex gap-4 flex-wrap items-center">
         <div className="relative flex-1 min-w-[200px]">
@@ -172,6 +265,20 @@ export function EquipmentPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left">
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && filtered.every((eq) => selectedIds.has(eq.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(filtered.map((eq) => eq.id)));
+                      } else {
+                        setSelectedIds(new Set());
+                      }
+                    }}
+                    aria-label="Odaberi sve"
+                  />
+                </th>
                 <th className="px-4 py-3 font-medium text-gray-600">Inv. broj</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Kategorija</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Ključne spec.</th>
@@ -191,6 +298,24 @@ export function EquipmentPage() {
 
                 return (
                   <tr key={eq.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(eq.id)}
+                        onChange={() => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(eq.id)) {
+                              next.delete(eq.id);
+                            } else {
+                              next.add(eq.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        aria-label={`Odaberi ${eq.inventoryNumber}`}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</span>
                     </td>
@@ -227,7 +352,7 @@ export function EquipmentPage() {
                         <button onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-gray-700 p-1" title="Pogledaj detalje">
                           <Eye size={14} />
                         </button>
-                        {eq.status !== 'rashodovano' && (
+                        {eq.status !== 'rashodovano' && canManage && (
                           <button onClick={() => openEdit(eq)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                             <Edit2 size={14} />
                           </button>
@@ -238,12 +363,22 @@ export function EquipmentPage() {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="text-center text-gray-400 py-12">Nema rezultata</td></tr>
+                <tr><td colSpan={9} className="text-center text-gray-400 py-12">Nema rezultata</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+        </>
+      ) : null}
+
+      {showLabels && (
+        <LabelPrintSheet
+          items={state.equipment.filter((eq) => selectedIds.has(eq.id))}
+          categories={state.categories}
+          onClose={() => setShowLabels(false)}
+        />
+      )}
 
       {/* Equipment Card Modal with QR */}
       {viewItemId && (
@@ -291,6 +426,23 @@ export function EquipmentPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
               </div>
+              {(editing?.status ?? 'skladiste') === 'skladiste' ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Skladište *</label>
+                  <select
+                    value={fWarehouseId}
+                    onChange={(e) => setFWarehouseId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  >
+                    <option value="">— Odaberi skladište —</option>
+                    {formWarehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
 
               {selectedCategory && (
                 <>

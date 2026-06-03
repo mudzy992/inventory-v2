@@ -7,7 +7,41 @@ export type OrgUnitType =
   | 'sluzba'
   | 'odjeljenje';
 
-export type UserRole = 'admin' | 'evidenticar' | 'user';
+export type UserRole = 'admin' | 'evidenticar' | 'user' | 'skladistar';
+
+export type WarehouseCondition = 'na_skladistu' | 'spremno_za_unistenje' | 'unisteno';
+
+export interface Canton {
+  id: string;
+  name: string;
+  code?: string | null;
+  cities?: City[];
+}
+
+export interface City {
+  id: string;
+  cantonId: string;
+  name: string;
+  canton?: Canton;
+}
+
+export interface Warehouse {
+  id: string;
+  name: string;
+  cityId: string;
+  orgUnitId?: string | null;
+  address: string;
+  notes?: string | null;
+  isActive: boolean;
+  city?: City;
+  keepers?: { userId: string; user?: { id: string; username: string } }[];
+}
+
+export interface RegistrarScopeAssignment {
+  warehouseId: string;
+  categoryId: string;
+  orgUnitId?: string | null;
+}
 
 export interface UserAccount {
   id: string;
@@ -17,8 +51,7 @@ export interface UserAccount {
   role: UserRole;
   isActive: boolean;
   lastLogin?: string;
-  // For evidenticar role - which org units they manage
-  managedOrgUnitIds?: string[];
+  registrarScopes?: RegistrarScopeAssignment[];
 }
 
 export interface OrgUnit {
@@ -26,7 +59,10 @@ export interface OrgUnit {
   name: string;
   type: OrgUnitType;
   parentId: string | null;
-  signerId?: string;
+  signerId?: string | null;
+  effectiveSignerId?: string | null;
+  locationCityId?: string | null;
+  effectiveLocationCityId?: string | null;
 }
 
 export interface Employee {
@@ -48,25 +84,55 @@ export interface CategoryField {
   options?: string[];
 }
 
-// Updated Category with parent-child hierarchy
 export interface Category {
   id: string;
   name: string;
   description: string;
-  parentId: string | null; // null = parent category, string = sub-category
+  parentId: string | null;
   fields: CategoryField[];
   optionalFields: CategoryField[];
 }
 
+export type WarehouseStockLotStatus =
+  | 'ceka_specifikaciju'
+  | 'spremno_za_izdavanje'
+  | 'zatvoreno';
+
+export interface WarehouseStockLot {
+  id: string;
+  warehouseId: string;
+  categoryId: string;
+  categoryName?: string;
+  warehouseName?: string;
+  productName: string;
+  quantityReceived: number;
+  quantityOnHand: number;
+  status: WarehouseStockLotStatus;
+  specifications?: Record<string, string>;
+  contractNumber?: string | null;
+  entryDate: string;
+  notes?: string | null;
+  issuedUnits?: {
+    id: string;
+    inventoryNumber: string;
+    status: string;
+    currentHolderId?: string | null;
+    createdAt: string;
+  }[];
+}
+
 export interface Equipment {
   id: string;
-  categoryId: string; // Should point to sub-category
+  categoryId: string;
+  stockLotId?: string | null;
   inventoryNumber: string;
   specifications: Record<string, string>;
   status: 'skladiste' | 'zaduzeno' | 'rashodovano';
   contractNumber?: string;
   entryDate: string;
   currentHolderId?: string;
+  warehouseId?: string | null;
+  warehouseCondition?: WarehouseCondition | null;
   notes?: string;
 }
 
@@ -83,18 +149,24 @@ export interface TransferRecord {
   signerId: string;
   date: string;
   reason?: string;
-  status: 'raw' | 'potpisan';
+  status: 'raw' | 'printed' | 'uploaded' | 'potpisan' | 'cancelled';
   scannedDocUrl?: string;
   documentNumber: string;
   notes?: string;
-  // Flag for cross-service transfers (only admin can do these)
   isCrossServiceTransfer?: boolean;
+  fromWarehouseId?: string | null;
+  toWarehouseId?: string | null;
+  inventoryLineId?: string | null;
+  disposalApproval?: {
+    id: string;
+    status: 'pending' | 'approved' | 'rejected';
+  };
 }
 
 export interface Notification {
   id: string;
   userId: string;
-  type: 'transfer_pending' | 'transfer_complete' | 'equipment_assigned' | 'info';
+  type: string;
   title: string;
   message: string;
   read: boolean;
@@ -102,7 +174,6 @@ export interface Notification {
   relatedId?: string;
 }
 
-// User-defined filter configuration
 export interface SavedFilter {
   id: string;
   userId: string;
@@ -112,13 +183,16 @@ export interface SavedFilter {
 }
 
 export interface FilterCondition {
-  fieldId: string; // Can be 'status', 'inventoryNumber', or spec field id
+  fieldId: string;
   fieldName: string;
   operator: 'equals' | 'contains' | 'startsWith' | 'gt' | 'lt' | 'gte' | 'lte';
   value: string;
 }
 
 export interface AppState {
+  cantons: Canton[];
+  cities: City[];
+  warehouses: Warehouse[];
   orgUnits: OrgUnit[];
   employees: Employee[];
   categories: Category[];

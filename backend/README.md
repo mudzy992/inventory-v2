@@ -1,9 +1,77 @@
 # inventory-v2 — backend
 
-NestJS + Prisma 7 + MySQL (eksterni server).
+NestJS 11 + Prisma 7 + MySQL (eksterni server).
 
-Scaffold dolazi u **Fazi 1** — vidi `.cursor/plans/inventory-v2/02_phase-backend-foundation.md`.
+## Preduvjeti
 
-## Env
+- Node 22+
+- Root `.env` sa `DATABASE_URL`, `JWT_SECRET`, `API_PREFIX=backend`
 
-Koristi root `.env` (`DATABASE_URL`, `JWT_SECRET`, …).
+## Lokalno
+
+```bash
+cd backend
+npm install
+npm run prisma:generate
+npm run db:migrate:dev    # prva migracija
+npm run db:seed           # prazan seed (bez demo podataka)
+npm run dev
+```
+
+Otvori frontend — prikazuje se **setup wizard** dok nema korisnika u bazi.
+
+### Demo podaci (opcionalno)
+
+```bash
+npm run db:seed:demo
+```
+
+Kredencijali: `admin` / `admin123`, `kenan.hodzic` / `user123`.
+
+### Potpuni wipe baze (dev)
+
+```bash
+npx prisma migrate reset
+```
+
+Briše sve podatke, ponovo primjenjuje migracije i pokreće prazan `db:seed`.
+
+## Setup API
+
+| Endpoint | Auth | Opis |
+|----------|------|------|
+| `GET /backend/setup/status` | — | `{ needsSetup: true }` ako nema korisnika |
+| `POST /backend/setup/initialize` | — | Jednokratna instalacija (preduzeće + admin) |
+
+Opcionalno: `SETUP_TOKEN` u `.env` — tada POST mora sadržavati `setupToken` u JSON tijelu.
+
+## Skripte
+
+| Skripta | Opis |
+|---------|------|
+| `npm run dev` | Watch mode |
+| `npm run build` | Produkcijski build |
+| `npm run db:migrate` | `prisma migrate deploy` |
+| `npm run db:migrate:dev` | Dev migracije |
+| `npm run db:seed` | Prazan seed (bez demo) |
+| `npm run db:seed:demo` | Demo org/oprema/korisnici |
+| `npm run db:studio` | Prisma Studio |
+
+## Moduli
+
+| Modul | Putanja | Napomena |
+|-------|---------|----------|
+| health | `/backend/health` | DB ping |
+| setup | `/backend/setup/*` | Inicijalna instalacija |
+| public | `/backend/public/equipment/:id` | Javni QR pregled |
+| auth | `/backend/auth/*` | JWT |
+| users | `/backend/users` | admin |
+| settings | `/backend/settings/*` | public/private |
+| org-units | `/backend/org-units`, `/tree` | admin |
+| employees | `/backend/employees` | admin CRUD, evidentičar read (scope) |
+| categories | `/backend/categories`, `/tree` | admin CRUD, evidentičar read |
+| equipment | `/backend/equipment`, `/:id/qr` | scope po ulozi |
+| transfers | `/backend/transfers`, `/:id/sign` | admin/evidenticar write |
+| uploads | `/backend/uploads` | skenovi transfera |
+
+Global prefix: `backend` (Traefik `PathPrefix(/backend)`).

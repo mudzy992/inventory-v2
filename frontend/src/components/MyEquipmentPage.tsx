@@ -1,42 +1,78 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore } from '../useStore';
 import { getCurrentUser } from '../store';
-import { Package, Monitor, Laptop, Printer, Smartphone, QrCode, History, ChevronRight, Building2, Mail, User, Calendar } from 'lucide-react';
+import { Package, Monitor, Laptop, Printer as PrinterIcon, Smartphone, QrCode, History, ChevronRight, Building2, Mail, User, Calendar } from 'lucide-react';
+import { LabelPrintSheet } from './LabelPrintSheet';
 import { getOrgUnitPath, formatDate, getStatusLabel, getStatusColor } from '../helpers';
 import { EquipmentCard } from './EquipmentCard';
+import { EmptyState } from './ui/empty-state';
 
 export function MyEquipmentPage() {
   const [state] = useStore();
   const currentUser = getCurrentUser();
   const [selectedEquipId, setSelectedEquipId] = useState<string | null>(null);
+  const [showLabels, setShowLabels] = useState(false);
 
-  if (!currentUser) return null;
+  const employee = currentUser
+    ? state.employees.find((e) => e.id === currentUser.employeeId)
+    : undefined;
 
-  const employee = state.employees.find(e => e.id === currentUser.employeeId);
-  if (!employee) return null;
+  const myEquipment = employee
+    ? state.equipment.filter(
+        (e) => e.currentHolderId === employee.id && e.status === 'zaduzeno',
+      )
+    : [];
 
-  const orgUnit = state.orgUnits.find(o => o.id === employee.orgUnitId);
-  const myEquipment = state.equipment.filter(e => e.currentHolderId === employee.id && e.status === 'zaduzeno');
-  
-  // Get transfer history for my equipment
+  const equipmentByCategory = useMemo(() => {
+    const groups = new Map<string, typeof myEquipment>();
+    for (const item of myEquipment) {
+      const category = state.categories.find((row) => row.id === item.categoryId);
+      const parent = category?.parentId
+        ? state.categories.find((row) => row.id === category.parentId)
+        : category;
+      const label = parent?.name ?? category?.name ?? 'Ostalo';
+      const list = groups.get(label) ?? [];
+      list.push(item);
+      groups.set(label, list);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [myEquipment, state.categories]);
+
+  if (!currentUser) {
+    return (
+      <div className="max-w-lg mx-auto mt-12">
+        <EmptyState message="Niste prijavljeni." />
+      </div>
+    );
+  }
+
+  if (!employee) {
+    return (
+      <div className="max-w-lg mx-auto mt-12">
+        <EmptyState message="Nalog nije povezan s radnikom. Kontaktirajte administratora da poveže vaš korisnički nalog s evidencijom radnika." />
+      </div>
+    );
+  }
+
+  const orgUnit = state.orgUnits.find((o) => o.id === employee.orgUnitId);
+
   const myTransfers = state.transfers
-    .filter(t => t.toPersonId === employee.id || t.fromPersonId === employee.id)
+    .filter((t) => t.toPersonId === employee.id || t.fromPersonId === employee.id)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const getCategoryIcon = (catId: string) => {
-    const cat = state.categories.find(c => c.id === catId);
+    const cat = state.categories.find((c) => c.id === catId);
     if (!cat) return <Package size={20} />;
     const name = cat.name.toLowerCase();
     if (name.includes('monitor')) return <Monitor size={20} />;
     if (name.includes('laptop')) return <Laptop size={20} />;
-    if (name.includes('print')) return <Printer size={20} />;
+    if (name.includes('print')) return <PrinterIcon size={20} />;
     if (name.includes('mobil') || name.includes('telefon')) return <Smartphone size={20} />;
     return <Package size={20} />;
   };
 
   return (
     <div>
-      {/* Profile Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 mb-6 text-white">
         <div className="flex items-start gap-6">
           <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center text-3xl font-bold backdrop-blur-sm">
@@ -66,20 +102,30 @@ export function MyEquipmentPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* My Equipment List */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Package size={20} className="text-blue-500" />
-              Moja zadužena oprema
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                <Package size={20} className="text-blue-500" />
+                Moja zadužena oprema
+              </h2>
+              {myEquipment.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowLabels(true)}
+                  className="flex items-center gap-1.5 text-sm border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50"
+                >
+                  <PrinterIcon size={14} /> Štampaj naljepnice
+                </button>
+              )}
+            </div>
 
             {myEquipment.length > 0 ? (
               <div className="space-y-3">
-                {myEquipment.map(eq => {
-                  const cat = state.categories.find(c => c.id === eq.categoryId);
+                {myEquipment.map((eq) => {
+                  const cat = state.categories.find((c) => c.id === eq.categoryId);
                   const lastTransfer = state.transfers
-                    .filter(t => t.equipmentId === eq.id && t.toPersonId === employee.id)
+                    .filter((t) => t.equipmentId === eq.id && t.toPersonId === employee.id)
                     .sort((a, b) => b.date.localeCompare(a.date))[0];
 
                   return (
@@ -110,16 +156,15 @@ export function MyEquipmentPage() {
                           <button
                             className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
                             title="Prikaži QR kod"
-                            onClick={e => { e.stopPropagation(); setSelectedEquipId(eq.id); }}
+                            onClick={(e) => { e.stopPropagation(); setSelectedEquipId(eq.id); }}
                           >
                             <QrCode size={18} />
                           </button>
                           <ChevronRight size={18} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
                         </div>
                       </div>
-                      {/* Quick specs */}
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {cat && cat.fields.slice(0, 4).map(f => {
+                        {cat && cat.fields.slice(0, 4).map((f) => {
                           const val = eq.specifications[f.id];
                           if (!val) return null;
                           return (
@@ -140,9 +185,49 @@ export function MyEquipmentPage() {
               </div>
             )}
           </div>
+          {myEquipment.length > 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Pregled po kategorijama (popis)</h2>
+              <div className="space-y-6">
+                {equipmentByCategory.map(([categoryName, items]) => (
+                  <div key={categoryName}>
+                    <h3 className="text-sm font-medium text-gray-700 border-b border-gray-100 pb-1 mb-2">
+                      {categoryName}
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 text-gray-600">
+                          <tr>
+                            <th className="text-left px-2 py-1 font-medium">Inv. broj</th>
+                            <th className="text-left px-2 py-1 font-medium">Naziv</th>
+                            <th className="text-center px-2 py-1 font-medium w-10">Kol.</th>
+                            <th className="text-left px-2 py-1 font-medium w-20">Potpis</th>
+                            <th className="text-left px-2 py-1 font-medium">Napomena</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item) => {
+                            const category = state.categories.find((row) => row.id === item.categoryId);
+                            return (
+                              <tr key={item.id} className="border-t border-gray-50">
+                                <td className="px-2 py-1.5 font-mono">{item.inventoryNumber}</td>
+                                <td className="px-2 py-1.5">{category?.name ?? '—'}</td>
+                                <td className="px-2 py-1.5 text-center">1</td>
+                                <td className="px-2 py-1.5" />
+                                <td className="px-2 py-1.5" />
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        {/* Recent Activity */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -152,9 +237,9 @@ export function MyEquipmentPage() {
 
             {myTransfers.length > 0 ? (
               <div className="space-y-3">
-                {myTransfers.slice(0, 10).map(t => {
-                  const eq = state.equipment.find(e => e.id === t.equipmentId);
-                  const cat = eq ? state.categories.find(c => c.id === eq.categoryId) : null;
+                {myTransfers.slice(0, 10).map((t) => {
+                  const eq = state.equipment.find((e) => e.id === t.equipmentId);
+                  const cat = eq ? state.categories.find((c) => c.id === eq.categoryId) : null;
                   const isIncoming = t.toPersonId === employee.id;
 
                   return (
@@ -179,7 +264,14 @@ export function MyEquipmentPage() {
         </div>
       </div>
 
-      {/* Equipment Detail Modal */}
+      {showLabels && (
+        <LabelPrintSheet
+          items={myEquipment}
+          categories={state.categories}
+          onClose={() => setShowLabels(false)}
+        />
+      )}
+
       {selectedEquipId && (
         <EquipmentCard
           equipmentId={selectedEquipId}

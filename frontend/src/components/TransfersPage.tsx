@@ -1,20 +1,49 @@
-import { useState, useMemo } from 'react';
-import { useStore } from '../useStore';
+import { useState, useMemo, useEffect } from 'react';
+import { TransferDocumentPanel } from './TransferDocumentPanel';
+import { useStore, useRefreshData } from '../useStore';
 import { getSignerForEmployee, getEmployeeFullName, getStatusLabel, getStatusColor, formatDate, getOrgUnitPath } from '../helpers';
-import { getNextDocumentNumber, isAdmin, isEvidenticar, getManagedOrgUnitIds, isCrossServiceTransfer, addNotification } from '../store';
+import {
+  isAdmin,
+  isEvidenticar,
+  getCurrentUser,
+  equipmentMatchesScope,
+  employeeMatchesScope,
+  transferMatchesScope,
+  isCrossRegistrarScopeTransfer,
+  isCrossServiceTransfer,
+} from '../store';
+import { createTransferApi } from '../api/data-api';
+import { resolveDisposalCommissionApi, type DisposalResolveDto } from '../api/disposal-api';
+import { AlertBanner } from './ui/alert-banner';
+import { ApiError } from '../api/client';
+import { useToast } from '../contexts/toast-context';
 import { Search, Filter, ArrowRight, Package, Warehouse, UserX, Trash2, AlertTriangle } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
 import type { TransferType } from '../types';
+import { buildTransferCreatePayload } from '../helpers/create-transfer-payload.util';
+import {
+  InventoryFreezeActionHint,
+  useInventoryFreezeActive,
+} from './inventory-count/inventory-freeze-action-hint';
+import type { PageId } from './Layout';
 
-export function TransfersPage() {
-  const [state, setState] = useStore();
+interface TransfersPageProps {
+  onNavigate?: (page: PageId) => void;
+}
+
+export function TransfersPage({ onNavigate }: TransfersPageProps) {
+  const [state] = useStore();
+  const refresh = useRefreshData();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
 
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
-  const managedOrgUnitIds = getManagedOrgUnitIds();
+  const user = getCurrentUser();
+  const { toastError } = useToast();
+  const isFrozen = useInventoryFreezeActive();
+  const [disposalResolve, setDisposalResolve] = useState<DisposalResolveDto | null>(null);
 
   // Form
   const [fType, setFType] = useState<TransferType>('zaduzenje');
@@ -28,33 +57,8 @@ export function TransfersPage() {
   const relevantTransfers = useMemo(() => {
     if (admin) return state.transfers;
     if (!evidenticar) return [];
-    
-    return state.transfers.filter(t => {
-      // Check if equipment holder is in managed units
-      const eq = state.equipment.find(e => e.id === t.equipmentId);
-      if (!eq) return false;
-      
-      // If from/to person is in managed units, show the transfer
-      if (t.fromPersonId) {
-        const fromEmp = state.employees.find(e => e.id === t.fromPersonId);
-        if (fromEmp && managedOrgUnitIds.includes(fromEmp.orgUnitId)) return true;
-      }
-      if (t.toPersonId) {
-        const toEmp = state.employees.find(e => e.id === t.toPersonId);
-        if (toEmp && managedOrgUnitIds.includes(toEmp.orgUnitId)) return true;
-      }
-      
-      // From/to warehouse
-      if (t.fromType === 'skladiste' || t.toType === 'skladiste') {
-        if (eq.currentHolderId) {
-          const holder = state.employees.find(e => e.id === eq.currentHolderId);
-          if (holder && managedOrgUnitIds.includes(holder.orgUnitId)) return true;
-        }
-      }
-      
-      return false;
-    });
-  }, [state, admin, evidenticar, managedOrgUnitIds]);
+    return state.transfers.filter((row) => transferMatchesScope(row, state, user));
+  }, [state, admin, evidenticar, user]);
 
   const filtered = useMemo(() => {
     return [...relevantTransfers]
@@ -76,12 +80,7 @@ export function TransfersPage() {
     
     // For evidenticar, filter equipment
     if (evidenticar && !admin) {
-      equipment = equipment.filter(e => {
-        if (e.status === 'skladiste') return true; // Warehouse items available
-        if (!e.currentHolderId) return true;
-        const holder = state.employees.find(emp => emp.id === e.currentHolderId);
-        return holder && managedOrgUnitIds.includes(holder.orgUnitId);
-      });
+      equipment = equipment.filter((row) => equipmentMatchesScope(row, state, user));
     }
     
     if (fType === 'zaduzenje') {
@@ -94,21 +93,45 @@ export function TransfersPage() {
       return equipment.filter(e => e.status === 'skladiste' || e.status === 'zaduzeno');
     }
     return [];
-  }, [state.equipment, fType, admin, evidenticar, managedOrgUnitIds, state.employees]);
+  }, [state, fType, admin, evidenticar, user]);
 
   // Available employees for transfer
   const availableEmployees = useMemo(() => {
     if (admin) return state.employees;
     if (evidenticar) {
-      return state.employees.filter(e => managedOrgUnitIds.includes(e.orgUnitId));
+      return state.employees.filter((row) => employeeMatchesScope(row, state, user));
     }
     return [];
-  }, [state.employees, admin, evidenticar, managedOrgUnitIds]);
+  }, [state.employees, admin, evidenticar, user, state]);
 
   const selectedEquipment = state.equipment.find(e => e.id === fEquipmentId);
   const selectedEquipHolder = selectedEquipment?.currentHolderId
     ? state.employees.find(e => e.id === selectedEquipment.currentHolderId)
     : null;
+
+  useEffect(() => {
+    if (!showForm || fType !== 'rashodovanje' || !fEquipmentId) {
+      setDisposalResolve(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const resolved = await resolveDisposalCommissionApi(fEquipmentId);
+        if (!cancelled) {
+          setDisposalResolve(resolved);
+        }
+      } catch {
+        if (!cancelled) {
+          setDisposalResolve(null);
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [fEquipmentId, fType, showForm]);
 
   // Check if this would be a cross-service transfer
   const wouldBeCrossService = useMemo(() => {
@@ -126,101 +149,40 @@ export function TransfersPage() {
     setShowForm(true);
   }
 
-  function handleSave() {
-    if (!fEquipmentId) { alert('Odaberite opremu.'); return; }
-    const eq = state.equipment.find(e => e.id === fEquipmentId);
+  const handleSave = async () => {
+    if (!fEquipmentId) {
+      toastError('Odaberite opremu.');
+      return;
+    }
+    const eq = state.equipment.find((e) => e.id === fEquipmentId);
     if (!eq) return;
 
-    if ((fType === 'zaduzenje' || fType === 'prenos') && !fToPersonId) {
-      alert('Odaberite osobu na koju se oprema zadužuje.');
-      return;
-    }
-
-    // Check cross-service restriction for evidenticar
-    if (evidenticar && !admin && wouldBeCrossService) {
-      alert('Prenos između različitih službi može izvršiti samo administrator.');
-      return;
-    }
-
-    // Determine signer
-    let signerId = '';
-    if (fType === 'zaduzenje' || fType === 'prenos') {
-      const signer = getSignerForEmployee(state, fToPersonId);
-      signerId = signer?.id || state.employees[0]?.id || '';
-    } else if (fType === 'razduzenje' && eq.currentHolderId) {
-      const signer = getSignerForEmployee(state, eq.currentHolderId);
-      signerId = signer?.id || state.employees[0]?.id || '';
-    } else if (fType === 'rashodovanje') {
-      if (eq.currentHolderId) {
-        const signer = getSignerForEmployee(state, eq.currentHolderId);
-        signerId = signer?.id || state.employees[0]?.id || '';
-      } else {
-        const dirUnit = state.orgUnits.find(o => o.type === 'direkcija');
-        signerId = dirUnit?.signerId || state.employees[0]?.id || '';
-      }
-    }
-
-    const docNumber = getNextDocumentNumber();
-    const crossService = fType === 'prenos' && isCrossServiceTransfer(eq.currentHolderId, fToPersonId);
-
-    const transfer = {
-      id: uuidv4(),
-      equipmentId: fEquipmentId,
+    const result = buildTransferCreatePayload({
+      state,
+      user,
+      equipment: eq,
       type: fType,
-      fromType: (eq.status === 'zaduzeno' ? 'osoba' : 'skladiste') as 'skladiste' | 'osoba',
-      fromPersonId: eq.currentHolderId || undefined,
-      toType: (fType === 'razduzenje' ? 'skladiste' : fType === 'rashodovanje' ? 'rashod' : 'osoba') as 'skladiste' | 'osoba' | 'rashod',
-      toPersonId: (fType === 'zaduzenje' || fType === 'prenos') ? fToPersonId : undefined,
-      signerId,
+      toPersonId: fToPersonId,
+      reason: fReason,
       date: fDate,
-      reason: fReason || undefined,
-      status: 'raw' as const,
-      documentNumber: docNumber,
-      notes: fNotes || undefined,
-      isCrossServiceTransfer: crossService,
-    };
-
-    let newStatus = eq.status;
-    let newHolder = eq.currentHolderId;
-
-    if (fType === 'zaduzenje' || fType === 'prenos') {
-      newStatus = 'zaduzeno';
-      newHolder = fToPersonId;
-    } else if (fType === 'razduzenje') {
-      newStatus = 'skladiste';
-      newHolder = undefined;
-    } else if (fType === 'rashodovanje') {
-      newStatus = 'rashodovano';
-      newHolder = undefined;
+      notes: fNotes,
+      admin,
+      evidenticar,
+      hasDisposalCommission: Boolean(disposalResolve?.commission),
+    });
+    if (result.error) {
+      toastError(result.error);
+      return;
     }
-
-    setState(prev => ({
-      ...prev,
-      transfers: [...prev.transfers, transfer],
-      equipment: prev.equipment.map(e =>
-        e.id === fEquipmentId
-          ? { ...e, status: newStatus as typeof e.status, currentHolderId: newHolder }
-          : e
-      ),
-    }));
-
-    // Notify the recipient
-    if (fToPersonId) {
-      const toUser = state.users.find(u => u.employeeId === fToPersonId);
-      const cat = state.categories.find(c => c.id === eq.categoryId);
-      if (toUser) {
-        addNotification(
-          toUser.id,
-          'equipment_assigned',
-          'Nova oprema zadužena',
-          `Oprema ${eq.inventoryNumber} (${cat?.name}) je zadužena na vas.`,
-          eq.id
-        );
-      }
+    try {
+      await createTransferApi(result.payload!);
+      await refresh();
+      setShowForm(false);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri kreiranju transfera';
+      toastError(message);
     }
-
-    setShowForm(false);
-  }
+  };
 
   return (
     <div>
@@ -229,21 +191,39 @@ export function TransfersPage() {
           <h1 className="text-2xl font-bold text-gray-900">Zaduženja i prenosi</h1>
           <p className="text-gray-500 mt-1">Upravljanje kretanjem opreme — zaduženja, razduženja, rashod</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => openForm('zaduzenje')} className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm font-medium">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => openForm('zaduzenje')}
+            disabled={isFrozen}
+            className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
+          >
             <Package size={16} /> Zaduži
           </button>
-          <button onClick={() => openForm('prenos')} className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 text-sm font-medium">
+          <button
+            onClick={() => openForm('prenos')}
+            disabled={isFrozen}
+            className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 text-sm font-medium disabled:opacity-50"
+          >
             <ArrowRight size={16} /> Prenos
           </button>
-          <button onClick={() => openForm('razduzenje')} className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium">
+          <button
+            onClick={() => openForm('razduzenje')}
+            disabled={isFrozen}
+            className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+          >
             <Warehouse size={16} /> Razduži
           </button>
-          <button onClick={() => openForm('rashodovanje')} className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-sm font-medium">
+          <button
+            onClick={() => openForm('rashodovanje')}
+            disabled={isFrozen}
+            className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+          >
             <Trash2 size={16} /> Rashod
           </button>
         </div>
       </div>
+
+      <InventoryFreezeActionHint onOpenInventory={onNavigate} />
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex gap-4 flex-wrap items-center">
@@ -292,7 +272,13 @@ export function TransfersPage() {
                 const signer = state.employees.find(e => e.id === t.signerId);
 
                 return (
-                  <tr key={t.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={t.id}
+                    className={`border-t border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${
+                      selectedTransferId === t.id ? 'bg-blue-50' : ''
+                    }`}
+                    onClick={() => setSelectedTransferId(t.id)}
+                  >
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-medium text-gray-800">{t.documentNumber}</span>
                     </td>
@@ -335,6 +321,11 @@ export function TransfersPage() {
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(t.status)}`}>
                         {t.status === 'raw' ? 'RAW' : 'Potpisan'}
                       </span>
+                      {t.disposalApproval ? (
+                        <p className="text-[10px] text-amber-700 mt-0.5">
+                          Rashod: {t.disposalApproval.status}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500 max-w-[150px] truncate" title={t.reason || t.notes || ''}>
                       {t.reason || t.notes || '—'}
@@ -349,6 +340,22 @@ export function TransfersPage() {
           </table>
         </div>
       </div>
+
+      {selectedTransferId && (() => {
+        const selected = state.transfers.find((t) => t.id === selectedTransferId);
+        if (!selected) {
+          return null;
+        }
+        return (
+          <div className="mt-4">
+            <TransferDocumentPanel
+              transfer={selected}
+              allowSign={selected.status === 'raw'}
+              onSigned={() => void refresh()}
+            />
+          </div>
+        );
+      })()}
 
       {/* New Transfer Modal */}
       {showForm && (
@@ -425,7 +432,7 @@ export function TransfersPage() {
                   </select>
                   {evidenticar && !admin && availableEmployees.length < state.employees.length && (
                     <p className="text-xs text-purple-500 mt-1">
-                      Prikazani su samo radnici iz vaših org. jedinica.
+                      Prikazani su samo radnici u gradovima iz vaših dodjela.
                     </p>
                   )}
                 </div>
@@ -436,12 +443,11 @@ export function TransfersPage() {
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm flex items-start gap-2">
                   <AlertTriangle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium text-red-800">Cross-service prenos!</p>
+                    <p className="font-medium text-red-800">Prenos izvan opsega!</p>
                     <p className="text-red-600 text-xs mt-0.5">
-                      {admin 
+                      {admin
                         ? 'Ovo je prenos između različitih službi. Dokumentacija će biti posebno označena.'
-                        : 'Prenos između različitih službi može izvršiti samo administrator.'
-                      }
+                        : 'Prenos izvan vašeg opsega (grad/kategorija) može izvršiti samo administrator.'}
                     </p>
                   </div>
                 </div>
@@ -466,6 +472,29 @@ export function TransfersPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
               </div>
 
+              {fType === 'rashodovanje' && evidenticar ? (
+                disposalResolve?.commission ? (
+                  <AlertBanner tone="info">
+                    Komisija za rashod: <strong>{disposalResolve.commission.name}</strong>
+                    {disposalResolve.city?.name ? ` (${disposalResolve.city.name})` : ''}
+                    <ul className="mt-2 text-xs space-y-0.5">
+                      {disposalResolve.commission.members.map((member) => (
+                        <li key={member.employeeId}>
+                          {member.employee
+                            ? `${member.employee.firstName} ${member.employee.lastName}`
+                            : member.employeeId}
+                          {member.role === 'predsjednik' ? ' — predsjednik' : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </AlertBanner>
+                ) : (
+                  <AlertBanner tone="warning">
+                    Nema aktivne komisije za rashod u gradu zaduženog radnika. Rashod nije moguć.
+                  </AlertBanner>
+                )
+              ) : null}
+
               {(fType === 'razduzenje' || fType === 'rashodovanje') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -488,7 +517,10 @@ export function TransfersPage() {
               <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50">Odustani</button>
               <button 
                 onClick={handleSave} 
-                disabled={evidenticar && !admin && wouldBeCrossService}
+                disabled={
+                  (evidenticar && !admin && wouldBeCrossService) ||
+                  (fType === 'rashodovanje' && evidenticar && !disposalResolve?.commission)
+                }
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Kreiraj prenos

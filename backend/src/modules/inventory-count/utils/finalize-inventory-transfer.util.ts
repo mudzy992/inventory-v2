@@ -1,0 +1,80 @@
+import { BadRequestException } from '@nestjs/common';
+import type { Prisma } from '../../../../generated/prisma/client';
+import {
+  buildDocumentNumber,
+  countYearlySequences,
+} from '../../../common/utils/document-number.util';
+import { buildEquipmentUpdateOnFinalize } from '../../transfers/transfer-validation.util';
+
+type FinalizeTx = Prisma.TransactionClient;
+
+export const finalizeInventoryTransferInTx = async (
+  tx: FinalizeTx,
+  transferId: string,
+  finalizedByUserId: string,
+): Promise<void> => {
+  const transfer = await tx.transfer.findUnique({
+    where: { id: transferId },
+    select: {
+      id: true,
+      status: true,
+      type: true,
+      equipmentId: true,
+      toPersonId: true,
+      toWarehouseId: true,
+      signerId: true,
+      date: true,
+      scannedDocUrl: true,
+      documentNumber: true,
+    },
+  });
+  if (!transfer) {
+    throw new BadRequestException('Transfer not found');
+  }
+  if (transfer.status === 'potpisan') {
+    return;
+  }
+  if (!transfer.scannedDocUrl) {
+    throw new BadRequestException('Signed document upload required before applying inventory transfer');
+  }
+  const year = transfer.date.getFullYear();
+  const isRashod = transfer.type === 'rashodovanje';
+  const documentNumber =
+    transfer.documentNumber.startsWith('DRAFT')
+      ? await generateFinalDocumentNumber(tx, year, isRashod)
+      : transfer.documentNumber;
+  const equipmentUpdate = buildEquipmentUpdateOnFinalize(
+    transfer.type,
+    transfer.toPersonId,
+    transfer.toWarehouseId,
+  );
+  await tx.transfer.update({
+    where: { id: transferId },
+    data: {
+      status: 'potpisan',
+      documentNumber,
+      finalizedByUserId,
+    },
+  });
+  await tx.equipment.update({
+    where: { id: transfer.equipmentId },
+    data: equipmentUpdate,
+  });
+};
+
+const generateFinalDocumentNumber = async (
+  tx: FinalizeTx,
+  year: number,
+  isRashod: boolean,
+): Promise<string> => {
+  const existing = await tx.transfer.findMany({
+    where: { documentNumber: { contains: String(year) } },
+    select: { documentNumber: true },
+  });
+  const sequence = countYearlySequences(
+    existing.map((row) => row.documentNumber),
+    year,
+    isRashod,
+  );
+  return buildDocumentNumber(year, sequence + 1, isRashod);
+};

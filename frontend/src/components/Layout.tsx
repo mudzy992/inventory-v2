@@ -2,23 +2,33 @@ import { useState } from 'react';
 import {
   Building2, Users, Package, ArrowLeftRight, FolderTree,
   FileText, LayoutDashboard, RotateCcw, ChevronLeft, ChevronRight,
-  LogOut, User, Bell, Shield, Briefcase, QrCode, List, Layers, ChevronDown, ClipboardList
+  LogOut, User, Shield, Briefcase, QrCode, List, Layers, ChevronDown, ClipboardList,
+  MapPin, Warehouse, Trash2, ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
-import { logout, getCurrentUser, getCurrentEmployee, isAdmin, isEvidenticar, getUnreadNotificationsCount, getUserRole } from '../store';
+import { getCurrentEmployee, isAdmin, isEvidenticar, isSkladistar, getUserRole } from '../store';
 import { useStore } from '../useStore';
 import { getOrgUnitPath } from '../helpers';
+import { NotificationsPanel } from './NotificationsPanel';
+import { useInventoryFreezeBanner } from '../hooks/use-inventory-freeze-banner';
+import { InventoryFreezeBanner } from './inventory-count/inventory-freeze-banner';
 
-export type PageId = 
-  | 'dashboard' 
-  | 'organization' 
-  | 'employees' 
-  | 'categories' 
-  | 'equipment' 
+export type PageId =
+  | 'dashboard'
+  | 'organization'
+  | 'locations'
+  | 'warehouses'
+  | 'employees'
+  | 'categories'
+  | 'equipment'
   | 'equipment-by-category'
-  | 'transfers' 
-  | 'documents' 
-  | 'my-equipment' 
+  | 'transfers'
+  | 'documents'
+  | 'disposal-commissions'
+  | 'inventory-count'
+  | 'registrar-stock'
+  | 'warehouse-inventory'
+  | 'my-equipment'
   | 'qr-scanner'
   | 'user-management';
 
@@ -36,21 +46,34 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
   const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(true);
   const [state] = useStore();
 
-  const currentUser = getCurrentUser();
   const currentEmployee = getCurrentEmployee();
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
+  const skladistar = isSkladistar();
   const role = getUserRole();
-  const unreadCount = currentUser ? getUnreadNotificationsCount(currentUser.id) : 0;
   const orgUnit = currentEmployee ? state.orgUnits.find(o => o.id === currentEmployee.orgUnitId) : null;
+  const { sessions: freezeSessions } = useInventoryFreezeBanner(Boolean(currentEmployee));
 
-  function handleLogout() {
-    logout();
+  const handleLogout = () => {
     onLogout();
-  }
+  };
 
-  const roleLabel = role === 'admin' ? 'Administrator' : role === 'evidenticar' ? 'Evidentičar' : 'Korisnik';
-  const roleColor = role === 'admin' ? 'bg-amber-500 text-amber-900' : role === 'evidenticar' ? 'bg-purple-500 text-purple-100' : 'bg-gray-500 text-gray-100';
+  const roleLabel =
+    role === 'admin'
+      ? 'Administrator'
+      : role === 'evidenticar'
+        ? 'Evidentičar'
+        : role === 'skladistar'
+          ? 'Skladištar'
+          : 'Korisnik';
+  const roleColor =
+    role === 'admin'
+      ? 'bg-amber-500 text-amber-900'
+      : role === 'evidenticar'
+        ? 'bg-purple-500 text-purple-100'
+        : role === 'skladistar'
+          ? 'bg-teal-500 text-teal-900'
+          : 'bg-gray-500 text-gray-100';
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -119,6 +142,26 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
                 {!collapsed && <span>Organizacija</span>}
               </button>
               <button
+                onClick={() => onNavigate('locations')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                  currentPage === 'locations' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+                )}
+              >
+                <MapPin size={20} />
+                {!collapsed && <span>Lokacije</span>}
+              </button>
+              <button
+                onClick={() => onNavigate('warehouses')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                  currentPage === 'warehouses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+                )}
+              >
+                <Warehouse size={20} />
+                {!collapsed && <span>Skladišta</span>}
+              </button>
+              <button
                 onClick={() => onNavigate('employees')}
                 className={cn(
                   'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
@@ -137,6 +180,26 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
               >
                 <FolderTree size={20} />
                 {!collapsed && <span>Kategorije</span>}
+              </button>
+              <button
+                onClick={() => onNavigate('disposal-commissions')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                  currentPage === 'disposal-commissions' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+                )}
+              >
+                <Trash2 size={20} />
+                {!collapsed && <span>Komisija rashod</span>}
+              </button>
+              <button
+                onClick={() => onNavigate('inventory-count')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                  currentPage === 'inventory-count' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+                )}
+              >
+                <ClipboardCheck size={20} />
+                {!collapsed && <span>Popis</span>}
               </button>
               <button
                 onClick={() => onNavigate('user-management')}
@@ -166,6 +229,16 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
                 {!collapsed && <span>Kontrolna tabla</span>}
               </button>
               <button
+                onClick={() => onNavigate('registrar-stock')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                  currentPage === 'registrar-stock' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+                )}
+              >
+                <Package size={20} />
+                {!collapsed && <span>Skladišna roba</span>}
+              </button>
+              <button
                 onClick={() => onNavigate('employees')}
                 className={cn(
                   'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
@@ -174,6 +247,42 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
               >
                 <Users size={20} />
                 {!collapsed && <span>Radnici</span>}
+              </button>
+              <button
+                onClick={() => onNavigate('inventory-count')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                  currentPage === 'inventory-count' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+                )}
+              >
+                <ClipboardCheck size={20} />
+                {!collapsed && <span>Popis</span>}
+              </button>
+            </>
+          )}
+
+          {skladistar && !admin && (
+            <>
+              {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mb-2">Skladište</p>}
+              <button
+                onClick={() => onNavigate('warehouses')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                  currentPage === 'warehouses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+                )}
+              >
+                <Package size={20} />
+                {!collapsed && <span>Moja skladišta</span>}
+              </button>
+              <button
+                onClick={() => onNavigate('warehouse-inventory')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                  currentPage === 'warehouse-inventory' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+                )}
+              >
+                <ClipboardCheck size={20} />
+                {!collapsed && <span>Popis skladišta</span>}
               </button>
             </>
           )}
@@ -270,7 +379,7 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
 
         {/* Footer actions */}
         <div className="border-t border-slate-700 p-2">
-          {admin && (
+          {admin && import.meta.env.DEV && (
             <button
               onClick={onReset}
               className="w-full flex items-center gap-3 px-4 py-2 text-xs text-slate-400 hover:text-red-400 transition-colors"
@@ -309,15 +418,7 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
             )}
           </div>
           <div className="flex items-center gap-3">
-            {/* Notifications */}
-            <button className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-              <Bell size={20} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
+            <NotificationsPanel />
 
             {/* User menu */}
             <div className="relative">
@@ -368,6 +469,8 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
             </div>
           </div>
         </header>
+
+        <InventoryFreezeBanner sessions={freezeSessions} onNavigate={onNavigate} />
 
         {/* Main content area */}
         <main className="flex-1 overflow-y-auto">

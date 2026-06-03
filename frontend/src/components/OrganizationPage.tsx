@@ -1,10 +1,19 @@
 import { useState } from 'react';
-import { useStore } from '../useStore';
+import { useStore, useRefreshData } from '../useStore';
+import { createOrgUnitApi, deleteOrgUnitApi, updateOrgUnitApi } from '../api/data-api';
+import { ApiError } from '../api/client';
+import { useToast } from '../contexts/toast-context';
 import { ChevronDown, ChevronRight, Building2, Plus, Edit2, Trash2, Users, Shield } from 'lucide-react';
-import { getOrgUnitTypeLabel } from '../helpers';
+import {
+  getCityLabel,
+  getEffectiveCityForOrgUnit,
+  getEffectiveSignerForOrgUnit,
+  getOrgUnitTypeLabel,
+} from '../helpers';
 import { cn } from '../utils/cn';
 import { v4 as uuidv4 } from 'uuid';
 import type { OrgUnit, OrgUnitType } from '../types';
+import { OrgUnitWarehousesSection } from './organization/org-unit-warehouses-section';
 
 function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
   unit: OrgUnit;
@@ -17,7 +26,10 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
   const [expanded, setExpanded] = useState(level < 2);
   const children = state.orgUnits.filter(o => o.parentId === unit.id);
   const employees = state.employees.filter(e => e.orgUnitId === unit.id);
-  const signer = unit.signerId ? state.employees.find(e => e.id === unit.signerId) : null;
+  const explicitSigner = unit.signerId ? state.employees.find((e) => e.id === unit.signerId) : null;
+  const effectiveSigner = getEffectiveSignerForOrgUnit(state.orgUnits, state.employees, unit.id);
+  const inheritedSigner =
+    effectiveSigner && effectiveSigner.id !== unit.signerId ? effectiveSigner : null;
   const hasChildren = children.length > 0;
 
   const typeColors: Record<string, string> = {
@@ -61,9 +73,14 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
           <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', badgeColors[unit.type] || 'bg-gray-100 text-gray-600')}>
             {getOrgUnitTypeLabel(unit.type)}
           </span>
-          {signer && (
+          {explicitSigner && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 flex items-center gap-1">
-              <Shield size={10} /> {signer.firstName} {signer.lastName}
+              <Shield size={10} /> {explicitSigner.firstName} {explicitSigner.lastName}
+            </span>
+          )}
+          {!explicitSigner && inheritedSigner && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 flex items-center gap-1">
+              <Shield size={10} /> {inheritedSigner.firstName} {inheritedSigner.lastName} (nasl.)
             </span>
           )}
           <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
@@ -103,7 +120,9 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
 }
 
 export function OrganizationPage() {
-  const [state, setState] = useStore();
+  const [state] = useStore();
+  const refresh = useRefreshData();
+  const { toastError } = useToast();
   const [editingUnit, setEditingUnit] = useState<OrgUnit | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formParentId, setFormParentId] = useState<string | null>(null);
@@ -111,6 +130,7 @@ export function OrganizationPage() {
   const [formName, setFormName] = useState('');
   const [formType, setFormType] = useState<OrgUnitType>('sektor');
   const [formSignerId, setFormSignerId] = useState('');
+  const [formLocationCityId, setFormLocationCityId] = useState('');
 
   const rootUnits = state.orgUnits.filter(o => o.parentId === null);
 
@@ -120,6 +140,7 @@ export function OrganizationPage() {
     setFormName('');
     setFormType('sektor');
     setFormSignerId('');
+    setFormLocationCityId('');
     setShowForm(true);
   }
 
@@ -129,43 +150,43 @@ export function OrganizationPage() {
     setFormName(unit.name);
     setFormType(unit.type);
     setFormSignerId(unit.signerId || '');
+    setFormLocationCityId(unit.locationCityId || '');
     setShowForm(true);
   }
 
-  function handleSave() {
+  const handleSave = async () => {
     if (!formName.trim()) return;
-    if (editingUnit) {
-      setState(prev => ({
-        ...prev,
-        orgUnits: prev.orgUnits.map(o =>
-          o.id === editingUnit.id
-            ? { ...o, name: formName.trim(), type: formType, signerId: formSignerId || undefined }
-            : o
-        ),
-      }));
-    } else {
-      const newUnit: OrgUnit = {
-        id: uuidv4(),
+    try {
+      const payload = {
         name: formName.trim(),
         type: formType,
         parentId: formParentId,
-        signerId: formSignerId || undefined,
+        signerId: formSignerId || null,
+        locationCityId: formLocationCityId || null,
       };
-      setState(prev => ({
-        ...prev,
-        orgUnits: [...prev.orgUnits, newUnit],
-      }));
+      if (editingUnit) {
+        await updateOrgUnitApi(editingUnit.id, payload);
+      } else {
+        await createOrgUnitApi(payload);
+      }
+      await refresh();
+      setShowForm(false);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri spremanju';
+      toastError(message);
     }
-    setShowForm(false);
-  }
+  };
 
-  function handleDelete(id: string) {
+  const handleDelete = async (id: string) => {
     if (!confirm('Da li ste sigurni da želite obrisati ovu organizacijsku jedinicu?')) return;
-    setState(prev => ({
-      ...prev,
-      orgUnits: prev.orgUnits.filter(o => o.id !== id),
-    }));
-  }
+    try {
+      await deleteOrgUnitApi(id);
+      await refresh();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri brisanju';
+      toastError(message);
+    }
+  };
 
   return (
     <div>
@@ -267,6 +288,43 @@ export function OrganizationPage() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Lokacija (grad)</label>
+                <select
+                  value={formLocationCityId}
+                  onChange={(event) => setFormLocationCityId(event.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                >
+                  <option value="">— Nasljeđuje od nadređene —</option>
+                  {state.cities.map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {getCityLabel(state.cities, city.id)}
+                    </option>
+                  ))}
+                </select>
+                {editingUnit && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Efektivna lokacija:{' '}
+                    {getCityLabel(state.cities, getEffectiveCityForOrgUnit(state.orgUnits, editingUnit.id))}
+                  </p>
+                )}
+              </div>
+              {editingUnit && (
+                <p className="text-xs text-gray-500 -mt-2">
+                  Efektivni potpisnik:{' '}
+                  {(() => {
+                    const effective = getEffectiveSignerForOrgUnit(
+                      state.orgUnits,
+                      state.employees,
+                      editingUnit.id,
+                    );
+                    return effective
+                      ? `${effective.firstName} ${effective.lastName}`
+                      : '— nije konfigurisan u hijerarhiji';
+                  })()}
+                </p>
+              )}
+              {editingUnit ? <OrgUnitWarehousesSection orgUnit={editingUnit} /> : null}
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
               <button

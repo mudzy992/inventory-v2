@@ -1,51 +1,131 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useStore } from '../useStore';
-import { getNextDocumentNumber, getCurrentUser, isAdmin, addNotification } from '../store';
-import { getOrgUnitPath, getEmployeeFullName, formatDate, getStatusLabel, getStatusColor, getSignerForEmployee } from '../helpers';
+import { useStore, useRefreshData } from '../useStore';
+import { getCurrentUser, isAdmin, isEvidenticar, employeeMatchesScope } from '../store';
+import { createTransferApi } from '../api/data-api';
+import { resolveDisposalCommissionApi, type DisposalResolveDto } from '../api/disposal-api';
+import { ApiError } from '../api/client';
+import { useToast } from '../contexts/toast-context';
+import { getOrgUnitPath, getEmployeeFullName, formatDate, getStatusLabel, getStatusColor } from '../helpers';
+import {
+  buildEquipmentDisplayName,
+  buildEquipmentQrUrl,
+  getUniqueFieldDisplay,
+} from '../helpers/equipment-display.util';
+import { buildTransferCreatePayload, canSignDisposalTransfer } from '../helpers/create-transfer-payload.util';
 import { X, Package, QrCode, History, ArrowRight, Download, Printer, User, Building2, FileText, AlertTriangle, CheckCircle, Warehouse, Trash2 } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
 import type { TransferType } from '../types';
+import { TransferDocumentPanel } from './TransferDocumentPanel';
+import { AlertBanner } from './ui/alert-banner';
+import { ModalRoot } from './ui/modal-root';
 
 interface EquipmentCardProps {
   equipmentId: string;
   onClose: () => void;
   showTransferActions?: boolean;
+  initialShowQR?: boolean;
 }
 
-export function EquipmentCard({ equipmentId, onClose, showTransferActions = true }: EquipmentCardProps) {
-  const [state, setState] = useStore();
-  const [showQR, setShowQR] = useState(false);
+export function EquipmentCard({ equipmentId, onClose, showTransferActions = true, initialShowQR = false }: EquipmentCardProps) {
+  const [state] = useStore();
+  const refresh = useRefreshData();
+  const { toastError, toastSuccess } = useToast();
+  const [showQR, setShowQR] = useState(initialShowQR);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<TransferType>('prenos');
   const [toPersonId, setToPersonId] = useState('');
   const [reason, setReason] = useState('');
+  const [expandedTransferId, setExpandedTransferId] = useState<string | null>(null);
+  const [disposalResolve, setDisposalResolve] = useState<DisposalResolveDto | null>(null);
 
   const currentUser = getCurrentUser();
   const admin = isAdmin();
+  const evidenticar = isEvidenticar();
 
-  const equipment = state.equipment.find(e => e.id === equipmentId);
-  if (!equipment) return null;
+  const equipment = state.equipment.find((e) => e.id === equipmentId);
+  const eq = equipment;
+  const cat = eq ? state.categories.find((c) => c.id === eq.categoryId) : undefined;
+  const holder = eq?.currentHolderId ? state.employees.find((e) => e.id === eq.currentHolderId) : null;
+  const holderOrg = holder ? state.orgUnits.find((o) => o.id === holder.orgUnitId) : null;
+  const transfers = eq
+    ? state.transfers.filter((t) => t.equipmentId === equipmentId).sort((a, b) => b.date.localeCompare(a.date))
+    : [];
 
-  const eq = equipment; // This satisfies TypeScript that eq is defined
-  const cat = state.categories.find(c => c.id === eq.categoryId);
-  const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
-  const holderOrg = holder ? state.orgUnits.find(o => o.id === holder.orgUnitId) : null;
-  const transfers = state.transfers.filter(t => t.equipmentId === equipmentId).sort((a, b) => b.date.localeCompare(a.date));
+  const availableEmployees = useMemo(() => {
+    if (!eq) return [];
+    if (admin) {
+      return state.employees.filter((row) => row.id !== eq.currentHolderId);
+    }
+    if (evidenticar) {
+      return state.employees.filter(
+        (row) => row.id !== eq.currentHolderId && employeeMatchesScope(row, state, currentUser),
+      );
+    }
+    return [];
+  }, [admin, currentUser, eq, evidenticar, state]);
 
-  // Generate QR data - this would be the URL in production
-  const qrData = `INVENTAR:${eq.inventoryNumber}|${eq.id}`;
+  const warehousePreview = useMemo(() => {
+    if (!eq || transferType !== 'razduzenje') {
+      return null;
+    }
+    const result = buildTransferCreatePayload({
+      state,
+      user: currentUser,
+      equipment: eq,
+      type: 'razduzenje',
+      admin,
+      evidenticar,
+    });
+    if (!result.targetWarehouseId) {
+      return null;
+    }
+    return state.warehouses.find((row) => row.id === result.targetWarehouseId);
+  }, [admin, currentUser, eq, evidenticar, state, transferType]);
 
-  const canTransfer = admin && eq.status !== 'rashodovano';
-  const canAssign = admin && eq.status === 'skladiste';
-  const canReturn = admin && eq.status === 'zaduzeno';
-  const canDecommission = admin && eq.status !== 'rashodovano';
+  useEffect(() => {
+    setShowQR(initialShowQR);
+  }, [equipmentId, initialShowQR]);
 
-  function handleDownloadQR() {
+  useEffect(() => {
+    if (!eq || !showTransferModal || transferType !== 'rashodovanje') {
+      setDisposalResolve(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const resolved = await resolveDisposalCommissionApi(eq.id);
+        if (!cancelled) {
+          setDisposalResolve(resolved);
+        }
+      } catch {
+        if (!cancelled) {
+          setDisposalResolve(null);
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [eq, showTransferModal, transferType]);
+
+  if (!equipment || !eq) return null;
+
+  const qrData = buildEquipmentQrUrl(eq);
+  const displayName = buildEquipmentDisplayName(cat, eq.specifications);
+  const uniqueField = getUniqueFieldDisplay(cat, eq.specifications);
+
+  const canManage = admin || evidenticar;
+  const canTransfer = canManage && eq.status !== 'rashodovano';
+  const canAssign = canManage && eq.status === 'skladiste';
+  const canReturn = canManage && eq.status === 'zaduzeno';
+  const canDecommission = canManage && eq.status !== 'rashodovano';
+
+  const handleDownloadQR = () => {
     const canvas = document.createElement('canvas');
     const svg = document.querySelector('#equipment-qr-code svg');
     if (!svg) return;
-
     const svgData = new XMLSerializer().serializeToString(svg);
     const img = new Image();
     img.onload = () => {
@@ -53,31 +133,30 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       canvas.height = 350;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 25, 25, 250, 250);
-      
       ctx.fillStyle = 'black';
       ctx.font = 'bold 14px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(eq.inventoryNumber, 150, 300);
+      ctx.fillText(displayName.slice(0, 40), 150, 290);
       ctx.font = '12px Arial';
-      ctx.fillText(cat?.name || '', 150, 320);
-      ctx.fillText('Skeniraj za detalje', 150, 340);
-
+      ctx.fillText(eq.inventoryNumber, 150, 310);
+      if (uniqueField) {
+        ctx.fillText(`${uniqueField.label}: ${uniqueField.value}`.slice(0, 42), 150, 328);
+      }
+      ctx.fillText('Skeniraj za detalje', 150, 346);
       const link = document.createElement('a');
       link.download = `QR-${eq.inventoryNumber}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     };
     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-  }
+  };
 
-  function handlePrintQR() {
+  const handlePrintQR = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -89,15 +168,13 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
           .inv-number { font-size: 16px; font-weight: bold; margin-top: 15px; }
           .category { font-size: 12px; color: #666; margin-top: 5px; }
           .instruction { font-size: 10px; color: #999; margin-top: 10px; }
-          @media print {
-            body { padding: 0; }
-            .qr-container { border: 1px solid #000; }
-          }
         </style>
       </head>
       <body>
         <div class="qr-container">
           ${document.querySelector('#equipment-qr-code')?.innerHTML || ''}
+          <div style="font-size:13px;font-weight:bold;margin-top:12px;">${displayName}</div>
+          ${uniqueField ? `<div style="font-size:11px;margin-top:4px;">${uniqueField.label}: ${uniqueField.value}</div>` : ''}
           <div class="inv-number">${eq.inventoryNumber}</div>
           <div class="category">${cat?.name || ''}</div>
           <div class="instruction">Skeniraj za detalje opreme</div>
@@ -107,93 +184,61 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       </html>
     `);
     printWindow.document.close();
-  }
+  };
 
-  function handleTransfer() {
-    if (!currentUser) return;
-    
-    const employee = state.employees.find(e => e.id === currentUser.employeeId);
-    if (!employee) return;
-
-    if ((transferType === 'zaduzenje' || transferType === 'prenos') && !toPersonId) {
-      alert('Odaberite osobu na koju prenosite opremu.');
-      return;
-    }
-
-    // Get signer
-    let signerId = '';
-    if (transferType === 'zaduzenje' || transferType === 'prenos') {
-      const signer = getSignerForEmployee(state, toPersonId);
-      signerId = signer?.id || state.employees[0]?.id || '';
-    } else if (eq.currentHolderId) {
-      const signer = getSignerForEmployee(state, eq.currentHolderId);
-      signerId = signer?.id || state.employees[0]?.id || '';
-    } else {
-      const dirUnit = state.orgUnits.find(o => o.type === 'direkcija');
-      signerId = dirUnit?.signerId || state.employees[0]?.id || '';
-    }
-
-    const docNumber = getNextDocumentNumber();
-    const transfer = {
-      id: uuidv4(),
-      equipmentId: eq.id,
-      type: transferType,
-      fromType: (eq.status === 'zaduzeno' ? 'osoba' : 'skladiste') as 'skladiste' | 'osoba',
-      fromPersonId: eq.currentHolderId || undefined,
-      toType: (transferType === 'razduzenje' ? 'skladiste' : transferType === 'rashodovanje' ? 'rashod' : 'osoba') as 'skladiste' | 'osoba' | 'rashod',
-      toPersonId: (transferType === 'zaduzenje' || transferType === 'prenos') ? toPersonId : undefined,
-      signerId,
-      date: new Date().toISOString().slice(0, 10),
-      reason: reason || undefined,
-      status: 'raw' as const,
-      documentNumber: docNumber,
-    };
-
-    let newStatus = eq.status;
-    let newHolder = eq.currentHolderId;
-
-    if (transferType === 'zaduzenje' || transferType === 'prenos') {
-      newStatus = 'zaduzeno';
-      newHolder = toPersonId;
-    } else if (transferType === 'razduzenje') {
-      newStatus = 'skladiste';
-      newHolder = undefined;
-    } else if (transferType === 'rashodovanje') {
-      newStatus = 'rashodovano';
-      newHolder = undefined;
-    }
-
-    setState(prev => ({
-      ...prev,
-      transfers: [...prev.transfers, transfer],
-      equipment: prev.equipment.map(e =>
-        e.id === eq.id ? { ...e, status: newStatus as typeof e.status, currentHolderId: newHolder } : e
-      ),
-    }));
-
-    // Notify the recipient
-    if (toPersonId) {
-      const toUser = state.users.find(u => u.employeeId === toPersonId);
-      if (toUser) {
-        addNotification(
-          toUser.id,
-          'equipment_assigned',
-          'Nova oprema zadužena',
-          `Oprema ${eq.inventoryNumber} (${cat?.name}) je zadužena na vas.`,
-          eq.id
-        );
-      }
-    }
-
+  const handleCloseTransferModal = () => {
     setShowTransferModal(false);
     setToPersonId('');
     setReason('');
-  }
+  };
+
+  const handleTransfer = async () => {
+    if (!currentUser) return;
+    const result = buildTransferCreatePayload({
+      state,
+      user: currentUser,
+      equipment: eq,
+      type: transferType,
+      toPersonId,
+      reason,
+      admin,
+      evidenticar,
+      hasDisposalCommission: Boolean(disposalResolve?.commission),
+    });
+    if (result.error) {
+      toastError(result.error);
+      return;
+    }
+    try {
+      await createTransferApi(result.payload!);
+      await refresh();
+      handleCloseTransferModal();
+      toastSuccess(
+        transferType === 'rashodovanje'
+          ? 'Predlog rashoda je kreiran (RAW). Odobrenje komisije je potrebno prije potpisa.'
+          : 'Transfer je kreiran.',
+      );
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri transferu';
+      toastError(message);
+    }
+  };
+
+  const rashodBlocked =
+    transferType === 'rashodovanje' && evidenticar && !admin && !disposalResolve?.commission;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-        {/* Header */}
+    <>
+      <ModalRoot
+        open
+        onClose={onClose}
+        zIndex={50}
+        size="xl"
+        enableEscape={!showTransferModal}
+        closeOnBackdrop={!showTransferModal}
+        panelClassName="max-w-3xl"
+      >
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
@@ -212,18 +257,15 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
             }`}>
               {getStatusLabel(eq.status)}
             </span>
-            <button onClick={onClose} className="text-white/70 hover:text-white p-1">
+            <button type="button" onClick={onClose} className="text-white/70 hover:text-white p-1" aria-label="Zatvori">
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column - Details */}
             <div className="space-y-5">
-              {/* Current Holder */}
               {holder && (
                 <div className="bg-green-50 rounded-xl p-4">
                   <h3 className="text-xs font-semibold text-green-800 uppercase mb-2 flex items-center gap-1">
@@ -259,11 +301,10 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                 </div>
               )}
 
-              {/* Specifications */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Specifikacije</h3>
                 <div className="space-y-2">
-                  {cat && [...cat.fields, ...cat.optionalFields].map(f => {
+                  {cat && [...cat.fields, ...cat.optionalFields].map((f) => {
                     const val = eq.specifications[f.id];
                     if (!val && !f.required) return null;
                     return (
@@ -285,15 +326,14 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
               </div>
             </div>
 
-            {/* Right Column - QR & History */}
             <div className="space-y-5">
-              {/* QR Code */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                     <QrCode size={16} /> QR Kod
                   </h3>
                   <button
+                    type="button"
                     onClick={() => setShowQR(!showQR)}
                     className="text-xs text-blue-600 hover:text-blue-800"
                   >
@@ -307,12 +347,14 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                     </div>
                     <div className="mt-3 flex justify-center gap-2">
                       <button
+                        type="button"
                         onClick={handleDownloadQR}
                         className="flex items-center gap-1.5 text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors"
                       >
                         <Download size={12} /> Preuzmi
                       </button>
                       <button
+                        type="button"
                         onClick={handlePrintQR}
                         className="flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
                       >
@@ -322,37 +364,58 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   </div>
                 )}
                 {!showQR && (
-                  <p className="text-xs text-gray-400 text-center">Klikni "Prikaži" za QR kod opreme</p>
+                  <p className="text-xs text-gray-400 text-center">Klikni &quot;Prikaži&quot; za QR kod opreme</p>
                 )}
               </div>
 
-              {/* Transfer History */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                   <History size={16} /> Historija kretanja
                 </h3>
                 {transfers.length > 0 ? (
                   <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {transfers.map(t => {
-                      const from = t.fromPersonId ? state.employees.find(e => e.id === t.fromPersonId) : null;
-                      const to = t.toPersonId ? state.employees.find(e => e.id === t.toPersonId) : null;
+                    {transfers.map((t) => {
+                      const from = t.fromPersonId ? state.employees.find((e) => e.id === t.fromPersonId) : null;
+                      const to = t.toPersonId ? state.employees.find((e) => e.id === t.toPersonId) : null;
                       return (
                         <div key={t.id} className="bg-gray-50 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-semibold text-gray-700">{getStatusLabel(t.type)}</span>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs px-1.5 py-0.5 rounded ${getStatusColor(t.status)}`}>
-                                {t.status === 'raw' ? 'RAW' : '✓'}
-                              </span>
-                              <span className="text-xs text-gray-400">{formatDate(t.date)}</span>
+                          <button
+                            type="button"
+                            className="w-full text-left"
+                            onClick={() =>
+                              setExpandedTransferId((prev) => (prev === t.id ? null : t.id))
+                            }
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold text-gray-700">{getStatusLabel(t.type)}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs px-1.5 py-0.5 rounded ${getStatusColor(t.status)}`}>
+                                  {t.status === 'raw' ? 'RAW' : '✓'}
+                                </span>
+                                <span className="text-xs text-gray-400">{formatDate(t.date)}</span>
+                              </div>
                             </div>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {t.fromType === 'skladiste' ? 'Skladište' : from ? getEmployeeFullName(from) : '—'}
-                            {' → '}
-                            {t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : to ? getEmployeeFullName(to) : '—'}
-                          </p>
-                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">{t.documentNumber}</p>
+                            <p className="text-xs text-gray-500">
+                              {t.fromType === 'skladiste' ? 'Skladište' : from ? getEmployeeFullName(from) : '—'}
+                              {' → '}
+                              {t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : to ? getEmployeeFullName(to) : '—'}
+                            </p>
+                            {t.disposalApproval ? (
+                              <p className="text-[10px] text-amber-700 mt-0.5">
+                                Komisija: {t.disposalApproval.status}
+                              </p>
+                            ) : null}
+                            <p className="text-[10px] text-gray-400 font-mono mt-0.5">{t.documentNumber}</p>
+                          </button>
+                          {expandedTransferId === t.id && (
+                            <div className="mt-2">
+                              <TransferDocumentPanel
+                                transfer={t}
+                                allowSign={canManage && canSignDisposalTransfer(t)}
+                                onSigned={() => void refresh()}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -365,16 +428,16 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
           </div>
         </div>
 
-        {/* Actions Footer */}
         {showTransferActions && canTransfer && (
           <div className="border-t border-gray-100 px-6 py-4 bg-gray-50 flex justify-between items-center">
             <div className="text-xs text-gray-400">
               <FileText size={12} className="inline mr-1" />
               {transfers.length} prenosnica
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap justify-end">
               {canAssign && (
                 <button
+                  type="button"
                   onClick={() => { setTransferType('zaduzenje'); setShowTransferModal(true); }}
                   className="flex items-center gap-1.5 text-sm bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
                 >
@@ -384,12 +447,14 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
               {canReturn && (
                 <>
                   <button
+                    type="button"
                     onClick={() => { setTransferType('prenos'); setShowTransferModal(true); }}
                     className="flex items-center gap-1.5 text-sm bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
                   >
                     <ArrowRight size={14} /> Prenesi
                   </button>
                   <button
+                    type="button"
                     onClick={() => { setTransferType('razduzenje'); setShowTransferModal(true); }}
                     className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                   >
@@ -399,6 +464,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
               )}
               {canDecommission && (
                 <button
+                  type="button"
                   onClick={() => { setTransferType('rashodovanje'); setShowTransferModal(true); }}
                   className="flex items-center gap-1.5 text-sm bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
                 >
@@ -409,71 +475,96 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
           </div>
         )}
 
-        {/* Transfer Modal */}
-        {showTransferModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowTransferModal(false)}>
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-semibold mb-4">
-                {transferType === 'zaduzenje' && '📦 Zaduženje opreme'}
-                {transferType === 'prenos' && '🔄 Prenos opreme'}
-                {transferType === 'razduzenje' && '🏪 Razduženje opreme'}
-                {transferType === 'rashodovanje' && '🗑️ Rashodovanje opreme'}
-              </h3>
+        </div>
+      </ModalRoot>
 
-              <div className="space-y-4">
-                {(transferType === 'zaduzenje' || transferType === 'prenos') && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Zadužiti na osobu *</label>
-                    <select
-                      value={toPersonId}
-                      onChange={e => setToPersonId(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="">— Odaberi osobu —</option>
-                      {state.employees
-                        .filter(e => e.id !== eq.currentHolderId)
-                        .map(emp => (
-                          <option key={emp.id} value={emp.id}>
-                            {getEmployeeFullName(emp)} — {emp.title}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                )}
+      <ModalRoot open={showTransferModal} onClose={handleCloseTransferModal} zIndex={60} size="md">
+        <div className="bg-white rounded-xl shadow-2xl w-full p-6">
+          <h3 className="text-lg font-semibold mb-4">
+            {transferType === 'zaduzenje' && 'Zaduženje opreme'}
+            {transferType === 'prenos' && 'Prenos opreme'}
+            {transferType === 'razduzenje' && 'Razduženje opreme'}
+            {transferType === 'rashodovanje' && 'Predlog rashoda (komisija)'}
+          </h3>
 
-                {(transferType === 'razduzenje' || transferType === 'rashodovanje') && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Razlog</label>
-                    <textarea
-                      value={reason}
-                      onChange={e => setReason(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      rows={3}
-                      placeholder={transferType === 'rashodovanje' ? 'Razlog rashodovanja...' : 'Razlog razduženja...'}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 mt-6">
-                <button
-                  onClick={() => setShowTransferModal(false)}
-                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+          <div className="space-y-4">
+            {(transferType === 'zaduzenje' || transferType === 'prenos') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Zadužiti na osobu *</label>
+                <select
+                  value={toPersonId}
+                  onChange={(e) => setToPersonId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                  Odustani
-                </button>
-                <button
-                  onClick={handleTransfer}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  <CheckCircle size={14} className="inline mr-1" />
-                  Potvrdi
-                </button>
+                  <option value="">— Odaberi osobu —</option>
+                  {availableEmployees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {getEmployeeFullName(emp)} — {emp.title}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
+            )}
+
+            {transferType === 'razduzenje' && warehousePreview ? (
+              <AlertBanner tone="info">
+                Ciljno skladište: <strong>{warehousePreview.name}</strong>
+              </AlertBanner>
+            ) : null}
+
+            {transferType === 'rashodovanje' && evidenticar ? (
+              disposalResolve?.commission ? (
+                <AlertBanner tone="info">
+                  Komisija za rashod: <strong>{disposalResolve.commission.name}</strong>
+                  {disposalResolve.city?.name ? ` (${disposalResolve.city.name})` : ''}
+                </AlertBanner>
+              ) : (
+                <AlertBanner tone="warning">
+                  Nema aktivne komisije za rashod u gradu zaduženog radnika.
+                </AlertBanner>
+              )
+            ) : null}
+
+            {transferType === 'rashodovanje' ? (
+              <p className="text-xs text-gray-500">
+                Kreira se RAW prenosnica; oprema se rashoduje tek nakon odobrenja komisije i potpisa.
+              </p>
+            ) : null}
+
+            {(transferType === 'razduzenje' || transferType === 'rashodovanje') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Razlog</label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  rows={3}
+                  placeholder={transferType === 'rashodovanje' ? 'Razlog rashodovanja...' : 'Razlog razduženja...'}
+                />
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              type="button"
+              onClick={handleCloseTransferModal}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Odustani
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleTransfer()}
+              disabled={rashodBlocked}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              <CheckCircle size={14} className="inline mr-1" />
+              Potvrdi
+            </button>
+          </div>
+        </div>
+      </ModalRoot>
+    </>
   );
 }

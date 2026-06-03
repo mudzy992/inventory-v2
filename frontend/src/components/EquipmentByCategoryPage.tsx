@@ -1,17 +1,30 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../useStore';
-import { getParentCategories, getSubCategories, getEquipmentStats, isAdmin, isEvidenticar, getManagedOrgUnitIds } from '../store';
-import { ChevronRight, Folder, Layers, Search, Filter, Download, X, Eye, QrCode } from 'lucide-react';
+import {
+  getParentCategories,
+  getSubCategories,
+  getEquipmentStats,
+  isAdmin,
+  isEvidenticar,
+  getCurrentUser,
+  equipmentMatchesScope,
+} from '../store';
+import { ChevronRight, Folder, Layers, Search, Filter, Download, X, Eye, QrCode, Printer } from 'lucide-react';
+import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName } from '../helpers';
 import { EquipmentCard } from './EquipmentCard';
 import type { FilterCondition } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { ModalRoot } from './ui/modal-root';
 
 export function EquipmentByCategoryPage() {
   const [state, setState] = useStore();
   const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
   const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
   const [viewItemId, setViewItemId] = useState<string | null>(null);
+  const [viewShowQR, setViewShowQR] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showLabels, setShowLabels] = useState(false);
   
   // Dynamic filters
   const [activeFilters, setActiveFilters] = useState<FilterCondition[]>([]);
@@ -27,7 +40,8 @@ export function EquipmentByCategoryPage() {
 
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
-  const managedOrgUnitIds = getManagedOrgUnitIds();
+  const user = getCurrentUser();
+  const useScope = evidenticar && !admin;
 
   const parentCategories = getParentCategories();
   const selectedParent = parentCategories.find(p => p.id === selectedParentId);
@@ -42,16 +56,11 @@ export function EquipmentByCategoryPage() {
     
     // Filter by managed org units for evidenticar
     if (evidenticar && !admin) {
-      items = items.filter(e => {
-        if (e.status === 'skladiste') return true;
-        if (!e.currentHolderId) return true;
-        const holder = state.employees.find(emp => emp.id === e.currentHolderId);
-        return holder && managedOrgUnitIds.includes(holder.orgUnitId);
-      });
+      items = items.filter((e) => equipmentMatchesScope(e, state, user));
     }
     
     return items;
-  }, [state.equipment, selectedSubId, evidenticar, admin, managedOrgUnitIds, state.employees]);
+  }, [state.equipment, selectedSubId, evidenticar, admin, user, state]);
 
   // Apply dynamic filters
   const filteredEquipment = useMemo(() => {
@@ -202,7 +211,22 @@ export function EquipmentByCategoryPage() {
   }
 
   // Stats for selected category
-  const stats = selectedSubId ? getEquipmentStats(selectedSubId, evidenticar && !admin ? managedOrgUnitIds : undefined) : null;
+  const stats = selectedSubId ? getEquipmentStats(selectedSubId, useScope) : null;
+
+  useEffect(() => {
+    setViewItemId(null);
+    setViewShowQR(false);
+  }, [selectedSubId]);
+
+  const handleOpenEquipment = (equipmentId: string, showQR = false) => {
+    setViewItemId(equipmentId);
+    setViewShowQR(showQR);
+  };
+
+  const handleCloseEquipment = () => {
+    setViewItemId(null);
+    setViewShowQR(false);
+  };
 
   return (
     <div>
@@ -214,7 +238,7 @@ export function EquipmentByCategoryPage() {
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-4 text-sm">
         <button 
-          onClick={() => { setSelectedParentId(null); setSelectedSubId(null); }}
+          onClick={() => { setSelectedParentId(null); setSelectedSubId(null); handleCloseEquipment(); }}
           className={`${!selectedParentId ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
         >
           Sve kategorije
@@ -223,7 +247,7 @@ export function EquipmentByCategoryPage() {
           <>
             <ChevronRight size={14} className="text-gray-400" />
             <button 
-              onClick={() => setSelectedSubId(null)}
+              onClick={() => { setSelectedSubId(null); handleCloseEquipment(); }}
               className={`${!selectedSubId ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
             >
               {selectedParent.name}
@@ -245,7 +269,7 @@ export function EquipmentByCategoryPage() {
             // Show parent categories
             parentCategories.map(parent => {
               const subs = getSubCategories(parent.id);
-              const parentStats = getEquipmentStats(parent.id, evidenticar && !admin ? managedOrgUnitIds : undefined);
+              const parentStats = getEquipmentStats(parent.id, useScope);
               return (
                 <button
                   key={parent.id}
@@ -272,7 +296,7 @@ export function EquipmentByCategoryPage() {
           ) : (
             // Show sub-categories
             subCategories.map(sub => {
-              const subStats = getEquipmentStats(sub.id, evidenticar && !admin ? managedOrgUnitIds : undefined);
+              const subStats = getEquipmentStats(sub.id, useScope);
               return (
                 <button
                   key={sub.id}
@@ -383,10 +407,21 @@ export function EquipmentByCategoryPage() {
             )}
           </div>
 
-          {/* Results count */}
-          <p className="text-xs text-gray-500 mb-2">
-            Prikazano: {filteredEquipment.length} {filteredEquipment.length !== categoryEquipment.length && `od ${categoryEquipment.length}`} stavki
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-gray-500">
+              Prikazano: {filteredEquipment.length}{' '}
+              {filteredEquipment.length !== categoryEquipment.length && `od ${categoryEquipment.length}`} stavki
+            </p>
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowLabels(true)}
+                className="flex items-center gap-1 text-xs border px-2 py-1 rounded-lg hover:bg-gray-50"
+              >
+                <Printer size={12} /> Štampaj ({selectedIds.size})
+              </button>
+            )}
+          </div>
 
           {/* Equipment Table */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -394,6 +429,23 @@ export function EquipmentByCategoryPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 text-left">
+                    <th className="px-4 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredEquipment.length > 0 &&
+                          filteredEquipment.every((eq) => selectedIds.has(eq.id))
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(new Set(filteredEquipment.map((eq) => eq.id)));
+                          } else {
+                            setSelectedIds(new Set());
+                          }
+                        }}
+                        aria-label="Odaberi sve"
+                      />
+                    </th>
                     <th className="px-4 py-3 font-medium text-gray-600">Inv. broj</th>
                     <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                     <th className="px-4 py-3 font-medium text-gray-600">Zadužen na</th>
@@ -408,6 +460,24 @@ export function EquipmentByCategoryPage() {
                     const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
                     return (
                       <tr key={eq.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(eq.id)}
+                            onChange={() => {
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(eq.id)) {
+                                  next.delete(eq.id);
+                                } else {
+                                  next.add(eq.id);
+                                }
+                                return next;
+                              });
+                            }}
+                            aria-label={`Odaberi ${eq.inventoryNumber}`}
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           <span className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</span>
                         </td>
@@ -426,10 +496,20 @@ export function EquipmentByCategoryPage() {
                         ))}
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-1">
-                            <button onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-blue-600 p-1" title="QR / Detalji">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleOpenEquipment(eq.id, true); }}
+                              className="text-gray-500 hover:text-blue-600 p-1"
+                              title="QR kod"
+                            >
                               <QrCode size={14} />
                             </button>
-                            <button onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-gray-700 p-1" title="Detalji">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleOpenEquipment(eq.id, false); }}
+                              className="text-gray-500 hover:text-gray-700 p-1"
+                              title="Detalji"
+                            >
                               <Eye size={14} />
                             </button>
                           </div>
@@ -439,7 +519,7 @@ export function EquipmentByCategoryPage() {
                   })}
                   {filteredEquipment.length === 0 && (
                     <tr>
-                      <td colSpan={5 + Math.min(selectedSub.fields.length, 3)} className="text-center text-gray-400 py-12">
+                      <td colSpan={6 + Math.min(selectedSub.fields.length, 3)} className="text-center text-gray-400 py-12">
                         Nema rezultata
                       </td>
                     </tr>
@@ -452,9 +532,8 @@ export function EquipmentByCategoryPage() {
       )}
 
       {/* Filter Builder Modal */}
-      {showFilterBuilder && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowFilterBuilder(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+      <ModalRoot open={showFilterBuilder} onClose={() => setShowFilterBuilder(false)} size="md">
+        <div className="bg-white rounded-xl shadow-xl w-full p-6">
             <h3 className="text-lg font-semibold mb-4">Dodaj filter</h3>
             <div className="space-y-4">
               <div>
@@ -498,21 +577,19 @@ export function EquipmentByCategoryPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowFilterBuilder(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <button type="button" onClick={() => setShowFilterBuilder(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
                 Odustani
               </button>
-              <button onClick={addFilter} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <button type="button" onClick={addFilter} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 Dodaj filter
               </button>
             </div>
-          </div>
         </div>
-      )}
+      </ModalRoot>
 
       {/* Save Filter Modal */}
-      {showSaveFilter && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowSaveFilter(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+      <ModalRoot open={showSaveFilter} onClose={() => setShowSaveFilter(false)} size="sm">
+        <div className="bg-white rounded-xl shadow-xl w-full p-6">
             <h3 className="text-lg font-semibold mb-4">Sačuvaj filter</h3>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Naziv filtera</label>
@@ -525,23 +602,31 @@ export function EquipmentByCategoryPage() {
               />
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowSaveFilter(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <button type="button" onClick={() => setShowSaveFilter(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
                 Odustani
               </button>
-              <button onClick={saveFilter} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <button type="button" onClick={saveFilter} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 Sačuvaj
               </button>
             </div>
-          </div>
         </div>
-      )}
+      </ModalRoot>
 
       {/* Equipment Card Modal */}
+      {showLabels && (
+        <LabelPrintSheet
+          items={state.equipment.filter((eq) => selectedIds.has(eq.id))}
+          categories={state.categories}
+          onClose={() => setShowLabels(false)}
+        />
+      )}
+
       {viewItemId && (
         <EquipmentCard
           equipmentId={viewItemId}
-          onClose={() => setViewItemId(null)}
+          onClose={handleCloseEquipment}
           showTransferActions={admin || evidenticar}
+          initialShowQR={viewShowQR}
         />
       )}
     </div>

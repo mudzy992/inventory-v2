@@ -1,10 +1,23 @@
 import { useState, useMemo, useRef } from 'react';
-import { useStore } from '../useStore';
+import { useStore, useRefreshData } from '../useStore';
+import { signTransferApi, uploadTransferDocumentApi } from '../api/data-api';
+import { ApiError } from '../api/client';
+import { useToast } from '../contexts/toast-context';
 import { getEmployeeFullName, getStatusLabel, formatDate, getOrgUnitPath, getStatusColor } from '../helpers';
+import { usePublicSettings } from '../contexts/public-settings-context';
+import {
+  buildCompanyHeaderHtml,
+  companyHeaderFromSettings,
+} from '../helpers/company-header.util';
 import { Search, Filter, FileText, Printer, Upload, CheckCircle, Eye } from 'lucide-react';
+import { TransferDocumentPanel } from './TransferDocumentPanel';
 
 export function DocumentsPage() {
-  const [state, setState] = useStore();
+  const [state] = useStore();
+  const refresh = useRefreshData();
+  const { toastError } = useToast();
+  const { settings } = usePublicSettings();
+  const companyHeader = companyHeaderFromSettings(settings);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [viewDoc, setViewDoc] = useState<string | null>(null);
@@ -30,30 +43,33 @@ export function DocumentsPage() {
     fileInputRef.current?.click();
   }
 
-  function handleFileUpload() {
-    if (!uploadingId) return;
-    // Simulate file upload - in real app would upload to server
-    setState(prev => ({
-      ...prev,
-      transfers: prev.transfers.map(t =>
-        t.id === uploadingId
-          ? { ...t, status: 'potpisan' as const, scannedDocUrl: 'skeniran_dokument.pdf' }
-          : t
-      ),
-    }));
-    setUploadingId(null);
-  }
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!uploadingId || !file) return;
+    try {
+      await uploadTransferDocumentApi(uploadingId, file);
+      await signTransferApi(uploadingId, {});
+      await refresh();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri uploadu';
+      toastError(message);
+    } finally {
+      setUploadingId(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
-  function handleMarkSigned(transferId: string) {
-    setState(prev => ({
-      ...prev,
-      transfers: prev.transfers.map(t =>
-        t.id === transferId
-          ? { ...t, status: 'potpisan' as const, scannedDocUrl: 'potpisan_dokument.pdf' }
-          : t
-      ),
-    }));
-  }
+  const handleMarkSigned = async (transferId: string) => {
+    try {
+      await signTransferApi(transferId, {});
+      await refresh();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri potpisivanju';
+      toastError(message);
+    }
+  };
 
   function printPrenosnica(transferId: string) {
     const t = state.transfers.find(tr => tr.id === transferId);
@@ -92,10 +108,7 @@ export function DocumentsPage() {
         .status-badge { background: ${t.status === 'raw' ? '#fef3c7' : '#d1fae5'}; color: ${t.status === 'raw' ? '#92400e' : '#065f46'}; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
         @media print { body { padding: 20px; } }
       </style></head><body>
-      <div class="header">
-        <div class="company">PREDUZEĆE D.D.</div>
-        <div style="font-size:12px;color:#666;">Adresa firme bb, 71000 Sarajevo</div>
-      </div>
+      ${buildCompanyHeaderHtml(companyHeader)}
       <h1>PRENOSNICA</h1>
       <h2>${getStatusLabel(t.type).toUpperCase()} OPREME</h2>
       <div class="doc-info">
@@ -270,7 +283,7 @@ export function DocumentsPage() {
                         className="flex items-center gap-1.5 text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors">
                         <Upload size={13} /> Priloži sken
                       </button>
-                      <button onClick={() => handleMarkSigned(t.id)}
+                      <button onClick={() => void handleMarkSigned(t.id)}
                         className="flex items-center gap-1.5 text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors">
                         <CheckCircle size={13} /> Potpiši
                       </button>
@@ -303,8 +316,16 @@ export function DocumentsPage() {
                 <div className="p-8">
                   {/* Document Header */}
                   <div className="text-center border-b-2 border-gray-800 pb-4 mb-6">
-                    <h2 className="text-lg font-bold text-gray-800">PREDUZEĆE D.D.</h2>
-                    <p className="text-xs text-gray-500">Adresa firme bb, 71000 Sarajevo</p>
+                    <h2 className="text-lg font-bold text-gray-800">
+                      {companyHeader.name?.trim() || 'Preduzeće'}
+                    </h2>
+                    {(companyHeader.address || companyHeader.city) && (
+                      <p className="text-xs text-gray-500">
+                        {[companyHeader.address, companyHeader.postalCode, companyHeader.city]
+                          .filter(Boolean)
+                          .join(', ')}
+                      </p>
+                    )}
                   </div>
 
                   <h1 className="text-xl font-bold text-center text-gray-900 mb-1">PRENOSNICA</h1>
@@ -408,11 +429,13 @@ export function DocumentsPage() {
                     </div>
                   </div>
 
-                  {t.scannedDocUrl && (
-                    <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
-                      📎 Skenirani potpisan dokument: <strong>{t.scannedDocUrl}</strong>
-                    </div>
-                  )}
+                  <div className="mt-6">
+                    <TransferDocumentPanel
+                      transfer={t}
+                      allowSign={t.status === 'raw'}
+                      onSigned={() => void refresh()}
+                    />
+                  </div>
                 </div>
               );
             })()}

@@ -16,27 +16,48 @@ Web aplikacija za evidenciju opreme po organizacionoj hijerarhiji — zaduženja
 inventory-v2/
 ├── backend/     # NestJS + Prisma (faza 1+)
 ├── frontend/    # React + Vite + Tailwind
-├── docker/      # nginx config
+├── docker/      # rezervisano (routing isključivo preko Traefik labela)
 └── .cursor/     # plan, matrice, pravila
 ```
 
-## Lokalni razvoj (frontend prototip)
+## Lokalni razvoj
 
 ```bash
+# 1. Backend (port 3000)
+cd backend
+npm install
+npm run prisma:generate
+npm run db:migrate
+npm run db:seed    # prazan — bez demo korisnika
+npm run dev
+
+# 2. Frontend (port 5173, drugi terminal)
 cd frontend
 npm install
 npm run dev
 ```
 
-Backend i puni API dolaze u fazi 1 — plan: `.cursor/plans/inventory-v2/`.
+Frontend u dev modu šalje requeste na **`/backend`** (Vite proxy → `http://localhost:3000`).  
+U Network tabu vidiš `localhost:5173/backend/...` — to je ispravno; Vite prosljeđuje na backend.
+
+Produkcijski build koristi `VITE_API_URL` (npr. `https://inventory-v2.ba101.top/backend`).
+
+Provjera: `GET http://localhost:3000/backend/health` · prvi start → setup wizard u browseru.
+
+Demo korisnici (opcionalno): u `backend/` pokreni `npm run db:seed:demo` → `admin` / `admin123`.
+
+Potpuni wipe baze (dev): `cd backend && npx prisma migrate reset`.
 
 ## Env
 
 1. Kopiraj `.env.example` → `.env` (već postoji template).
 2. Popuni **eksterni MySQL** (`DATABASE_HOST`, `DATABASE_URL`, …).
 3. Postavi `JWT_SECRET`.
+4. **Ne** stavljaj `NODE_ENV` u `.env` — Vite dev to ne podržava (koristi se samo u Dockeru).
 
 `.env` nije u gitu.
+
+Socket.IO u dev modu ide preko Vite proxyja (`/backend` → `localhost:3000`); backend mora raditi prije nego što se frontend spoji.
 
 ## Docker
 

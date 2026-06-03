@@ -1,0 +1,1512 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type {
+  InventoryLineStatus,
+  InventoryRelocationTarget,
+  InventoryWarehouseLineStatus,
+  Prisma,
+} from '../../../generated/prisma/client';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { LocationResolutionService } from '../../common/services/location-resolution.service';
+import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { buildDisposalReportPayload } from './utils/build-disposal-report.util';
+import { finalizeInventoryTransferInTx } from './utils/finalize-inventory-transfer.util';
+import { buildWarehouseCommitteeMembers } from './utils/inventory-warehouse-committees.util';
+
+interface CommitteeMemberInput {
+  employeeId: string;
+  role: 'predsjednik' | 'clan';
+}
+
+interface CreateSessionInput {
+  name: string;
+  orgUnitId: string;
+  year: number;
+}
+
+interface CreateCommitteeInput {
+  sessionId: string;
+  categoryId: string;
+  inventoryMembers: CommitteeMemberInput[];
+  disposalMembers: CommitteeMemberInput[];
+  name?: string;
+}
+
+@Injectable()
+export class InventoryCountService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly locationResolutionService: LocationResolutionService,
+    private readonly registrarScope: RegistrarScopeService,
+    private readonly notificationsService: NotificationsService,
+    private readonly warehouseResolutionService: WarehouseResolutionService,
+  ) {}
+
+  async findCommittees(sessionId: string) {
+    return this.prisma.inventoryCommittee.findMany({
+      where: { sessionId },
+      include: {
+        members: { include: { employee: true } },
+        category: true,
+        disposalCommission: { include: { members: { include: { employee: true } } } },
+      },
+      orderBy: [{ category: { name: 'asc' } }, { createdAt: 'asc' }],
+    });
+  }
+
+  async createSession(input: CreateSessionInput) {
+    const name = input.name.trim();
+    if (!name) {
+      throw new BadRequestException('Name is required');
+    }
+    const orgUnit = await this.prisma.orgUnit.findUnique({
+      where: { id: input.orgUnitId },
+      select: { id: true, type: true },
+    });
+    if (!orgUnit) {
+      throw new BadRequestException('Org unit not found');
+    }
+    if (orgUnit.type !== 'distribucija') {
+      throw new BadRequestException('Inventory session must be created for a distribution org unit');
+    }
+    return this.prisma.inventorySession.create({
+      data: {
+        name,
+        orgUnitId: input.orgUnitId,
+        year: input.year,
+        status: 'draft',
+      },
+      include: { orgUnit: true, committees: true },
+    });
+  }
+
+  async createCommittee(input: CreateCommitteeInput) {
+    const session = await this.prisma.inventorySession.findUnique({
+      where: { id: input.sessionId },
+      include: { orgUnit: true },
+    });
+    if (!session) {
+      throw new NotFoundException('Inventory session not found');
+    }
+    if (session.status !== 'draft') {
+      throw new BadRequestException('Committees can only be added while session is draft');
+    }
+    await this.validateCommitteeMembers(input.inventoryMembers, { requireUserForPresidentOnly: true });
+    await this.validateCommitteeMembers(input.disposalMembers, { requireUserForPresidentOnly: true });
+    const existing = await this.prisma.inventoryCommittee.findFirst({
+      where: { sessionId: session.id, categoryId: input.categoryId },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException('Committee already exists for this category in selected session');
+    }
+    const category = await this.prisma.category.findUnique({ where: { id: input.categoryId } });
+    if (!category) {
+      throw new BadRequestException('Category not found');
+    }
+    const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+      session.orgUnitId,
+    );
+    if (!sessionCityId) {
+      throw new BadRequestException('Distribution must have effective location city configured');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const disposal = await tx.disposalCommission.create({
+        data: {
+          cityId: sessionCityId,
+          name: `${session.name} — ${category.name} — rashod`,
+          isActive: true,
+          members: { create: input.disposalMembers },
+        },
+      });
+      const committee = await tx.inventoryCommittee.create({
+        data: {
+          sessionId: session.id,
+          categoryId: input.categoryId,
+          name: input.name?.trim() || null,
+          disposalCommissionId: disposal.id,
+          members: { create: input.inventoryMembers },
+        },
+        include: {
+          category: true,
+          members: { include: { employee: true } },
+          disposalCommission: { include: { members: { include: { employee: true } } } },
+          session: { include: { orgUnit: true } },
+        },
+      });
+      return committee;
+    });
+  }
+
+  async getPrintScopeForUser(user: AuthenticatedUser, committeeId: string) {
+    const committee = await this.prisma.inventoryCommittee.findUnique({
+      where: { id: committeeId },
+      include: {
+        category: true,
+        members: { include: { employee: true } },
+        session: { include: { orgUnit: true } },
+      },
+    });
+    if (!committee) {
+      throw new NotFoundException('Inventory committee not found');
+    }
+    if (user.role !== 'admin') {
+      const actor = await this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { employeeId: true },
+      });
+      if (!actor?.employeeId) {
+        throw new ForbiddenException('Only committee members can access inventory scope');
+      }
+      const isMember = committee.members.some((member) => member.employeeId === actor.employeeId);
+      if (!isMember) {
+        throw new ForbiddenException('Only committee members can access inventory scope');
+      }
+    }
+    const equipment = await this.resolveCommitteeEquipment(committeeId);
+    return { committee, equipment };
+  }
+
+  async getCommitteeReportForUser(user: AuthenticatedUser, committeeId: string) {
+    const scope = await this.getPrintScopeForUser(user, committeeId);
+    const lines = await this.prisma.inventoryLine.findMany({
+      where: { committeeId },
+      include: {
+        pendingAction: true,
+        generatedTransfer: true,
+        equipment: { include: { category: true, currentHolder: true, warehouse: true } },
+      },
+    });
+    const lineByEquipmentId = new Map(lines.map((line) => [line.equipmentId, line]));
+    const items = scope.equipment.map((equipment) => {
+      const line = lineByEquipmentId.get(equipment.id);
+      return {
+        equipmentId: equipment.id,
+        inventoryNumber: equipment.inventoryNumber,
+        categoryId: equipment.categoryId,
+        categoryName: equipment.category?.name ?? null,
+        currentHolder: equipment.currentHolder
+          ? {
+              id: equipment.currentHolder.id,
+              firstName: equipment.currentHolder.firstName,
+              lastName: equipment.currentHolder.lastName,
+              title: equipment.currentHolder.title,
+              orgUnitId: equipment.currentHolder.orgUnitId,
+            }
+          : null,
+        warehouse: equipment.warehouse
+          ? { id: equipment.warehouse.id, name: equipment.warehouse.name, cityId: equipment.warehouse.cityId }
+          : null,
+        line: line
+          ? {
+              id: line.id,
+              status: line.status,
+              note: line.note,
+              pendingActionStatus: line.pendingAction?.status ?? null,
+              relocationTargetType: line.relocationTargetType,
+              relocationWarehouseId: line.relocationWarehouseId,
+              relocationToPersonId: line.relocationToPersonId,
+              generatedTransfer: line.generatedTransfer
+                ? {
+                    id: line.generatedTransfer.id,
+                    status: line.generatedTransfer.status,
+                    documentNumber: line.generatedTransfer.documentNumber,
+                    scannedDocUrl: line.generatedTransfer.scannedDocUrl,
+                  }
+                : null,
+              createdAt: line.createdAt,
+              updatedAt: line.updatedAt,
+            }
+          : null,
+      };
+    });
+    const groups = new Map<string, { key: string; label: string; items: typeof items }>();
+    for (const item of items) {
+      const key = item.currentHolder ? `person:${item.currentHolder.id}` : `warehouse:${item.warehouse?.id ?? 'unknown'}`;
+      const label = item.currentHolder
+        ? `${item.currentHolder.firstName} ${item.currentHolder.lastName}`
+        : item.warehouse?.name ?? 'Skladište';
+      const existing = groups.get(key);
+      if (existing) {
+        existing.items.push(item);
+        continue;
+      }
+      groups.set(key, { key, label, items: [item] });
+    }
+    return {
+      committee: scope.committee,
+      groups: [...groups.values()],
+    };
+  }
+
+  async resolveCommitteeEquipment(committeeId: string) {
+    const committee = await this.prisma.inventoryCommittee.findUnique({
+      where: { id: committeeId },
+      include: { session: true },
+    });
+    if (!committee) {
+      throw new NotFoundException('Inventory committee not found');
+    }
+    const categoryIds = await this.registrarScope.expandCategoryIds([committee.categoryId]);
+    const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+      committee.session.orgUnitId,
+    );
+    if (!sessionCityId) {
+      throw new BadRequestException('Session distribution must have effective location city configured');
+    }
+    const allEquipment = await this.prisma.equipment.findMany({
+      where: {
+        status: { not: 'rashodovano' },
+        categoryId: { in: [...categoryIds] },
+      },
+      include: {
+        category: true,
+        currentHolder: true,
+        warehouse: true,
+      },
+    });
+    const result = [];
+    for (const item of allEquipment) {
+      const equipmentCityId = await this.resolveEquipmentCityId(item);
+      if (equipmentCityId === sessionCityId) {
+        result.push(item);
+      }
+    }
+    return result;
+  }
+
+  async findSessionsForUser(user: AuthenticatedUser, orgUnitId?: string) {
+    if (user.role === 'admin' || user.role === 'evidenticar') {
+      return this.prisma.inventorySession.findMany({
+        where: orgUnitId ? { orgUnitId } : undefined,
+        include: {
+          orgUnit: { include: { effectiveLocationCity: { include: { canton: true } } } },
+          committees: {
+            include: {
+              category: true,
+              members: { include: { employee: true } },
+              disposalCommission: { include: { members: { include: { employee: true } } } },
+              lines: { include: { equipment: true, pendingAction: true, generatedTransfer: true } },
+            },
+          },
+        },
+        orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
+      });
+    }
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (!actor?.employeeId) {
+      return [];
+    }
+    const sessions = await this.prisma.inventorySession.findMany({
+      where: orgUnitId ? { orgUnitId } : undefined,
+      include: {
+        orgUnit: { include: { effectiveLocationCity: { include: { canton: true } } } },
+        committees: {
+          where: { members: { some: { employeeId: actor.employeeId } } },
+          include: {
+            category: true,
+            members: { include: { employee: true } },
+            disposalCommission: { include: { members: { include: { employee: true } } } },
+            lines: { include: { equipment: true, pendingAction: true, generatedTransfer: true } },
+          },
+          orderBy: [{ category: { name: 'asc' } }, { createdAt: 'asc' }],
+        },
+      },
+      orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
+    });
+    return sessions.filter((session) => (session.committees ?? []).length > 0);
+  }
+
+  async getFreezeBannerForUser(user: AuthenticatedUser) {
+    const cityIds = await this.resolveFreezeCityIdsForUser(user);
+    const where: Prisma.InventorySessionWhereInput = { status: 'active' };
+    if (user.role !== 'admin') {
+      if (cityIds.length === 0) {
+        return { activeSessions: [] };
+      }
+      where.orgUnit = { effectiveLocationCityId: { in: cityIds } };
+    }
+    const sessions = await this.prisma.inventorySession.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        year: true,
+        orgUnit: {
+          select: {
+            name: true,
+            effectiveLocationCity: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
+    });
+    return {
+      activeSessions: sessions.map((row) => ({
+        id: row.id,
+        name: row.name,
+        year: row.year,
+        orgUnitName: row.orgUnit.name,
+        cityName: row.orgUnit.effectiveLocationCity?.name ?? null,
+      })),
+    };
+  }
+
+  private async resolveFreezeCityIdsForUser(user: AuthenticatedUser): Promise<string[]> {
+    const citySet = new Set<string>();
+    if (user.role === 'evidenticar') {
+      const assignments = await this.prisma.registrarAssignment.findMany({
+        where: { userId: user.id },
+        include: { warehouse: { select: { cityId: true } } },
+      });
+      for (const assignment of assignments) {
+        citySet.add(assignment.warehouse.cityId);
+      }
+    }
+    if (user.role === 'skladistar') {
+      const keepers = await this.prisma.warehouseKeeper.findMany({
+        where: { userId: user.id },
+        include: { warehouse: { select: { cityId: true } } },
+      });
+      for (const keeper of keepers) {
+        citySet.add(keeper.warehouse.cityId);
+      }
+    }
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (actor?.employeeId) {
+      const employee = await this.prisma.employee.findUnique({
+        where: { id: actor.employeeId },
+        select: { orgUnitId: true },
+      });
+      if (employee) {
+        const cityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+          employee.orgUnitId,
+        );
+        if (cityId) {
+          citySet.add(cityId);
+        }
+      }
+    }
+    return [...citySet];
+  }
+
+  async activateSession(sessionId: string) {
+    const session = await this.getSessionOrThrow(sessionId);
+    if (session.status !== 'draft') {
+      throw new BadRequestException('Only draft sessions can be activated');
+    }
+    const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+      session.orgUnitId,
+    );
+    if (!sessionCityId) {
+      throw new BadRequestException('Distribution must have effective location city configured');
+    }
+    const startDate = session.startDate ?? new Date(session.year, 11, 1);
+    const endDate = session.endDate ?? new Date(session.year, 11, 31);
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.inventorySession.update({
+        where: { id: sessionId },
+        data: { status: 'active', startDate, endDate },
+      });
+      await this.createWarehouseCommitteesForSession(tx, sessionId, sessionCityId);
+      return updated;
+    });
+  }
+
+  async findWarehouseCommittees(sessionId: string) {
+    return this.prisma.inventoryWarehouseCommittee.findMany({
+      where: { sessionId },
+      include: {
+        warehouse: true,
+        members: { include: { employee: true } },
+        lines: { include: { stockLot: { include: { category: true } } } },
+      },
+      orderBy: { warehouse: { name: 'asc' } },
+    });
+  }
+
+  async findWarehouseCommitteesForUser(user: AuthenticatedUser) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (!actor?.employeeId) {
+      return [];
+    }
+    return this.prisma.inventoryWarehouseCommittee.findMany({
+      where: {
+        session: { status: 'active' },
+        members: { some: { employeeId: actor.employeeId } },
+      },
+      include: {
+        warehouse: true,
+        session: true,
+        members: { include: { employee: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getWarehouseCommitteeScope(user: AuthenticatedUser, committeeId: string) {
+    const committee = await this.getWarehouseCommitteeOrThrow(committeeId);
+    await this.assertWarehouseCommitteeMember(user, committee);
+    const lots = await this.prisma.warehouseStockLot.findMany({
+      where: {
+        warehouseId: committee.warehouseId,
+        quantityOnHand: { gt: 0 },
+      },
+      include: { category: true },
+      orderBy: [{ productName: 'asc' }, { entryDate: 'desc' }],
+    });
+    const lines = await this.prisma.inventoryWarehouseLine.findMany({
+      where: { committeeId },
+    });
+    const lineByLot = new Map(lines.map((row) => [row.stockLotId, row]));
+    return {
+      committee,
+      items: lots.map((lot) => ({
+        stockLot: lot,
+        line: lineByLot.get(lot.id) ?? null,
+      })),
+    };
+  }
+
+  async recordWarehouseLine(
+    user: AuthenticatedUser,
+    committeeId: string,
+    stockLotId: string,
+    status: InventoryWarehouseLineStatus,
+    quantityCounted: number,
+    note?: string,
+  ) {
+    if (user.role === 'admin') {
+      throw new ForbiddenException('Administrator cannot record warehouse inventory lines');
+    }
+    const committee = await this.getWarehouseCommitteeOrThrow(committeeId);
+    await this.assertWarehouseCommitteeMember(user, committee);
+    if (committee.isClosed) {
+      throw new BadRequestException('Warehouse committee list is closed');
+    }
+    if (committee.session.status !== 'active') {
+      throw new BadRequestException('Session is not active');
+    }
+    if (status === 'ostecena' && !note?.trim()) {
+      throw new BadRequestException('Note is required for damaged stock');
+    }
+    if (status === 'nije_prisutna' && !note?.trim()) {
+      throw new BadRequestException('Note is required for missing stock');
+    }
+    const lot = await this.prisma.warehouseStockLot.findUnique({ where: { id: stockLotId } });
+    if (!lot || lot.warehouseId !== committee.warehouseId) {
+      throw new BadRequestException('Stock lot is not in this warehouse committee scope');
+    }
+    if (lot.quantityOnHand <= 0) {
+      throw new BadRequestException('Stock lot has no units on hand');
+    }
+    if (quantityCounted < 0) {
+      throw new BadRequestException('quantityCounted cannot be negative');
+    }
+    return this.prisma.inventoryWarehouseLine.upsert({
+      where: { committeeId_stockLotId: { committeeId, stockLotId } },
+      create: {
+        committeeId,
+        stockLotId,
+        status,
+        quantityCounted,
+        note: note?.trim() || null,
+      },
+      update: {
+        status,
+        quantityCounted,
+        note: note?.trim() || null,
+      },
+      include: { stockLot: { include: { category: true } } },
+    });
+  }
+
+  async closeWarehouseCommittee(user: AuthenticatedUser, committeeId: string) {
+    const committee = await this.getWarehouseCommitteeOrThrow(committeeId);
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (!actor?.employeeId) {
+      throw new ForbiddenException('Only committee president can close the list');
+    }
+    const president = committee.members.find(
+      (member) => member.role === 'predsjednik' && member.employeeId === actor.employeeId,
+    );
+    if (!president) {
+      throw new ForbiddenException('Only committee president can close the list');
+    }
+    return this.prisma.inventoryWarehouseCommittee.update({
+      where: { id: committeeId },
+      data: {
+        isClosed: true,
+        closedAt: new Date(),
+        closedByUserId: user.id,
+      },
+      include: {
+        warehouse: true,
+        members: { include: { employee: true } },
+      },
+    });
+  }
+
+  private async createWarehouseCommitteesForSession(
+    tx: Prisma.TransactionClient,
+    sessionId: string,
+    sessionCityId: string,
+  ): Promise<void> {
+    const warehouses = await tx.warehouse.findMany({
+      where: { cityId: sessionCityId, isActive: true },
+      include: {
+        keepers: {
+          include: { user: { select: { id: true, employeeId: true } } },
+        },
+      },
+    });
+    for (const warehouse of warehouses) {
+      const existing = await tx.inventoryWarehouseCommittee.findFirst({
+        where: { sessionId, warehouseId: warehouse.id },
+        select: { id: true },
+      });
+      if (existing) {
+        continue;
+      }
+      const keeperCandidates = warehouse.keepers.map((row) => ({
+        userId: row.userId,
+        employeeId: row.user.employeeId,
+      }));
+      const members = buildWarehouseCommitteeMembers(warehouse.name, keeperCandidates);
+      await tx.inventoryWarehouseCommittee.create({
+        data: {
+          sessionId,
+          warehouseId: warehouse.id,
+          members: { create: members },
+        },
+      });
+    }
+  }
+
+  private async getWarehouseCommitteeOrThrow(committeeId: string) {
+    const committee = await this.prisma.inventoryWarehouseCommittee.findUnique({
+      where: { id: committeeId },
+      include: {
+        session: true,
+        warehouse: true,
+        members: true,
+      },
+    });
+    if (!committee) {
+      throw new NotFoundException('Warehouse inventory committee not found');
+    }
+    return committee;
+  }
+
+  private async assertWarehouseCommitteeMember(
+    user: AuthenticatedUser,
+    committee: { members: { employeeId: string }[] },
+  ): Promise<void> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (!actor?.employeeId) {
+      throw new ForbiddenException('Only committee members can access this committee');
+    }
+    const isMember = committee.members.some((member) => member.employeeId === actor.employeeId);
+    if (!isMember) {
+      throw new ForbiddenException('Only committee members can access this committee');
+    }
+  }
+
+  async recordLine(
+    user: AuthenticatedUser,
+    committeeId: string,
+    equipmentId: string,
+    status: InventoryLineStatus,
+    note?: string,
+    relocation?: {
+      relocationTargetType: InventoryRelocationTarget;
+      relocationWarehouseId?: string;
+      relocationToPersonId?: string;
+    },
+  ) {
+    if (user.role === 'admin') {
+      throw new ForbiddenException('Administrator cannot record inventory lines');
+    }
+    const committee = await this.prisma.inventoryCommittee.findUnique({
+      where: { id: committeeId },
+      include: { members: true, session: true },
+    });
+    if (!committee) {
+      throw new NotFoundException('Inventory committee not found');
+    }
+    if (committee.isClosed) {
+      throw new BadRequestException('Inventory committee list is closed');
+    }
+    if (committee.session.status !== 'active') {
+      throw new BadRequestException('Session is not active');
+    }
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (!actor?.employeeId) {
+      throw new ForbiddenException('Only committee members can record inventory lines');
+    }
+    const isMember = committee.members.some((member) => member.employeeId === actor.employeeId);
+    if (!isMember) {
+      throw new ForbiddenException('Only committee members can record inventory lines');
+    }
+    if (status === 'ostecena' && !note?.trim()) {
+      throw new BadRequestException('Note is required for damaged equipment');
+    }
+    if (status === 'nije_prisutna' && !note?.trim()) {
+      throw new BadRequestException('Note is required for missing equipment');
+    }
+    if (status === 'predlozen_rashod' && !note?.trim()) {
+      throw new BadRequestException('Note is required for proposed disposal');
+    }
+    const equipment = await this.prisma.equipment.findUnique({
+      where: { id: equipmentId },
+      include: { currentHolder: true, warehouse: true },
+    });
+    if (!equipment) {
+      throw new NotFoundException('Equipment not found');
+    }
+    const inScope = await this.isEquipmentInCommitteeScope(committee, equipment);
+    if (!inScope) {
+      throw new BadRequestException('Equipment is not in inventory committee scope');
+    }
+    if (status === 'predlozen_rashod') {
+      if (equipment.status !== 'skladiste' || !equipment.warehouseId) {
+        throw new BadRequestException('Proposed disposal requires equipment on warehouse (razduženo)');
+      }
+    }
+    const line = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.inventoryLine.findUnique({
+        where: { committeeId_equipmentId: { committeeId, equipmentId } },
+        include: { pendingAction: true },
+      });
+      if (existing?.pendingAction?.status === 'running' || existing?.pendingAction?.status === 'applied') {
+        throw new BadRequestException('Cannot modify inventory line while action is being applied');
+      }
+      if (status === 'promjena_lokacije') {
+        if (!relocation?.relocationTargetType) {
+          throw new BadRequestException('Relocation target is required');
+        }
+        if (relocation.relocationTargetType === 'osoba' && !relocation.relocationToPersonId) {
+          throw new BadRequestException('Person is required for relocation');
+        }
+      }
+      const line = await tx.inventoryLine.upsert({
+        where: { committeeId_equipmentId: { committeeId, equipmentId } },
+        create: {
+          committeeId,
+          equipmentId,
+          status,
+          note,
+          relocationTargetType: relocation?.relocationTargetType,
+          relocationWarehouseId: relocation?.relocationWarehouseId,
+          relocationToPersonId: relocation?.relocationToPersonId,
+        },
+        update: {
+          status,
+          note,
+          relocationTargetType: relocation?.relocationTargetType ?? null,
+          relocationWarehouseId: relocation?.relocationWarehouseId ?? null,
+          relocationToPersonId: relocation?.relocationToPersonId ?? null,
+          generatedTransfer: { disconnect: true },
+        },
+      });
+      const kind =
+        status === 'prisutna'
+          ? 'mark_present'
+          : status === 'ostecena'
+            ? 'mark_damaged'
+            : status === 'nije_prisutna'
+              ? 'mark_missing'
+              : status === 'predlozen_rashod'
+                ? 'disposal'
+                : relocation?.relocationTargetType === 'skladiste'
+                  ? 'relocate_to_warehouse'
+                  : 'relocate_to_person';
+      const payload =
+        status === 'promjena_lokacije'
+          ? {
+              relocationTargetType: relocation?.relocationTargetType,
+              relocationToPersonId:
+                relocation?.relocationTargetType === 'osoba' ? relocation.relocationToPersonId : null,
+              note: note ?? null,
+            }
+          : { note: note ?? null };
+      await tx.inventoryPendingAction.upsert({
+        where: { inventoryLineId: line.id },
+        create: {
+          sessionId: committee.session.id,
+          committeeId,
+          equipmentId,
+          inventoryLineId: line.id,
+          kind,
+          payload,
+          status: 'pending',
+          createdByUserId: user.id,
+        },
+        update: {
+          kind,
+          payload,
+          status: 'pending',
+          lastError: null,
+          appliedAt: null,
+        },
+      });
+      if (status === 'promjena_lokacije' && relocation) {
+        await this.ensureRelocationDraftTransfer(
+          committee.session,
+          equipment,
+          relocation,
+          line.id,
+          tx,
+        );
+      }
+      return tx.inventoryLine.findUnique({
+        where: { id: line.id },
+        include: {
+          pendingAction: true,
+          generatedTransfer: true,
+          equipment: { include: { category: true, currentHolder: true } },
+        },
+      });
+    });
+    if (line?.generatedTransfer && !line.generatedTransfer.scannedDocUrl) {
+      void this.notificationsService.notifyInventoryTransferUploadPending(
+        line.generatedTransfer.id,
+        committeeId,
+      );
+    }
+    return line;
+  }
+
+  async closeCommittee(user: AuthenticatedUser, committeeId: string) {
+    if (user.role === 'admin') {
+      throw new ForbiddenException('Administrator cannot close inventory committee list');
+    }
+    const committee = await this.prisma.inventoryCommittee.findUnique({
+      where: { id: committeeId },
+      include: {
+        session: true,
+        members: true,
+      },
+    });
+    if (!committee) {
+      throw new NotFoundException('Inventory committee not found');
+    }
+    if (committee.isClosed) {
+      return committee;
+    }
+    if (committee.session.status !== 'active') {
+      throw new BadRequestException('Session is not active');
+    }
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (!actor?.employeeId) {
+      throw new ForbiddenException('Only committee members can close inventory committee list');
+    }
+    const member = committee.members.find((row) => row.employeeId === actor.employeeId);
+    if (!member || member.role !== 'predsjednik') {
+      throw new ForbiddenException('Only committee president can close inventory committee list');
+    }
+    return this.prisma.inventoryCommittee.update({
+      where: { id: committeeId },
+      data: { isClosed: true, closedAt: new Date(), closedByUserId: user.id },
+      include: { session: true, members: true, category: true },
+    });
+  }
+
+  async closeSession(user: AuthenticatedUser, sessionId: string) {
+    const session = await this.prisma.inventorySession.findUnique({
+      where: { id: sessionId },
+      include: {
+        committees: true,
+        closeJobs: true,
+      },
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+    if (session.status !== 'active') {
+      throw new BadRequestException('Only active sessions can be closed');
+    }
+    const openCommitteeIds = session.committees.filter((committee) => !committee.isClosed).map((c) => c.id);
+    if (openCommitteeIds.length > 0) {
+      await this.prisma.inventoryCommittee.updateMany({
+        where: { id: { in: openCommitteeIds } },
+        data: { isClosed: true, closedAt: new Date(), closedByUserId: user.id },
+      });
+    }
+    const existingJob = session.closeJobs[0] ?? null;
+    if (existingJob && (existingJob.status === 'queued' || existingJob.status === 'running')) {
+      return existingJob;
+    }
+    await this.assertRelocateLinesHaveUpload(session.id);
+    const totalCount = await this.prisma.inventoryPendingAction.count({
+      where: { sessionId: session.id, status: 'pending' },
+    });
+    await this.prisma.inventorySession.update({
+      where: { id: session.id },
+      data: { status: 'closing' },
+    });
+    return this.prisma.inventorySessionCloseJob.upsert({
+      where: { sessionId: session.id },
+      create: {
+        sessionId: session.id,
+        status: 'queued',
+        totalCount,
+      },
+      update: {
+        status: 'queued',
+        totalCount,
+        appliedCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        startedAt: null,
+        endedAt: null,
+        lastError: null,
+      },
+    });
+  }
+
+  async getCloseJob(sessionId: string) {
+    const job = await this.prisma.inventorySessionCloseJob.findUnique({ where: { sessionId } });
+    if (!job) {
+      return null;
+    }
+    const remaining = await this.prisma.inventoryPendingAction.count({
+      where: { sessionId, status: 'pending' },
+    });
+    return { ...job, remaining };
+  }
+
+  async assertTransfersAllowedForEquipment(equipmentId: string): Promise<void> {
+    const equipment = await this.prisma.equipment.findUnique({
+      where: { id: equipmentId },
+      include: { currentHolder: true, warehouse: true },
+    });
+    if (!equipment) {
+      return;
+    }
+    const cityId = await this.resolveEquipmentCityId(equipment);
+    if (!cityId) {
+      return;
+    }
+    const active = await this.prisma.inventorySession.findFirst({
+      where: { status: 'active', orgUnit: { effectiveLocationCityId: cityId } },
+    });
+    if (active) {
+      throw new BadRequestException('Transfers are blocked during active inventory count');
+    }
+  }
+
+  async assertInventoryTransferFinalizeAllowed(transferId: string): Promise<void> {
+    const transfer = await this.prisma.transfer.findUnique({
+      where: { id: transferId },
+      select: {
+        inventoryLine: {
+          select: { committee: { select: { session: { select: { status: true } } } } },
+        },
+      },
+    });
+    const sessionStatus = transfer?.inventoryLine?.committee?.session?.status;
+    if (sessionStatus === 'active') {
+      throw new BadRequestException(
+        'Inventory transfer cannot be finalized while inventory session is active',
+      );
+    }
+  }
+
+  async applyPendingAction(pendingActionId: string): Promise<void> {
+    const action = await this.prisma.inventoryPendingAction.findUnique({
+      where: { id: pendingActionId },
+      include: {
+        session: true,
+        inventoryLine: true,
+      },
+    });
+    if (!action) {
+      throw new NotFoundException('Pending action not found');
+    }
+    if (action.kind === 'mark_present' || action.kind === 'mark_damaged' || action.kind === 'mark_missing') {
+      return;
+    }
+    const committee = await this.prisma.inventoryCommittee.findUnique({
+      where: { id: action.committeeId },
+      select: {
+        id: true,
+        disposalCommissionId: true,
+        session: true,
+      },
+    });
+    if (!committee) {
+      throw new NotFoundException('Inventory committee not found');
+    }
+    const equipment = await this.prisma.equipment.findUnique({
+      where: { id: action.equipmentId },
+      include: { currentHolder: true, warehouse: true },
+    });
+    if (!equipment) {
+      throw new NotFoundException('Equipment not found');
+    }
+    const payload = action.payload as { relocationToPersonId?: string | null };
+    if (action.kind === 'relocate_to_warehouse' || action.kind === 'relocate_to_person') {
+      const actorUserId = await this.resolveCloseJobActorUserId();
+      const line = action.inventoryLineId
+        ? await this.prisma.inventoryLine.findUnique({
+            where: { id: action.inventoryLineId },
+            include: { generatedTransfer: true },
+          })
+        : null;
+      let transferId = line?.generatedTransfer?.id ?? null;
+      if (!transferId) {
+        if (action.kind === 'relocate_to_warehouse') {
+          const created = await this.createRelocationTransfer(
+            committee.session,
+            equipment,
+            'skladiste',
+            undefined,
+            undefined,
+            action.inventoryLineId,
+          );
+          transferId = created.id;
+        } else {
+          const toPersonId = payload.relocationToPersonId ?? null;
+          if (!toPersonId) {
+            throw new BadRequestException('Target person is required');
+          }
+          const created = await this.createRelocationTransfer(
+            committee.session,
+            equipment,
+            'osoba',
+            undefined,
+            toPersonId,
+            action.inventoryLineId,
+          );
+          transferId = created.id;
+        }
+      }
+      await this.prisma.$transaction(async (tx) => {
+        await finalizeInventoryTransferInTx(tx, transferId!, actorUserId);
+      });
+      return;
+    }
+    if (action.kind === 'disposal') {
+      await this.applyDisposalPendingAction(committee, action);
+      return;
+    }
+  }
+
+  async getSessionReport(sessionId: string) {
+    const session = await this.prisma.inventorySession.findUnique({
+      where: { id: sessionId },
+      include: {
+        orgUnit: true,
+        committees: {
+          include: {
+            category: true,
+            lines: {
+              include: {
+                pendingAction: true,
+                equipment: { include: { category: true, currentHolder: true, warehouse: true } },
+              },
+            },
+          },
+        },
+        disposalApprovals: {
+          include: { equipment: true, disposalCommission: true },
+        },
+      },
+    });
+    if (!session) {
+      throw new NotFoundException('Inventory session not found');
+    }
+    return session;
+  }
+
+  async getDisposalReport(sessionId: string) {
+    const session = await this.prisma.inventorySession.findUnique({
+      where: { id: sessionId },
+      include: { orgUnit: true },
+    });
+    if (!session) {
+      throw new NotFoundException('Inventory session not found');
+    }
+    const approvals = await this.prisma.disposalInventoryApproval.findMany({
+      where: { sessionId },
+      include: {
+        equipment: { include: { category: true, warehouse: true } },
+        disposalCommission: {
+          include: {
+            city: true,
+            inventoryCommittee: { include: { category: true } },
+            members: { include: { employee: true } },
+          },
+        },
+        inventoryLine: true,
+        reviewedByUser: { select: { username: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return buildDisposalReportPayload(session, approvals);
+  }
+
+  async getDisposalInboxForUser(user: AuthenticatedUser, sessionId: string) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (!actor?.employeeId && user.role !== 'admin') {
+      return [];
+    }
+    const approvals = await this.prisma.disposalInventoryApproval.findMany({
+      where: { sessionId, status: 'pending' },
+      include: {
+        equipment: { include: { category: true, warehouse: true } },
+        disposalCommission: { include: { members: true } },
+        inventoryLine: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (user.role === 'admin') {
+      return approvals;
+    }
+    return approvals.filter((row) => {
+      const president = row.disposalCommission.members.find((m) => m.role === 'predsjednik');
+      return president?.employeeId === actor!.employeeId;
+    });
+  }
+
+  async reviewDisposalApproval(
+    user: AuthenticatedUser,
+    approvalId: string,
+    approved: boolean,
+    note?: string,
+  ) {
+    const approval = await this.prisma.disposalInventoryApproval.findUnique({
+      where: { id: approvalId },
+      include: {
+        equipment: true,
+        disposalCommission: { include: { members: true } },
+      },
+    });
+    if (!approval) {
+      throw new NotFoundException('Disposal approval not found');
+    }
+    if (approval.status !== 'pending') {
+      throw new BadRequestException('Approval already reviewed');
+    }
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true, role: true },
+    });
+    const president = approval.disposalCommission.members.find((m) => m.role === 'predsjednik');
+    const isPresident = president?.employeeId === actor?.employeeId;
+    if (user.role !== 'admin' && !isPresident) {
+      throw new ForbiddenException('Only disposal commission president can review');
+    }
+    if (!approved && !note?.trim()) {
+      throw new BadRequestException('Rejection reason is required');
+    }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.disposalInventoryApproval.update({
+        where: { id: approvalId },
+        data: {
+          status: approved ? 'approved' : 'rejected',
+          reviewedByUserId: user.id,
+          reviewNote: note?.trim() ?? null,
+          reviewedAt: new Date(),
+        },
+        include: { equipment: true },
+      });
+      if (approved) {
+        await tx.equipment.update({
+          where: { id: approval.equipmentId },
+          data: {
+            status: 'rashodovano',
+            currentHolderId: null,
+            warehouseId: approval.equipment.warehouseId,
+            warehouseCondition: 'spremno_za_unistenje',
+          },
+        });
+      }
+      return row;
+    });
+    void this.notificationsService.emitInventoryDisposalInboxRefresh(approval.sessionId);
+    return updated;
+  }
+
+  private async applyDisposalPendingAction(
+    committee: { id: string; disposalCommissionId: string | null; session: { id: string } },
+    action: { equipmentId: string; inventoryLineId: string | null },
+  ): Promise<void> {
+    if (!committee.disposalCommissionId) {
+      throw new BadRequestException('Disposal commission is not configured for committee');
+    }
+    const approval = await this.prisma.disposalInventoryApproval.upsert({
+      where: {
+        equipmentId_disposalCommissionId: {
+          equipmentId: action.equipmentId,
+          disposalCommissionId: committee.disposalCommissionId,
+        },
+      },
+      create: {
+        equipmentId: action.equipmentId,
+        disposalCommissionId: committee.disposalCommissionId,
+        sessionId: committee.session.id,
+        inventoryLineId: action.inventoryLineId,
+        status: 'pending',
+      },
+      update: {
+        status: 'pending',
+        inventoryLineId: action.inventoryLineId,
+        reviewedByUserId: null,
+        reviewNote: null,
+        reviewedAt: null,
+      },
+      include: { equipment: { select: { inventoryNumber: true } } },
+    });
+    void this.notificationsService.notifyDisposalApprovalPending(
+      approval.id,
+      committee.disposalCommissionId,
+      approval.equipment.inventoryNumber,
+    );
+    void this.notificationsService.emitInventoryDisposalInboxRefresh(committee.session.id);
+  }
+
+  private async assertRelocateLinesHaveUpload(sessionId: string): Promise<void> {
+    const lines = await this.prisma.inventoryLine.findMany({
+      where: { committee: { sessionId }, status: 'promjena_lokacije' },
+      include: { generatedTransfer: true, equipment: { select: { inventoryNumber: true } } },
+    });
+    const missing = lines.filter((line) => !line.generatedTransfer?.scannedDocUrl);
+    if (missing.length > 0) {
+      const numbers = missing.map((line) => line.equipment.inventoryNumber).join(', ');
+      throw new BadRequestException(
+        `Prenosnice za promjenu lokacije moraju imati upload prije zatvaranja sesije: ${numbers}`,
+      );
+    }
+  }
+
+  private async resolveCloseJobActorUserId(): Promise<string> {
+    const admin = await this.prisma.user.findFirst({
+      where: { role: 'admin', isActive: true },
+      select: { id: true },
+    });
+    if (!admin) {
+      throw new BadRequestException('No admin user available for inventory close job');
+    }
+    return admin.id;
+  }
+
+  private async ensureRelocationDraftTransfer(
+    session: { year: number; orgUnitId: string },
+    equipment: {
+      id: string;
+      status: string;
+      currentHolderId: string | null;
+      currentHolder: { id: string; orgUnitId: string } | null;
+    },
+    relocation: {
+      relocationTargetType: InventoryRelocationTarget;
+      relocationWarehouseId?: string;
+      relocationToPersonId?: string;
+    },
+    inventoryLineId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const existing = await tx.transfer.findFirst({
+      where: { inventoryLineId },
+      select: { id: true },
+    });
+    if (existing) {
+      return;
+    }
+    if (relocation.relocationTargetType === 'skladiste') {
+      await this.createRelocationTransfer(
+        session,
+        equipment,
+        'skladiste',
+        relocation.relocationWarehouseId,
+        undefined,
+        inventoryLineId,
+        tx,
+      );
+      return;
+    }
+    await this.createRelocationTransfer(
+      session,
+      equipment,
+      'osoba',
+      undefined,
+      relocation.relocationToPersonId,
+      inventoryLineId,
+      tx,
+    );
+  }
+
+  private async validateCommitteeMembers(
+    members: CommitteeMemberInput[],
+    options: { requireUserForPresidentOnly: boolean },
+  ): Promise<void> {
+    const presidents = members.filter((row) => row.role === 'predsjednik');
+    const clerks = members.filter((row) => row.role === 'clan');
+    if (presidents.length !== 1) {
+      throw new BadRequestException('Exactly one committee president is required');
+    }
+    if (clerks.length < 2 || members.length < 3) {
+      throw new BadRequestException('At least two committee members besides president are required');
+    }
+    const employeeIds = new Set(members.map((row) => row.employeeId));
+    if (employeeIds.size !== members.length) {
+      throw new BadRequestException('Duplicate committee members');
+    }
+    const employees = await this.prisma.employee.findMany({
+      where: { id: { in: [...employeeIds] } },
+      select: { id: true },
+    });
+    if (employees.length !== employeeIds.size) {
+      throw new BadRequestException('Invalid employee in committee');
+    }
+    if (!options.requireUserForPresidentOnly) {
+      const activeUsers = await this.prisma.user.findMany({
+        where: { employeeId: { in: [...employeeIds] }, isActive: true },
+        select: { employeeId: true },
+      });
+      const userEmployeeIds = new Set(activeUsers.map((row) => row.employeeId).filter(Boolean) as string[]);
+      for (const employeeId of employeeIds) {
+        if (!userEmployeeIds.has(employeeId)) {
+          throw new BadRequestException('All committee members must have active user accounts');
+        }
+      }
+      return;
+    }
+    const presidentUser = await this.prisma.user.findFirst({
+      where: { employeeId: presidents[0].employeeId, isActive: true },
+    });
+    if (!presidentUser) {
+      throw new BadRequestException('President must have an active user account');
+    }
+  }
+
+  private async isEquipmentInCommitteeScope(
+    committee: { id: string; categoryId: string; session: { orgUnitId: string } },
+    equipment: {
+      id: string;
+      categoryId: string;
+      status: string;
+      currentHolder: { orgUnitId: string } | null;
+      warehouse?: { cityId: string } | null;
+      warehouseId?: string | null;
+    },
+  ): Promise<boolean> {
+    if (equipment.status === 'rashodovano') {
+      return false;
+    }
+    const committeeCategoryIds = await this.registrarScope.expandCategoryIds([committee.categoryId]);
+    if (!committeeCategoryIds.has(equipment.categoryId)) {
+      return false;
+    }
+    const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+      committee.session.orgUnitId,
+    );
+    if (!sessionCityId) {
+      return false;
+    }
+    const equipmentCityId = await this.resolveEquipmentCityId(equipment);
+    return equipmentCityId === sessionCityId;
+  }
+
+  private async createRelocationTransfer(
+    session: { year: number; orgUnitId: string },
+    equipment: {
+      id: string;
+      status: string;
+      currentHolderId: string | null;
+      currentHolder: { id: string; orgUnitId: string } | null;
+    },
+    targetType: InventoryRelocationTarget,
+    warehouseId?: string,
+    toPersonId?: string,
+    inventoryLineId?: string,
+    tx?: Pick<PrismaService, 'transfer' | 'employee'>,
+  ) {
+    const db = tx ?? this.prisma;
+    const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+      session.orgUnitId,
+    );
+    if (!sessionCityId) {
+      throw new BadRequestException('Session distribution must have effective location city configured');
+    }
+    const signerId = equipment.currentHolderId ?? (await this.getDefaultSignerId());
+    if (targetType === 'skladiste') {
+      const resolvedWarehouseId = await this.resolveRelocationWarehouseId({
+        sessionCityId,
+        sessionOrgUnitId: session.orgUnitId,
+        requestedWarehouseId: warehouseId,
+      });
+      if (equipment.status === 'zaduzeno' && equipment.currentHolderId) {
+        return db.transfer.create({
+          data: {
+            equipmentId: equipment.id,
+            type: 'razduzenje',
+            fromType: 'osoba',
+            fromPersonId: equipment.currentHolderId,
+            toType: 'skladiste',
+            toWarehouseId: resolvedWarehouseId,
+            signerId,
+            toPersonId: null,
+            date: new Date(),
+            status: 'raw',
+            documentNumber: `DRAFT-POPIS-${Date.now()}`,
+            notes: `Automatski prenos iz popisa (${session.year}) — na skladište`,
+            ...(inventoryLineId ? { inventoryLineId } : {}),
+          },
+        });
+      }
+      throw new BadRequestException('Equipment is already in warehouse or cannot relocate to warehouse');
+    }
+    if (!toPersonId) {
+      throw new BadRequestException('Person is required for relocation');
+    }
+    const toEmployee = await db.employee.findUnique({ where: { id: toPersonId } });
+    if (!toEmployee) {
+      throw new BadRequestException('Target person not found');
+    }
+    const toCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+      toEmployee.orgUnitId,
+    );
+    if (toCityId !== sessionCityId) {
+      throw new BadRequestException('Target person must be in session city');
+    }
+    if (equipment.status === 'skladiste') {
+      const fromWarehouseId = await this.resolveRelocationWarehouseId({
+        sessionCityId,
+        sessionOrgUnitId: session.orgUnitId,
+      });
+      return db.transfer.create({
+        data: {
+          equipmentId: equipment.id,
+          type: 'zaduzenje',
+          fromType: 'skladiste',
+          fromWarehouseId,
+          toType: 'osoba',
+          toPersonId,
+          signerId: toPersonId,
+          date: new Date(),
+          status: 'raw',
+          documentNumber: `DRAFT-POPIS-${Date.now()}`,
+          notes: `Automatski prenos iz popisa (${session.year}) — zaduženje`,
+          ...(inventoryLineId ? { inventoryLineId } : {}),
+        },
+      });
+    }
+    if (equipment.status === 'zaduzeno' && equipment.currentHolderId) {
+      return db.transfer.create({
+        data: {
+          equipmentId: equipment.id,
+          type: 'prenos',
+          fromType: 'osoba',
+          fromPersonId: equipment.currentHolderId,
+          toType: 'osoba',
+          toPersonId,
+          signerId: toPersonId,
+          date: new Date(),
+          status: 'raw',
+          documentNumber: `DRAFT-POPIS-${Date.now()}`,
+          notes: `Automatski prenos iz popisa (${session.year}) — prenos`,
+          ...(inventoryLineId ? { inventoryLineId } : {}),
+        },
+      });
+    }
+    throw new BadRequestException('Cannot relocate equipment to person');
+  }
+
+  private async getSessionOrThrow(sessionId: string) {
+    const session = await this.prisma.inventorySession.findUnique({ where: { id: sessionId } });
+    if (!session) {
+      throw new NotFoundException('Inventory session not found');
+    }
+    return session;
+  }
+
+  private async resolveEquipmentCityId(equipment: {
+    currentHolder: { orgUnitId: string } | null;
+    warehouse?: { cityId: string } | null;
+    warehouseId?: string | null;
+  }): Promise<string | null> {
+    if (equipment.currentHolder) {
+      return this.locationResolutionService.getEffectiveLocationForOrgUnit(
+        equipment.currentHolder.orgUnitId,
+      );
+    }
+    if (equipment.warehouse) {
+      return equipment.warehouse.cityId;
+    }
+    if (equipment.warehouseId) {
+      const warehouse = await this.prisma.warehouse.findUnique({
+        where: { id: equipment.warehouseId },
+        select: { cityId: true },
+      });
+      return warehouse?.cityId ?? null;
+    }
+    return null;
+  }
+
+  private async getDefaultSignerId(): Promise<string> {
+    const employee = await this.prisma.employee.findFirst();
+    if (!employee) {
+      throw new BadRequestException('No signer employee configured');
+    }
+    return employee.id;
+  }
+
+  private async resolveRelocationWarehouseId(input: {
+    sessionCityId: string;
+    sessionOrgUnitId: string;
+    requestedWarehouseId?: string;
+  }): Promise<string> {
+    if (input.requestedWarehouseId) {
+      const warehouse = await this.prisma.warehouse.findUnique({
+        where: { id: input.requestedWarehouseId },
+        select: { id: true, cityId: true },
+      });
+      if (!warehouse || warehouse.cityId !== input.sessionCityId) {
+        throw new BadRequestException('Warehouse must be in session city');
+      }
+      return warehouse.id;
+    }
+    const resolved = await this.warehouseResolutionService.resolveForOrgUnit(
+      input.sessionOrgUnitId,
+      input.sessionCityId,
+    );
+    if (resolved) {
+      return resolved;
+    }
+    throw new BadRequestException('No active warehouse configured for session city');
+  }
+}

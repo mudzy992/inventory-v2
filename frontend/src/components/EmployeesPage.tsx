@@ -1,12 +1,21 @@
 import { useState, useMemo } from 'react';
-import { useStore } from '../useStore';
+import { useStore, useRefreshData } from '../useStore';
+import { createEmployeeApi, deleteEmployeeApi, updateEmployeeApi } from '../api/data-api';
+import { ApiError } from '../api/client';
+import { useToast } from '../contexts/toast-context';
+import { isAdmin, isEvidenticar, getCurrentUser, employeeMatchesScope } from '../store';
 import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
 import { v4 as uuidv4 } from 'uuid';
 import type { Employee } from '../types';
 
 export function EmployeesPage() {
-  const [state, setState] = useStore();
+  const [state] = useStore();
+  const refresh = useRefreshData();
+  const admin = isAdmin();
+  const evidenticar = isEvidenticar();
+  const user = getCurrentUser();
+  const { toastError } = useToast();
   const [search, setSearch] = useState('');
   const [filterOrgUnit, setFilterOrgUnit] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -21,12 +30,29 @@ export function EmployeesPage() {
 
   const filtered = useMemo(() => {
     return state.employees.filter(emp => {
+      if (evidenticar && !admin && !employeeMatchesScope(emp, state, user)) {
+        return false;
+      }
       const matchSearch = search === '' ||
         `${emp.firstName} ${emp.lastName} ${emp.title} ${emp.email || ''}`.toLowerCase().includes(search.toLowerCase());
       const matchOrg = filterOrgUnit === '' || emp.orgUnitId === filterOrgUnit;
       return matchSearch && matchOrg;
     });
-  }, [state.employees, search, filterOrgUnit]);
+  }, [state, admin, evidenticar, user, search, filterOrgUnit]);
+
+  const scopedOrgUnits = useMemo(() => {
+    if (admin) {
+      return state.orgUnits;
+    }
+    if (evidenticar) {
+      return state.orgUnits.filter((org) =>
+        state.employees.some(
+          (emp) => emp.orgUnitId === org.id && employeeMatchesScope(emp, state, user),
+        ),
+      );
+    }
+    return state.orgUnits;
+  }, [admin, evidenticar, state.employees, state.orgUnits, user]);
 
   function openAdd() {
     setEditing(null);
@@ -50,20 +76,14 @@ export function EmployeesPage() {
     setShowForm(true);
   }
 
-  function handleSave() {
+  const handleSave = async () => {
+    if (!admin) {
+      toastError('Samo administrator može mijenjati zaposlenike.');
+      return;
+    }
     if (!fFirstName.trim() || !fLastName.trim() || !fOrgUnit) return;
-    if (editing) {
-      setState(prev => ({
-        ...prev,
-        employees: prev.employees.map(e =>
-          e.id === editing.id
-            ? { ...e, firstName: fFirstName.trim(), lastName: fLastName.trim(), title: fTitle.trim(), orgUnitId: fOrgUnit, email: fEmail || undefined, phone: fPhone || undefined }
-            : e
-        ),
-      }));
-    } else {
-      const newEmp: Employee = {
-        id: uuidv4(),
+    try {
+      const payload = {
         firstName: fFirstName.trim(),
         lastName: fLastName.trim(),
         title: fTitle.trim(),
@@ -71,20 +91,35 @@ export function EmployeesPage() {
         email: fEmail || undefined,
         phone: fPhone || undefined,
       };
-      setState(prev => ({ ...prev, employees: [...prev.employees, newEmp] }));
+      if (editing) {
+        await updateEmployeeApi(editing.id, payload);
+      } else {
+        await createEmployeeApi(payload);
+      }
+      await refresh();
+      setShowForm(false);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri spremanju';
+      toastError(message);
     }
-    setShowForm(false);
-  }
+  };
 
-  function handleDelete(id: string) {
-    const hasEquipment = state.equipment.some(e => e.currentHolderId === id);
+  const handleDelete = async (id: string) => {
+    if (!admin) return;
+    const hasEquipment = state.equipment.some((e) => e.currentHolderId === id);
     if (hasEquipment) {
-      alert('Nije moguće obrisati radnika koji ima zaduženu opremu. Prvo razdužite opremu.');
+      toastError('Nije moguće obrisati radnika koji ima zaduženu opremu. Prvo razdužite opremu.');
       return;
     }
     if (!confirm('Da li ste sigurni?')) return;
-    setState(prev => ({ ...prev, employees: prev.employees.filter(e => e.id !== id) }));
-  }
+    try {
+      await deleteEmployeeApi(id);
+      await refresh();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri brisanju';
+      toastError(message);
+    }
+  };
 
   function getEquipmentCount(empId: string): number {
     return state.equipment.filter(e => e.currentHolderId === empId && e.status === 'zaduzeno').length;
@@ -95,14 +130,18 @@ export function EmployeesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Radnici</h1>
-          <p className="text-gray-500 mt-1">Evidencija radnika po organizacijskim jedinicama</p>
+          <p className="text-gray-500 mt-1">
+            {admin ? 'Evidencija radnika po organizacijskim jedinicama' : 'Pregled radnika u vašem opsegu'}
+          </p>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
-        >
-          <Plus size={16} /> Novi radnik
-        </button>
+        {admin ? (
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
+          >
+            <Plus size={16} /> Novi radnik
+          </button>
+        ) : null}
       </div>
 
       {/* Filters */}
@@ -123,7 +162,7 @@ export function EmployeesPage() {
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-w-[200px]"
         >
           <option value="">Sve org. jedinice</option>
-          {state.orgUnits.map(o => (
+          {scopedOrgUnits.map(o => (
             <option key={o.id} value={o.id}>{o.name} ({getOrgUnitTypeLabel(o.type)})</option>
           ))}
         </select>
@@ -140,7 +179,9 @@ export function EmployeesPage() {
                 <th className="px-4 py-3 font-medium text-gray-600">Org. jedinica</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Email</th>
                 <th className="px-4 py-3 font-medium text-gray-600 text-center">Oprema</th>
-                <th className="px-4 py-3 font-medium text-gray-600 text-right">Akcije</th>
+                {admin ? (
+                  <th className="px-4 py-3 font-medium text-gray-600 text-right">Akcije</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -166,22 +207,24 @@ export function EmployeesPage() {
                         <span className="text-xs text-gray-300">0</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <button onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
-                          <Edit2 size={14} />
-                        </button>
-                        <button onClick={() => handleDelete(emp.id)} className="text-red-500 hover:text-red-700 p-1" title="Obriši">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
+                    {admin ? (
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
+                            <Edit2 size={14} />
+                          </button>
+                          <button onClick={() => handleDelete(emp.id)} className="text-red-500 hover:text-red-700 p-1" title="Obriši">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-gray-400 py-12">Nema rezultata</td>
+                  <td colSpan={admin ? 6 : 5} className="text-center text-gray-400 py-12">Nema rezultata</td>
                 </tr>
               )}
             </tbody>

@@ -2,14 +2,14 @@
 
 ## Cilj
 
-Produkcijski compose sa mrežom `web`, TLS Let's Encrypt (`le`), host `opremnica.ba101.top`.
+Produkcijski compose sa mrežom `web`, TLS Let's Encrypt (`le`), host `inventory-v2.ba101.top`.
 
 ## Servisi (`docker-compose.prod.yml`)
 
 | Servis | Slika / build | Port interni | Napomena |
 |--------|---------------|--------------|----------|
 | `backend` | build `./backend` | 3000 | NestJS |
-| `frontend` | build `./frontend` → nginx | 80 | statički `dist/` |
+| `frontend` | build `./frontend` → `serve` (Node) | 3000 | statički `dist/`, **bez nginx** |
 
 **Napomena:** Traefik je van compose-a (već na serveru) — samo labele na servisima.
 
@@ -32,11 +32,11 @@ networks:
 labels:
   - traefik.enable=true
   - traefik.docker.network=web
-  - traefik.http.routers.opremnica-frontend.rule=Host(`opremnica.ba101.top`)
-  - traefik.http.routers.opremnica-frontend.entrypoints=websecure
-  - traefik.http.routers.opremnica-frontend.tls=true
-  - traefik.http.routers.opremnica-frontend.tls.certresolver=le
-  - traefik.http.services.opremnica-frontend.loadbalancer.server.port=80
+  - traefik.http.routers.inventory-v2-web.rule=Host(`inventory-v2.ba101.top`)
+  - traefik.http.routers.inventory-v2-web.entrypoints=websecure
+  - traefik.http.routers.inventory-v2-web.tls=true
+  - traefik.http.routers.inventory-v2-web.tls.certresolver=le
+  - traefik.http.services.inventory-v2-web.loadbalancer.server.port=3000
 ```
 
 ## Traefik labele — backend (PathPrefix `/backend`)
@@ -47,20 +47,21 @@ labels:
 labels:
   - traefik.enable=true
   - traefik.docker.network=web
-  - traefik.http.routers.opremnica-api.rule=Host(`opremnica.ba101.top`) && PathPrefix(`/backend`)
-  - traefik.http.routers.opremnica-api.entrypoints=websecure
-  - traefik.http.routers.opremnica-api.tls=true
-  - traefik.http.routers.opremnica-api.tls.certresolver=le
-  - traefik.http.services.opremnica-api.loadbalancer.server.port=3000
-  - traefik.http.routers.opremnica-api.priority=100
+  - traefik.http.routers.inventory-v2-api.rule=Host(`inventory-v2.ba101.top`) && PathPrefix(`/backend`)
+  - traefik.http.routers.inventory-v2-api.entrypoints=websecure
+  - traefik.http.routers.inventory-v2-api.tls=true
+  - traefik.http.routers.inventory-v2-api.tls.certresolver=le
+  - traefik.http.services.inventory-v2-api.loadbalancer.server.port=3000
+  - traefik.http.routers.inventory-v2-api.priority=100
 ```
 
 **Strategija B:** StripPrefix `/backend` + Nest bez prefiksa — dokumentovati u matrici ako server već koristi strip.
 
-## Frontend nginx
+## Frontend (bez nginx)
 
-- `try_files` za SPA
-- **Ne** proxy `/backend` ako API ide direktno na isti host (browser zove `https://opremnica.ba101.top/backend/...`)
+- Kontejner servira `dist/` preko `serve -s` na portu **3000**.
+- Routing isključivo **Traefik labelama** — nema reverse proxy u compose-u.
+- API: browser direktno na `https://inventory-v2.ba101.top/backend/...` (odvojen Traefik router).
 
 ## Socket.IO iza Traefik
 
@@ -87,19 +88,9 @@ ENV NODE_ENV=production
 CMD ["node", "dist/main.js"]
 ```
 
-## Dockerfile — frontend (skica)
+## Dockerfile — frontend
 
-```dockerfile
-FROM node:22-alpine AS builder
-WORKDIR /app
-ARG VITE_API_URL=https://opremnica.ba101.top/backend
-COPY . .
-RUN npm ci && npm run build
-
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-```
+Vidi `frontend/Dockerfile` — multi-stage build + `serve` na portu 3000.
 
 ## Lokalni dev compose (`docker-compose.yml`)
 

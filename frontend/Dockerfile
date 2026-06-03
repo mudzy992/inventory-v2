@@ -1,3 +1,4 @@
+# Build SPA — produkcija: Traefik rutira na ovaj kontejner (bez nginx)
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -5,12 +6,15 @@ RUN npm ci
 COPY . .
 ARG VITE_API_URL=https://inventory-v2.ba101.top/backend
 ARG VITE_APP_NAME=Inventory v2
+ARG VITE_APP_URL=https://inventory-v2.ba101.top
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_APP_NAME=$VITE_APP_NAME
+ENV VITE_APP_URL=$VITE_APP_URL
 RUN npm run build
 
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+FROM node:22-alpine
+WORKDIR /app
+RUN npm install -g serve@14.2.4
+COPY --from=builder /app/dist ./dist
+EXPOSE 3000
+CMD ["serve", "-s", "dist", "-l", "3000"]

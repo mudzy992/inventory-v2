@@ -18,3 +18,14 @@
 ## Prefix
 
 NestJS `setGlobalPrefix('backend')` — bez Traefik StripPrefix.
+
+## Socket.IO
+
+- Path: `/backend/socket.io`
+- Namespace: `/notifications`
+- Isti Traefik router (`inventory-v2-api`) — WS upgrade na backend servis
+
+## Frontend kontejner
+
+- **Bez nginx** — statički `dist/` preko `serve` na portu `3000`.
+- Traefik labela: `loadbalancer.server.port=3000`.

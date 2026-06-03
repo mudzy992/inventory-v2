@@ -1,4 +1,48 @@
-import type { OrgUnit, Employee, AppState } from './types';
+import type { OrgUnit, Employee, AppState, City, Canton } from './types';
+
+export function getCityLabel(cities: City[], cityId: string | null | undefined): string {
+  if (!cityId) {
+    return '—';
+  }
+  const city = cities.find((row) => row.id === cityId);
+  if (!city) {
+    return '—';
+  }
+  const cantonName = city.canton?.name;
+  return cantonName ? `${city.name} (${cantonName})` : city.name;
+}
+
+export function getEffectiveCityForOrgUnit(orgUnits: OrgUnit[], unitId: string): string | null {
+  let current = orgUnits.find((unit) => unit.id === unitId);
+  while (current) {
+    if (current.effectiveLocationCityId) {
+      return current.effectiveLocationCityId;
+    }
+    if (current.locationCityId) {
+      return current.locationCityId;
+    }
+    current = orgUnits.find((unit) => unit.id === current!.parentId);
+  }
+  return null;
+}
+
+export function getEffectiveSignerForOrgUnit(
+  orgUnits: OrgUnit[],
+  employees: Employee[],
+  unitId: string,
+): Employee | null {
+  let current = orgUnits.find((unit) => unit.id === unitId);
+  while (current) {
+    if (current.effectiveSignerId) {
+      return employees.find((employee) => employee.id === current!.effectiveSignerId) ?? null;
+    }
+    if (current.signerId) {
+      return employees.find((employee) => employee.id === current!.signerId) ?? null;
+    }
+    current = orgUnits.find((unit) => unit.id === current!.parentId);
+  }
+  return null;
+}
 
 export function getOrgUnitPath(orgUnits: OrgUnit[], unitId: string): string {
   const parts: string[] = [];

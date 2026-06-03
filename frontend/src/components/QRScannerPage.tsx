@@ -16,11 +16,13 @@ export function QRScannerPage() {
     setError('');
     if (!searchQuery.trim()) return;
 
-    // Try to parse QR format: INVENTAR:INV-XXX|id
     let searchTerm = searchQuery.trim();
-    if (searchTerm.startsWith('INVENTAR:')) {
+    const equipmentPathMatch = /\/equipment\/([0-9a-f-]{36})/i.exec(searchTerm);
+    if (equipmentPathMatch) {
+      searchTerm = equipmentPathMatch[1];
+    } else if (searchTerm.startsWith('INVENTAR:')) {
       const parts = searchTerm.replace('INVENTAR:', '').split('|');
-      searchTerm = parts[0];
+      searchTerm = parts[0] || parts[1] || searchTerm;
     }
 
     // Search by inventory number

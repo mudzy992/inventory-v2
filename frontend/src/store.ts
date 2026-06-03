@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { AppState, OrgUnit, Employee, Category, Equipment, TransferRecord, CategoryField, UserAccount, Notification, SavedFilter } from './types';
+import { equipmentMatchesScope } from './helpers/registrar-scope';
+import type { AppState, OrgUnit, Employee, Category, Equipment, TransferRecord, CategoryField, UserAccount, Notification, SavedFilter, UserRole } from './types';
 
 const ORG_IDS = {
   direkcija: uuidv4(),
@@ -119,7 +120,7 @@ function createDemoData(): AppState {
       password: 'user123', 
       role: 'evidenticar', 
       isActive: true,
-      managedOrgUnitIds: [ORG_IDS.sektorIT, ORG_IDS.sluzbaInfrastrukture, ORG_IDS.sluzbaRazvoja]
+      registrarScopes: [],
     },
     
     // Evidenticar - manages Distribucija Sarajevo
@@ -130,7 +131,7 @@ function createDemoData(): AppState {
       password: 'user123', 
       role: 'evidenticar', 
       isActive: true,
-      managedOrgUnitIds: [ORG_IDS.distribucijaSarajevo, ORG_IDS.sektorTehDistSa, ORG_IDS.sluzbaMrezaDistSa, ORG_IDS.podruznicaCentar, ORG_IDS.sluzbaPodrCentar, ORG_IDS.podruznicaNovoSarajevo, ORG_IDS.sluzbaPodrNS]
+      registrarScopes: [],
     },
     
     // Regular users
@@ -487,102 +488,106 @@ function createDemoData(): AppState {
   // ============ SAVED FILTERS ============
   const savedFilters: SavedFilter[] = [];
 
-  return { 
-    orgUnits, 
-    employees, 
-    categories, 
-    equipment, 
-    transfers, 
-    users, 
+  return {
+    cantons: [],
+    cities: [],
+    warehouses: [],
+    orgUnits,
+    employees,
+    categories,
+    equipment,
+    transfers,
+    users,
     notifications,
     savedFilters,
-    currentUserId: null 
+    currentUserId: null,
   };
 }
 
-// Singleton state with localStorage persistence
-const STORAGE_KEY = 'inventar_app_state_v3';
+import type { AuthUserDto } from './api/auth-api';
 
-function loadState(): AppState {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (!parsed.users) parsed.users = [];
-      if (!parsed.notifications) parsed.notifications = [];
-      if (!parsed.savedFilters) parsed.savedFilters = [];
-      if (parsed.currentUserId === undefined) parsed.currentUserId = null;
-      return parsed;
-    }
-  } catch (e) {
-    console.error('Error loading state:', e);
-  }
-  return createDemoData();
-}
+const emptyAppState = (): AppState => ({
+  cantons: [],
+  cities: [],
+  warehouses: [],
+  orgUnits: [],
+  employees: [],
+  categories: [],
+  equipment: [],
+  transfers: [],
+  users: [],
+  notifications: [],
+  savedFilters: [],
+  currentUserId: null,
+});
 
-function saveState(state: AppState): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error('Error saving state:', e);
-  }
-}
-
-let _state = loadState();
+let _state: AppState = emptyAppState();
+let _authUser: AuthUserDto | null = null;
 const _listeners: Set<() => void> = new Set();
+
+export function syncAppState(state: AppState): void {
+  _state = state;
+  _listeners.forEach((listener) => listener());
+}
+
+export function setAuthUser(user: AuthUserDto | null): void {
+  _authUser = user;
+  _listeners.forEach((listener) => listener());
+}
 
 export function getState(): AppState {
   return _state;
 }
 
+/** @deprecated Prefer API mutations + refresh() from useData() */
 export function setState(updater: (prev: AppState) => AppState): void {
   _state = updater(_state);
-  saveState(_state);
-  _listeners.forEach(fn => fn());
+  _listeners.forEach((listener) => listener());
 }
 
 export function subscribe(listener: () => void): () => void {
   _listeners.add(listener);
-  return () => { _listeners.delete(listener); };
+  return () => {
+    _listeners.delete(listener);
+  };
 }
 
 export function resetToDemo(): void {
+  if (!import.meta.env.DEV) {
+    return;
+  }
   _state = createDemoData();
-  saveState(_state);
-  _listeners.forEach(fn => fn());
+  _listeners.forEach((listener) => listener());
 }
 
 export function getNextDocumentNumber(): string {
-  const transfers = _state.transfers;
   const year = new Date().getFullYear();
-  const thisYearTransfers = transfers.filter(t => t.documentNumber.includes(String(year)) && !t.documentNumber.includes('RASH'));
+  const thisYearTransfers = _state.transfers.filter(
+    (transfer) =>
+      transfer.documentNumber.includes(String(year)) &&
+      !transfer.documentNumber.includes('RASH') &&
+      !transfer.documentNumber.startsWith('DRAFT'),
+  );
   return `PRN-${year}-${String(thisYearTransfers.length + 1).padStart(4, '0')}`;
 }
 
-// Auth helpers
-export function login(username: string, password: string): { success: boolean; error?: string } {
-  const user = _state.users.find(u => u.username === username && u.password === password);
-  if (!user) {
-    return { success: false, error: 'Pogrešno korisničko ime ili lozinka' };
-  }
-  if (!user.isActive) {
-    return { success: false, error: 'Korisnički račun je deaktiviran' };
-  }
-  setState(prev => ({
-    ...prev,
-    currentUserId: user.id,
-    users: prev.users.map(u => u.id === user.id ? { ...u, lastLogin: new Date().toISOString() } : u),
-  }));
-  return { success: true };
-}
-
-export function logout(): void {
-  setState(prev => ({ ...prev, currentUserId: null }));
-}
-
 export function getCurrentUser(): UserAccount | null {
-  if (!_state.currentUserId) return null;
-  return _state.users.find(u => u.id === _state.currentUserId) || null;
+  if (!_authUser) {
+    return null;
+  }
+  const existing = _state.users.find((user) => user.id === _authUser?.id);
+  if (existing) {
+    return existing;
+  }
+  return {
+    id: _authUser.id,
+    username: _authUser.username,
+    role: _authUser.role,
+    employeeId: _authUser.employeeId ?? '',
+    password: '',
+    isActive: true,
+    registrarScopes: _authUser.registrarScopes,
+  };
 }
 
 export function getCurrentEmployee(): Employee | null {
@@ -601,41 +606,26 @@ export function isEvidenticar(): boolean {
   return user?.role === 'evidenticar';
 }
 
-export function getUserRole(): 'admin' | 'evidenticar' | 'user' | null {
+export function isSkladistar(): boolean {
+  const user = getCurrentUser();
+  return user?.role === 'skladistar';
+}
+
+export function getUserRole(): UserRole | null {
   const user = getCurrentUser();
   return user?.role || null;
 }
 
-// Get all org unit IDs that current evidenticar manages (including descendants)
-export function getManagedOrgUnitIds(): string[] {
-  const user = getCurrentUser();
-  if (!user || user.role !== 'evidenticar' || !user.managedOrgUnitIds) return [];
-  
-  const result = new Set<string>();
-  
-  function addWithDescendants(unitId: string) {
-    result.add(unitId);
-    _state.orgUnits.filter(o => o.parentId === unitId).forEach(child => {
-      addWithDescendants(child.id);
-    });
-  }
-  
-  user.managedOrgUnitIds.forEach(id => addWithDescendants(id));
-  return Array.from(result);
-}
+export {
+  equipmentMatchesScope,
+  employeeMatchesScope,
+  isEmployeeInManagedUnits,
+  transferMatchesScope,
+  isCrossRegistrarScopeTransfer,
+} from './helpers/registrar-scope';
 
-// Check if employee belongs to managed org units
-export function isEmployeeInManagedUnits(employeeId: string): boolean {
-  const user = getCurrentUser();
-  if (!user) return false;
-  if (user.role === 'admin') return true;
-  if (user.role !== 'evidenticar') return false;
-  
-  const emp = _state.employees.find(e => e.id === employeeId);
-  if (!emp) return false;
-  
-  const managedIds = getManagedOrgUnitIds();
-  return managedIds.includes(emp.orgUnitId);
+export function getRegistrarScopes() {
+  return getCurrentUser()?.registrarScopes ?? [];
 }
 
 // Check if transfer is cross-service (different org units at service level)
@@ -693,7 +683,30 @@ export function isCrossServiceTransfer(fromEmployeeId: string | undefined, toEmp
   return false;
 }
 
-// Notification helpers
+// Notification helpers (synced via REST + Socket.IO)
+export function applyNotificationsLoaded(notifications: Notification[]): void {
+  setState((prev) => ({ ...prev, notifications }));
+}
+
+export function applyNotificationCreated(notification: Notification): void {
+  setState((prev) => {
+    if (prev.notifications.some((row) => row.id === notification.id)) {
+      return prev;
+    }
+    return { ...prev, notifications: [notification, ...prev.notifications] };
+  });
+}
+
+export function applyNotificationRead(notificationId: string): void {
+  setState((prev) => ({
+    ...prev,
+    notifications: prev.notifications.map((row) =>
+      row.id === notificationId ? { ...row, read: true } : row,
+    ),
+  }));
+}
+
+/** @deprecated Use API + SocketProvider instead */
 export function addNotification(userId: string, type: Notification['type'], title: string, message: string, relatedId?: string): void {
   const notification: Notification = {
     id: uuidv4(),
@@ -705,17 +718,12 @@ export function addNotification(userId: string, type: Notification['type'], titl
     createdAt: new Date().toISOString(),
     relatedId,
   };
-  setState(prev => ({
-    ...prev,
-    notifications: [notification, ...prev.notifications],
-  }));
+  applyNotificationCreated(notification);
 }
 
+/** @deprecated Use markNotificationReadApi + SocketProvider */
 export function markNotificationRead(notificationId: string): void {
-  setState(prev => ({
-    ...prev,
-    notifications: prev.notifications.map(n => n.id === notificationId ? { ...n, read: true } : n),
-  }));
+  applyNotificationRead(notificationId);
 }
 
 export function getUnreadNotificationsCount(userId: string): number {
@@ -738,26 +746,20 @@ export function getCategoryWithParent(categoryId: string): { category: typeof _s
 }
 
 // Equipment stats helper
-export function getEquipmentStats(categoryId?: string, orgUnitIds?: string[]) {
+export function getEquipmentStats(categoryId?: string, useRegistrarScope = false) {
   let filtered = _state.equipment;
-  
+  const user = getCurrentUser();
   if (categoryId) {
-    // Check if it's a parent category
     const subCats = getSubCategories(categoryId);
     if (subCats.length > 0) {
-      const subCatIds = subCats.map(c => c.id);
-      filtered = filtered.filter(e => subCatIds.includes(e.categoryId));
+      const subCatIds = subCats.map((c) => c.id);
+      filtered = filtered.filter((e) => subCatIds.includes(e.categoryId));
     } else {
-      filtered = filtered.filter(e => e.categoryId === categoryId);
+      filtered = filtered.filter((e) => e.categoryId === categoryId);
     }
   }
-  
-  if (orgUnitIds && orgUnitIds.length > 0) {
-    filtered = filtered.filter(e => {
-      if (!e.currentHolderId) return true; // On warehouse - accessible
-      const holder = _state.employees.find(emp => emp.id === e.currentHolderId);
-      return holder && orgUnitIds.includes(holder.orgUnitId);
-    });
+  if (useRegistrarScope && user?.role === 'evidenticar') {
+    filtered = filtered.filter((e) => equipmentMatchesScope(e, _state, user));
   }
   
   const total = filtered.length;
