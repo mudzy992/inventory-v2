@@ -36,6 +36,15 @@ npx prisma migrate reset
 
 Briše sve podatke, ponovo primjenjuje migracije i pokreće prazan `db:seed`.
 
+Ako reset padne sa `P3018` (npr. `Can't DROP ... check that column/key exists`), prvo označi neuspjelu migraciju kao rolled back, pa ponovi reset:
+
+```bash
+npx prisma migrate resolve --rolled-back <ime_migracije>
+npx prisma migrate reset
+```
+
+**Napomena (2026-06-03):** Usklađene su `20260602090000_inventory_session_v3` i `20260602120000_inventory_committee_scope_v2` za čist `migrate reset` na praznoj bazi.
+
 ## Setup API
 
 | Endpoint | Auth | Opis |

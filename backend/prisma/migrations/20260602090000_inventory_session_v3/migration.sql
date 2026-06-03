@@ -20,10 +20,10 @@ DROP INDEX `inventory_lines_sessionId_equipmentId_key` ON `inventory_lines`;
 DROP INDEX `inventory_lines_sessionId_idx` ON `inventory_lines`;
 
 -- DropIndex
-DROP INDEX `inventory_sessions_cityId_idx` ON `inventory_sessions`;
+DROP INDEX `inventory_sessions_cityId_year_key` ON `inventory_sessions`;
 
 -- DropIndex
-DROP INDEX `inventory_sessions_committeeId_year_key` ON `inventory_sessions`;
+DROP INDEX `inventory_sessions_cityId_idx` ON `inventory_sessions`;
 
 -- AlterTable
 ALTER TABLE `inventory_committees` DROP COLUMN `cityId`,
@@ -45,7 +45,7 @@ ALTER TABLE `inventory_sessions` DROP COLUMN `cityId`,
     MODIFY `endDate` DATE NULL;
 
 -- DropTable
-DROP TABLE `inventory_committee_categories`;
+DROP TABLE IF EXISTS `inventory_committee_categories`;
 
 -- CreateIndex
 CREATE INDEX `inventory_committees_sessionId_idx` ON `inventory_committees`(`sessionId`);
@@ -72,16 +72,7 @@ ALTER TABLE `inventory_committees` ADD CONSTRAINT `inventory_committees_sessionI
 ALTER TABLE `inventory_committees` ADD CONSTRAINT `inventory_committees_categoryId_fkey` FOREIGN KEY (`categoryId`) REFERENCES `categories`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `inventory_committees` ADD CONSTRAINT `inventory_committees_disposalCommissionId_fkey` FOREIGN KEY (`disposalCommissionId`) REFERENCES `disposal_commissions`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE `inventory_sessions` ADD CONSTRAINT `inventory_sessions_orgUnitId_fkey` FOREIGN KEY (`orgUnitId`) REFERENCES `org_units`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `inventory_lines` ADD CONSTRAINT `inventory_lines_committeeId_fkey` FOREIGN KEY (`committeeId`) REFERENCES `inventory_committees`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `inventory_lines` ADD CONSTRAINT `inventory_lines_relocationWarehouseId_fkey` FOREIGN KEY (`relocationWarehouseId`) REFERENCES `warehouses`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `inventory_lines` ADD CONSTRAINT `inventory_lines_relocationToPersonId_fkey` FOREIGN KEY (`relocationToPersonId`) REFERENCES `employees`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;

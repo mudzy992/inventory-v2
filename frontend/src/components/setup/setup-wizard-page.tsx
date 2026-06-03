@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Building2, ChevronLeft, ChevronRight, Shield, User } from 'lucide-react';
+import { Building2, ChevronLeft, ChevronRight, Shield, Sparkles, User } from 'lucide-react';
 import { ApiError } from '../../api/client';
 import { initializeSetupApi, type InitializeSetupPayload } from '../../api/setup-api';
 import { usePublicSettings } from '../../contexts/public-settings-context';
+import { PremiumAuthLayout } from '../ui/premium-auth-layout';
 
 interface SetupWizardPageProps {
   onComplete: () => void;
@@ -72,17 +73,43 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
     }
   };
 
+  const appName = (import.meta.env.VITE_APP_NAME as string) || 'Inventar';
+
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/80">
-          <h1 className="text-xl font-semibold text-slate-900">Inicijalizacija aplikacije</h1>
-          <p className="text-sm text-slate-500 mt-1">Korak {step} od 3</p>
-          <div className="flex gap-2 mt-4">
+    <PremiumAuthLayout maxWidth="lg">
+      <div className="text-center mb-6">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 border border-white/20 rounded-2xl mb-4 shadow-lg shadow-blue-900/30 backdrop-blur-md">
+          <Sparkles size={28} className="text-blue-200" aria-hidden />
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
+          Inicijalizacija aplikacije
+        </h1>
+        <p className="text-blue-200/80 text-sm mt-2">
+          {appName} · Korak {step} od 3
+        </p>
+      </div>
+
+      <form
+        className="w-full bg-white rounded-2xl border border-slate-200 shadow-2xl shadow-slate-950/40"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (step < 3) {
+            if ((step === 1 && canProceedStep1) || (step === 2 && canProceedStep2)) {
+              setStep((s) => (s + 1) as WizardStep);
+            }
+            return;
+          }
+          void handleSubmit();
+        }}
+      >
+        <div className="px-6 py-4 border-b border-slate-100">
+          <div className="flex gap-2">
             {[1, 2, 3].map((n) => (
               <div
                 key={n}
-                className={`h-1 flex-1 rounded-full ${n <= step ? 'bg-blue-600' : 'bg-slate-200'}`}
+                className={`h-1.5 flex-1 rounded-full transition-colors ${
+                  n <= step ? 'bg-blue-600' : 'bg-slate-200'
+                }`}
               />
             ))}
           </div>
@@ -99,7 +126,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                 <input
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </label>
               <label className="block text-sm font-medium text-slate-700">
@@ -107,7 +134,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                 <input
                   value={companyAddress}
                   onChange={(e) => setCompanyAddress(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </label>
               <label className="block text-sm font-medium text-slate-700">
@@ -115,7 +142,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                 <input
                   value={companyCity}
                   onChange={(e) => setCompanyCity(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -124,7 +151,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                   <input
                     value={companyPostalCode}
                     onChange={(e) => setCompanyPostalCode(e.target.value)}
-                    className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                    className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </label>
                 <label className="block text-sm font-medium text-slate-700">
@@ -132,7 +159,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                   <input
                     value={companyPhone}
                     onChange={(e) => setCompanyPhone(e.target.value)}
-                    className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                    className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </label>
               </div>
@@ -142,7 +169,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                   type="email"
                   value={companyEmail}
                   onChange={(e) => setCompanyEmail(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </label>
               <label className="block text-sm font-medium text-slate-700">
@@ -150,7 +177,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                 <input
                   value={companyTaxId}
                   onChange={(e) => setCompanyTaxId(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </label>
             </>
@@ -167,7 +194,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                   <input
                     value={adminFirstName}
                     onChange={(e) => setAdminFirstName(e.target.value)}
-                    className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                    className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </label>
                 <label className="block text-sm font-medium text-slate-700">
@@ -175,7 +202,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                   <input
                     value={adminLastName}
                     onChange={(e) => setAdminLastName(e.target.value)}
-                    className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                    className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </label>
               </div>
@@ -185,7 +212,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                   type="email"
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </label>
               <label className="block text-sm font-medium text-slate-700">
@@ -193,7 +220,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                 <input
                   value={adminUsername}
                   onChange={(e) => setAdminUsername(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   autoComplete="username"
                 />
               </label>
@@ -203,7 +230,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                   type="password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   autoComplete="new-password"
                 />
               </label>
@@ -213,7 +240,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                   type="password"
                   value={adminPasswordConfirm}
                   onChange={(e) => setAdminPasswordConfirm(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   autoComplete="new-password"
                 />
               </label>
@@ -222,7 +249,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
                 <input
                   value={setupToken}
                   onChange={(e) => setSetupToken(e.target.value)}
-                  className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 block w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </label>
             </>
@@ -251,41 +278,43 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
               </dl>
             </>
           )}
-          {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
-        </div>
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-between gap-2">
-          {step > 1 ? (
-            <button
-              type="button"
-              onClick={() => setStep((s) => (s - 1) as WizardStep)}
-              className="inline-flex items-center gap-1 px-4 py-2 text-sm border border-slate-300 rounded-xl"
-            >
-              <ChevronLeft size={16} /> Nazad
-            </button>
-          ) : (
-            <span />
-          )}
-          {step < 3 ? (
-            <button
-              type="button"
-              disabled={(step === 1 && !canProceedStep1) || (step === 2 && !canProceedStep2)}
-              onClick={() => setStep((s) => (s + 1) as WizardStep)}
-              className="inline-flex items-center gap-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-xl disabled:opacity-50"
-            >
-              Dalje <ChevronRight size={16} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={isSubmitting || !canProceedStep2}
-              onClick={() => void handleSubmit()}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl disabled:opacity-50"
-            >
-              {isSubmitting ? 'Inicijalizacija...' : 'Završi instalaciju'}
-            </button>
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 border border-red-100">
+              {error}
+            </p>
           )}
         </div>
-      </div>
-    </div>
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-between gap-2">
+            {step > 1 ? (
+              <button
+                type="button"
+                onClick={() => setStep((s) => (s - 1) as WizardStep)}
+                className="inline-flex items-center gap-1 px-4 py-2 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition-colors"
+              >
+                <ChevronLeft size={16} /> Nazad
+              </button>
+            ) : (
+              <span />
+            )}
+            {step < 3 ? (
+              <button
+                type="submit"
+                disabled={(step === 1 && !canProceedStep1) || (step === 2 && !canProceedStep2)}
+                className="inline-flex items-center gap-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-500 transition-colors shadow-md shadow-blue-600/20"
+              >
+                Dalje <ChevronRight size={16} />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSubmitting || !canProceedStep2}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-500 transition-colors shadow-md shadow-blue-600/20"
+              >
+                {isSubmitting ? 'Inicijalizacija...' : 'Završi instalaciju'}
+              </button>
+            )}
+        </div>
+      </form>
+    </PremiumAuthLayout>
   );
 };

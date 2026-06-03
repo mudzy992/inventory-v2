@@ -16,16 +16,16 @@ todos:
     status: completed
   - id: frontend-setup-public
     content: "App routing: public equipment path, SetupWizard, PublicSettings hook"
-    status: in_progress
+    status: completed
   - id: labels-qr-modernize
     content: "LabelPrintSheet + EquipmentCard: URL QR, display name, unique field, print CSS"
-    status: pending
+    status: completed
   - id: login-print-headers
     content: Login branding + company header helper u DocumentsPage/print sheetovima
-    status: pending
+    status: completed
   - id: matrices-docs
     content: Ažurirati settings/labels matrice + nova install-setup matrica + README
-    status: pending
+    status: completed
 isProject: false
 ---
 

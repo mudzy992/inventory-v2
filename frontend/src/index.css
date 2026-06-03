@@ -59,6 +59,14 @@ body {
   height: 100vh;
 }
 
+/* Login / setup wizard — allow full-page scroll */
+body.auth-flow,
+body.auth-flow #root {
+  overflow: auto;
+  height: auto;
+  min-height: 100dvh;
+}
+
 /* Print styles */
 @media print {
   .no-print {
