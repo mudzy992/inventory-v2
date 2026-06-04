@@ -1,12 +1,19 @@
-const resolveApiBase = (): string => {
-  if (import.meta.env.DEV) {
-    return '/backend';
-  }
-  const configured = import.meta.env.VITE_API_URL as string | undefined;
-  return configured?.replace(/\/$/, '') || '/backend';
-};
+import { refreshTokensApi } from './auth-refresh';
+import { API_BASE, getApiBaseUrl } from './api-base';
+import {
+  clearTokens,
+  dispatchSessionExpired,
+  getAccessToken,
+  getRefreshToken,
+} from './token-storage';
 
-const API_BASE = resolveApiBase();
+export { getApiBaseUrl } from './api-base';
+export {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+} from './token-storage';
 
 export class ApiError extends Error {
   constructor(
@@ -18,19 +25,38 @@ export class ApiError extends Error {
   }
 }
 
-const getAccessToken = (): string | null => sessionStorage.getItem('accessToken');
+const AUTH_NO_RETRY_PATHS = ['/auth/login', '/auth/refresh', '/auth/logout'];
 
-export const setTokens = (accessToken: string, refreshToken: string): void => {
-  sessionStorage.setItem('accessToken', accessToken);
-  sessionStorage.setItem('refreshToken', refreshToken);
+let refreshInFlight: Promise<void> | null = null;
+
+const shouldRetryAuth = (path: string, status: number): boolean => {
+  if (status !== 401) {
+    return false;
+  }
+  if (AUTH_NO_RETRY_PATHS.some((skip) => path.startsWith(skip))) {
+    return false;
+  }
+  return Boolean(getRefreshToken());
 };
 
-export const clearTokens = (): void => {
-  sessionStorage.removeItem('accessToken');
-  sessionStorage.removeItem('refreshToken');
+export const ensureAccessTokenFresh = async (): Promise<void> => {
+  if (!getRefreshToken()) {
+    throw new ApiError('Session expired', 401);
+  }
+  if (!refreshInFlight) {
+    refreshInFlight = refreshTokensApi().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  await refreshInFlight;
 };
 
-export const apiRequest = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
+const handleSessionFailure = (): void => {
+  clearTokens();
+  dispatchSessionExpired();
+};
+
+const buildAuthHeaders = (options: RequestInit): Headers => {
   const headers = new Headers(options.headers);
   const token = getAccessToken();
   if (token) {
@@ -40,13 +66,48 @@ export const apiRequest = async <T>(path: string, options: RequestInit = {}): Pr
   if (hasBody && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  return headers;
+};
+
+const executeFetch = async (path: string, options: RequestInit): Promise<Response> => {
+  const headers = buildAuthHeaders(options);
+  return fetch(`${API_BASE}${path}`, { ...options, headers });
+};
+
+const parseApiError = async (response: Response): Promise<ApiError> => {
+  const payload = (await response.json().catch(() => ({}))) as { message?: string | string[] };
+  const message = Array.isArray(payload.message)
+    ? payload.message.join(', ')
+    : payload.message || response.statusText;
+  return new ApiError(message, response.status);
+};
+
+const fetchWithAuthRetry = async (path: string, options: RequestInit): Promise<Response> => {
+  let response = await executeFetch(path, options);
+  if (!shouldRetryAuth(path, response.status)) {
+    return response;
+  }
+  try {
+    await ensureAccessTokenFresh();
+  } catch (err) {
+    handleSessionFailure();
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    throw new ApiError('Session expired', 401);
+  }
+  response = await executeFetch(path, options);
+  if (response.status === 401) {
+    handleSessionFailure();
+    throw new ApiError('Session expired', 401);
+  }
+  return response;
+};
+
+export const apiRequest = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
+  const response = await fetchWithAuthRetry(path, options);
   if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { message?: string | string[] };
-    const message = Array.isArray(payload.message)
-      ? payload.message.join(', ')
-      : payload.message || response.statusText;
-    throw new ApiError(message, response.status);
+    throw await parseApiError(response);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -54,17 +115,10 @@ export const apiRequest = async <T>(path: string, options: RequestInit = {}): Pr
   return (await response.json()) as T;
 };
 
-export const getApiBaseUrl = (): string => API_BASE;
-
 export const fetchAuthenticatedBlob = async (path: string): Promise<Blob> => {
-  const token = sessionStorage.getItem('accessToken');
-  const headers = new Headers();
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-  const response = await fetch(`${API_BASE}${path}`, { headers });
+  const response = await fetchWithAuthRetry(path, { method: 'GET' });
   if (!response.ok) {
-    throw new ApiError(response.statusText, response.status);
+    throw await parseApiError(response);
   }
   return response.blob();
 };

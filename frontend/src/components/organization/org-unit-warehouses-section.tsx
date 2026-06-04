@@ -7,12 +7,13 @@ import {
   countEquipmentInOrgSubtree,
   getDefaultCityIdForOrgUnit,
   getWarehousesForOrgUnit,
+  resolveEffectiveWarehouseForOrgUnit,
 } from '../../helpers/org-warehouse.util';
 import { getCityLabel } from '../../helpers';
 import { useStore, useRefreshData } from '../../useStore';
 import type { OrgUnit } from '../../types';
 import { Button } from '../ui/button';
-import { inputClass, labelClass } from '../ui/form-styles';
+import { inputClass, labelClass, selectClass } from '../ui/form-styles';
 
 interface OrgUnitWarehousesSectionProps {
   orgUnit: OrgUnit;
@@ -31,10 +32,29 @@ export const OrgUnitWarehousesSection = ({
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [quickName, setQuickName] = useState('');
   const [quickAddress, setQuickAddress] = useState('');
+  const [quickKeeperIds, setQuickKeeperIds] = useState('');
+  const skladistarUsers = state.users.filter((user) => user.role === 'skladistar');
+  const selectedQuickKeeperIds = quickKeeperIds.split(',').filter(Boolean);
   const defaultCityId = getDefaultCityIdForOrgUnit(state.orgUnits, orgUnit.id);
+  const effectiveWarehouseId = resolveEffectiveWarehouseForOrgUnit(
+    state.orgUnits,
+    state.warehouses,
+    orgUnit.id,
+    defaultCityId,
+  );
+  const effectiveWarehouse = effectiveWarehouseId
+    ? state.warehouses.find((row) => row.id === effectiveWarehouseId)
+    : null;
+  const showInherited =
+    effectiveWarehouse &&
+    !warehouses.some((row) => row.id === effectiveWarehouse.id);
   const handleQuickCreate = async () => {
     if (!quickName.trim() || !quickAddress.trim() || !defaultCityId) {
       toastError('Unesite naziv i adresu; org jedinica mora imati efektivni grad.');
+      return;
+    }
+    if (selectedQuickKeeperIds.length < 1) {
+      toastError('Odaberite barem jednog skladištara');
       return;
     }
     try {
@@ -43,9 +63,11 @@ export const OrgUnitWarehousesSection = ({
         cityId: defaultCityId,
         address: quickAddress.trim(),
         orgUnitId: orgUnit.id,
+        keeperUserIds: selectedQuickKeeperIds,
       });
       setQuickName('');
       setQuickAddress('');
+      setQuickKeeperIds('');
       setShowQuickCreate(false);
       await refresh();
     } catch (err) {
@@ -67,6 +89,17 @@ export const OrgUnitWarehousesSection = ({
       <p className="text-xs text-gray-500">
         Oprema u podstablu (zadužena + na skladištima org-a): <strong>{subtreeCount}</strong> stavki
       </p>
+      {showInherited && effectiveWarehouse ? (
+        <p className="text-xs text-slate-600 rounded-md bg-white border border-slate-200 px-2 py-1.5">
+          Efektivno skladište (nasljeđeno): <strong>{effectiveWarehouse.name}</strong>
+          {effectiveWarehouse.orgUnitId !== orgUnit.id ? (
+            <span className="text-gray-400"> — dodijeljeno na nadređenom čvoru</span>
+          ) : null}
+        </p>
+      ) : null}
+      <p className="text-[11px] text-gray-400">
+        Skladište na ovom čvoru nadjačava nasljeđeno za cijelo podstablo.
+      </p>
       {showQuickCreate ? (
         <div className="space-y-2 bg-white rounded-lg p-3 border border-gray-100">
           <input
@@ -84,7 +117,38 @@ export const OrgUnitWarehousesSection = ({
           <p className="text-[11px] text-gray-500">
             Grad: {defaultCityId ? getCityLabel(state.cities, defaultCityId) : '— postavite lokaciju na čvoru'}
           </p>
-          <Button onClick={() => void handleQuickCreate()}>Kreiraj skladište</Button>
+          <div>
+            <label className={labelClass} htmlFor={`quick-keepers-${orgUnit.id}`}>
+              Skladištari *
+            </label>
+            {skladistarUsers.length === 0 ? (
+              <p className="text-xs text-amber-800">Nema korisnika s ulogom Skladištar.</p>
+            ) : (
+              <select
+                id={`quick-keepers-${orgUnit.id}`}
+                multiple
+                value={selectedQuickKeeperIds}
+                onChange={(event) =>
+                  setQuickKeeperIds(
+                    Array.from(event.target.selectedOptions).map((option) => option.value).join(','),
+                  )
+                }
+                className={`${selectClass} min-h-[72px]`}
+              >
+                {skladistarUsers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.username}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <Button
+            onClick={() => void handleQuickCreate()}
+            disabled={!defaultCityId || selectedQuickKeeperIds.length < 1}
+          >
+            Kreiraj skladište
+          </Button>
         </div>
       ) : null}
       <ul className="space-y-1">

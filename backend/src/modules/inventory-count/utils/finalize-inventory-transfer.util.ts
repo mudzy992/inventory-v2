@@ -1,9 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import type { Prisma } from '../../../../generated/prisma/client';
-import {
-  buildDocumentNumber,
-  countYearlySequences,
-} from '../../../common/utils/document-number.util';
+import { allocateTransferDocumentNumberInTx } from '../../transfers/utils/allocate-transfer-document-number.util';
 import { buildEquipmentUpdateOnFinalize } from '../../transfers/transfer-validation.util';
 
 type FinalizeTx = Prisma.TransactionClient;
@@ -26,6 +23,7 @@ export const finalizeInventoryTransferInTx = async (
       date: true,
       scannedDocUrl: true,
       documentNumber: true,
+      documentWarehouseId: true,
     },
   });
   if (!transfer) {
@@ -40,8 +38,13 @@ export const finalizeInventoryTransferInTx = async (
   const year = transfer.date.getFullYear();
   const isRashod = transfer.type === 'rashodovanje';
   const documentNumber =
-    transfer.documentNumber.startsWith('DRAFT')
-      ? await generateFinalDocumentNumber(tx, year, isRashod)
+    transfer.documentNumber.startsWith('DRAFT') && transfer.documentWarehouseId
+      ? await allocateTransferDocumentNumberInTx(
+          tx,
+          transfer.documentWarehouseId,
+          year,
+          isRashod,
+        )
       : transfer.documentNumber;
   const equipmentUpdate = buildEquipmentUpdateOnFinalize(
     transfer.type,
@@ -60,21 +63,4 @@ export const finalizeInventoryTransferInTx = async (
     where: { id: transfer.equipmentId },
     data: equipmentUpdate,
   });
-};
-
-const generateFinalDocumentNumber = async (
-  tx: FinalizeTx,
-  year: number,
-  isRashod: boolean,
-): Promise<string> => {
-  const existing = await tx.transfer.findMany({
-    where: { documentNumber: { contains: String(year) } },
-    select: { documentNumber: true },
-  });
-  const sequence = countYearlySequences(
-    existing.map((row) => row.documentNumber),
-    year,
-    isRashod,
-  );
-  return buildDocumentNumber(year, sequence + 1, isRashod);
 };

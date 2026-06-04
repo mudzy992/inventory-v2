@@ -44,9 +44,18 @@
 | Key | Tip | Scope | Default |
 |-----|-----|-------|---------|
 | `features.cross_service_transfer` | boolean | private | true |
+| `transfer.generation.enabled` | boolean | private | true |
+| `transfer.generation.on_stock_lot_issue` | boolean | private | true |
+| `transfer.generation.on_zaduzenje` | boolean | private | true |
+| `transfer.generation.on_prenos` | boolean | private | true |
+| `transfer.generation.on_razduzenje` | boolean | private | true |
+| `transfer.generation.on_rashodovanje` | boolean | private | true |
+| `transfer.generate_print_pdf` | boolean | private | true |
+| `transfer.require_signed_pdf_upload` | boolean | private | true |
 | `transfer.allow_finalize_without_upload` | boolean | private | false |
 | `transfer.allow_evidenticar_cross_city` | boolean | private | false |
-| `transfer.require_upload_before_sign` | boolean | private | false |
+| `transfer.require_upload_before_sign` | boolean | private | false (legacy, ne u UI) |
+| `transfer.template_placeholders_help` | string | public | placeholder lista (read-only) |
 
 ### Upload (tab: Upload)
 
@@ -88,7 +97,7 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 | Ključ | Modul / servis |
 |-------|----------------|
 | `upload.max_mb` | `UploadsService` |
-| `features.transfers` + transfer.* | `TransfersService` |
+| `features.transfers` + `transfer.generation.*` + upload PDF | `TransfersService`, `WarehouseStockService`, `InventoryCountService`, `UploadsService` |
 | `features.disposal_commissions` | `DisposalCommissionsService` |
 | `features.inventory_count` | `InventoryCountService` |
 | `features.public_equipment_lookup` | `PublicEquipmentService` |

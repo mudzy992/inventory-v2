@@ -7,7 +7,14 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { ApiError, ensureAccessTokenFresh } from '../api/client';
 import { fetchMeApi, loginApi, logoutApi, type AuthUserDto } from '../api/auth-api';
+import {
+  AUTH_SESSION_EXPIRED_EVENT,
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+} from '../api/token-storage';
 import { setAuthUser } from '../store';
 
 interface AuthContextValue {
@@ -20,24 +27,43 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const loadProfileWithRefresh = async (): Promise<AuthUserDto> => {
+  try {
+    return await fetchMeApi();
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 401 || !getRefreshToken()) {
+      throw err;
+    }
+    await ensureAccessTokenFresh();
+    return fetchMeApi();
+  }
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUserDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser(null);
+      setAuthUser(null);
+    };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, []);
+
+  useEffect(() => {
     const bootstrap = async () => {
-      const token = sessionStorage.getItem('accessToken');
-      if (!token) {
+      if (!getAccessToken() && !getRefreshToken()) {
         setIsLoading(false);
         return;
       }
       try {
-        const profile = await fetchMeApi();
+        const profile = await loadProfileWithRefresh();
         setUser(profile);
         setAuthUser(profile);
       } catch {
-        sessionStorage.removeItem('accessToken');
-        sessionStorage.removeItem('refreshToken');
+        clearTokens();
         setAuthUser(null);
       } finally {
         setIsLoading(false);

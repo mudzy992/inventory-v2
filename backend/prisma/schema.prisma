@@ -19,6 +19,7 @@ enum OrgUnitType {
   distribucija
   podrucje
   podruznica
+  poslovna_jedinica
   sektor
   sluzba
   odjeljenje
@@ -68,6 +69,7 @@ enum TransferStatus {
 
 enum NotificationType {
   transfer_pending
+  transfer_signed_upload_pending
   transfer_complete
   equipment_assigned
   disposal_pending_approval
@@ -234,6 +236,7 @@ model User {
   stockLotsReceived       WarehouseStockLot[]      @relation("StockLotReceivedBy")
   stockLotsSpecDefined    WarehouseStockLot[]      @relation("StockLotSpecDefinedBy")
   closedInventoryWarehouseCommittees InventoryWarehouseCommittee[] @relation("InventoryWarehouseCommitteeClosedBy")
+  warehouseTransferTemplatesUploaded WarehouseTransferTemplate[] @relation("WarehouseTransferTemplateUploadedBy")
 
   @@index([role])
   @@map("users")
@@ -341,10 +344,41 @@ model Warehouse {
   equipmentEvents       EquipmentEvent[]
   stockLots             WarehouseStockLot[]
   inventoryWarehouseCommittees InventoryWarehouseCommittee[]
+  transferTemplates     WarehouseTransferTemplate[]
+  transferDocumentSequences TransferDocumentSequence[]
+  documentTransfers     Transfer[] @relation("TransferDocumentWarehouse")
 
   @@index([cityId])
   @@index([orgUnitId])
   @@map("warehouses")
+}
+
+model WarehouseTransferTemplate {
+  id               String   @id @default(uuid())
+  warehouseId      String
+  label            String   @db.VarChar(120)
+  templatePath     String   @db.VarChar(500)
+  isActive         Boolean  @default(false)
+  uploadedByUserId String
+  createdAt        DateTime @default(now())
+
+  warehouse  Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  uploadedBy User      @relation("WarehouseTransferTemplateUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([warehouseId, isActive])
+  @@map("warehouse_transfer_templates")
+}
+
+model TransferDocumentSequence {
+  warehouseId String
+  year        Int
+  lastNumber  Int      @default(0)
+  rashodLastNumber Int @default(0)
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@id([warehouseId, year])
+  @@map("transfer_document_sequences")
 }
 
 model WarehouseKeeper {
@@ -484,6 +518,9 @@ model Transfer {
   scannedDocUrl          String?           @db.VarChar(500)
   printedAt              DateTime?
   documentNumber         String            @db.VarChar(120)
+  documentWarehouseId    String?
+  generatedDocxPath      String?           @db.VarChar(500)
+  generatedPdfPath       String?           @db.VarChar(500)
   notes                  String?           @db.Text
   isCrossServiceTransfer Boolean           @default(false)
   inventoryLineId        String?           @unique
@@ -493,6 +530,7 @@ model Transfer {
   equipment        Equipment         @relation(fields: [equipmentId], references: [id])
   fromWarehouse    Warehouse?        @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id], onDelete: SetNull)
   toWarehouse      Warehouse?        @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id], onDelete: SetNull)
+  documentWarehouse Warehouse?       @relation("TransferDocumentWarehouse", fields: [documentWarehouseId], references: [id], onDelete: SetNull)
   createdBy        User?             @relation("TransferCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   finalizedBy      User?             @relation("TransferFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: SetNull)
   signer           Employee          @relation("TransferSigner", fields: [signerId], references: [id])
@@ -507,6 +545,7 @@ model Transfer {
   @@index([status])
   @@index([fromWarehouseId])
   @@index([toWarehouseId])
+  @@index([documentWarehouseId])
   @@map("transfers")
 }
 

@@ -15,7 +15,7 @@
     "db:seed": "prisma db seed",
     "db:seed:demo": "tsx prisma/seed-demo.ts",
     "db:studio": "prisma studio",
-    "test:unit": "node --import tsx --test src/common/utils/org-hierarchy-validation.util.spec.ts"
+    "test:unit": "node --import tsx --test src/common/utils/org-hierarchy-validation.util.spec.ts src/common/utils/resolve-effective-warehouse.util.spec.ts src/common/utils/collect-open-org-subtree.util.spec.ts src/common/utils/document-number.util.spec.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
@@ -31,10 +31,12 @@
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "docxtemplater": "^3.68.7",
     "dotenv": "^16.6.1",
     "mariadb": "^3.4.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "pizzip": "^3.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "socket.io": "^4.8.3"

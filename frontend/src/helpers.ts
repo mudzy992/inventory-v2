@@ -86,6 +86,7 @@ export function getOrgUnitTypeLabel(type: string): string {
     distribucija: 'Distribucija',
     podrucje: 'Područje',
     podruznica: 'Podružnica',
+    poslovna_jedinica: 'Poslovna jedinica',
     sektor: 'Sektor',
     sluzba: 'Služba',
     odjeljenje: 'Odjeljenje',

@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
-import { getApiBaseUrl } from '../api/client';
+import { getApiBaseUrl } from './api-base';
+import { getAccessToken } from './token-storage';
 
 const SOCKET_PATH = '/backend/socket.io';
 const POLL_INTERVAL_MS = 60_000;
@@ -45,6 +46,15 @@ export const destroyNotificationsSocket = (): void => {
     sharedSocket = null;
     sharedToken = null;
   }
+};
+
+export const reconnectNotificationsSocket = (): Socket | null => {
+  destroyNotificationsSocket();
+  const token = getAccessToken();
+  if (!token) {
+    return null;
+  }
+  return getOrCreateNotificationsSocket(token);
 };
 
 export const NOTIFICATION_POLL_INTERVAL_MS = POLL_INTERVAL_MS;

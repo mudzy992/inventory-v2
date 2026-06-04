@@ -24,7 +24,7 @@ export const resolveEffectiveWarehouseId = (
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId);
     const matches = activeWarehouses
-      .filter((row) => row.orgUnitId === currentId && (!cityId || row.cityId === cityId))
+      .filter((row) => row.orgUnitId === currentId)
       .sort((a, b) => {
         const aTime = new Date(a.createdAt).getTime();
         const bTime = new Date(b.createdAt).getTime();

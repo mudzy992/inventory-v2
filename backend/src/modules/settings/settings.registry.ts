@@ -4,6 +4,7 @@ export type SettingGroup =
   | 'branding'
   | 'company'
   | 'modules'
+  | 'system'
   | 'transfers'
   | 'uploads'
   | 'notifications';
@@ -302,9 +303,97 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     scope: 'private',
     valueType: 'boolean',
     defaultValue: false,
-    label: 'Obavezan upload prije potpisa',
-    description: 'Prenosnica mora imati sken prije finalizacije (osim ako admin ima izuzetak).',
+    label: 'Obavezan upload prije potpisa (legacy)',
+    description: 'Zastarjelo — koristite „Obavezan potpisani PDF”. Ostaje za kompatibilnost.',
     group: 'transfers',
+    adminEditable: false,
+  }),
+  def({
+    key: 'transfer.generation.enabled',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Kreiranje prenosnica (uključeno)',
+    description:
+      'Isključite pri masovnom uvozu opreme bez prenosnica. Blokira API prenosa, izdavanje iz lota i draft prenose na popisu.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.generation.on_stock_lot_issue',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Prenosnica pri prvom izdavanju iz lota',
+    description: 'Automatski transfer kada evidentičar izda prvi komad sa skladišnog lota.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.generation.on_zaduzenje',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Prenosnica: skladište → osoba',
+    description: 'Zaduženje opreme koja je na skladištu (već u sistemu).',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.generation.on_prenos',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Prenosnica: osoba → osoba',
+    description: 'Prenos zaduženja između radnika.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.generation.on_razduzenje',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Prenosnica: osoba → skladište',
+    description: 'Razduženje opreme na skladište.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.generation.on_rashodovanje',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Prenosnica: rashodovanje',
+    description: 'Dokument prenosnice za rashod opreme.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.generate_print_pdf',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Generiši PDF za štampu',
+    description:
+      'Nakon DOCX obrazca generiše PDF za štampu (zahtijeva LibreOffice na serveru). Bez toga dostupan je samo DOCX.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.require_signed_pdf_upload',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Obavezan potpisani PDF',
+    description:
+      'Prije finalizacije mora biti uploadovan sken potpisane prenosnice (PDF). Generisani DOCX/PDF služi samo za štampu.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.template_placeholders_help',
+    scope: 'public',
+    valueType: 'string',
+    defaultValue:
+      '{broj_prenosnice},{predao},{preuzeo},{potpisnik},{inv_broj},{naziv_opreme},{obrazlozenje}',
+    label: 'Placeholderi u Word šablonu',
+    description:
+      'U .docx obrascu koristite tačno ova polja: {broj_prenosnice}, {predao}, {preuzeo}, {potpisnik}, {inv_broj}, {naziv_opreme}, {obrazlozenje}. Upload obrazca po skladištu.',
+    group: 'transfers',
+    adminEditable: false,
   }),
   def({
     key: 'upload.max_mb',

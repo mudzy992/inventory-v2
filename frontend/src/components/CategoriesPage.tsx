@@ -7,6 +7,7 @@ import { Plus, Edit2, Trash2, ChevronDown, ChevronRight, Settings, Folder, Folde
 import { getParentCategories, getSubCategories, getEquipmentStats } from '../store';
 import { v4 as uuidv4 } from 'uuid';
 import type { Category, CategoryField } from '../types';
+import { CategoryFieldOptionsEditor } from './categories/category-field-options-editor';
 
 function FieldEditor({ fields, onChange, label }: { fields: CategoryField[]; onChange: (fields: CategoryField[]) => void; label: string }) {
   function addField() {
@@ -63,12 +64,9 @@ function FieldEditor({ fields, onChange, label }: { fields: CategoryField[]; onC
               <Trash2 size={12} />
             </button>
             {field.type === 'select' && (
-              <input
-                type="text"
-                value={(field.options || []).join(', ')}
-                onChange={e => updateField(i, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                placeholder="Opcije (razdvojene zarezom)"
-                className="w-full mt-1 border border-gray-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              <CategoryFieldOptionsEditor
+                options={field.options || []}
+                onChange={(options) => updateField(i, { options })}
               />
             )}
           </div>

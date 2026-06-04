@@ -1,4 +1,12 @@
-import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateWarehouseDto {
   @IsString()
@@ -8,9 +16,8 @@ export class CreateWarehouseDto {
   @IsUUID()
   cityId!: string;
 
-  @IsOptional()
   @IsUUID()
-  orgUnitId?: string;
+  orgUnitId!: string;
 
   @IsString()
   @MaxLength(500)
@@ -24,7 +31,8 @@ export class CreateWarehouseDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
   @IsUUID('4', { each: true })
-  keeperUserIds?: string[];
+  keeperUserIds!: string[];
 }

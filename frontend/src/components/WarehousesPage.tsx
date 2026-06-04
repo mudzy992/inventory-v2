@@ -56,9 +56,36 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
     [state.warehouses, visibleWarehouseIds],
   );
   const skladistarUsers = state.users.filter((u) => u.role === 'skladistar');
+  const selectedKeeperIds = keeperIds.split(',').filter(Boolean);
+  const isCreateFormValid =
+    Boolean(name.trim()) &&
+    Boolean(cityId) &&
+    Boolean(address.trim()) &&
+    Boolean(orgUnitId) &&
+    selectedKeeperIds.length >= 1;
   const canManageDestruction = admin || skladistar;
   const handleCreate = async () => {
-    if (!admin || isFrozen || !name.trim() || !cityId || !address.trim()) {
+    if (!admin || isFrozen) {
+      return;
+    }
+    if (!name.trim()) {
+      toastError('Naziv skladišta je obavezan');
+      return;
+    }
+    if (!cityId) {
+      toastError('Grad je obavezan');
+      return;
+    }
+    if (!address.trim()) {
+      toastError('Adresa je obavezna');
+      return;
+    }
+    if (!orgUnitId) {
+      toastError('Org. jedinica je obavezna');
+      return;
+    }
+    if (selectedKeeperIds.length < 1) {
+      toastError('Odaberite barem jednog skladištara');
       return;
     }
     try {
@@ -66,13 +93,14 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
         name: name.trim(),
         cityId,
         address: address.trim(),
-        orgUnitId: orgUnitId || undefined,
-        keeperUserIds: keeperIds.split(',').map((id) => id.trim()).filter(Boolean),
+        orgUnitId,
+        keeperUserIds: selectedKeeperIds,
       });
       setName('');
       setAddress('');
       setOrgUnitId('');
       setKeeperIds('');
+      setCityId('');
       await refresh();
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška');
@@ -97,7 +125,7 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
         description={
           skladistar && !admin
             ? 'Pregled stanja, prenosnica i uništenja po vašim skladištima.'
-            : 'Registry skladišta — centralna ili vezana za org-jedinicu.'
+            : 'Registry skladišta vezana za org-jedinicu i skladištare.'
         }
       />
       <InventoryFreezeActionHint onOpenInventory={onNavigate} />
@@ -111,45 +139,94 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
       />
       {tab === 'create' && admin ? (
         <FormCard title="Novo skladište" className="max-w-lg">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Naziv" className={inputClass} />
-          <select value={cityId} onChange={(e) => setCityId(e.target.value)} className={selectClass}>
-            <option value="">Grad</option>
-            {state.cities.map((city) => (
-              <option key={city.id} value={city.id}>
-                {getCityLabel(state.cities, city.id)}
-              </option>
-            ))}
-          </select>
-          <label className={labelClass}>Org-jedinica (opciono)</label>
-          <select value={orgUnitId} onChange={(e) => setOrgUnitId(e.target.value)} className={selectClass}>
-            <option value="">— Centralno skladište —</option>
-            {state.orgUnits.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.name} ({getOrgUnitTypeLabel(unit.type)})
-              </option>
-            ))}
-          </select>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Adresa" className={inputClass} />
-          <label className={labelClass}>Skladištari (Ctrl+klik za više)</label>
-          {skladistarUsers.length === 0 ? (
-            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
-              Nema korisnika s ulogom Skladištar.
-            </p>
-          ) : (
+          <div>
+            <label className={labelClass} htmlFor="wh-create-name">
+              Naziv *
+            </label>
+            <input
+              id="wh-create-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="wh-create-city">
+              Grad *
+            </label>
             <select
-              multiple
-              value={keeperIds.split(',').filter(Boolean)}
-              onChange={(e) => setKeeperIds(Array.from(e.target.selectedOptions).map((o) => o.value).join(','))}
-              className={`${selectClass} min-h-[80px]`}
+              id="wh-create-city"
+              value={cityId}
+              onChange={(e) => setCityId(e.target.value)}
+              className={selectClass}
             >
-              {skladistarUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.username}
+              <option value="">— Odaberi grad —</option>
+              {state.cities.map((city) => (
+                <option key={city.id} value={city.id}>
+                  {getCityLabel(state.cities, city.id)}
                 </option>
               ))}
             </select>
-          )}
-          <Button onClick={() => void handleCreate()} disabled={isFrozen}>
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="wh-create-org">
+              Org. jedinica *
+            </label>
+            <select
+              id="wh-create-org"
+              value={orgUnitId}
+              onChange={(e) => setOrgUnitId(e.target.value)}
+              className={selectClass}
+            >
+              <option value="">— Odaberi org. jedinicu —</option>
+              {state.orgUnits.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name} ({getOrgUnitTypeLabel(unit.type)})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="wh-create-address">
+              Adresa *
+            </label>
+            <input
+              id="wh-create-address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="wh-create-keepers">
+              Skladištari * (Ctrl+klik za više)
+            </label>
+            {skladistarUsers.length === 0 ? (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                Nema korisnika s ulogom Skladištar.
+              </p>
+            ) : (
+              <select
+                id="wh-create-keepers"
+                multiple
+                value={selectedKeeperIds}
+                onChange={(e) =>
+                  setKeeperIds(Array.from(e.target.selectedOptions).map((o) => o.value).join(','))
+                }
+                className={`${selectClass} min-h-[80px]`}
+              >
+                {skladistarUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.username}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <Button
+            onClick={() => void handleCreate()}
+            disabled={isFrozen || !isCreateFormValid}
+          >
             <Plus size={14} /> Kreiraj
           </Button>
         </FormCard>

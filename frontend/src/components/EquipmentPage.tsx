@@ -1,14 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useStore, useRefreshData } from '../useStore';
-import { createEquipmentApi, updateEquipmentApi } from '../api/data-api';
+import { updateEquipmentApi } from '../api/data-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
-import { Plus, Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon } from 'lucide-react';
+import { Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon, Info } from 'lucide-react';
 import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser, equipmentMatchesScope } from '../store';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, formatDate, getEmployeeFullName } from '../helpers';
-import { v4 as uuidv4 } from 'uuid';
 import type { Equipment } from '../types';
 import { EquipmentCard } from './EquipmentCard';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
@@ -90,19 +89,6 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
 
   const selectedCategory = state.categories.find(c => c.id === fCategoryId);
 
-  function openAdd() {
-    setEditing(null);
-    const firstCat = state.categories[0];
-    setFCategoryId(firstCat?.id || '');
-    setFInventoryNumber('');
-    setFSpecs({});
-    setFContract('');
-    setFEntryDate(new Date().toISOString().slice(0, 10));
-    setFNotes('');
-    setFWarehouseId(formWarehouses[0]?.id ?? '');
-    setShowForm(true);
-  }
-
   function openEdit(eq: Equipment) {
     setEditing(eq);
     setFCategoryId(eq.categoryId);
@@ -116,8 +102,10 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
   }
 
   const handleSave = async () => {
-    if (!fCategoryId || !fInventoryNumber.trim()) return;
-    const status = editing?.status ?? 'skladiste';
+    if (!editing || !fCategoryId || !fInventoryNumber.trim()) {
+      return;
+    }
+    const status = editing.status;
     if (status === 'skladiste' && !fWarehouseId) {
       toastError('Odaberite skladište za opremu na skladištu.');
       return;
@@ -133,13 +121,10 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
       warehouseId: status === 'skladiste' ? fWarehouseId : undefined,
     };
     try {
-      if (editing) {
-        await updateEquipmentApi(editing.id, payload);
-      } else {
-        await createEquipmentApi(payload);
-      }
+      await updateEquipmentApi(editing.id, payload);
       await refresh();
       setShowForm(false);
+      setEditing(null);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri spremanju';
       toastError(message);
@@ -153,6 +138,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
         onBack={() => setSelectedWarehouseId(null)}
         canEditContext={admin}
         canManageDestruction={admin || skladistar}
+        canReceiveStock={admin || skladistar}
         onNavigate={onNavigate}
       />
     );
@@ -179,17 +165,36 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
               <Printer size={16} /> Štampaj naljepnice ({selectedIds.size})
             </button>
           )}
-          {canManage && (
+        </div>
+      </div>
+
+      {canManage && (
+        <div className="mb-4 flex flex-wrap items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <Info size={18} className="shrink-0 mt-0.5 text-blue-600" aria-hidden />
+          <p className="flex-1 min-w-[200px]">
+            Nova oprema se ne dodaje ovdje. Prvo evidentirajte prijem robe na skladištu, zatim evidentičar
+            izdaje komade iz skladišnog lota (zaduženje).
+          </p>
+          {(evidenticar || admin) && (
             <button
-              onClick={openAdd}
-              disabled={isFrozen}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+              type="button"
+              onClick={() => setViewMode('warehouses')}
+              className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
             >
-              <Plus size={16} /> Nova oprema
+              Po skladištima
+            </button>
+          )}
+          {onNavigate && (admin || skladistar) && (
+            <button
+              type="button"
+              onClick={() => onNavigate('warehouses')}
+              className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            >
+              Modul Skladišta
             </button>
           )}
         </div>
-      </div>
+      )}
 
       <InventoryFreezeActionHint onOpenInventory={onNavigate} />
 
@@ -398,12 +403,12 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
         />
       )}
 
-      {/* Add/Edit Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
+      {/* Edit Form Modal */}
+      {showForm && editing && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => { setShowForm(false); setEditing(null); }}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
-              <h2 className="text-lg font-semibold">{editing ? 'Uredi opremu' : 'Nova oprema — prijem na skladište'}</h2>
+              <h2 className="text-lg font-semibold">Uredi opremu</h2>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -435,7 +440,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
               </div>
-              {(editing?.status ?? 'skladiste') === 'skladiste' ? (
+              {editing.status === 'skladiste' ? (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Skladište *</label>
                   <select
@@ -521,9 +526,9 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
               </div>
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
-              <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50">Odustani</button>
-              <button onClick={handleSave} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                {editing ? 'Sačuvaj' : 'Dodaj na skladište'}
+              <button onClick={() => { setShowForm(false); setEditing(null); }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50">Odustani</button>
+              <button onClick={handleSave} disabled={isFrozen} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50">
+                Sačuvaj
               </button>
             </div>
           </div>

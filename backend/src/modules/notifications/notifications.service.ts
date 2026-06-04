@@ -116,6 +116,38 @@ export class NotificationsService {
     });
   }
 
+  async notifyTransferSignedUploadPending(transferId: string): Promise<void> {
+    if (!(await this.areNotificationsEnabled())) {
+      return;
+    }
+    const transfer = await this.prisma.transfer.findUnique({
+      where: { id: transferId },
+      select: {
+        id: true,
+        documentNumber: true,
+        scannedDocUrl: true,
+        status: true,
+        equipment: { select: { inventoryNumber: true } },
+      },
+    });
+    if (!transfer || transfer.scannedDocUrl || transfer.status !== 'raw') {
+      return;
+    }
+    const fullTransfer = await this.loadTransferContext(transferId);
+    const recipients = await collectTransferPendingRecipients(
+      this.prisma,
+      this.registrarScope,
+      await this.buildRecipientContext(fullTransfer),
+    );
+    const equipmentLabel = transfer.equipment.inventoryNumber;
+    await this.createForUsers(recipients, {
+      type: 'transfer_signed_upload_pending',
+      title: 'Prenosnica čeka potpisani PDF',
+      message: `Upload potpisane prenosnice ${transfer.documentNumber} (${equipmentLabel}).`,
+      relatedId: transfer.id,
+    });
+  }
+
   async notifyTransferSigned(transferId: string): Promise<void> {
     if (!(await this.areNotificationsEnabled())) {
       return;

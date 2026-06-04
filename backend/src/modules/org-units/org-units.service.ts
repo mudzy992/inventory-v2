@@ -7,6 +7,7 @@ import type { OrgUnit, OrgUnitType } from '../../../generated/prisma/client';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { SignerResolutionService } from '../../common/services/signer-resolution.service';
 import { OrgScopeService, type OrgUnitTreeNode } from '../../common/services/org-scope.service';
+import { ORG_HIERARCHY_MESSAGES } from '../../common/utils/org-hierarchy-messages.util';
 import { assertValidOrgUnitParentChild } from '../../common/utils/org-hierarchy-validation.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -35,7 +36,7 @@ export class OrgUnitsService {
   async findOne(id: string): Promise<OrgUnit> {
     const unit = await this.prisma.orgUnit.findUnique({ where: { id } });
     if (!unit) {
-      throw new NotFoundException('Org unit not found');
+      throw new NotFoundException(ORG_HIERARCHY_MESSAGES.notFound);
     }
     return unit;
   }
@@ -61,7 +62,10 @@ export class OrgUnitsService {
         locationCityId: dto.locationCityId ?? null,
       },
     });
-    await this.refreshDerivedFields(unit.id);
+    await this.refreshDerivedFields(unit.id, {
+      refreshSigner: true,
+      refreshLocation: true,
+    });
     return this.findOne(unit.id);
   }
 
@@ -72,13 +76,13 @@ export class OrgUnitsService {
     const nextType = dto.type ?? existing.type;
     if (nextParentId) {
       if (nextParentId === id) {
-        throw new BadRequestException('Org unit cannot be its own parent');
+        throw new BadRequestException(ORG_HIERARCHY_MESSAGES.selfParent);
       }
       const parent = await this.findOne(nextParentId);
       await this.assertNoCycle(id, nextParentId);
       assertValidOrgUnitParentChild(parent.type, nextType);
-      await this.assertChildrenCompatibleWithParentType(id, parent.type);
     }
+    await this.assertDirectChildrenCompatibleWithUnitType(id, nextType);
     if (dto.signerId) {
       await this.assertEmployeeExists(dto.signerId);
     }
@@ -95,7 +99,16 @@ export class OrgUnitsService {
         locationCityId: dto.locationCityId,
       },
     });
-    await this.refreshDerivedFields(id);
+    const parentChanged =
+      dto.parentId !== undefined && dto.parentId !== existing.parentId;
+    const signerChanged =
+      dto.signerId !== undefined && dto.signerId !== existing.signerId;
+    const locationChanged =
+      dto.locationCityId !== undefined && dto.locationCityId !== existing.locationCityId;
+    await this.refreshDerivedFields(id, {
+      refreshSigner: signerChanged || parentChanged,
+      refreshLocation: locationChanged || parentChanged,
+    });
     return this.findOne(id);
   }
 
@@ -103,23 +116,34 @@ export class OrgUnitsService {
     await this.findOne(id);
     const childCount = await this.prisma.orgUnit.count({ where: { parentId: id } });
     if (childCount > 0) {
-      throw new BadRequestException('Cannot delete org unit with children');
+      throw new BadRequestException(ORG_HIERARCHY_MESSAGES.deleteHasChildren);
     }
     const employeeCount = await this.prisma.employee.count({ where: { orgUnitId: id } });
     if (employeeCount > 0) {
-      throw new BadRequestException('Cannot delete org unit with employees');
+      throw new BadRequestException(ORG_HIERARCHY_MESSAGES.deleteHasEmployees);
     }
     await this.prisma.orgUnit.delete({ where: { id } });
   }
 
-  private async refreshDerivedFields(orgUnitId: string): Promise<void> {
-    await this.locationResolutionService.refreshOrgUnitEffectiveLocations(orgUnitId);
-    await this.signerResolutionService.refreshOrgUnitEffectiveSigners(orgUnitId);
+  private async refreshDerivedFields(
+    orgUnitId: string,
+    options: { refreshSigner: boolean; refreshLocation: boolean },
+  ): Promise<void> {
+    const tasks: Promise<void>[] = [];
+    if (options.refreshLocation) {
+      tasks.push(this.locationResolutionService.refreshOrgUnitEffectiveLocations(orgUnitId));
+    }
+    if (options.refreshSigner) {
+      tasks.push(this.signerResolutionService.refreshOrgUnitEffectiveSigners(orgUnitId));
+    }
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
+    }
   }
 
-  private async assertChildrenCompatibleWithParentType(
+  private async assertDirectChildrenCompatibleWithUnitType(
     unitId: string,
-    parentType: OrgUnitType,
+    unitType: OrgUnitType,
   ): Promise<void> {
     const children = await this.prisma.orgUnit.findMany({
       where: { parentId: unitId },
@@ -127,10 +151,10 @@ export class OrgUnitsService {
     });
     for (const child of children) {
       try {
-        assertValidOrgUnitParentChild(parentType, child.type);
+        assertValidOrgUnitParentChild(unitType, child.type);
       } catch {
         throw new BadRequestException(
-          `Child "${child.name}" (${child.type}) is not allowed under parent type "${parentType}"`,
+          ORG_HIERARCHY_MESSAGES.childIncompatible(child.name, child.type, unitType),
         );
       }
     }
@@ -139,14 +163,14 @@ export class OrgUnitsService {
   private async assertCityExists(cityId: string): Promise<void> {
     const city = await this.prisma.city.findUnique({ where: { id: cityId } });
     if (!city) {
-      throw new BadRequestException('City not found');
+      throw new BadRequestException(ORG_HIERARCHY_MESSAGES.cityNotFound);
     }
   }
 
   private async assertEmployeeExists(employeeId: string): Promise<void> {
     const employee = await this.prisma.employee.findUnique({ where: { id: employeeId } });
     if (!employee) {
-      throw new BadRequestException('Signer employee not found');
+      throw new BadRequestException(ORG_HIERARCHY_MESSAGES.signerNotFound);
     }
   }
 
@@ -154,7 +178,7 @@ export class OrgUnitsService {
     let currentId: string | null = newParentId;
     while (currentId) {
       if (currentId === unitId) {
-        throw new BadRequestException('Parent assignment would create a cycle');
+        throw new BadRequestException(ORG_HIERARCHY_MESSAGES.cycle);
       }
       const parentRow: { parentId: string | null } | null = await this.prisma.orgUnit.findUnique({
         where: { id: currentId },

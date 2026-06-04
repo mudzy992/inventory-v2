@@ -63,63 +63,11 @@ export class EquipmentService {
     return equipment;
   }
 
-  async create(user: AuthenticatedUser, dto: CreateEquipmentDto): Promise<Equipment> {
+  async create(_user: AuthenticatedUser, _dto: CreateEquipmentDto): Promise<Equipment> {
     await this.settingsService.assertFeatureEnabled('features.equipment');
-    if (user.role === 'user') {
-      throw new ForbiddenException('Users cannot create equipment');
-    }
-    if (user.role === 'skladistar') {
-      throw new ForbiddenException('Skladistar registers stock via warehouse stock lots');
-    }
-    if (dto.warehouseId && dto.status === 'skladiste') {
-      const warehouse = await this.prisma.warehouse.findUnique({
-        where: { id: dto.warehouseId },
-        select: { cityId: true },
-      });
-      if (warehouse) {
-        await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'equipment_create');
-      }
-    }
-    const category = await this.categoriesService.assertLeafCategory(dto.categoryId);
-    const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
-    validateSpecifications(dto.specifications, fields, optionalFields);
-    const draft = {
-      categoryId: dto.categoryId,
-      status: dto.status,
-      currentHolderId: dto.currentHolderId ?? null,
-      warehouseId: dto.warehouseId ?? null,
-    } as Equipment;
-    if (dto.currentHolderId) {
-      const holder = await this.getEmployeeOrThrow(dto.currentHolderId);
-      const allowed = await this.registrarScope.canAccessEquipment(user, draft, holder);
-      if (user.role === 'evidenticar' && !allowed) {
-        throw new ForbiddenException('Holder outside your scope');
-      }
-    } else if (user.role === 'evidenticar' && dto.warehouseId) {
-      const allowed = await this.registrarScope.canAccessEquipment(user, draft, null);
-      if (!allowed) {
-        throw new ForbiddenException('Warehouse equipment outside your scope');
-      }
-    }
-    try {
-      return await this.prisma.equipment.create({
-        data: {
-          categoryId: dto.categoryId,
-          inventoryNumber: dto.inventoryNumber,
-          specifications: dto.specifications,
-          status: dto.status,
-          contractNumber: dto.contractNumber,
-          entryDate: new Date(dto.entryDate),
-          currentHolderId: dto.currentHolderId,
-          warehouseId: dto.warehouseId,
-          warehouseCondition:
-            dto.warehouseCondition ?? (dto.status === 'skladiste' ? 'na_skladistu' : null),
-          notes: dto.notes,
-        },
-      });
-    } catch {
-      throw new ConflictException('Inventory number already exists');
-    }
+    throw new ForbiddenException(
+      'Oprema se kreira izdavanjem iz skladišnog lota (prijem robe na skladištu, zatim issue)',
+    );
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateEquipmentDto): Promise<Equipment> {

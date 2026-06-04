@@ -14,6 +14,7 @@ import {
   markAllNotificationsReadApi,
   markNotificationReadApi,
 } from '../api/notifications-api';
+import { getAccessToken, subscribeTokenChange } from '../api/token-storage';
 import {
   destroyNotificationsSocket,
   getOrCreateNotificationsSocket,
@@ -46,8 +47,11 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const isRealtimeEnabled = getBoolean('notifications.realtime', true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [tokenRevision, setTokenRevision] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const pollRef = useRef<number | null>(null);
+
+  useEffect(() => subscribeTokenChange(() => setTokenRevision((n) => n + 1)), []);
 
   const refreshNotifications = useCallback(async () => {
     if (!user) {
@@ -105,7 +109,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       setIsConnected(false);
       return;
     }
-    const token = sessionStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) {
       return;
     }
@@ -145,7 +149,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       socketRef.current = null;
       setIsConnected(socket.connected);
     };
-  }, [isAuthenticated, user, patchLocal, isRealtimeEnabled]);
+  }, [isAuthenticated, user, patchLocal, isRealtimeEnabled, tokenRevision]);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {

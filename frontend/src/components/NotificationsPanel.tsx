@@ -3,6 +3,7 @@ import { Bell, CheckCheck } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useNotifications } from '../contexts/SocketContext';
 import { usePublicSettings } from '../contexts/public-settings-context';
+import { getNotificationTypeMeta } from '../helpers/notification-type.util';
 import type { Notification } from '../types';
 
 const formatRelativeTime = (iso: string): string => {
@@ -75,7 +76,10 @@ export const NotificationsPanel = () => {
               {notifications.length === 0 ? (
                 <p className="px-4 py-8 text-sm text-center text-gray-400">Nema notifikacija</p>
               ) : (
-                notifications.map((notification) => (
+                notifications.map((notification) => {
+                  const typeMeta = getNotificationTypeMeta(notification.type);
+                  const TypeIcon = typeMeta.icon;
+                  return (
                   <button
                     key={notification.id}
                     type="button"
@@ -86,7 +90,13 @@ export const NotificationsPanel = () => {
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <TypeIcon size={16} className="text-gray-400 mt-0.5 flex-shrink-0" aria-hidden />
+                        <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-800">{notification.title}</p>
+                      <p className="text-[10px] text-gray-400">{typeMeta.label}</p>
+                        </div>
+                      </div>
                       {!notification.read && (
                         <span className="mt-1 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
                       )}
@@ -96,7 +106,8 @@ export const NotificationsPanel = () => {
                       {formatRelativeTime(notification.createdAt)}
                     </p>
                   </button>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

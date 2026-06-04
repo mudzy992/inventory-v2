@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { getAccessToken, subscribeTokenChange } from '../api/token-storage';
 import { getOrCreateNotificationsSocket } from '../api/socket-client';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -22,11 +23,15 @@ export const useInventorySocketEvents = ({
   onDisposalInboxUpdated,
 }: UseInventorySocketEventsParams): void => {
   const { isAuthenticated } = useAuth();
+  const [tokenRevision, setTokenRevision] = useState(0);
+
+  useEffect(() => subscribeTokenChange(() => setTokenRevision((n) => n + 1)), []);
+
   useEffect(() => {
     if (!isAuthenticated) {
       return;
     }
-    const token = sessionStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) {
       return;
     }
@@ -49,5 +54,5 @@ export const useInventorySocketEvents = ({
       socket.off('inventory.close_job.updated', handleCloseJob);
       socket.off('inventory.disposal_inbox.updated', handleDisposal);
     };
-  }, [isAuthenticated, sessionId, onCloseJobUpdated, onDisposalInboxUpdated]);
+  }, [isAuthenticated, sessionId, onCloseJobUpdated, onDisposalInboxUpdated, tokenRevision]);
 };

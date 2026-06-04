@@ -131,6 +131,18 @@ export const SettingsPage = () => {
         <>
           <PageTabs tabs={visibleTabs} activeTab={activeTab} onChange={setActiveTab} />
           <p className="text-sm text-gray-500">{activeTabMeta.description}</p>
+          {activeTab === 'transfers' ? (
+            <div className={`${cardClass} border-gray-100 px-4 py-3 text-sm text-gray-600 space-y-2`}>
+              <p className="font-medium text-gray-800">Word obrazac prenosnice</p>
+              <p>
+                Upload .docx obrazca po skladištu (tab Kontekst na skladištu). U dokumentu koristite:
+              </p>
+              <p className="font-mono text-xs text-gray-700">
+                {'{broj_prenosnice}'} {'{predao}'} {'{preuzeo}'} {'{potpisnik}'} {'{inv_broj}'}{' '}
+                {'{naziv_opreme}'} {'{obrazlozenje}'}
+              </p>
+            </div>
+          ) : null}
           <div className="space-y-4">
             {activeSections.map((section) => (
               <section key={section.group} className={`${cardClass} border-gray-100`}>

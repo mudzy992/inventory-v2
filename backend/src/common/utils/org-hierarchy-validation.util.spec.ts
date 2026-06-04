@@ -12,16 +12,18 @@ const ALL_ORG_UNIT_TYPES: readonly OrgUnitType[] = [
   'podrucje',
   'distribucija',
   'podruznica',
+  'poslovna_jedinica',
   'sektor',
   'sluzba',
   'odjeljenje',
 ];
 
 const EXPECTED_MATRIX: Record<OrgUnitType, readonly OrgUnitType[]> = {
-  direkcija: ['podrucje', 'distribucija', 'sektor'],
-  podrucje: ['sektor', 'sluzba', 'odjeljenje', 'distribucija'],
-  distribucija: ['sektor', 'sluzba', 'odjeljenje', 'podruznica'],
-  podruznica: ['sluzba', 'odjeljenje'],
+  direkcija: ['podrucje', 'distribucija', 'sektor', 'sluzba'],
+  podrucje: ['podruznica', 'sektor', 'sluzba'],
+  distribucija: ['podruznica', 'sektor', 'sluzba'],
+  podruznica: ['poslovna_jedinica', 'sektor', 'sluzba'],
+  poslovna_jedinica: ['sektor', 'sluzba', 'odjeljenje'],
   sektor: ['sluzba', 'odjeljenje'],
   sluzba: ['odjeljenje'],
   odjeljenje: [],
@@ -29,19 +31,17 @@ const EXPECTED_MATRIX: Record<OrgUnitType, readonly OrgUnitType[]> = {
 
 const FORBIDDEN_EDGE_CASES: ReadonlyArray<readonly [OrgUnitType, OrgUnitType]> = [
   ['odjeljenje', 'sluzba'],
-  ['odjeljenje', 'sektor'],
-  ['direkcija', 'sluzba'],
   ['direkcija', 'odjeljenje'],
   ['direkcija', 'podruznica'],
-  ['podrucje', 'podruznica'],
-  ['podrucje', 'direkcija'],
-  ['distribucija', 'direkcija'],
-  ['podruznica', 'sektor'],
-  ['podruznica', 'distribucija'],
-  ['sluzba', 'sektor'],
-  ['sluzba', 'direkcija'],
+  ['direkcija', 'poslovna_jedinica'],
+  ['podrucje', 'odjeljenje'],
+  ['podrucje', 'distribucija'],
+  ['distribucija', 'odjeljenje'],
+  ['podruznica', 'odjeljenje'],
+  ['podruznica', 'podrucje'],
+  ['poslovna_jedinica', 'podruznica'],
   ['sektor', 'direkcija'],
-  ['sektor', 'podrucje'],
+  ['sluzba', 'sektor'],
 ];
 
 const isAllowedChild = (parentType: OrgUnitType, childType: OrgUnitType): boolean =>
@@ -83,8 +83,7 @@ describe('org-hierarchy-validation.util', () => {
                     'message' in response
                   ? String((response as { message: unknown }).message)
                   : '';
-            assert.match(message, new RegExp(childType));
-            assert.match(message, new RegExp(parentType));
+            assert.match(message, /nije dozvoljen/i);
             return true;
           },
         );

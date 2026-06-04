@@ -7,8 +7,10 @@ import {
   Patch,
   Post,
   Query,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
+import { createReadStream } from 'node:fs';
 import { UserRole } from '../../../generated/prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -18,12 +20,16 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { ListTransfersQueryDto } from './dto/list-transfers-query.dto';
 import { SignTransferDto } from './dto/sign-transfer.dto';
+import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { TransfersService } from './transfers.service';
 
 @Controller('transfers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TransfersController {
-  constructor(private readonly transfersService: TransfersService) {}
+  constructor(
+    private readonly transfersService: TransfersService,
+    private readonly transferDocumentGeneration: TransferDocumentGenerationService,
+  ) {}
 
   @Get()
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
@@ -48,6 +54,23 @@ export class TransfersController {
   @Header('Content-Type', 'text/html; charset=utf-8')
   getRawDocument(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.transfersService.getRawDocumentHtml(user, id);
+  }
+
+  @Get(':id/generated-document')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  async getGeneratedDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Query('format') format?: string,
+  ): Promise<StreamableFile> {
+    await this.transfersService.findOne(user, id);
+    const resolvedFormat = format === 'pdf' ? 'pdf' : 'docx';
+    const file = await this.transferDocumentGeneration.getGeneratedFileStream(id, resolvedFormat);
+    const stream = createReadStream(file.absolutePath);
+    return new StreamableFile(stream, {
+      type: file.mime,
+      disposition: `attachment; filename="${file.filename}"`,
+    });
   }
 
   @Patch(':id/mark-printed')

@@ -2,7 +2,7 @@
 
 ## Model
 
-- `Warehouse`: name, cityId, address, orgUnitId?, isActive
+- `Warehouse`: name, cityId, address, orgUnitId (obavezan na **create**), isActive
 - `WarehouseKeeper`: warehouseId + userId (M:N)
 - `WarehouseStockLot`: količinski prijem neizdane robe (vidi matricu `warehouse-stock`)
 - `Equipment.warehouseId` kada `status ∈ { skladiste, rashodovano }` (pojedinačni komadi)
@@ -20,16 +20,25 @@
 - **Uništenje:** `POST /warehouses/:id/destroy-equipment/:equipmentId` — samo keeper (ili admin); preduvjet `warehouseCondition=spremno_za_unistenje`
 - Ne potpisuje prenosnice (evidentičar/admin)
 
+## Obrazac prenosnice (.docx)
+
+- Upload (admin): `POST /warehouses/:id/transfer-template`; aktivacija jedne verzije po skladištu.
+- **Obavezno** `orgUnitId` na skladištu prije uploada/generisanja.
+- UI: tab **Kontekst** — `WarehouseContextPanel` (podaci + skladištari) + `WarehouseTransferTemplatePanel` (obrazac, arhiva verzija).
+- Arhiva: `GET /warehouses/:id/transfer-template/:templateId/download` (admin).
+- Placeholderi: vidi matricu `transfers` (Word find/replace).
+
 ## Coverage (`Warehouse.orgUnitId`)
 
-- `orgUnitId = null` → centralno skladište; razduženje dozvoljeno iz bilo kojeg holder org-a u istom gradu (bez subtree provjere)
+- `orgUnitId = null` → **legacy** centralno skladište (postojeći zapisi); novi create zahtijeva org + min 1 skladištar
+- Legacy centralno: razduženje dozvoljeno iz bilo kojeg holder org-a u istom gradu (bez subtree provjere)
 - `orgUnitId` set → holder `Employee.orgUnitId` mora biti u podstablu tog čvora da bi `razduzenje` ciljalo to skladište
 - Enforce: `assertRazduzenjeWarehouseCoverage` pri `POST /transfers` tip `razduzenje`
 
 ## Effective warehouse inheritance
 
 - Skladište se veže na org čvor preko `Warehouse.orgUnitId` (nije polje na `OrgUnit`).
-- **Resolucija** (`WarehouseResolutionService`): walk od `orgUnitId` prema korijenu; prvi aktivni warehouse na tom čvoru ili pretku; fallback bilo koje skladište u `cityId`.
+- **Resolucija** (`WarehouseResolutionService`): walk od `orgUnitId` prema korijenu; prvi aktivni warehouse na tom čvoru ili pretku (**bez** filtra po gradu — kao potpisnik/lokacija). Ako lanac nema skladišta: opcioni fallback bilo koje aktivno skladište u `cityId` (npr. centralno).
 - **Primjena**: auto `toWarehouseId` pri `razduzenje`, popisni relocation, frontend `resolveTransferWarehousePayload`.
 - **Override**: child org s vlastitim skladištem dobija svoje.
 - **API preview**: `GET /warehouses/resolve/effective?orgUnitId=&cityId=`
@@ -51,7 +60,8 @@
 | `GET .../ready-for-destruction` | ✓ | — | ✓ svoja |
 | `POST .../destroy-equipment/:equipmentId` | ✓ | — | ✓ svoja |
 | Stock lot prijem | ✓ | — | ✓ keeper |
-| Equipment create/update na skladištu | ✓ | ✓ | — |
+| Equipment `PATCH` (uređivanje) | ✓ | ✓ | — |
+| `POST /equipment` (direktno) | — | — | — |
 
 ## Scope
 
@@ -62,9 +72,11 @@
 
 | Element | Pravilo |
 |---------|---------|
-| Warehouse detail | tabovi: Na skladištu, Zaduženja/Razduženja, Rashod/Uništenje, Kontekst |
+| Warehouse detail | tabovi: Na skladištu, Zaduženja/Razduženja, Rashod/Uništenje, Kontekst (pun edit: naziv, grad, adresa, org, skladištari, napomena) |
+| Kreiranje skladišta | obavezno: name, cityId, address, orgUnitId, min 1 `keeperUserIds` (bez opcije „centralno”) |
 | Org čvor | lista skladišta `orgUnitId`, brzo kreiranje, broj opreme u podstablu |
 | Registry skladišta | badge **Centralno** (`orgUnitId=null`) vs **Org** |
 | Oprema | pogled **Po skladištima** (warehouse-first) |
-| Freeze | hint + disabled create na Oprema/Transferi/Skladišta dok aktivan popis |
+| Freeze | hint + disabled uređivanje na Oprema/Transferi/Skladišta dok aktivan popis |
+| Oprema — nova stavka | nema dugmeta na Oprema; prijem preko stock lot; izdavanje evidentičar |
 | Transfer create | obavezno `fromWarehouseId` (zaduženje), `toWarehouseId` (razduženje) |

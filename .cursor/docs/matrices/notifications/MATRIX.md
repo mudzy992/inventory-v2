@@ -15,6 +15,7 @@ In-app notifikacije za autentificirane korisnike. Realtime preko Socket.IO; REST
 | Tip | Trigger | Primatelji |
 |-----|---------|------------|
 | `transfer_pending` | Kreiran raw transfer | admin, potpisnik, evidentičari u scope-u |
+| `transfer_signed_upload_pending` | Kreiran raw transfer bez `scannedDocUrl` kad je `transfer.require_signed_pdf_upload=true` | isti primatelji kao `transfer_pending` |
 | `transfer_complete` | Potpis transfera | admin, potpisnik, evidentičari u scope-u, `toPerson` user |
 | `equipment_assigned` | Potpis transfera na osobu | korisnik `toPersonId` |
 | `disposal_pending_approval` | Legacy rashod transfer (komisija grad) | članovi komisije s user računom |

@@ -1,8 +1,5 @@
 import type { Prisma } from '../../../../generated/prisma/client';
-import {
-  buildDocumentNumber,
-  countYearlySequences,
-} from '../../../common/utils/document-number.util';
+import { allocateTransferDocumentNumberInTx } from '../../transfers/utils/allocate-transfer-document-number.util';
 import { buildEquipmentUpdateOnFinalize } from '../../transfers/transfer-validation.util';
 
 interface FinalizeStockLotIssueInput {
@@ -40,22 +37,19 @@ export const executeStockLotIssueInTx = async (
     },
   });
   const year = input.transferDate.getFullYear();
-  const existing = await tx.transfer.findMany({
-    where: { documentNumber: { contains: String(year) } },
-    select: { documentNumber: true },
-  });
-  const sequence = countYearlySequences(
-    existing.map((row) => row.documentNumber),
+  const documentNumber = await allocateTransferDocumentNumberInTx(
+    tx,
+    input.lot.warehouseId,
     year,
     false,
   );
-  const documentNumber = buildDocumentNumber(year, sequence + 1, false);
   const transfer = await tx.transfer.create({
     data: {
       equipmentId: equipment.id,
       type: 'zaduzenje',
       fromType: 'skladiste',
       fromWarehouseId: input.lot.warehouseId,
+      documentWarehouseId: input.lot.warehouseId,
       toType: 'osoba',
       toPersonId: input.employeeId,
       signerId: input.signerId,

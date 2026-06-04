@@ -1,5 +1,10 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-04 (prenosnice)
+
+- Registry: `transfer.generation.*`, `transfer.generate_print_pdf`, `transfer.require_signed_pdf_upload`, `transfer.template_placeholders_help`.
+- Enforcement: `TransfersService`, stock-lot issue, inventory draft transferi.
+
 ## 2026-06-03 (modularni registry + tabovi)
 
 - Registry: svi `features.*` moduli (dashboard, organization, locations, categories, user_management, employees, warehouses, registrar_stock, warehouse_inventory, equipment, transfers, documents, my_equipment, …); `transfer.require_upload_before_sign`, `notifications.realtime`.

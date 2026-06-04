@@ -23,6 +23,8 @@ import { WarehousesService } from '../warehouses/warehouses.service';
 import { CreateStockLotDto } from './dto/create-stock-lot.dto';
 import { IssueStockLotDto } from './dto/issue-stock-lot.dto';
 import { UpdateStockLotSpecDto } from './dto/update-stock-lot-spec.dto';
+import { TransferDocumentGenerationService } from '../transfers/transfer-document-generation.service';
+import { assertTransferCreationAllowed } from '../transfers/utils/transfer-generation-policy.util';
 import { executeStockLotIssueInTx } from './utils/finalize-stock-lot-issue.util';
 import { resolveTransferSignerId } from '../transfers/utils/resolve-transfer-signer.util';
 
@@ -53,6 +55,8 @@ export class WarehouseStockService {
     private readonly warehousesService: WarehousesService,
     private readonly notificationsService: NotificationsService,
     private readonly signerResolutionService: SignerResolutionService,
+    private readonly settingsService: SettingsService,
+    private readonly transferDocumentGeneration: TransferDocumentGenerationService,
   ) {}
 
   async listForWarehouse(user: AuthenticatedUser, warehouseId: string) {
@@ -214,6 +218,7 @@ export class WarehouseStockService {
         });
     const signerId = this.signerResolutionService.assertEffectiveSignerConfigured(signerResolved);
     const transferDate = dto.date ? new Date(dto.date) : new Date();
+    await assertTransferCreationAllowed(this.settingsService, 'zaduzenje', 'stock_lot');
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         const issued = await executeStockLotIssueInTx(tx, {
@@ -242,6 +247,7 @@ export class WarehouseStockService {
         });
         return issued;
       });
+      await this.transferDocumentGeneration.generateForTransfer(result.transferId).catch(() => undefined);
       await this.notificationsService.notifyTransferSigned(result.transferId);
       return this.findOne(user, lotId);
     } catch {

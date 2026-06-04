@@ -6,18 +6,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { buildSignedPdfRelativePath } from '../transfers/utils/transfer-document-path.util';
 import { TransfersService } from '../transfers/transfers.service';
 
-const ALLOWED_MIME_TYPES = new Set([
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-]);
+const SIGNED_TRANSFER_MIME_TYPES = new Set(['application/pdf']);
 
 @Injectable()
 export class UploadsService {
@@ -36,8 +32,8 @@ export class UploadsService {
     if (!file) {
       throw new BadRequestException('File is required');
     }
-    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      throw new BadRequestException('Unsupported file type');
+    if (!SIGNED_TRANSFER_MIME_TYPES.has(file.mimetype)) {
+      throw new BadRequestException('Potpisana prenosnica mora biti PDF');
     }
     const envMaxMb = Number(this.configService.get<string>('MAX_UPLOAD_MB', '10'));
     const maxMb = await this.settingsService.getNumberValue('upload.max_mb', envMaxMb);
@@ -45,10 +41,16 @@ export class UploadsService {
     if (file.size > maxBytes) {
       throw new BadRequestException(`File exceeds ${maxMb} MB limit`);
     }
-    await this.transfersService.findOne(user, transferId);
-    const year = new Date().getFullYear();
-    const extension = extname(file.originalname) || this.extensionFromMime(file.mimetype);
-    const relativePath = join('transfers', String(year), `${transferId}${extension}`);
+    const transfer = await this.transfersService.findOne(user, transferId);
+    if (!transfer.documentWarehouseId) {
+      throw new BadRequestException('Transfer has no document warehouse configured');
+    }
+    const year = transfer.date.getFullYear();
+    const relativePath = buildSignedPdfRelativePath(
+      transfer.documentWarehouseId,
+      year,
+      transfer.documentNumber,
+    );
     const absolutePath = join(this.getUploadRoot(), relativePath);
     mkdirSync(resolve(absolutePath, '..'), { recursive: true });
     writeFileSync(absolutePath, file.buffer);
@@ -103,18 +105,5 @@ export class UploadsService {
 
   private getUploadRoot(): string {
     return this.configService.get<string>('UPLOAD_DIR', join(process.cwd(), 'uploads'));
-  }
-
-  private extensionFromMime(mime: string): string {
-    if (mime === 'application/pdf') {
-      return '.pdf';
-    }
-    if (mime === 'image/png') {
-      return '.png';
-    }
-    if (mime === 'image/webp') {
-      return '.webp';
-    }
-    return '.jpg';
   }
 }

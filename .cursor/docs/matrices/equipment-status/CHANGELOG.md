@@ -1,5 +1,10 @@
 # Changelog — equipment-status
 
+## 2026-06-04
+
+- `POST /equipment` blokiran za sve uloge; jedini create put je issue iz skladišnog lota.
+- UI Oprema: uklonjeno direktno kreiranje; ostaje uređivanje postojeće opreme.
+
 ## 2026-06-03
 
 - Equipment se kreira pri issue iz skladišnog lota (`stockLotId`); skladištar više ne registruje opremu direktno.

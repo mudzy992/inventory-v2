@@ -118,6 +118,10 @@ export class WarehousesService {
       throw new ForbiddenException('Only admin can create warehouses');
     }
     await this.assertCityExists(dto.cityId);
+    await this.assertOrgUnitExists(dto.orgUnitId);
+    if (!dto.keeperUserIds.length) {
+      throw new BadRequestException('At least one warehouse keeper is required');
+    }
     const warehouse = await this.prisma.warehouse.create({
       data: {
         name: dto.name,
@@ -128,9 +132,7 @@ export class WarehousesService {
         isActive: dto.isActive ?? true,
       },
     });
-    if (dto.keeperUserIds?.length) {
-      await this.replaceKeepers(warehouse.id, dto.keeperUserIds);
-    }
+    await this.replaceKeepers(warehouse.id, dto.keeperUserIds);
     return this.getWarehouseOrThrow(warehouse.id);
   }
 
@@ -220,6 +222,13 @@ export class WarehousesService {
     const city = await this.prisma.city.findUnique({ where: { id: cityId } });
     if (!city) {
       throw new BadRequestException('City not found');
+    }
+  }
+
+  private async assertOrgUnitExists(orgUnitId: string): Promise<void> {
+    const unit = await this.prisma.orgUnit.findUnique({ where: { id: orgUnitId } });
+    if (!unit) {
+      throw new BadRequestException('Org unit not found');
     }
   }
 }

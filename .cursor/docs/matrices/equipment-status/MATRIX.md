@@ -20,9 +20,9 @@
 
 | Uloga | Čitanje | Pisanje |
 |-------|---------|---------|
-| admin | sve | sve (+ delete) |
+| admin | sve | update/delete; nema `POST /equipment` |
 | skladistar | `skladiste` / rashod u keeper skladištima; lotovi preko warehouse-stock API | nema `Equipment` create; uništenje preko destroy API |
-| evidenticar | scope A/B (`RegistrarAssignment`) | u scope-u (ne skladišna oprema u režimu B) |
+| evidenticar | scope A/B (`RegistrarAssignment`) | update u scope-u; nema `POST /equipment` |
 | user | samo vlastito zaduženje | — |
 
 ## Transfer finalize — warehouseCondition
@@ -32,8 +32,9 @@
 
 ## Nastanak opreme
 
-- Pojedinačni `Equipment` nastaje pri **issue** iz `WarehouseStockLot` (evidentičar), s `stockLotId` i transferom `zaduzenje`
-- Skladištar ne kreira `Equipment` direktno
+- Pojedinačni `Equipment` nastaje **isključivo** pri **issue** iz `WarehouseStockLot` (evidentičar/admin), s `stockLotId` i transferom `zaduzenje`
+- `POST /equipment` — zabranjen za sve uloge (403); prijem robe = stock lot, ne direktan unos opreme
+- UI modul **Oprema**: samo pregled i uređivanje postojećih stavki; nova oprema preko Skladišta → prijem → lot → izdavanje
 
 ## Ostalo
 

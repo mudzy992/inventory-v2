@@ -18,6 +18,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { buildDisposalReportPayload } from './utils/build-disposal-report.util';
+import { assertTransferCreationAllowed } from '../transfers/utils/transfer-generation-policy.util';
+import { resolveDocumentWarehouseId } from '../transfers/utils/resolve-document-warehouse.util';
 import { finalizeInventoryTransferInTx } from './utils/finalize-inventory-transfer.util';
 import { buildWarehouseCommitteeMembers } from './utils/inventory-warehouse-committees.util';
 
@@ -1241,6 +1243,7 @@ export class InventoryCountService {
     equipment: {
       id: string;
       status: string;
+      warehouseId: string | null;
       currentHolderId: string | null;
       currentHolder: { id: string; orgUnitId: string } | null;
     },
@@ -1359,6 +1362,7 @@ export class InventoryCountService {
     equipment: {
       id: string;
       status: string;
+      warehouseId: string | null;
       currentHolderId: string | null;
       currentHolder: { id: string; orgUnitId: string } | null;
     },
@@ -1377,12 +1381,19 @@ export class InventoryCountService {
     }
     const signerId = equipment.currentHolderId ?? (await this.getDefaultSignerId());
     if (targetType === 'skladiste') {
+      await assertTransferCreationAllowed(this.settingsService, 'razduzenje', 'inventory');
       const resolvedWarehouseId = await this.resolveRelocationWarehouseId({
         sessionCityId,
         sessionOrgUnitId: session.orgUnitId,
         requestedWarehouseId: warehouseId,
       });
       if (equipment.status === 'zaduzeno' && equipment.currentHolderId) {
+        const documentWarehouseId = resolveDocumentWarehouseId({
+          type: 'razduzenje',
+          fromWarehouseId: null,
+          toWarehouseId: resolvedWarehouseId,
+          equipmentWarehouseId: equipment.warehouseId,
+        });
         return db.transfer.create({
           data: {
             equipmentId: equipment.id,
@@ -1391,6 +1402,7 @@ export class InventoryCountService {
             fromPersonId: equipment.currentHolderId,
             toType: 'skladiste',
             toWarehouseId: resolvedWarehouseId,
+            documentWarehouseId,
             signerId,
             toPersonId: null,
             date: new Date(),
@@ -1417,9 +1429,16 @@ export class InventoryCountService {
       throw new BadRequestException('Target person must be in session city');
     }
     if (equipment.status === 'skladiste') {
+      await assertTransferCreationAllowed(this.settingsService, 'zaduzenje', 'inventory');
       const fromWarehouseId = await this.resolveRelocationWarehouseId({
         sessionCityId,
         sessionOrgUnitId: session.orgUnitId,
+      });
+      const documentWarehouseId = resolveDocumentWarehouseId({
+        type: 'zaduzenje',
+        fromWarehouseId,
+        toWarehouseId: null,
+        equipmentWarehouseId: equipment.warehouseId,
       });
       return db.transfer.create({
         data: {
@@ -1427,6 +1446,7 @@ export class InventoryCountService {
           type: 'zaduzenje',
           fromType: 'skladiste',
           fromWarehouseId,
+          documentWarehouseId,
           toType: 'osoba',
           toPersonId,
           signerId: toPersonId,
@@ -1439,6 +1459,17 @@ export class InventoryCountService {
       });
     }
     if (equipment.status === 'zaduzeno' && equipment.currentHolderId) {
+      await assertTransferCreationAllowed(this.settingsService, 'prenos', 'inventory');
+      const holderWarehouseId = await this.warehouseResolutionService.resolveForEmployee(
+        equipment.currentHolderId,
+      );
+      const documentWarehouseId = resolveDocumentWarehouseId({
+        type: 'prenos',
+        fromWarehouseId: null,
+        toWarehouseId: null,
+        equipmentWarehouseId: equipment.warehouseId,
+        resolvedHolderWarehouseId: holderWarehouseId,
+      });
       return db.transfer.create({
         data: {
           equipmentId: equipment.id,
@@ -1447,6 +1478,7 @@ export class InventoryCountService {
           fromPersonId: equipment.currentHolderId,
           toType: 'osoba',
           toPersonId,
+          documentWarehouseId,
           signerId: toPersonId,
           date: new Date(),
           status: 'raw',

@@ -67,7 +67,7 @@ export const resolveEffectiveWarehouseForOrgUnit = (
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId);
     const matches = activeWarehouses
-      .filter((row) => row.orgUnitId === currentId && (!cityId || row.cityId === cityId))
+      .filter((row) => row.orgUnitId === currentId)
       .sort((a, b) => a.name.localeCompare(b.name));
     if (matches.length > 0) {
       return matches[0]!.id;

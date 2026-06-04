@@ -1,8 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { applyEffectiveOrgUnitUpdates } from '../utils/apply-effective-org-updates.util';
 import {
-  buildEffectiveSignerMap,
-  resolveEffectiveSignerId,
-} from '../utils/resolve-effective-signer.util';
+  collectAllOrgUnitIds,
+  collectOpenSubtreeIds,
+} from '../utils/collect-open-org-subtree.util';
+import { resolveEffectiveSignerId } from '../utils/resolve-effective-signer.util';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -11,19 +13,28 @@ export class SignerResolutionService {
 
   async refreshOrgUnitEffectiveSigners(orgUnitId?: string): Promise<void> {
     const units = await this.prisma.orgUnit.findMany({
-      select: { id: true, parentId: true, signerId: true },
+      select: {
+        id: true,
+        parentId: true,
+        signerId: true,
+        effectiveSignerId: true,
+      },
     });
-    const effectiveMap = buildEffectiveSignerMap(units);
-    const targets = orgUnitId
-      ? units.filter((unit) => unit.id === orgUnitId || this.isDescendant(orgUnitId, unit.id, units))
-      : units;
-    for (const unit of targets) {
-      const effectiveSignerId = effectiveMap.get(unit.id) ?? null;
-      await this.prisma.orgUnit.update({
-        where: { id: unit.id },
-        data: { effectiveSignerId },
-      });
-    }
+    const targetIds = orgUnitId
+      ? collectOpenSubtreeIds(orgUnitId, units, 'signerId')
+      : collectAllOrgUnitIds(units);
+    const byId = new Map(units.map((unit) => [unit.id, unit]));
+    const updates = targetIds
+      .map((id) => {
+        const nextValue = resolveEffectiveSignerId(id, units);
+        const current = byId.get(id)?.effectiveSignerId ?? null;
+        if (nextValue === current) {
+          return null;
+        }
+        return { id, nextValue };
+      })
+      .filter((row): row is { id: string; nextValue: string | null } => row !== null);
+    await applyEffectiveOrgUnitUpdates(this.prisma, 'effectiveSignerId', updates);
   }
 
   async getEffectiveSignerForOrgUnit(orgUnitId: string): Promise<string | null> {
@@ -56,21 +67,5 @@ export class SignerResolutionService {
       throw new BadRequestException('No signer configured in org hierarchy');
     }
     return effectiveSignerId;
-  }
-
-  private isDescendant(
-    ancestorId: string,
-    unitId: string,
-    units: { id: string; parentId: string | null }[],
-  ): boolean {
-    const byId = new Map(units.map((unit) => [unit.id, unit]));
-    let currentId: string | null = unitId;
-    while (currentId) {
-      if (currentId === ancestorId) {
-        return true;
-      }
-      currentId = byId.get(currentId)?.parentId ?? null;
-    }
-    return false;
   }
 }

@@ -1,18 +1,15 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Package, ArrowLeftRight, Trash2, Building2 } from 'lucide-react';
-import { updateWarehouseApi } from '../../api/warehouses-api';
-import { ApiError } from '../../api/client';
-import { useToast } from '../../contexts/toast-context';
 import { filterTransfersForWarehouse, isCentralWarehouse } from '../../helpers/org-warehouse.util';
 import { WarehouseStockPanel } from './warehouse-stock-panel';
 import { isSkladistar, isAdmin } from '../../store';
 import { getCityLabel, formatDate } from '../../helpers';
-import { useStore, useRefreshData } from '../../useStore';
+import { useStore } from '../../useStore';
 import type { PageId } from '../Layout';
 import { WarehouseDestructionPanel } from './warehouse-destruction-panel';
+import { WarehouseContextPanel } from './warehouse-context-panel';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { inputClass, labelClass, selectClass } from '../ui/form-styles';
 import { cn } from '../../utils/cn';
 
 type WarehouseTab = 'stock' | 'transfers' | 'destruction' | 'context';
@@ -37,8 +34,6 @@ export const WarehouseDetailView = ({
   const admin = isAdmin();
   const skladistar = isSkladistar();
   const [state] = useStore();
-  const refresh = useRefreshData();
-  const { toastError } = useToast();
   const [tab, setTab] = useState<WarehouseTab>('stock');
   const warehouse = state.warehouses.find((row) => row.id === warehouseId);
   const orgUnit = warehouse?.orgUnitId
@@ -48,26 +43,11 @@ export const WarehouseDetailView = ({
     () => (warehouse ? filterTransfersForWarehouse(warehouse.id, state) : []),
     [state.transfers, warehouse],
   );
-  const [editOrgUnitId, setEditOrgUnitId] = useState(warehouse?.orgUnitId ?? '');
-  const [saving, setSaving] = useState(false);
   if (!warehouse) {
     return (
       <p className="text-gray-500">Skladište nije pronađeno.</p>
     );
   }
-  const handleSaveContext = async () => {
-    setSaving(true);
-    try {
-      await updateWarehouseApi(warehouse.id, {
-        orgUnitId: editOrgUnitId || null,
-      });
-      await refresh();
-    } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška');
-    } finally {
-      setSaving(false);
-    }
-  };
   const tabs: { id: WarehouseTab; label: string; icon: typeof Package }[] = [
     { id: 'stock', label: 'Na skladištu', icon: Package },
     { id: 'transfers', label: 'Zaduženja / Razduženja', icon: ArrowLeftRight },
@@ -171,39 +151,7 @@ export const WarehouseDetailView = ({
         <p className="text-sm text-gray-500">Pregled uništenja dostupan skladištaru ili administratoru.</p>
       ) : null}
       {tab === 'context' ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-4 space-y-3 max-w-lg">
-          <p className="text-sm text-gray-700">
-            <strong>Adresa:</strong> {warehouse.address}
-          </p>
-          <p className="text-sm text-gray-700">
-            <strong>Skladištari:</strong>{' '}
-            {warehouse.keepers?.map((keeper) => keeper.user?.username).filter(Boolean).join(', ') || '—'}
-          </p>
-          {canEditContext ? (
-            <>
-              <label className={labelClass}>Org-jedinica</label>
-              <select
-                value={editOrgUnitId}
-                onChange={(event) => setEditOrgUnitId(event.target.value)}
-                className={selectClass}
-              >
-                <option value="">— Centralno (bez org) —</option>
-                {state.orgUnits.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.name}
-                  </option>
-                ))}
-              </select>
-              <Button disabled={saving} onClick={() => void handleSaveContext()}>
-                Sačuvaj kontekst
-              </Button>
-            </>
-          ) : (
-            <p className="text-sm text-gray-500">
-              Org-jedinica: {orgUnit?.name ?? 'Centralno'}
-            </p>
-          )}
-        </div>
+        <WarehouseContextPanel warehouse={warehouse} canEditContext={canEditContext} />
       ) : null}
     </div>
   );

@@ -6,6 +6,7 @@ import { useToast } from '../contexts/toast-context';
 import { isAdmin, isEvidenticar, getCurrentUser, employeeMatchesScope } from '../store';
 import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
+import { OrgUnitAutocomplete } from './org-unit-autocomplete';
 import { v4 as uuidv4 } from 'uuid';
 import type { Employee } from '../types';
 
@@ -260,13 +261,12 @@ export function EmployeesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Org. jedinica *</label>
-                <select value={fOrgUnit} onChange={e => setFOrgUnit(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
-                  <option value="">— Odaberi —</option>
-                  {state.orgUnits.map(o => (
-                    <option key={o.id} value={o.id}>{o.name} ({getOrgUnitTypeLabel(o.type)})</option>
-                  ))}
-                </select>
+                <OrgUnitAutocomplete
+                  orgUnits={state.orgUnits}
+                  value={fOrgUnit}
+                  onChange={setFOrgUnit}
+                  required
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

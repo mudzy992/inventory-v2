@@ -1,5 +1,8 @@
-import { apiRequest, clearTokens, setTokens } from './client';
+import { apiRequest, setTokens } from './client';
+import { clearTokens, getRefreshToken } from './token-storage';
 import type { UserRole } from '../types';
+
+export { refreshTokensApi } from './auth-refresh';
 
 export interface AuthUserDto {
   id: string;
@@ -24,7 +27,7 @@ export const loginApi = async (username: string, password: string): Promise<Auth
 };
 
 export const logoutApi = async (): Promise<void> => {
-  const refreshToken = sessionStorage.getItem('refreshToken');
+  const refreshToken = getRefreshToken();
   if (refreshToken) {
     try {
       await apiRequest('/auth/logout', {

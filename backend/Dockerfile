@@ -13,6 +13,8 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# PDF prenosnica (transfer.generate_print_pdf): odkomentirati za LibreOffice u image-u
+# RUN apk add --no-cache libreoffice
 RUN addgroup -S app && adduser -S app -G app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules

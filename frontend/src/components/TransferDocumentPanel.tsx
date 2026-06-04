@@ -43,8 +43,10 @@ export const TransferDocumentPanel = ({
   const maxUploadMb = getNumber('upload.max_mb', 10);
   const allowFinalizeWithoutUpload =
     isAdmin() && getBoolean('transfer.allow_finalize_without_upload', false);
+  const requireSignedPdf = getBoolean('transfer.require_signed_pdf_upload', true);
   const [uploadMeta, setUploadMeta] = useState<UploadMeta | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [generatedPrintPreviewUrl, setGeneratedPrintPreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const inventorySteps = inventoryMode
     ? buildInventoryTransferSteps(transfer, inventorySessionStatus, linePendingApplied)
@@ -56,6 +58,14 @@ export const TransferDocumentPanel = ({
   const standardBadge = !inventoryMode ? getTransferStepBadge(transfer) : null;
   const finalizeBlocked =
     inventoryMode && inventorySessionStatus === 'active' && transfer.status !== 'potpisan';
+  useEffect(() => {
+    return () => {
+      if (generatedPrintPreviewUrl) {
+        URL.revokeObjectURL(generatedPrintPreviewUrl);
+      }
+    };
+  }, [generatedPrintPreviewUrl]);
+
   useEffect(() => {
     const load = async () => {
       if (!transfer.scannedDocUrl) {
@@ -101,6 +111,43 @@ export const TransferDocumentPanel = ({
     link.click();
     URL.revokeObjectURL(url);
   };
+  const handlePrintPreview = async () => {
+    setIsLoading(true);
+    try {
+      const blob = await fetchAuthenticatedBlob(
+        `/transfers/${transfer.id}/generated-document?format=pdf`,
+      );
+      if (generatedPrintPreviewUrl) {
+        URL.revokeObjectURL(generatedPrintPreviewUrl);
+      }
+      setGeneratedPrintPreviewUrl(URL.createObjectURL(blob));
+    } catch {
+      toastError(
+        'PDF nije generisan (provjerite postavku generate_print_pdf i LibreOffice na serveru). Preuzmite DOCX.',
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDownloadGenerated = async (format: 'docx' | 'pdf') => {
+    setIsLoading(true);
+    try {
+      const blob = await fetchAuthenticatedBlob(
+        `/transfers/${transfer.id}/generated-document?format=${format}`,
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${transfer.documentNumber}.${format}`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      await handleDownloadRaw();
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const handleDownloadRaw = async () => {
     setIsLoading(true);
     try {
@@ -116,6 +163,10 @@ export const TransferDocumentPanel = ({
     }
   };
   const handleUpload = async (file: File) => {
+    if (file.type !== 'application/pdf') {
+      toastError('Potpisana prenosnica mora biti PDF');
+      return;
+    }
     const maxBytes = maxUploadMb * 1024 * 1024;
     if (file.size > maxBytes) {
       toastError(`Datoteka prelazi limit od ${maxUploadMb} MB`);
@@ -125,6 +176,11 @@ export const TransferDocumentPanel = ({
     onSigned?.();
   };
   const isRaw = transfer.status === 'raw' || transfer.status === 'printed';
+  const canPrintPreview =
+    !inventoryMode &&
+    (transfer.status === 'raw' ||
+      transfer.status === 'printed' ||
+      transfer.status === 'uploaded');
   const canUpload = allowSign && isRaw && !transfer.scannedDocUrl;
   const badgeClass =
     inventoryBadge?.tone === 'success'
@@ -205,7 +261,8 @@ export const TransferDocumentPanel = ({
       ) : null}
       {!inventoryMode && isRaw ? (
         <p className="text-xs text-gray-500">
-          Draft dokument — potpis i sken se vrše nakon odobrenja (rashod: komisija).
+          Preuzmite generisani obrazac za štampu, potpišite ga, zatim uploadujte PDF.
+          {requireSignedPdf ? ' Potpisani PDF je obavezan prije finalizacije.' : ''}
           {allowFinalizeWithoutUpload
             ? ' Administrator može finalizovati bez uploada (postavka uključena).'
             : null}
@@ -221,14 +278,42 @@ export const TransferDocumentPanel = ({
       ) : null}
       <div className="flex flex-wrap gap-2">
         {(inventoryMode || isRaw) && (
-          <button
-            type="button"
-            onClick={() => void handleDownloadRaw()}
-            disabled={isLoading}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-          >
-            <Download size={14} /> RAW dokument
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => void handleDownloadGenerated('docx')}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
+            >
+              <Download size={14} /> Obrazac (DOCX)
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDownloadGenerated('pdf')}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
+            >
+              <Download size={14} /> Štampa (PDF)
+            </button>
+            {canPrintPreview ? (
+              <button
+                type="button"
+                onClick={() => void handlePrintPreview()}
+                disabled={isLoading}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
+              >
+                <Eye size={14} /> Pregled za štampu
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void handleDownloadRaw()}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50 text-gray-500"
+            >
+              <Download size={14} /> HTML (rezerva)
+            </button>
+          </>
         )}
         {uploadMeta && (
           <>
@@ -254,7 +339,7 @@ export const TransferDocumentPanel = ({
             <Upload size={14} /> Upload potpisane
             <input
               type="file"
-              accept="application/pdf,image/*"
+              accept="application/pdf"
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -270,7 +355,7 @@ export const TransferDocumentPanel = ({
             <Upload size={14} /> Upload + potpis
             <input
               type="file"
-              accept="application/pdf,image/*"
+              accept="application/pdf"
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -288,12 +373,21 @@ export const TransferDocumentPanel = ({
           sesije.
         </p>
       ) : null}
+      {generatedPrintPreviewUrl ? (
+        <div className="mt-2">
+          <iframe
+            src={generatedPrintPreviewUrl}
+            title="Pregled generisanog PDF-a za štampu"
+            className="w-full h-[360px] border rounded bg-white"
+          />
+        </div>
+      ) : null}
       {previewUrl && (
         <div className="mt-2">
           {uploadMeta?.mime.startsWith('image/') ? (
             <img src={previewUrl} alt="Sken prenosnice" className="max-h-64 rounded border" />
           ) : (
-            <iframe src={previewUrl} title="Sken" className="w-full h-64 border rounded" />
+            <iframe src={previewUrl} title="Sken potpisane prenosnice" className="w-full h-64 border rounded" />
           )}
           <p className="text-[10px] text-gray-400 mt-1">
             {getApiBaseUrl()}/uploads/{uploadMeta?.id}

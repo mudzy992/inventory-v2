@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore, useRefreshData } from '../useStore';
 import { createOrgUnitApi, deleteOrgUnitApi, updateOrgUnitApi } from '../api/data-api';
 import { ApiError } from '../api/client';
@@ -8,12 +8,24 @@ import {
   getCityLabel,
   getEffectiveCityForOrgUnit,
   getEffectiveSignerForOrgUnit,
+  getOrgUnitPath,
   getOrgUnitTypeLabel,
 } from '../helpers';
+import { getOrgSubtreeIds, resolveEffectiveWarehouseForOrgUnit } from '../helpers/org-warehouse.util';
+import {
+  ALL_ORG_UNIT_TYPE_OPTIONS,
+  getCreatableOrgUnitTypes,
+  canUseRootParent,
+  isAllowedOrgUnitParentChild,
+} from '../helpers/org-hierarchy.util';
 import { cn } from '../utils/cn';
-import { v4 as uuidv4 } from 'uuid';
 import type { OrgUnit, OrgUnitType } from '../types';
 import { OrgUnitWarehousesSection } from './organization/org-unit-warehouses-section';
+import { SearchableAutocomplete, type SearchableOption } from './searchable-autocomplete';
+
+const PARENT_ROOT_ID = '__parent_root__';
+const SIGNER_INHERIT_ID = '__inherit_signer__';
+const CITY_INHERIT_ID = '__inherit_city__';
 
 function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
   unit: OrgUnit;
@@ -23,7 +35,7 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
   onDelete: (id: string) => void;
   onAdd: (parentId: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(level < 2);
+  const [expanded, setExpanded] = useState(level === 0);
   const children = state.orgUnits.filter(o => o.parentId === unit.id);
   const employees = state.employees.filter(e => e.orgUnitId === unit.id);
   const explicitSigner = unit.signerId ? state.employees.find((e) => e.id === unit.signerId) : null;
@@ -37,6 +49,7 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
     distribucija: 'border-l-purple-600 bg-purple-50',
     podrucje: 'border-l-teal-600 bg-teal-50',
     podruznica: 'border-l-orange-600 bg-orange-50',
+    poslovna_jedinica: 'border-l-indigo-600 bg-indigo-50',
     sektor: 'border-l-green-600 bg-green-50',
     sluzba: 'border-l-yellow-600 bg-yellow-50',
     odjeljenje: 'border-l-gray-600 bg-gray-50',
@@ -47,6 +60,7 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
     distribucija: 'bg-purple-100 text-purple-700',
     podrucje: 'bg-teal-100 text-teal-700',
     podruznica: 'bg-orange-100 text-orange-700',
+    poslovna_jedinica: 'bg-indigo-100 text-indigo-700',
     sektor: 'bg-green-100 text-green-700',
     sluzba: 'bg-yellow-100 text-yellow-700',
     odjeljenje: 'bg-gray-100 text-gray-700',
@@ -120,9 +134,10 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
 }
 
 export function OrganizationPage() {
-  const [state] = useStore();
+  const [state, setState] = useStore();
   const refresh = useRefreshData();
-  const { toastError } = useToast();
+  const { toastError, toastSuccess } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
   const [editingUnit, setEditingUnit] = useState<OrgUnit | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formParentId, setFormParentId] = useState<string | null>(null);
@@ -133,12 +148,187 @@ export function OrganizationPage() {
   const [formLocationCityId, setFormLocationCityId] = useState('');
 
   const rootUnits = state.orgUnits.filter(o => o.parentId === null);
+  const hasDirekcija = state.orgUnits.some((unit) => unit.type === 'direkcija');
+  const isCreate = !editingUnit;
+
+  const formParentType = formParentId
+    ? state.orgUnits.find((unit) => unit.id === formParentId)?.type ?? null
+    : null;
+
+  const formTypeOptions = useMemo((): readonly OrgUnitType[] => {
+    if (editingUnit) {
+      return ALL_ORG_UNIT_TYPE_OPTIONS;
+    }
+    if (!hasDirekcija) {
+      return ['direkcija'];
+    }
+    return ALL_ORG_UNIT_TYPE_OPTIONS;
+  }, [editingUnit, hasDirekcija]);
+
+  const excludeParentIds = useMemo(() => {
+    if (!editingUnit) {
+      return undefined;
+    }
+    const ids = getOrgSubtreeIds(state.orgUnits, editingUnit.id);
+    ids.add(editingUnit.id);
+    return ids;
+  }, [editingUnit, state.orgUnits]);
+
+  const resolvedFormType = formTypeOptions.includes(formType)
+    ? formType
+    : (formTypeOptions[0] ?? formType);
+
+  const parentOrgOptions = useMemo((): SearchableOption[] => {
+    const mapUnit = (unit: OrgUnit): SearchableOption => {
+      const path = getOrgUnitPath(state.orgUnits, unit.id);
+      const prefix = `${unit.name} → `;
+      const parentPath = path.startsWith(prefix) ? path.slice(prefix.length) : path === unit.name ? '' : path;
+      const subLabel = parentPath
+        ? `${getOrgUnitTypeLabel(unit.type)} · ${parentPath}`
+        : getOrgUnitTypeLabel(unit.type);
+      return {
+        id: unit.id,
+        label: unit.name,
+        subLabel,
+        searchText: `${getOrgUnitTypeLabel(unit.type)} ${path}`,
+      };
+    };
+    return state.orgUnits
+      .filter((unit) => {
+        if (excludeParentIds?.has(unit.id)) {
+          return false;
+        }
+        return isAllowedOrgUnitParentChild(unit.type, resolvedFormType);
+      })
+      .map(mapUnit);
+  }, [state.orgUnits, resolvedFormType, excludeParentIds]);
+
+  const signerScopeOrgIds = useMemo(() => {
+    if (formParentId) {
+      return getOrgSubtreeIds(state.orgUnits, formParentId);
+    }
+    if (editingUnit) {
+      return getOrgSubtreeIds(state.orgUnits, editingUnit.id);
+    }
+    return null;
+  }, [formParentId, editingUnit, state.orgUnits]);
+
+  const employeeOptions = useMemo((): SearchableOption[] =>
+    state.employees
+      .filter((emp) => !signerScopeOrgIds || signerScopeOrgIds.has(emp.orgUnitId))
+      .map((emp) => {
+        const orgUnit = state.orgUnits.find((unit) => unit.id === emp.orgUnitId);
+        const orgPath = orgUnit ? getOrgUnitPath(state.orgUnits, orgUnit.id) : '—';
+        return {
+          id: emp.id,
+          label: `${emp.firstName} ${emp.lastName}`,
+          subLabel: `${emp.title || '—'} · ${orgPath}`,
+          searchText: `${emp.email ?? ''} ${orgPath}`,
+        };
+      }),
+  [state.employees, state.orgUnits, signerScopeOrgIds]);
+
+  const cityOptions = useMemo((): SearchableOption[] =>
+    state.cities.map((city) => ({
+      id: city.id,
+      label: city.name,
+      subLabel: city.canton?.name ? `${city.canton.name} (kanton)` : undefined,
+      searchText: `${city.name} ${city.canton?.name ?? ''}`,
+    })),
+  [state.cities]);
+
+  const effectiveMeta = useMemo(() => {
+    const anchorId = editingUnit?.id ?? formParentId;
+    if (!anchorId) {
+      return null;
+    }
+    const effectiveCityId = getEffectiveCityForOrgUnit(state.orgUnits, anchorId);
+    const effectiveSigner = getEffectiveSignerForOrgUnit(
+      state.orgUnits,
+      state.employees,
+      anchorId,
+    );
+    const effectiveWarehouseId = resolveEffectiveWarehouseForOrgUnit(
+      state.orgUnits,
+      state.warehouses,
+      anchorId,
+      effectiveCityId,
+    );
+    const effectiveWarehouse = effectiveWarehouseId
+      ? state.warehouses.find((row) => row.id === effectiveWarehouseId)
+      : null;
+    return {
+      location: getCityLabel(state.cities, effectiveCityId),
+      signer: effectiveSigner
+        ? `${effectiveSigner.firstName} ${effectiveSigner.lastName}`
+        : '— nije konfigurisan u hijerarhiji',
+      warehouse: effectiveWarehouse?.name ?? '— nije dodijeljeno',
+      inheritedFrom: editingUnit
+        ? 'Efektivne vrijednosti ove jedinice (ako polja ostavite prazna, nasljeđuje se od nadređene).'
+        : 'Vrijednosti koje nasljeđuje nova jedinica od odabrane nadređene (ako polja ostavite prazna).',
+    };
+  }, [editingUnit, formParentId, state]);
+
+  const inheritAnchorId = editingUnit?.id ?? formParentId;
+
+  const inheritSignerOption = useMemo((): SearchableOption => {
+    if (!inheritAnchorId) {
+      return {
+        id: SIGNER_INHERIT_ID,
+        label: '— Nasljeđuje od nadređene (podrazumijevano) —',
+        subLabel: 'Odaberite nadređenu jedinicu da vidite tko se nasljeđuje',
+      };
+    }
+    const effective = getEffectiveSignerForOrgUnit(state.orgUnits, state.employees, inheritAnchorId);
+    return {
+      id: SIGNER_INHERIT_ID,
+      label: '— Nasljeđuje od nadređene (podrazumijevano) —',
+      subLabel: effective
+        ? `Nasljedeće: ${effective.firstName} ${effective.lastName}`
+        : 'Nije postavljen u hijerarhiji nadređene',
+    };
+  }, [inheritAnchorId, state.orgUnits, state.employees]);
+
+  const inheritCityOption = useMemo((): SearchableOption => {
+    if (!inheritAnchorId) {
+      return {
+        id: CITY_INHERIT_ID,
+        label: '— Nasljeđuje od nadređene (podrazumijevano) —',
+        subLabel: 'Odaberite nadređenu jedinicu da vidite koji grad se nasljeđuje',
+      };
+    }
+    const effectiveCityId = getEffectiveCityForOrgUnit(state.orgUnits, inheritAnchorId);
+    return {
+      id: CITY_INHERIT_ID,
+      label: '— Nasljeđuje od nadređene (podrazumijevano) —',
+      subLabel: effectiveCityId
+        ? `Nasljedeće: ${getCityLabel(state.cities, effectiveCityId)}`
+        : 'Lokacija nije postavljena na nadređenoj',
+    };
+  }, [inheritAnchorId, state.orgUnits, state.cities]);
+
+  const resetInheritedFields = () => {
+    setFormSignerId('');
+    setFormLocationCityId('');
+  };
+
+  const openCreate = () => {
+    setEditingUnit(null);
+    setFormParentId(null);
+    setFormName('');
+    setFormType(hasDirekcija ? 'sektor' : 'direkcija');
+    setFormSignerId('');
+    setFormLocationCityId('');
+    setShowForm(true);
+  };
 
   function openAdd(parentId: string) {
+    const parentType = state.orgUnits.find((unit) => unit.id === parentId)?.type ?? null;
+    const allowed = getCreatableOrgUnitTypes(parentId, parentType);
     setEditingUnit(null);
     setFormParentId(parentId);
     setFormName('');
-    setFormType('sektor');
+    setFormType(allowed[0] ?? 'sektor');
     setFormSignerId('');
     setFormLocationCityId('');
     setShowForm(true);
@@ -154,26 +344,93 @@ export function OrganizationPage() {
     setShowForm(true);
   }
 
+  const handleTypeChange = (nextType: OrgUnitType) => {
+    setFormType(nextType);
+    if (formParentId) {
+      const parent = state.orgUnits.find((unit) => unit.id === formParentId);
+      if (parent && !isAllowedOrgUnitParentChild(parent.type, nextType)) {
+        setFormParentId(null);
+        resetInheritedFields();
+      }
+    }
+    if (!canUseRootParent(nextType) && !formParentId) {
+      resetInheritedFields();
+    }
+  };
+
+  const handleParentChange = (rawParentId: string) => {
+    const nextParentId = rawParentId === PARENT_ROOT_ID ? null : rawParentId;
+    if (nextParentId) {
+      const parent = state.orgUnits.find((unit) => unit.id === nextParentId);
+      if (parent && !isAllowedOrgUnitParentChild(parent.type, resolvedFormType)) {
+        return;
+      }
+    } else if (!canUseRootParent(resolvedFormType)) {
+      return;
+    }
+    setFormParentId(nextParentId);
+    resetInheritedFields();
+  };
+
   const handleSave = async () => {
     if (!formName.trim()) return;
+    const saveType = formTypeOptions.includes(formType) ? formType : (formTypeOptions[0] ?? formType);
+    if (isCreate) {
+      if (!hasDirekcija) {
+        if (saveType !== 'direkcija' || formParentId) {
+          toastError('Prvo kreirajte Direkciju na krovnom nivou (bez nadređene jedinice).');
+          return;
+        }
+      } else if (!formParentId && saveType !== 'direkcija') {
+        toastError('Na krovnom nivou dozvoljena je samo Direkcija. Odaberite nadređenu jedinicu.');
+        return;
+      } else if (formParentId) {
+        const parent = state.orgUnits.find((unit) => unit.id === formParentId);
+        if (parent && !isAllowedOrgUnitParentChild(parent.type, saveType)) {
+          const allowed = getCreatableOrgUnitTypes(formParentId, parent.type)
+            .map(getOrgUnitTypeLabel)
+            .join(', ');
+          toastError(
+            `Tip „${getOrgUnitTypeLabel(saveType)}” nije dozvoljen ispod „${getOrgUnitTypeLabel(parent.type)}”. Dozvoljeno: ${allowed}.`,
+          );
+          return;
+        }
+      }
+    }
+    setIsSaving(true);
     try {
       const payload = {
         name: formName.trim(),
-        type: formType,
+        type: saveType,
         parentId: formParentId,
         signerId: formSignerId || null,
         locationCityId: formLocationCityId || null,
       };
       if (editingUnit) {
-        await updateOrgUnitApi(editingUnit.id, payload);
+        const updated = await updateOrgUnitApi(editingUnit.id, payload);
+        setState((prev) => ({
+          ...prev,
+          orgUnits: prev.orgUnits.map((unit) =>
+            unit.id === updated.id ? { ...unit, ...updated } : unit,
+          ),
+        }));
+        toastSuccess('Organizacijska jedinica je ažurirana.');
       } else {
-        await createOrgUnitApi(payload);
+        const created = await createOrgUnitApi(payload);
+        setState((prev) => ({
+          ...prev,
+          orgUnits: [...prev.orgUnits, created],
+        }));
+        toastSuccess('Organizacijska jedinica je dodana.');
       }
-      await refresh();
+      setEditingUnit(null);
       setShowForm(false);
+      void refresh();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri spremanju';
       toastError(message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -196,21 +453,13 @@ export function OrganizationPage() {
           <p className="text-gray-500 mt-1">Hijerarhija preduzeća — direkcija, distribucije, područja, podružnice</p>
         </div>
         <button
-          onClick={() => {
-            setEditingUnit(null);
-            setFormParentId(null);
-            setFormName('');
-            setFormType('direkcija');
-            setFormSignerId('');
-            setShowForm(true);
-          }}
+          onClick={openCreate}
           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
         >
           <Plus size={16} /> Nova jedinica
         </button>
       </div>
 
-      {/* Tree */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         {rootUnits.map(unit => (
           <OrgTreeNode key={unit.id} unit={unit} level={0} state={state} onEdit={openEdit} onDelete={handleDelete} onAdd={openAdd} />
@@ -220,14 +469,23 @@ export function OrganizationPage() {
         )}
       </div>
 
-      {/* Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold">
                 {editingUnit ? 'Uredi organizacijsku jedinicu' : 'Nova organizacijska jedinica'}
               </h2>
+              {isCreate && !hasDirekcija ? (
+                <p className="text-xs text-amber-700 mt-1 rounded-md bg-amber-50 border border-amber-100 px-2 py-1.5">
+                  Prvo kreirajte Direkciju na krovnom nivou. Zatim možete dodavati ostale tipove ispod nje.
+                </p>
+              ) : null}
+              {isCreate && hasDirekcija ? (
+                <p className="text-xs text-gray-500 mt-1">
+                  Odaberite nadređenu jedinicu i tip prema hijerarhiji. Na krovnom nivou dozvoljena je samo Direkcija.
+                </p>
+              ) : null}
             </div>
             <div className="p-6 space-y-4">
               <div>
@@ -243,87 +501,82 @@ export function OrganizationPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tip</label>
                 <select
-                  value={formType}
-                  onChange={e => setFormType(e.target.value as OrgUnitType)}
+                  value={resolvedFormType}
+                  onChange={e => handleTypeChange(e.target.value as OrgUnitType)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 >
-                  <option value="direkcija">Direkcija</option>
-                  <option value="distribucija">Distribucija</option>
-                  <option value="podrucje">Područje</option>
-                  <option value="podruznica">Podružnica</option>
-                  <option value="sektor">Sektor</option>
-                  <option value="sluzba">Služba</option>
-                  <option value="odjeljenje">Odjeljenje</option>
+                  {formTypeOptions.map((type) => (
+                    <option key={type} value={type}>
+                      {getOrgUnitTypeLabel(type)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nadređena jedinica</label>
-                <select
-                  value={formParentId || ''}
-                  onChange={e => setFormParentId(e.target.value || null)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                >
-                  <option value="">— Krovni nivo (nema nadređenu) —</option>
-                  {state.orgUnits
-                    .filter(o => o.id !== editingUnit?.id)
-                    .map(o => (
-                      <option key={o.id} value={o.id}>
-                        {o.name} ({getOrgUnitTypeLabel(o.type)})
-                      </option>
-                    ))}
-                </select>
+                <SearchableAutocomplete
+                  options={parentOrgOptions}
+                  value={formParentId ?? PARENT_ROOT_ID}
+                  onChange={handleParentChange}
+                  excludeIds={excludeParentIds}
+                  emptyOption={
+                    canUseRootParent(resolvedFormType)
+                      ? {
+                          id: PARENT_ROOT_ID,
+                          label: '— Krovni nivo (nema nadređenu) —',
+                          subLabel: 'Samo za tip Direkcija',
+                        }
+                      : undefined
+                  }
+                  placeholder="Pretraži nadređenu jedinicu…"
+                  ariaLabel="Nadređena jedinica"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Prikaz: naziv · tip · putanja. Filtrirano prema odabranom tipu ({getOrgUnitTypeLabel(resolvedFormType)}).
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Potpisnik (ovlaštena osoba)</label>
-                <select
-                  value={formSignerId}
-                  onChange={e => setFormSignerId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                >
-                  <option value="">— Bez potpisnika (nasljeđuje od nadređene) —</option>
-                  {state.employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.firstName} {emp.lastName} — {emp.title}
-                    </option>
-                  ))}
-                </select>
+                <SearchableAutocomplete
+                  options={employeeOptions}
+                  value={formSignerId ? formSignerId : SIGNER_INHERIT_ID}
+                  onChange={(id) => setFormSignerId(id === SIGNER_INHERIT_ID ? '' : id)}
+                  emptyOption={inheritSignerOption}
+                  placeholder="Pretraži za ručni odabir potpisnika…"
+                  ariaLabel="Potpisnik"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Podrazumijevano: nasljeđivanje. Ispod: ručni odabir (ime · pozicija · org. putanja).
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Lokacija (grad)</label>
-                <select
-                  value={formLocationCityId}
-                  onChange={(event) => setFormLocationCityId(event.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                >
-                  <option value="">— Nasljeđuje od nadređene —</option>
-                  {state.cities.map((city) => (
-                    <option key={city.id} value={city.id}>
-                      {getCityLabel(state.cities, city.id)}
-                    </option>
-                  ))}
-                </select>
-                {editingUnit && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Efektivna lokacija:{' '}
-                    {getCityLabel(state.cities, getEffectiveCityForOrgUnit(state.orgUnits, editingUnit.id))}
-                  </p>
-                )}
-              </div>
-              {editingUnit && (
-                <p className="text-xs text-gray-500 -mt-2">
-                  Efektivni potpisnik:{' '}
-                  {(() => {
-                    const effective = getEffectiveSignerForOrgUnit(
-                      state.orgUnits,
-                      state.employees,
-                      editingUnit.id,
-                    );
-                    return effective
-                      ? `${effective.firstName} ${effective.lastName}`
-                      : '— nije konfigurisan u hijerarhiji';
-                  })()}
+                <SearchableAutocomplete
+                  options={cityOptions}
+                  value={formLocationCityId ? formLocationCityId : CITY_INHERIT_ID}
+                  onChange={(id) => setFormLocationCityId(id === CITY_INHERIT_ID ? '' : id)}
+                  emptyOption={inheritCityOption}
+                  placeholder="Pretraži za ručni odabir grada…"
+                  ariaLabel="Lokacija"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Podrazumijevano: nasljeđivanje. Ispod: ručni odabir (grad · kanton).
                 </p>
-              )}
+              </div>
+              {effectiveMeta ? (
+                <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2.5 space-y-1 text-xs text-gray-500">
+                  <p className="text-gray-400">{effectiveMeta.inheritedFrom}</p>
+                  <p>
+                    Efektivna lokacija: <span className="font-medium text-gray-700">{effectiveMeta.location}</span>
+                  </p>
+                  <p>
+                    Efektivni potpisnik: <span className="font-medium text-gray-700">{effectiveMeta.signer}</span>
+                  </p>
+                  <p>
+                    Efektivno skladište: <span className="font-medium text-gray-700">{effectiveMeta.warehouse}</span>
+                  </p>
+                </div>
+              ) : null}
               {editingUnit ? <OrgUnitWarehousesSection orgUnit={editingUnit} /> : null}
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
@@ -334,10 +587,12 @@ export function OrganizationPage() {
                 Odustani
               </button>
               <button
-                onClick={handleSave}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {editingUnit ? 'Sačuvaj izmjene' : 'Dodaj'}
+                {isSaving ? 'Spremanje…' : editingUnit ? 'Sačuvaj izmjene' : 'Dodaj'}
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@ export type OrgUnitType =
   | 'distribucija'
   | 'podrucje'
   | 'podruznica'
+  | 'poslovna_jedinica'
   | 'sektor'
   | 'sluzba'
   | 'odjeljenje';

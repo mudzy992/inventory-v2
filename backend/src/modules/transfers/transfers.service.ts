@@ -6,10 +6,6 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '../../../generated/prisma/client';
 import { detectCrossServiceTransfer } from '../../common/utils/transfer-cross-service.util';
-import {
-  buildDocumentNumber,
-  countYearlySequences,
-} from '../../common/utils/document-number.util';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { OrgScopeService } from '../../common/services/org-scope.service';
@@ -36,6 +32,10 @@ import {
   validateTransferShape,
 } from './transfer-validation.util';
 import { resolveTransferSignerId } from './utils/resolve-transfer-signer.util';
+import { allocateTransferDocumentNumberInTx } from './utils/allocate-transfer-document-number.util';
+import { assertTransferCreationAllowed } from './utils/transfer-generation-policy.util';
+import { resolveDocumentWarehouseId } from './utils/resolve-document-warehouse.util';
+import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { buildTransferRawDocumentHtml } from './utils/transfer-raw-document.util';
 
 const transferInclude = {
@@ -60,6 +60,7 @@ export class TransfersService {
     private readonly orgScopeService: OrgScopeService,
     private readonly inventoryFreeze: InventoryFreezeService,
     private readonly warehouseResolutionService: WarehouseResolutionService,
+    private readonly transferDocumentGeneration: TransferDocumentGenerationService,
   ) {}
 
   async markUploadedAfterScan(transferId: string): Promise<void> {
@@ -106,6 +107,7 @@ export class TransfersService {
 
   async create(user: AuthenticatedUser, dto: CreateTransferDto) {
     await this.settingsService.assertFeatureEnabled('features.transfers');
+    await assertTransferCreationAllowed(this.settingsService, dto.type, 'api');
     if (user.role === 'user') {
       throw new ForbiddenException('Users cannot create transfers');
     }
@@ -145,6 +147,8 @@ export class TransfersService {
       await this.assertEmployeeInScope(user, dto.toPersonId);
     }
     const draftNumber = `DRAFT-${Date.now()}`;
+    const documentWarehouseId = await this.resolveDocumentWarehouseForCreate(dto, equipment);
+    await this.assertWarehouseReadyForDocuments(documentWarehouseId);
     const created = await this.prisma.transfer.create({
       data: {
         equipmentId: dto.equipmentId,
@@ -156,6 +160,7 @@ export class TransfersService {
         signerId,
         fromWarehouseId: dto.fromWarehouseId ?? null,
         toWarehouseId: dto.toWarehouseId ?? null,
+        documentWarehouseId,
         createdByUserId: user.id,
         date: new Date(dto.date),
         reason: dto.reason,
@@ -174,6 +179,14 @@ export class TransfersService {
       await this.disposalCommissionsService.createApprovalForTransfer(created.id, resolved.cityId);
     }
     await this.notificationsService.notifyTransferPending(created.id);
+    const requireSignedPdf = await this.settingsService.getBooleanValue(
+      'transfer.require_signed_pdf_upload',
+      true,
+    );
+    if (requireSignedPdf) {
+      await this.notificationsService.notifyTransferSignedUploadPending(created.id);
+    }
+    await this.transferDocumentGeneration.generateForTransfer(created.id).catch(() => undefined);
     return this.getTransferOrThrow(created.id);
   }
 
@@ -246,13 +259,22 @@ export class TransfersService {
     const signDate = dto.date ? new Date(dto.date) : transfer.date;
     const year = signDate.getFullYear();
     const isRashod = transfer.type === 'rashodovanje';
-    const documentNumber = await this.generateDocumentNumber(year, isRashod);
+    const documentWarehouseId =
+      transfer.documentWarehouseId ??
+      (await this.resolveDocumentWarehouseForTransfer(transfer));
+    await this.assertWarehouseReadyForDocuments(documentWarehouseId);
     const equipmentUpdate = buildEquipmentUpdateOnFinalize(
       transfer.type,
       transfer.toPersonId,
       transfer.toWarehouseId,
     );
     const signed = await this.prisma.$transaction(async (tx) => {
+      const documentNumber = await allocateTransferDocumentNumberInTx(
+        tx,
+        documentWarehouseId,
+        year,
+        isRashod,
+      );
       const updated = await tx.transfer.update({
         where: { id },
         data: {
@@ -260,6 +282,7 @@ export class TransfersService {
           signerId,
           date: signDate,
           documentNumber,
+          documentWarehouseId,
           finalizedByUserId: user.id,
         },
         include: transferInclude,
@@ -270,6 +293,7 @@ export class TransfersService {
       });
       return updated;
     });
+    await this.transferDocumentGeneration.generateForTransfer(signed.id).catch(() => undefined);
     await this.notificationsService.notifyTransferSigned(signed.id);
     return signed;
   }
@@ -288,14 +312,17 @@ export class TransfersService {
     if (user.role === 'admin' && allowWithoutUpload) {
       return;
     }
-    const requireUploadBeforeSign = await this.settingsService.getBooleanValue(
+    const requireSignedPdf = await this.settingsService.getBooleanValue(
+      'transfer.require_signed_pdf_upload',
+      true,
+    );
+    const legacyRequireUpload = await this.settingsService.getBooleanValue(
       'transfer.require_upload_before_sign',
       false,
     );
-    if (requireUploadBeforeSign) {
-      throw new BadRequestException('Upload signed document is required before finalizing');
+    if (requireSignedPdf || legacyRequireUpload) {
+      throw new BadRequestException('Upload potpisane prenosnice (PDF) prije finalizacije');
     }
-    throw new BadRequestException('Upload signed document before finalizing transfer');
   }
 
   private async resolveSignerForCreate(dto: CreateTransferDto): Promise<string> {
@@ -404,17 +431,56 @@ export class TransfersService {
     return true;
   }
 
-  private async generateDocumentNumber(year: number, isRashod: boolean): Promise<string> {
-    const existing = await this.prisma.transfer.findMany({
-      where: { documentNumber: { contains: String(year) } },
-      select: { documentNumber: true },
+  private async resolveDocumentWarehouseForCreate(
+    dto: CreateTransferDto,
+    equipment: { warehouseId: string | null },
+  ): Promise<string> {
+    let resolvedHolderWarehouseId: string | null = null;
+    if (dto.type === 'prenos' && dto.fromPersonId) {
+      resolvedHolderWarehouseId = await this.warehouseResolutionService.resolveForEmployee(
+        dto.fromPersonId,
+      );
+    }
+    return resolveDocumentWarehouseId({
+      type: dto.type,
+      fromWarehouseId: dto.fromWarehouseId ?? null,
+      toWarehouseId: dto.toWarehouseId ?? null,
+      equipmentWarehouseId: equipment.warehouseId,
+      resolvedHolderWarehouseId,
     });
-    const sequence = countYearlySequences(
-      existing.map((row) => row.documentNumber),
-      year,
-      isRashod,
-    );
-    return buildDocumentNumber(year, sequence + 1, isRashod);
+  }
+
+  private async resolveDocumentWarehouseForTransfer(
+    transfer: Awaited<ReturnType<typeof this.getTransferOrThrow>>,
+  ): Promise<string> {
+    let resolvedHolderWarehouseId: string | null = null;
+    if (transfer.type === 'prenos' && transfer.fromPersonId) {
+      resolvedHolderWarehouseId = await this.warehouseResolutionService.resolveForEmployee(
+        transfer.fromPersonId,
+      );
+    }
+    return resolveDocumentWarehouseId({
+      type: transfer.type,
+      fromWarehouseId: transfer.fromWarehouseId,
+      toWarehouseId: transfer.toWarehouseId,
+      equipmentWarehouseId: transfer.equipment.warehouseId,
+      resolvedHolderWarehouseId,
+    });
+  }
+
+  private async assertWarehouseReadyForDocuments(warehouseId: string): Promise<void> {
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { orgUnitId: true, isActive: true },
+    });
+    if (!warehouse?.isActive) {
+      throw new BadRequestException('Skladište nije pronađeno ili nije aktivno');
+    }
+    if (!warehouse.orgUnitId) {
+      throw new BadRequestException(
+        'Skladište mora imati dodijeljenu org. jedinicu prije generisanja prenosnice',
+      );
+    }
   }
 
   private async canAccessTransfer(

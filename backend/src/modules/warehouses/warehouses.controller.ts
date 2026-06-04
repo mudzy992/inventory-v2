@@ -1,4 +1,17 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+  StreamableFile,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '../../../generated/prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -7,12 +20,16 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
+import { WarehouseTransferTemplateService } from './warehouse-transfer-template.service';
 import { WarehousesService } from './warehouses.service';
 
 @Controller('warehouses')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class WarehousesController {
-  constructor(private readonly warehousesService: WarehousesService) {}
+  constructor(
+    private readonly warehousesService: WarehousesService,
+    private readonly transferTemplateService: WarehouseTransferTemplateService,
+  ) {}
 
   @Get()
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
@@ -65,5 +82,44 @@ export class WarehousesController {
     @Param('equipmentId') equipmentId: string,
   ) {
     return this.warehousesService.destroyEquipment(user, id, equipmentId);
+  }
+
+  @Get(':id/transfer-templates')
+  @Roles(UserRole.admin)
+  listTransferTemplates(@Param('id') id: string) {
+    return this.transferTemplateService.listTemplates(id);
+  }
+
+  @Get(':id/transfer-template/active')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  getActiveTransferTemplate(@Param('id') id: string) {
+    return this.transferTemplateService.getActiveTemplate(id);
+  }
+
+  @Post(':id/transfer-template')
+  @Roles(UserRole.admin)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadTransferTemplate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('label') label?: string,
+  ) {
+    return this.transferTemplateService.uploadTemplate(user, id, file, label ?? '');
+  }
+
+  @Patch(':id/transfer-template/:templateId/activate')
+  @Roles(UserRole.admin)
+  activateTransferTemplate(@Param('id') id: string, @Param('templateId') templateId: string) {
+    return this.transferTemplateService.activateTemplate(id, templateId);
+  }
+
+  @Get(':id/transfer-template/:templateId/download')
+  @Roles(UserRole.admin)
+  downloadTransferTemplate(
+    @Param('id') id: string,
+    @Param('templateId') templateId: string,
+  ): Promise<StreamableFile> {
+    return this.transferTemplateService.downloadTemplate(id, templateId);
   }
 }
