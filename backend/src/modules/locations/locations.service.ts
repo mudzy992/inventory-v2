@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateCantonDto } from './dto/create-canton.dto';
 import { CreateCityDto } from './dto/create-city.dto';
 import { UpdateCantonDto } from './dto/update-canton.dto';
@@ -11,7 +12,10 @@ import { UpdateCityDto } from './dto/update-city.dto';
 
 @Injectable()
 export class LocationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async findCantons() {
     return this.prisma.canton.findMany({
@@ -21,6 +25,7 @@ export class LocationsService {
   }
 
   async createCanton(dto: CreateCantonDto) {
+    await this.settingsService.assertFeatureEnabled('features.locations');
     return this.prisma.canton.create({
       data: { name: dto.name, code: dto.code },
       include: { cities: true },
@@ -28,6 +33,7 @@ export class LocationsService {
   }
 
   async updateCanton(id: string, dto: UpdateCantonDto) {
+    await this.settingsService.assertFeatureEnabled('features.locations');
     await this.assertCantonExists(id);
     return this.prisma.canton.update({
       where: { id },
@@ -49,6 +55,7 @@ export class LocationsService {
   }
 
   async createCity(dto: CreateCityDto) {
+    await this.settingsService.assertFeatureEnabled('features.locations');
     const canton = await this.prisma.canton.findUnique({ where: { id: dto.cantonId } });
     if (!canton) {
       throw new NotFoundException('Canton not found');
@@ -67,6 +74,7 @@ export class LocationsService {
   }
 
   async updateCity(id: string, dto: UpdateCityDto) {
+    await this.settingsService.assertFeatureEnabled('features.locations');
     await this.assertCityExists(id);
     if (dto.cantonId) {
       const canton = await this.prisma.canton.findUnique({ where: { id: dto.cantonId } });

@@ -9,6 +9,7 @@ import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { TransfersService } from '../transfers/transfers.service';
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -24,6 +25,7 @@ export class UploadsService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly transfersService: TransfersService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async uploadTransferDocument(
@@ -37,7 +39,8 @@ export class UploadsService {
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
       throw new BadRequestException('Unsupported file type');
     }
-    const maxMb = Number(this.configService.get<string>('MAX_UPLOAD_MB', '10'));
+    const envMaxMb = Number(this.configService.get<string>('MAX_UPLOAD_MB', '10'));
+    const maxMb = await this.settingsService.getNumberValue('upload.max_mb', envMaxMb);
     const maxBytes = maxMb * 1024 * 1024;
     if (file.size > maxBytes) {
       throw new BadRequestException(`File exceeds ${maxMb} MB limit`);

@@ -2,23 +2,76 @@
 
 ## Registry (source: `backend/src/modules/settings/settings.registry.ts`)
 
-| Key | Tip | Scope | Opis |
-|-----|-----|-------|------|
-| `app.name` | string | public | Prikazano ime |
-| `app.subtitle` | string | public | Sub-naslov |
-| `app.initialized` | boolean | private | Setup wizard završen |
-| `features.qr_scanner` | boolean | public | QR modul |
-| `features.cross_service_transfer` | boolean | private | Admin cross-service prenosi |
-| `transfer.allow_finalize_without_upload` | boolean | private | Finalizacija bez uploada |
-| `upload.max_mb` | number | private | Limit uploada (MB) |
-| `notifications.enabled` | boolean | public | In-app notifikacije |
-| `company.name` | string | public | Naziv preduzeća (štampa) |
-| `company.address` | string | public | Adresa |
-| `company.city` | string | public | Grad |
-| `company.postalCode` | string | public | Poštanski broj |
-| `company.phone` | string | public | Telefon |
-| `company.email` | string | public | Email |
-| `company.taxId` | string | public | JIB/ID |
+### Branding & company (tab: Opšte)
+
+| Key | Tip | Scope | Admin UI | Opis |
+|-----|-----|-------|----------|------|
+| `app.name` | string | public | da | Naziv aplikacije (sidebar, login) |
+| `app.subtitle` | string | public | da | Podnaslov aplikacije |
+| `company.name` | string | public | da | Naziv preduzeća (štampa) |
+| `company.address` | string | public | da | Adresa |
+| `company.city` | string | public | da | Grad |
+| `company.postalCode` | string | public | da | Poštanski broj |
+| `company.phone` | string | public | da | Telefon |
+| `company.email` | string | public | da | Email |
+| `company.taxId` | string | public | da | JIB/ID |
+
+### Moduli (tab: Moduli) — `features.*`
+
+| Key | Default | Nav / stranica |
+|-----|---------|----------------|
+| `features.dashboard` | true | `dashboard` |
+| `features.organization` | true | `organization` |
+| `features.locations` | true | `locations` |
+| `features.categories` | true | `categories` |
+| `features.user_management` | true | `user-management` |
+| `features.employees` | true | `employees` |
+| `features.warehouses` | true | `warehouses` |
+| `features.registrar_stock` | true | `registrar-stock` |
+| `features.warehouse_inventory` | true | `warehouse-inventory` |
+| `features.equipment` | true | `equipment`, `equipment-by-category` |
+| `features.equipment_labels` | true | UI naljepnica na opremi |
+| `features.transfers` | true | `transfers` |
+| `features.documents` | true | `documents` |
+| `features.disposal_commissions` | true | `disposal-commissions` |
+| `features.inventory_count` | true | `inventory-count` |
+| `features.my_equipment` | true | `my-equipment` |
+| `features.qr_scanner` | true | `qr-scanner` |
+| `features.public_equipment_lookup` | true | Javni QR pregled |
+
+### Prenosi (tab: Prenosi)
+
+| Key | Tip | Scope | Default |
+|-----|-----|-------|---------|
+| `features.cross_service_transfer` | boolean | private | true |
+| `transfer.allow_finalize_without_upload` | boolean | private | false |
+| `transfer.allow_evidenticar_cross_city` | boolean | private | false |
+| `transfer.require_upload_before_sign` | boolean | private | false |
+
+### Upload (tab: Upload)
+
+| Key | Tip | Scope | Default |
+|-----|-----|-------|---------|
+| `upload.max_mb` | number | private | 10 |
+
+### Notifikacije (tab: Notifikacije)
+
+| Key | Tip | Scope | Default |
+|-----|-----|-------|---------|
+| `notifications.enabled` | boolean | public | true |
+| `notifications.realtime` | boolean | public | true |
+
+### Sistem
+
+| Key | Tip | Scope | Admin UI |
+|-----|-----|-------|----------|
+| `app.initialized` | boolean | private | ne (setup wizard) |
+
+## Admin UI
+
+- Stranica: **Postavke** (`settings`), samo admin.
+- Tabovi: `frontend/src/constants/settings-ui-tabs.ts` — Opšte, Moduli, Prenosi, Upload, Notifikacije.
+- Polje: `label` + `description` (ne prikazivati raw `key`).
 
 ## API
 
@@ -26,12 +79,45 @@
 |----------|------|------|
 | `GET /backend/settings/public` | — | Javne postavke |
 | `GET /backend/settings/private` | admin | Privatne postavke |
-| `PATCH /backend/settings/:key` | admin | Ažuriranje vrijednosti |
+| `PATCH /backend/settings/:key` | admin | Ažuriranje (`adminEditable` only) |
 
 Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertValues`.
+
+## Enforcement (backend)
+
+| Ključ | Modul / servis |
+|-------|----------------|
+| `upload.max_mb` | `UploadsService` |
+| `features.transfers` + transfer.* | `TransfersService` |
+| `features.disposal_commissions` | `DisposalCommissionsService` |
+| `features.inventory_count` | `InventoryCountService` |
+| `features.public_equipment_lookup` | `PublicEquipmentService` |
+| `notifications.enabled` | `NotificationsService` |
+| `features.organization` | `OrgUnitsService` |
+| `features.locations` | `LocationsService` |
+| `features.categories` | `CategoriesService` |
+| `features.employees` | `EmployeesService` |
+| `features.equipment` | `EquipmentService` |
+| `features.user_management` | `UsersService` |
+| `features.warehouses` | `WarehousesService` |
+| `features.registrar_stock` | `WarehouseStockService` (receive/issue) |
+
+## Enforcement (frontend)
+
+| Mekanizam | Fajl |
+|-----------|------|
+| Nav gating | `Layout.tsx` + `showNavPage` / `SidebarNavButton` |
+| Stranica blokirana | `layout-nav-gate.tsx`, `module-disabled-state.tsx` |
+| Mapiranje stranica | `page-feature-settings.util.ts` |
+| Public cache + socket patch | `public-settings-context.tsx`, `SocketContext` |
+| Admin cache | `admin-settings-context.tsx` |
+| `notifications.realtime` | `SocketContext` — bez socket-a, polling ostaje |
 
 ## Pravila
 
 - Nepoznat `key` → 404.
-- Vrijednosti se čuvaju kao string u DB; parsiranje prema `valueType`.
-- Na startu aplikacije `ensureDefaults()` kreira nedostajuće ključeve iz registry-ja.
+- `adminEditable: false` → PATCH odbijen.
+- Vrijednosti u DB kao string; parsiranje prema `valueType`.
+- `ensureDefaults()` na startu kreira nedostajuće ključeve.
+- Public promjena emituje `settings.updated` (Socket.IO kad je realtime uključen).
+- **Novi modul**: vidi `.cursor/rules/settings-registry.mdc`.

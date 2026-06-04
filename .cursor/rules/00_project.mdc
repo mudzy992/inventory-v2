@@ -12,5 +12,6 @@ alwaysApply: true
 - Deploy: `inventory-v2.ba101.top`, API prefix `/backend`, Traefik `web` + `websecure` + `le`.
 - Plan: `.cursor/plans/inventory-v2/` — plan-first for multi-phase work.
 - Matrices: `.cursor/docs/matrices/*/MATRIX.md` — update on logic changes.
+- Settings: novi modul/feature ⇒ registry + enforcement + matrica (vidi `settings-registry.mdc`).
 - Secrets: never commit `.env`; user fills DATABASE_* and JWT_SECRET.
-- Realtime: Socket.IO required for notifications (phase 5).
+- Realtime: Socket.IO za notifikacije/postavke; `notifications.realtime` isključuje socket (polling ostaje).

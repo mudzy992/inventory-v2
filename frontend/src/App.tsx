@@ -22,7 +22,12 @@ import { DisposalCommissionsPage } from './components/DisposalCommissionsPage';
 import { InventoryCountPage } from './components/InventoryCountPage';
 import { RegistrarStockPage } from './components/registrar-stock/registrar-stock-page';
 import { WarehouseInventoryPage } from './components/inventory-count/warehouse-inventory-page';
-import { resetToDemo, isAdmin, isEvidenticar, isSkladistar } from './store';
+import { SettingsPage } from './components/settings/settings-page';
+import { isAdmin, isEvidenticar, isSkladistar } from './store';
+import { usePublicSettings } from './contexts/public-settings-context';
+import { useAdminSettings } from './contexts/admin-settings-context';
+import { LayoutNavGate } from './components/layout-nav-gate';
+import { isNavPageEnabled } from './utils/settings-feature.util';
 import { useAuth } from './contexts/AuthContext';
 import { useData } from './contexts/DataContext';
 
@@ -32,6 +37,7 @@ const ADMIN_ONLY_PAGES: PageId[] = [
   'categories',
   'user-management',
   'disposal-commissions',
+  'settings',
 ];
 
 const ADMIN_OR_EVIDENTICAR_INVENTORY_PAGES: PageId[] = ['inventory-count'];
@@ -60,6 +66,8 @@ export default function App() {
 function AppMain() {
   const { isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const { isLoading: dataLoading, error: dataError } = useData();
+  const { settings: publicSettings } = usePublicSettings();
+  const { settings: adminSettings } = useAdminSettings();
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const [setupJustFinished, setSetupJustFinished] = useState(false);
@@ -92,7 +100,16 @@ function AppMain() {
         setCurrentPage('my-equipment');
       }
     }
-  }, [isAuthenticated, currentPage]);
+    if (!isNavPageEnabled(currentPage, publicSettings, adminSettings)) {
+      if (admin || evidenticar) {
+        setCurrentPage('dashboard');
+      } else if (skladistar) {
+        setCurrentPage('warehouses');
+      } else {
+        setCurrentPage('my-equipment');
+      }
+    }
+  }, [isAuthenticated, currentPage, publicSettings, adminSettings]);
 
   const handleLoginSuccess = () => {
     if (isAdmin() || isEvidenticar()) {
@@ -107,19 +124,6 @@ function AppMain() {
   const handleLogout = async () => {
     await logout();
     setCurrentPage('dashboard');
-  };
-
-  const handleReset = () => {
-    if (!import.meta.env.DEV) {
-      return;
-    }
-    if (
-      confirm(
-        'Da li ste sigurni da želite resetovati na demo primjer? (samo lokalni dev fallback)',
-      )
-    ) {
-      resetToDemo();
-    }
   };
 
   const handleNavigate = (page: PageId) => {
@@ -138,6 +142,9 @@ function AppMain() {
     }
     if (!admin && !evidenticar && !skladistar && ADMIN_OR_EVIDENTICAR_PAGES.includes(page)) {
       setCurrentPage('my-equipment');
+      return;
+    }
+    if (!isNavPageEnabled(page, publicSettings, adminSettings)) {
       return;
     }
     setCurrentPage(page);
@@ -200,38 +207,94 @@ function AppMain() {
     <Layout
       currentPage={currentPage}
       onNavigate={handleNavigate}
-      onReset={handleReset}
       onLogout={() => void handleLogout()}
     >
-      {admin && currentPage === 'organization' && <OrganizationPage />}
-      {admin && currentPage === 'locations' && <LocationsPage />}
+      {admin && currentPage === 'organization' && (
+        <LayoutNavGate pageId="organization">
+          <OrganizationPage />
+        </LayoutNavGate>
+      )}
+      {admin && currentPage === 'locations' && (
+        <LayoutNavGate pageId="locations">
+          <LocationsPage />
+        </LayoutNavGate>
+      )}
       {(admin || skladistar) && currentPage === 'warehouses' && (
-        <WarehousesPage onNavigate={handleNavigate} />
+        <LayoutNavGate pageId="warehouses">
+          <WarehousesPage onNavigate={handleNavigate} />
+        </LayoutNavGate>
       )}
-      {admin && currentPage === 'categories' && <CategoriesPage />}
-      {admin && currentPage === 'user-management' && <UserManagementPage />}
-      {admin && currentPage === 'disposal-commissions' && <DisposalCommissionsPage />}
-      {(admin || evidenticar) && currentPage === 'inventory-count' && <InventoryCountPage />}
-      {(admin || evidenticar) && currentPage === 'registrar-stock' && <RegistrarStockPage />}
-      {skladistar && !admin && currentPage === 'warehouse-inventory' && <WarehouseInventoryPage />}
-
+      {admin && currentPage === 'categories' && (
+        <LayoutNavGate pageId="categories">
+          <CategoriesPage />
+        </LayoutNavGate>
+      )}
+      {admin && currentPage === 'user-management' && (
+        <LayoutNavGate pageId="user-management">
+          <UserManagementPage />
+        </LayoutNavGate>
+      )}
+      {admin && currentPage === 'settings' && <SettingsPage />}
+      {admin && currentPage === 'disposal-commissions' && (
+        <LayoutNavGate pageId="disposal-commissions">
+          <DisposalCommissionsPage />
+        </LayoutNavGate>
+      )}
+      {(admin || evidenticar) && currentPage === 'inventory-count' && (
+        <LayoutNavGate pageId="inventory-count">
+          <InventoryCountPage />
+        </LayoutNavGate>
+      )}
+      {(admin || evidenticar) && currentPage === 'registrar-stock' && (
+        <LayoutNavGate pageId="registrar-stock">
+          <RegistrarStockPage />
+        </LayoutNavGate>
+      )}
+      {skladistar && !admin && currentPage === 'warehouse-inventory' && (
+        <LayoutNavGate pageId="warehouse-inventory">
+          <WarehouseInventoryPage />
+        </LayoutNavGate>
+      )}
       {(admin || evidenticar) && currentPage === 'dashboard' && (
-        <Dashboard onNavigate={handleNavigate} />
+        <LayoutNavGate pageId="dashboard">
+          <Dashboard onNavigate={handleNavigate} />
+        </LayoutNavGate>
       )}
-      {(admin || evidenticar) && currentPage === 'employees' && <EmployeesPage />}
+      {(admin || evidenticar) && currentPage === 'employees' && (
+        <LayoutNavGate pageId="employees">
+          <EmployeesPage />
+        </LayoutNavGate>
+      )}
       {(admin || evidenticar) && currentPage === 'equipment' && (
-        <EquipmentPage onNavigate={handleNavigate} />
+        <LayoutNavGate pageId="equipment">
+          <EquipmentPage onNavigate={handleNavigate} />
+        </LayoutNavGate>
       )}
       {(admin || evidenticar) && currentPage === 'equipment-by-category' && (
-        <EquipmentByCategoryPage />
+        <LayoutNavGate pageId="equipment-by-category">
+          <EquipmentByCategoryPage />
+        </LayoutNavGate>
       )}
       {(admin || evidenticar) && currentPage === 'transfers' && (
-        <TransfersPage onNavigate={handleNavigate} />
+        <LayoutNavGate pageId="transfers">
+          <TransfersPage onNavigate={handleNavigate} />
+        </LayoutNavGate>
       )}
-      {(admin || evidenticar) && currentPage === 'documents' && <DocumentsPage />}
-
-      {currentPage === 'my-equipment' && <MyEquipmentPage />}
-      {currentPage === 'qr-scanner' && <QRScannerPage />}
+      {(admin || evidenticar) && currentPage === 'documents' && (
+        <LayoutNavGate pageId="documents">
+          <DocumentsPage />
+        </LayoutNavGate>
+      )}
+      {currentPage === 'my-equipment' && (
+        <LayoutNavGate pageId="my-equipment">
+          <MyEquipmentPage />
+        </LayoutNavGate>
+      )}
+      {currentPage === 'qr-scanner' && (
+        <LayoutNavGate pageId="qr-scanner">
+          <QRScannerPage />
+        </LayoutNavGate>
+      )}
     </Layout>
   );
 }

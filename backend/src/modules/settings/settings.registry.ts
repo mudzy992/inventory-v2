@@ -1,120 +1,352 @@
 import type { SettingScope, SettingValueType } from '../../../generated/prisma/client';
 
+export type SettingGroup =
+  | 'branding'
+  | 'company'
+  | 'modules'
+  | 'transfers'
+  | 'uploads'
+  | 'notifications';
+
 export interface SettingDefinition {
   key: string;
   scope: SettingScope;
   valueType: SettingValueType;
   defaultValue: string | number | boolean;
+  label: string;
   description: string;
+  group: SettingGroup;
+  adminEditable: boolean;
 }
 
+const def = (
+  entry: Omit<SettingDefinition, 'adminEditable'> & { adminEditable?: boolean },
+): SettingDefinition => ({
+  adminEditable: entry.adminEditable ?? true,
+  ...entry,
+});
+
 export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
-  {
+  def({
     key: 'app.name',
     scope: 'public',
     valueType: 'string',
     defaultValue: 'Inventory v2',
-    description: 'Prikazano ime aplikacije',
-  },
-  {
+    label: 'Naziv aplikacije',
+    description: 'Prikazuje se u sidebaru, na prijavi i u zaglavlju aplikacije.',
+    group: 'branding',
+  }),
+  def({
     key: 'app.subtitle',
     scope: 'public',
     valueType: 'string',
     defaultValue: 'Hijerarhijska evidencija i zaduženje opreme',
-    description: 'Sub-naslov na početnoj stranici',
-  },
-  {
-    key: 'features.qr_scanner',
-    scope: 'public',
-    valueType: 'boolean',
-    defaultValue: true,
-    description: 'Omogućava QR skener modul',
-  },
-  {
-    key: 'features.cross_service_transfer',
-    scope: 'private',
-    valueType: 'boolean',
-    defaultValue: true,
-    description: 'Admin cross-service prenosi opreme',
-  },
-  {
-    key: 'transfer.allow_finalize_without_upload',
-    scope: 'private',
-    valueType: 'boolean',
-    defaultValue: false,
-    description: 'Admin može finalizovati prenosnicu bez uploada potpisanog dokumenta',
-  },
-  {
-    key: 'upload.max_mb',
-    scope: 'private',
-    valueType: 'number',
-    defaultValue: 10,
-    description: 'Maksimalna veličina uploada u MB',
-  },
-  {
-    key: 'notifications.enabled',
-    scope: 'public',
-    valueType: 'boolean',
-    defaultValue: true,
-    description: 'In-app notifikacije',
-  },
-  {
+    label: 'Podnaslov aplikacije',
+    description: 'Kratki opis ispod naziva aplikacije na početnoj stranici i u meniju.',
+    group: 'branding',
+  }),
+  def({
     key: 'company.name',
     scope: 'public',
     valueType: 'string',
     defaultValue: '',
-    description: 'Naziv preduzeća (header štampanih dokumenata)',
-  },
-  {
+    label: 'Naziv preduzeća',
+    description: 'Koristi se u zaglavlju štampanih dokumenata i prenosnica.',
+    group: 'company',
+  }),
+  def({
     key: 'company.address',
     scope: 'public',
     valueType: 'string',
     defaultValue: '',
-    description: 'Adresa preduzeća',
-  },
-  {
+    label: 'Adresa',
+    description: 'Ulica i broj za štampu dokumenata.',
+    group: 'company',
+  }),
+  def({
     key: 'company.city',
     scope: 'public',
     valueType: 'string',
     defaultValue: '',
-    description: 'Grad preduzeća',
-  },
-  {
+    label: 'Grad',
+    description: 'Grad preduzeća na štampanim formularima.',
+    group: 'company',
+  }),
+  def({
     key: 'company.postalCode',
     scope: 'public',
     valueType: 'string',
     defaultValue: '',
-    description: 'Poštanski broj preduzeća',
-  },
-  {
+    label: 'Poštanski broj',
+    description: 'Poštanski broj preduzeća.',
+    group: 'company',
+  }),
+  def({
     key: 'company.phone',
     scope: 'public',
     valueType: 'string',
     defaultValue: '',
-    description: 'Telefon preduzeća',
-  },
-  {
+    label: 'Telefon',
+    description: 'Kontakt telefon preduzeća na dokumentima.',
+    group: 'company',
+  }),
+  def({
     key: 'company.email',
     scope: 'public',
     valueType: 'string',
     defaultValue: '',
-    description: 'Email preduzeća',
-  },
-  {
+    label: 'Email',
+    description: 'Kontakt email preduzeća na dokumentima.',
+    group: 'company',
+  }),
+  def({
     key: 'company.taxId',
     scope: 'public',
     valueType: 'string',
     defaultValue: '',
-    description: 'ID/JIB preduzeća',
-  },
-  {
+    label: 'JIB / ID broj',
+    description: 'Identifikacioni broj preduzeća (JIB) za štampu.',
+    group: 'company',
+  }),
+  def({
+    key: 'features.dashboard',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Kontrolna tabla',
+    description: 'Početna stranica za administratora i evidentičara.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.organization',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Organizacija',
+    description: 'Upravljanje org-jedinicama, hijerarhijom i potpisnicima.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.locations',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Lokacije',
+    description: 'Kantoni, gradovi i registar lokacija za org-jedinice.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.categories',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Kategorije opreme',
+    description: 'Definicija kategorija i polja specifikacije opreme.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.user_management',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Upravljanje korisnicima',
+    description: 'Kreiranje naloga, uloge i povezivanje sa radnicima.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.employees',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Radnici',
+    description: 'Evidencija zaposlenika i org-jedinica zaduženja.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.warehouses',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Skladišta',
+    description: 'Modul skladišta, zaliha i skladišnih operacija.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.registrar_stock',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Skladišna roba (registar)',
+    description: 'Evidencija robe na skladištu za evidentičara.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.warehouse_inventory',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Popis skladišta',
+    description: 'Inventura skladišnih zaliha za skladištara.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.equipment',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Oprema',
+    description: 'Lista opreme, kategorije po opremi i detalji / QR kartica.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.equipment_labels',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Štampa naljepnica',
+    description: 'Odabir opreme i štampa naljepnica sa inventarskim brojem.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.transfers',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Zaduženja i prenosi',
+    description: 'Kreiranje prenosnica, zaduženja, razduženja i rashod.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.documents',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Pregled prenosnica',
+    description: 'Stranica za pregled i štampu dokumenata prenosnica.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.disposal_commissions',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Komisija za rashod',
+    description: 'Formiranje komisija i odobravanje rashoda opreme.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.inventory_count',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Inventurni popis',
+    description: 'Godišnji popis, komiteti i zamrzavanje promjena tokom sesije.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.my_equipment',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Moja oprema',
+    description: 'Self-service pregled opreme zadužene na ulogovanog korisnika.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.qr_scanner',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'QR skener',
+    description: 'Skeniranje i pretraga opreme putem QR / inventarskog broja.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.public_equipment_lookup',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Javni pregled opreme',
+    description: 'Javna stranica opreme putem QR linka bez prijave.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.cross_service_transfer',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Cross-service prenosi',
+    description: 'Administrator može prenose između različitih servisa u hijerarhiji.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.allow_finalize_without_upload',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: false,
+    label: 'Finalizacija bez uploada',
+    description: 'Administrator može potpisati prenosnicu bez skeniranog dokumenta.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.allow_evidenticar_cross_city',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: false,
+    label: 'Prenos između gradova (evidentičar)',
+    description: 'Evidentičar može prenos između radnika u različitim gradovima.',
+    group: 'transfers',
+  }),
+  def({
+    key: 'transfer.require_upload_before_sign',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: false,
+    label: 'Obavezan upload prije potpisa',
+    description: 'Prenosnica mora imati sken prije finalizacije (osim ako admin ima izuzetak).',
+    group: 'transfers',
+  }),
+  def({
+    key: 'upload.max_mb',
+    scope: 'private',
+    valueType: 'number',
+    defaultValue: 10,
+    label: 'Maksimalna veličina datoteke',
+    description: 'Gornja granica uploada potpisane prenosnice (megabajti).',
+    group: 'uploads',
+  }),
+  def({
+    key: 'notifications.enabled',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'In-app notifikacije',
+    description: 'Kreiranje i prikaz obavještenja (zvonce u zaglavlju).',
+    group: 'notifications',
+  }),
+  def({
+    key: 'notifications.realtime',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Realtime osvježavanje',
+    description: 'Socket.IO push za nove notifikacije; isključeno = samo polling.',
+    group: 'notifications',
+  }),
+  def({
     key: 'app.initialized',
     scope: 'private',
     valueType: 'boolean',
     defaultValue: false,
-    description: 'Aplikacija je inicijalizovana kroz setup wizard',
-  },
+    label: 'Aplikacija inicijalizovana',
+    description: 'Postavlja se automatski nakon setup wizarda.',
+    group: 'modules',
+    adminEditable: false,
+  }),
 ] as const;
 
 export const getSettingDefinition = (key: string): SettingDefinition | undefined =>
   SETTINGS_REGISTRY.find((entry) => entry.key === key);
+
+export const getAdminEditableDefinitions = (): SettingDefinition[] =>
+  SETTINGS_REGISTRY.filter((entry) => entry.adminEditable);

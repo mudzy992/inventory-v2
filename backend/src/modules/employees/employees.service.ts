@@ -4,6 +4,7 @@ import { LocationResolutionService } from '../../common/services/location-resolu
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -14,6 +15,7 @@ export class EmployeesService {
     private readonly prisma: PrismaService,
     private readonly registrarScope: RegistrarScopeService,
     private readonly locationResolutionService: LocationResolutionService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async findAll(user: AuthenticatedUser, query: ListEmployeesQueryDto): Promise<Employee[]> {
@@ -59,11 +61,13 @@ export class EmployeesService {
   }
 
   async create(dto: CreateEmployeeDto): Promise<Employee> {
+    await this.settingsService.assertFeatureEnabled('features.employees');
     await this.assertOrgUnitExists(dto.orgUnitId);
     return this.prisma.employee.create({ data: dto });
   }
 
   async update(id: string, dto: UpdateEmployeeDto): Promise<Employee> {
+    await this.settingsService.assertFeatureEnabled('features.employees');
     await this.findByIdOrThrow(id);
     if (dto.orgUnitId) {
       await this.assertOrgUnitExists(dto.orgUnitId);

@@ -1,10 +1,10 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module, OnModuleInit, forwardRef } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SettingsController } from './settings.controller';
 import { SettingsService } from './settings.service';
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [forwardRef(() => NotificationsModule)],
   controllers: [SettingsController],
   providers: [SettingsService],
   exports: [SettingsService],

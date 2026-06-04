@@ -3,6 +3,7 @@ import * as bcrypt from 'bcrypt';
 import type { User, UserRole } from '../../../generated/prisma/client';
 import type { RegistrarScopeAssignment } from '../../common/types/registrar-scope.type';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { assertUserAccessRules, normalizeRegistrarScopes } from './users-validation.util';
@@ -19,7 +20,10 @@ export interface UserListItem {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async findAll(): Promise<UserListItem[]> {
     const users = await this.prisma.user.findMany({
@@ -41,6 +45,7 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto): Promise<UserListItem> {
+    await this.settingsService.assertFeatureEnabled('features.user_management');
     const existing = await this.prisma.user.findUnique({ where: { username: dto.username } });
     if (existing) {
       throw new ConflictException('Username already exists');
@@ -76,6 +81,7 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<UserListItem> {
+    await this.settingsService.assertFeatureEnabled('features.user_management');
     const current = await this.prisma.user.findUnique({
       where: { id },
       include: { registrarAssignments: true },

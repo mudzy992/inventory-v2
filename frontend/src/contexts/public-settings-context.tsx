@@ -13,6 +13,9 @@ interface PublicSettingsContextValue {
   settings: Record<string, string | number | boolean>;
   isLoading: boolean;
   refresh: () => Promise<void>;
+  getBoolean: (key: string, fallback?: boolean) => boolean;
+  getString: (key: string, fallback?: string) => string;
+  patchLocal: (key: string, value: string | number | boolean) => void;
 }
 
 const PublicSettingsContext = createContext<PublicSettingsContextValue | null>(null);
@@ -33,13 +36,33 @@ export const PublicSettingsProvider = ({ children }: { children: ReactNode }) =>
     }
   }, []);
 
+  const getBoolean = useCallback(
+    (key: string, fallback = false): boolean => {
+      const value = settings[key];
+      return typeof value === 'boolean' ? value : fallback;
+    },
+    [settings],
+  );
+
+  const getString = useCallback(
+    (key: string, fallback = ''): string => {
+      const value = settings[key];
+      return typeof value === 'string' ? value : fallback;
+    },
+    [settings],
+  );
+
+  const patchLocal = useCallback((key: string, value: string | number | boolean) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ settings, isLoading, refresh }),
-    [settings, isLoading, refresh],
+    () => ({ settings, isLoading, refresh, getBoolean, getString, patchLocal }),
+    [settings, isLoading, refresh, getBoolean, getString, patchLocal],
   );
 
   return (

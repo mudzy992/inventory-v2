@@ -2,7 +2,12 @@ import { apiRequest } from './client';
 
 export interface PublicSettingDto {
   key: string;
+  scope?: 'public' | 'private';
+  valueType?: string;
   value: string | number | boolean;
+  description?: string;
+  group?: string;
+  adminEditable?: boolean;
 }
 
 export const fetchPublicSettingsApi = (): Promise<PublicSettingDto[]> =>

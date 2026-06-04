@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import {
   Building2, Users, Package, ArrowLeftRight, FolderTree,
-  FileText, LayoutDashboard, RotateCcw, ChevronLeft, ChevronRight,
+  FileText, LayoutDashboard, ChevronLeft, ChevronRight,
   LogOut, User, Shield, Briefcase, QrCode, List, Layers, ChevronDown, ClipboardList,
-  MapPin, Warehouse, Trash2, ClipboardCheck,
+  MapPin, Warehouse, Trash2, ClipboardCheck, Settings,
 } from 'lucide-react';
+import { usePublicSettings } from '../contexts/public-settings-context';
+import { isNavPageEnabled } from '../utils/settings-feature.util';
 import { cn } from '../utils/cn';
 import { getCurrentEmployee, isAdmin, isEvidenticar, isSkladistar, getUserRole } from '../store';
 import { useStore } from '../useStore';
@@ -12,6 +14,7 @@ import { getOrgUnitPath } from '../helpers';
 import { NotificationsPanel } from './NotificationsPanel';
 import { useInventoryFreezeBanner } from '../hooks/use-inventory-freeze-banner';
 import { InventoryFreezeBanner } from './inventory-count/inventory-freeze-banner';
+import { SidebarNavButton } from './sidebar-nav-button';
 
 export type PageId =
   | 'dashboard'
@@ -30,17 +33,17 @@ export type PageId =
   | 'warehouse-inventory'
   | 'my-equipment'
   | 'qr-scanner'
-  | 'user-management';
+  | 'user-management'
+  | 'settings';
 
 interface LayoutProps {
   currentPage: PageId;
   onNavigate: (page: PageId) => void;
-  onReset: () => void;
   onLogout: () => void;
   children: React.ReactNode;
 }
 
-export function Layout({ currentPage, onNavigate, onReset, onLogout, children }: LayoutProps) {
+export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(true);
@@ -53,6 +56,11 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
   const role = getUserRole();
   const orgUnit = currentEmployee ? state.orgUnits.find(o => o.id === currentEmployee.orgUnitId) : null;
   const { sessions: freezeSessions } = useInventoryFreezeBanner(Boolean(currentEmployee));
+  const { settings: publicSettings, getString: getPublicString } = usePublicSettings();
+  const appName = getPublicString('app.name', 'Inventar');
+  const appSubtitle = getPublicString('app.subtitle', 'Upravljanje opremom');
+  const showNavPage = (pageId: PageId): boolean =>
+    isNavPageEnabled(pageId, publicSettings, publicSettings);
 
   const handleLogout = () => {
     onLogout();
@@ -89,8 +97,8 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <h1 className="font-bold text-sm leading-tight">Inventar</h1>
-              <p className="text-xs text-slate-400 leading-tight">Upravljanje opremom</p>
+              <h1 className="font-bold text-sm leading-tight truncate">{appName}</h1>
+              <p className="text-xs text-slate-400 leading-tight truncate">{appSubtitle}</p>
             </div>
           )}
         </div>
@@ -121,96 +129,16 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
           {admin && (
             <>
               {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mb-2">Administracija</p>}
-              <button
-                onClick={() => onNavigate('dashboard')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                )}
-              >
-                <LayoutDashboard size={20} />
-                {!collapsed && <span>Kontrolna tabla</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('organization')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'organization' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                )}
-              >
-                <Building2 size={20} />
-                {!collapsed && <span>Organizacija</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('locations')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'locations' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-                )}
-              >
-                <MapPin size={20} />
-                {!collapsed && <span>Lokacije</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('warehouses')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'warehouses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-                )}
-              >
-                <Warehouse size={20} />
-                {!collapsed && <span>Skladišta</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('employees')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'employees' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                )}
-              >
-                <Users size={20} />
-                {!collapsed && <span>Radnici</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('categories')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'categories' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                )}
-              >
-                <FolderTree size={20} />
-                {!collapsed && <span>Kategorije</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('disposal-commissions')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'disposal-commissions' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-                )}
-              >
-                <Trash2 size={20} />
-                {!collapsed && <span>Komisija rashod</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('inventory-count')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'inventory-count' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-                )}
-              >
-                <ClipboardCheck size={20} />
-                {!collapsed && <span>Popis</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('user-management')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'user-management' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                )}
-              >
-                <ClipboardList size={20} />
-                {!collapsed && <span>Korisnici</span>}
-              </button>
+              <SidebarNavButton pageId="dashboard" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Kontrolna tabla" icon={LayoutDashboard} visible={showNavPage('dashboard')} />
+              <SidebarNavButton pageId="organization" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Organizacija" icon={Building2} visible={showNavPage('organization')} />
+              <SidebarNavButton pageId="locations" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Lokacije" icon={MapPin} visible={showNavPage('locations')} />
+              <SidebarNavButton pageId="warehouses" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Skladišta" icon={Warehouse} visible={showNavPage('warehouses')} />
+              <SidebarNavButton pageId="employees" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Radnici" icon={Users} visible={showNavPage('employees')} />
+              <SidebarNavButton pageId="categories" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Kategorije" icon={FolderTree} visible={showNavPage('categories')} />
+              <SidebarNavButton pageId="disposal-commissions" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Komisija rashod" icon={Trash2} visible={showNavPage('disposal-commissions')} />
+              <SidebarNavButton pageId="inventory-count" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Popis" icon={ClipboardCheck} visible={showNavPage('inventory-count')} />
+              <SidebarNavButton pageId="user-management" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Korisnici" icon={ClipboardList} visible={showNavPage('user-management')} />
+              <SidebarNavButton pageId="settings" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Postavke" icon={Settings} visible={true} />
             </>
           )}
 
@@ -218,177 +146,84 @@ export function Layout({ currentPage, onNavigate, onReset, onLogout, children }:
           {evidenticar && !admin && (
             <>
               {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mb-2">Evidencija</p>}
-              <button
-                onClick={() => onNavigate('dashboard')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                )}
-              >
-                <LayoutDashboard size={20} />
-                {!collapsed && <span>Kontrolna tabla</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('registrar-stock')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'registrar-stock' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-                )}
-              >
-                <Package size={20} />
-                {!collapsed && <span>Skladišna roba</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('employees')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'employees' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                )}
-              >
-                <Users size={20} />
-                {!collapsed && <span>Radnici</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('inventory-count')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'inventory-count' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-                )}
-              >
-                <ClipboardCheck size={20} />
-                {!collapsed && <span>Popis</span>}
-              </button>
+              <SidebarNavButton pageId="dashboard" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Kontrolna tabla" icon={LayoutDashboard} visible={showNavPage('dashboard')} />
+              <SidebarNavButton pageId="registrar-stock" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Skladišna roba" icon={Package} visible={showNavPage('registrar-stock')} />
+              <SidebarNavButton pageId="employees" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Radnici" icon={Users} visible={showNavPage('employees')} />
+              <SidebarNavButton pageId="inventory-count" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Popis" icon={ClipboardCheck} visible={showNavPage('inventory-count')} />
             </>
           )}
 
           {skladistar && !admin && (
             <>
               {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mb-2">Skladište</p>}
-              <button
-                onClick={() => onNavigate('warehouses')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'warehouses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-                )}
-              >
-                <Package size={20} />
-                {!collapsed && <span>Moja skladišta</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('warehouse-inventory')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'warehouse-inventory' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-                )}
-              >
-                <ClipboardCheck size={20} />
-                {!collapsed && <span>Popis skladišta</span>}
-              </button>
+              <SidebarNavButton pageId="warehouses" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Moja skladišta" icon={Package} visible={showNavPage('warehouses')} />
+              <SidebarNavButton pageId="warehouse-inventory" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Popis skladišta" icon={ClipboardCheck} visible={showNavPage('warehouse-inventory')} />
             </>
           )}
 
-          {/* Equipment submenu - for admin and evidenticar */}
-          {(admin || evidenticar) && (
+          {(admin || evidenticar) &&
+            (showNavPage('equipment') || showNavPage('transfers') || showNavPage('documents')) && (
             <>
               {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mt-4 mb-2">Oprema</p>}
-              <button
-                onClick={() => !collapsed && setEquipmentMenuOpen(!equipmentMenuOpen)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
-              >
-                <Package size={20} />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-left">Oprema</span>
-                    <ChevronDown size={14} className={cn('transition-transform', equipmentMenuOpen && 'rotate-180')} />
-                  </>
-                )}
-              </button>
-              {(equipmentMenuOpen || collapsed) && (
-                <div className={cn(!collapsed && 'ml-4 border-l border-slate-700')}>
+              {showNavPage('equipment') && (
+                <>
                   <button
-                    onClick={() => onNavigate('equipment')}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors',
-                      currentPage === 'equipment' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                    )}
-                    title={collapsed ? 'Sva oprema' : undefined}
+                    type="button"
+                    onClick={() => !collapsed && setEquipmentMenuOpen(!equipmentMenuOpen)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
                   >
-                    <List size={16} />
-                    {!collapsed && <span>Sva oprema</span>}
-                  </button>
-                  <button
-                    onClick={() => onNavigate('equipment-by-category')}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors',
-                      currentPage === 'equipment-by-category' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    <Package size={20} />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 text-left">Oprema</span>
+                        <ChevronDown size={14} className={cn('transition-transform', equipmentMenuOpen && 'rotate-180')} />
+                      </>
                     )}
-                    title={collapsed ? 'Po kategorijama' : undefined}
-                  >
-                    <Layers size={16} />
-                    {!collapsed && <span>Po kategorijama</span>}
                   </button>
-                </div>
+                  {(equipmentMenuOpen || collapsed) && (
+                    <div className={cn(!collapsed && 'ml-4 border-l border-slate-700')}>
+                      <SidebarNavButton
+                        pageId="equipment"
+                        currentPage={currentPage}
+                        onNavigate={onNavigate}
+                        collapsed={collapsed}
+                        label="Sva oprema"
+                        icon={List}
+                        visible
+                        title="Sva oprema"
+                        className="py-2 text-slate-400 hover:text-white"
+                      />
+                      <SidebarNavButton
+                        pageId="equipment-by-category"
+                        currentPage={currentPage}
+                        onNavigate={onNavigate}
+                        collapsed={collapsed}
+                        label="Po kategorijama"
+                        icon={Layers}
+                        visible
+                        title="Po kategorijama"
+                        className="py-2 text-slate-400 hover:text-white"
+                      />
+                    </div>
+                  )}
+                </>
               )}
-
-              <button
-                onClick={() => onNavigate('transfers')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'transfers' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                )}
-              >
-                <ArrowLeftRight size={20} />
-                {!collapsed && <span>Zaduženja</span>}
-              </button>
-              <button
-                onClick={() => onNavigate('documents')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  currentPage === 'documents' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                )}
-              >
-                <FileText size={20} />
-                {!collapsed && <span>Prenosnice</span>}
-              </button>
+              <SidebarNavButton pageId="transfers" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Zaduženja" icon={ArrowLeftRight} visible={showNavPage('transfers')} />
+              <SidebarNavButton pageId="documents" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Prenosnice" icon={FileText} visible={showNavPage('documents')} />
             </>
           )}
 
-          {/* User section - for all */}
-          {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mt-4 mb-2">Moj profil</p>}
-          <button
-            onClick={() => onNavigate('my-equipment')}
-            className={cn(
-              'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-              currentPage === 'my-equipment' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-            )}
-          >
-            <Briefcase size={20} />
-            {!collapsed && <span>Moja oprema</span>}
-          </button>
-          <button
-            onClick={() => onNavigate('qr-scanner')}
-            className={cn(
-              'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-              currentPage === 'qr-scanner' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-            )}
-          >
-            <QrCode size={20} />
-            {!collapsed && <span>QR Skener</span>}
-          </button>
+          {(showNavPage('my-equipment') || showNavPage('qr-scanner')) && (
+            <>
+              {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mt-4 mb-2">Moj profil</p>}
+              <SidebarNavButton pageId="my-equipment" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Moja oprema" icon={Briefcase} visible={showNavPage('my-equipment')} />
+              <SidebarNavButton pageId="qr-scanner" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="QR Skener" icon={QrCode} visible={showNavPage('qr-scanner')} />
+            </>
+          )}
         </nav>
 
         {/* Footer actions */}
         <div className="border-t border-slate-700 p-2">
-          {admin && import.meta.env.DEV && (
-            <button
-              onClick={onReset}
-              className="w-full flex items-center gap-3 px-4 py-2 text-xs text-slate-400 hover:text-red-400 transition-colors"
-              title="Resetuj na demo podatke"
-            >
-              <RotateCcw size={16} />
-              {!collapsed && <span>Reset demo</span>}
-            </button>
-          )}
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-2 text-xs text-slate-400 hover:text-red-400 transition-colors"

@@ -18,6 +18,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { PrismaService } from '../../prisma/prisma.service';
 import { CategoriesService } from '../categories/categories.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService } from '../settings/settings.service';
 import { WarehousesService } from '../warehouses/warehouses.service';
 import { CreateStockLotDto } from './dto/create-stock-lot.dto';
 import { IssueStockLotDto } from './dto/issue-stock-lot.dto';
@@ -100,6 +101,7 @@ export class WarehouseStockService {
   }
 
   async receive(user: AuthenticatedUser, warehouseId: string, dto: CreateStockLotDto) {
+    await this.settingsService.assertFeatureEnabled('features.registrar_stock');
     if (user.role !== 'skladistar' && user.role !== 'admin') {
       throw new ForbiddenException('Only warehouse keeper can receive stock');
     }
@@ -172,6 +174,7 @@ export class WarehouseStockService {
   }
 
   async issueUnit(user: AuthenticatedUser, lotId: string, dto: IssueStockLotDto) {
+    await this.settingsService.assertFeatureEnabled('features.registrar_stock');
     if (user.role !== 'evidenticar' && user.role !== 'admin') {
       throw new ForbiddenException('Only registrar can issue stock');
     }

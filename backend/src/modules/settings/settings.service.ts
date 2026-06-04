@@ -1,21 +1,29 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import type { Setting, SettingScope } from '../../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { getSettingDefinition, SETTINGS_REGISTRY } from './settings.registry';
+import {
+  getSettingDefinition,
+  SETTINGS_REGISTRY,
+  type SettingGroup,
+} from './settings.registry';
 
 export interface SettingResponse {
   key: string;
   scope: SettingScope;
   valueType: string;
   value: string | number | boolean;
+  label: string;
   description: string;
+  group: SettingGroup;
+  adminEditable: boolean;
 }
 
 @Injectable()
 export class SettingsService {
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -44,6 +52,29 @@ export class SettingsService {
     }
     const parsed = this.parseValue(row.value, row.valueType);
     return parsed === true;
+  }
+
+  async getNumberValue(key: string, defaultValue: number): Promise<number> {
+    const row = await this.prisma.setting.findUnique({ where: { key } });
+    if (!row) {
+      return defaultValue;
+    }
+    const parsed = this.parseValue(row.value, row.valueType);
+    return typeof parsed === 'number' && !Number.isNaN(parsed) ? parsed : defaultValue;
+  }
+
+  async isFeatureEnabled(key: string, defaultValue = true): Promise<boolean> {
+    return this.getBooleanValue(key, defaultValue);
+  }
+
+  async assertFeatureEnabled(key: string, message?: string): Promise<void> {
+    const enabled = await this.isFeatureEnabled(key, true);
+    if (!enabled) {
+      const definition = getSettingDefinition(key);
+      throw new BadRequestException(
+        message ?? `Feature is disabled: ${definition?.label ?? key}`,
+      );
+    }
   }
 
   async findByScope(scope: SettingScope): Promise<SettingResponse[]> {
@@ -82,6 +113,9 @@ export class SettingsService {
     if (!definition) {
       throw new NotFoundException(`Unknown setting key: ${key}`);
     }
+    if (!definition.adminEditable) {
+      throw new BadRequestException(`Setting cannot be edited: ${key}`);
+    }
     const serialized = this.serializeValue(rawValue, definition.valueType);
     const row = await this.prisma.setting.update({
       where: { key },
@@ -95,12 +129,16 @@ export class SettingsService {
   }
 
   private toResponse(row: Setting): SettingResponse {
+    const definition = getSettingDefinition(row.key);
     return {
       key: row.key,
       scope: row.scope,
       valueType: row.valueType,
       value: this.parseValue(row.value, row.valueType),
-      description: row.description,
+      label: definition?.label ?? row.key,
+      description: definition?.description ?? row.description,
+      group: definition?.group ?? 'system',
+      adminEditable: definition?.adminEditable ?? false,
     };
   }
 

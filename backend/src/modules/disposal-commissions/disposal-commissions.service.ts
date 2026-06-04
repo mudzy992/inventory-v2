@@ -7,6 +7,7 @@ import {
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import type { DisposalCommissionMember, InventoryCommittee } from '../../../generated/prisma/client';
 
 interface MemberInput {
@@ -19,6 +20,7 @@ export class DisposalCommissionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly locationResolutionService: LocationResolutionService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async findAll(cityId?: string) {
@@ -33,6 +35,7 @@ export class DisposalCommissionsService {
   }
 
   async create(cityId: string, name: string, members: MemberInput[]) {
+    await this.settingsService.assertFeatureEnabled('features.disposal_commissions');
     const city = await this.prisma.city.findUnique({ where: { id: cityId } });
     if (!city) {
       throw new BadRequestException('City not found');
@@ -118,6 +121,7 @@ export class DisposalCommissionsService {
   }
 
   async vote(user: AuthenticatedUser, approvalId: string, approved: boolean, note?: string) {
+    await this.settingsService.assertFeatureEnabled('features.disposal_commissions');
     const approval = await this.prisma.disposalApproval.findUnique({
       where: { id: approvalId },
       include: {

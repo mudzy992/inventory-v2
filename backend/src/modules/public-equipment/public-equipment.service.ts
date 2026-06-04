@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import {
   buildEquipmentDisplayName,
   buildLabeledSpecifications,
@@ -19,9 +20,19 @@ export interface PublicEquipmentResponse {
 
 @Injectable()
 export class PublicEquipmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async findOne(id: string): Promise<PublicEquipmentResponse> {
+    const lookupEnabled = await this.settingsService.isFeatureEnabled(
+      'features.public_equipment_lookup',
+      true,
+    );
+    if (!lookupEnabled) {
+      throw new NotFoundException('Public equipment lookup is disabled');
+    }
     const equipment = await this.prisma.equipment.findUnique({
       where: { id },
       include: { category: true },

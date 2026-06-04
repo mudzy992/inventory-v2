@@ -27,6 +27,7 @@ import {
 } from '../store';
 import type { Notification } from '../types';
 import { useAuth } from './AuthContext';
+import { usePublicSettings } from './public-settings-context';
 
 interface SocketContextValue {
   notifications: Notification[];
@@ -41,6 +42,8 @@ const SocketContext = createContext<SocketContextValue | null>(null);
 
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const { user, isAuthenticated } = useAuth();
+  const { patchLocal, getBoolean } = usePublicSettings();
+  const isRealtimeEnabled = getBoolean('notifications.realtime', true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
@@ -97,7 +100,9 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   }, [isAuthenticated, user, refreshNotifications]);
 
   useEffect(() => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user || !isRealtimeEnabled) {
+      destroyNotificationsSocket();
+      setIsConnected(false);
       return;
     }
     const token = sessionStorage.getItem('accessToken');
@@ -123,25 +128,30 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       );
       applyNotificationRead(payload.id);
     };
+    const handleSettingsUpdated = (payload: { key: string; value: string | number | boolean }) => {
+      patchLocal(payload.key, payload.value);
+    };
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('notification.created', handleCreated);
     socket.on('notification.read', handleRead);
+    socket.on('settings.updated', handleSettingsUpdated);
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('notification.created', handleCreated);
       socket.off('notification.read', handleRead);
+      socket.off('settings.updated', handleSettingsUpdated);
       socketRef.current = null;
       setIsConnected(socket.connected);
     };
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, patchLocal, isRealtimeEnabled]);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
       return;
     }
-    if (isConnected) {
+    if (isRealtimeEnabled && isConnected) {
       if (pollRef.current) {
         window.clearInterval(pollRef.current);
         pollRef.current = null;
@@ -157,7 +167,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
         pollRef.current = null;
       }
     };
-  }, [isAuthenticated, user, isConnected, refreshNotifications]);
+  }, [isAuthenticated, user, isConnected, isRealtimeEnabled, refreshNotifications]);
 
   const unreadCount = user ? getUnreadNotificationsCount(user.id) : 0;
 

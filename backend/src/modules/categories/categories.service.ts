@@ -5,6 +5,7 @@ import {
   type CategoryFieldDefinition,
 } from '../../common/utils/category-fields.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
@@ -20,7 +21,10 @@ export interface CategoryTreeNode {
 
 @Injectable()
 export class CategoriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async findFlat(): Promise<Category[]> {
     return this.prisma.category.findMany({ orderBy: { name: 'asc' } });
@@ -40,6 +44,7 @@ export class CategoriesService {
   }
 
   async create(dto: CreateCategoryDto): Promise<Category> {
+    await this.settingsService.assertFeatureEnabled('features.categories');
     if (dto.parentId) {
       await this.findOne(dto.parentId);
     }
@@ -55,6 +60,7 @@ export class CategoriesService {
   }
 
   async update(id: string, dto: UpdateCategoryDto): Promise<Category> {
+    await this.settingsService.assertFeatureEnabled('features.categories');
     await this.findOne(id);
     if (dto.parentId) {
       if (dto.parentId === id) {

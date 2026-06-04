@@ -552,14 +552,6 @@ export function subscribe(listener: () => void): () => void {
   };
 }
 
-export function resetToDemo(): void {
-  if (!import.meta.env.DEV) {
-    return;
-  }
-  _state = createDemoData();
-  _listeners.forEach((listener) => listener());
-}
-
 export function getNextDocumentNumber(): string {
   const year = new Date().getFullYear();
   const thisYearTransfers = _state.transfers.filter(

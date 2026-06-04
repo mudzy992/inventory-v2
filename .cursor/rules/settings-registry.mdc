@@ -1,0 +1,38 @@
+---
+description: Settings registry — obavezno za nove module i funkcionalnosti
+globs:
+  - backend/src/modules/**
+  - frontend/src/**
+alwaysApply: true
+---
+
+# Settings registry (obavezno)
+
+Svaki **novi modul** ili **bitna funkcionalnost** mora, gdje ima smisla, odmah dobiti postavku u registry-ju i punu implementaciju (ne ostavljati samo UI toggle bez efekta).
+
+## Izvor istine
+
+- Registry: `backend/src/modules/settings/settings.registry.ts`
+- Matrica: `.cursor/docs/matrices/settings/MATRIX.md` + `CHANGELOG.md`
+- Admin UI: tabovi u `frontend/src/constants/settings-ui-tabs.ts` (grupa → tab)
+
+## Checklist za novi feature
+
+1. **Ključ** — preferiraj `features.<modul_slug>` (boolean, `scope: public` ako utiče na meni/nav za sve uloge; `private` samo za admin-only ponašanje).
+2. **Metadata** — `label` (ljudski naziv), `description` (šta radi), `group`, `defaultValue`.
+3. **Backend** — mutacije/API: `SettingsService.assertFeatureEnabled('features.x')` ili specifičan ključ (`upload.max_mb`, `transfer.*`).
+4. **Frontend** — `PAGE_FEATURE_SETTING_KEY` + `LayoutNavGate` / `showNavPage` / `isSettingFlagEnabled` na stranici i UI dijelovima.
+5. **Realtime** — ako modul koristi Socket.IO (notifikacije, postavke), poštuj `notifications.realtime` i `settings.updated`.
+6. **Dokumentacija** — ažuriraj matricu i changelog istog dana.
+
+## Modul postavki
+
+- Drži **Settings** stranicu usklađenu sa registry-jem (tabovi po grupama).
+- Ne prikazuj registry `key` korisniku — samo `label` + `description`.
+- `adminEditable: false` samo za sistemske ključeve (`app.initialized`).
+
+## Zabrane
+
+- Ne hardkodirati feature flagove van registry-ja.
+- Ne dodavati PATCH endpoint bez definicije u registry-ju.
+- Ne merge-ati feature bez enforcementa na backendu (ako ima API write).

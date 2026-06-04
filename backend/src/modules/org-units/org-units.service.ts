@@ -9,6 +9,7 @@ import { SignerResolutionService } from '../../common/services/signer-resolution
 import { OrgScopeService, type OrgUnitTreeNode } from '../../common/services/org-scope.service';
 import { assertValidOrgUnitParentChild } from '../../common/utils/org-hierarchy-validation.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateOrgUnitDto } from './dto/create-org-unit.dto';
 import { UpdateOrgUnitDto } from './dto/update-org-unit.dto';
 
@@ -19,6 +20,7 @@ export class OrgUnitsService {
     private readonly orgScopeService: OrgScopeService,
     private readonly locationResolutionService: LocationResolutionService,
     private readonly signerResolutionService: SignerResolutionService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async findFlat(): Promise<OrgUnit[]> {
@@ -39,6 +41,7 @@ export class OrgUnitsService {
   }
 
   async create(dto: CreateOrgUnitDto): Promise<OrgUnit> {
+    await this.settingsService.assertFeatureEnabled('features.organization');
     if (dto.parentId) {
       const parent = await this.findOne(dto.parentId);
       assertValidOrgUnitParentChild(parent.type, dto.type);
@@ -63,6 +66,7 @@ export class OrgUnitsService {
   }
 
   async update(id: string, dto: UpdateOrgUnitDto): Promise<OrgUnit> {
+    await this.settingsService.assertFeatureEnabled('features.organization');
     const existing = await this.findOne(id);
     const nextParentId = dto.parentId !== undefined ? dto.parentId : existing.parentId;
     const nextType = dto.type ?? existing.type;

@@ -11,6 +11,9 @@ import {
 } from './inventory-count/inventory-transfer-step.util';
 import { buildTransferSteps, getTransferStepBadge } from './transfers/transfer-step.util';
 import { cn } from '../utils/cn';
+import { useAdminSettings } from '../contexts/admin-settings-context';
+import { isAdmin } from '../store';
+import { useToast } from '../contexts/toast-context';
 
 interface UploadMeta {
   id: string;
@@ -35,6 +38,11 @@ export const TransferDocumentPanel = ({
   inventorySessionStatus = 'active',
   linePendingApplied = false,
 }: TransferDocumentPanelProps) => {
+  const { getBoolean, getNumber } = useAdminSettings();
+  const { toastError } = useToast();
+  const maxUploadMb = getNumber('upload.max_mb', 10);
+  const allowFinalizeWithoutUpload =
+    isAdmin() && getBoolean('transfer.allow_finalize_without_upload', false);
   const [uploadMeta, setUploadMeta] = useState<UploadMeta | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -108,6 +116,11 @@ export const TransferDocumentPanel = ({
     }
   };
   const handleUpload = async (file: File) => {
+    const maxBytes = maxUploadMb * 1024 * 1024;
+    if (file.size > maxBytes) {
+      toastError(`Datoteka prelazi limit od ${maxUploadMb} MB`);
+      return;
+    }
     await uploadTransferDocumentApi(transfer.id, file);
     onSigned?.();
   };
@@ -193,7 +206,13 @@ export const TransferDocumentPanel = ({
       {!inventoryMode && isRaw ? (
         <p className="text-xs text-gray-500">
           Draft dokument — potpis i sken se vrše nakon odobrenja (rashod: komisija).
+          {allowFinalizeWithoutUpload
+            ? ' Administrator može finalizovati bez uploada (postavka uključena).'
+            : null}
         </p>
+      ) : null}
+      {canUpload ? (
+        <p className="text-xs text-gray-400">Maksimalna veličina uploada: {maxUploadMb} MB</p>
       ) : null}
       {inventoryMode ? (
         <p className="text-xs text-gray-500">

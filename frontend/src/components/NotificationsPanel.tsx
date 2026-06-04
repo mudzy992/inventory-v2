@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Bell, CheckCheck } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useNotifications } from '../contexts/SocketContext';
+import { usePublicSettings } from '../contexts/public-settings-context';
 import type { Notification } from '../types';
 
 const formatRelativeTime = (iso: string): string => {
@@ -23,7 +24,13 @@ const formatRelativeTime = (iso: string): string => {
 
 export const NotificationsPanel = () => {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const { getBoolean } = usePublicSettings();
   const [open, setOpen] = useState(false);
+  const notificationsEnabled = getBoolean('notifications.enabled', true);
+
+  if (!notificationsEnabled) {
+    return null;
+  }
 
   const handleMarkRead = (notification: Notification) => {
     if (!notification.read) {

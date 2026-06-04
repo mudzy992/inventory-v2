@@ -105,6 +105,7 @@ export class TransfersService {
   }
 
   async create(user: AuthenticatedUser, dto: CreateTransferDto) {
+    await this.settingsService.assertFeatureEnabled('features.transfers');
     if (user.role === 'user') {
       throw new ForbiddenException('Users cannot create transfers');
     }
@@ -287,6 +288,13 @@ export class TransfersService {
     if (user.role === 'admin' && allowWithoutUpload) {
       return;
     }
+    const requireUploadBeforeSign = await this.settingsService.getBooleanValue(
+      'transfer.require_upload_before_sign',
+      false,
+    );
+    if (requireUploadBeforeSign) {
+      throw new BadRequestException('Upload signed document is required before finalizing');
+    }
     throw new BadRequestException('Upload signed document before finalizing transfer');
   }
 
@@ -372,7 +380,13 @@ export class TransfersService {
           toEmployee.orgUnitId,
         );
         if (fromCity && toCity && fromCity !== toCity) {
-          throw new ForbiddenException('Evidentičar cannot transfer across different cities');
+          const allowCrossCity = await this.settingsService.getBooleanValue(
+            'transfer.allow_evidenticar_cross_city',
+            false,
+          );
+          if (!allowCrossCity) {
+            throw new ForbiddenException('Evidentičar cannot transfer across different cities');
+          }
         }
       }
       return false;

@@ -10,6 +10,7 @@ import { InventoryFreezeService } from '../../common/services/inventory-freeze.s
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 
@@ -19,6 +20,7 @@ export class WarehousesService {
     private readonly prisma: PrismaService,
     private readonly inventoryFreeze: InventoryFreezeService,
     private readonly warehouseResolutionService: WarehouseResolutionService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async findAll(user: AuthenticatedUser) {
@@ -111,6 +113,7 @@ export class WarehousesService {
   }
 
   async create(user: AuthenticatedUser, dto: CreateWarehouseDto) {
+    await this.settingsService.assertFeatureEnabled('features.warehouses');
     if (user.role !== 'admin') {
       throw new ForbiddenException('Only admin can create warehouses');
     }
@@ -132,6 +135,7 @@ export class WarehousesService {
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateWarehouseDto) {
+    await this.settingsService.assertFeatureEnabled('features.warehouses');
     if (user.role !== 'admin') {
       throw new ForbiddenException('Only admin can update warehouses');
     }

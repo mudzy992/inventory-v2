@@ -16,6 +16,7 @@ import { RegistrarScopeService } from '../../common/services/registrar-scope.ser
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService } from '../settings/settings.service';
 import { buildDisposalReportPayload } from './utils/build-disposal-report.util';
 import { finalizeInventoryTransferInTx } from './utils/finalize-inventory-transfer.util';
 import { buildWarehouseCommitteeMembers } from './utils/inventory-warehouse-committees.util';
@@ -47,7 +48,12 @@ export class InventoryCountService {
     private readonly registrarScope: RegistrarScopeService,
     private readonly notificationsService: NotificationsService,
     private readonly warehouseResolutionService: WarehouseResolutionService,
+    private readonly settingsService: SettingsService,
   ) {}
+
+  private async assertInventoryCountEnabled(): Promise<void> {
+    await this.settingsService.assertFeatureEnabled('features.inventory_count');
+  }
 
   async findCommittees(sessionId: string) {
     return this.prisma.inventoryCommittee.findMany({
@@ -62,6 +68,7 @@ export class InventoryCountService {
   }
 
   async createSession(input: CreateSessionInput) {
+    await this.assertInventoryCountEnabled();
     const name = input.name.trim();
     if (!name) {
       throw new BadRequestException('Name is required');
@@ -88,6 +95,7 @@ export class InventoryCountService {
   }
 
   async createCommittee(input: CreateCommitteeInput) {
+    await this.assertInventoryCountEnabled();
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: input.sessionId },
       include: { orgUnit: true },
@@ -492,6 +500,7 @@ export class InventoryCountService {
     quantityCounted: number,
     note?: string,
   ) {
+    await this.assertInventoryCountEnabled();
     if (user.role === 'admin') {
       throw new ForbiddenException('Administrator cannot record warehouse inventory lines');
     }
@@ -538,6 +547,7 @@ export class InventoryCountService {
   }
 
   async closeWarehouseCommittee(user: AuthenticatedUser, committeeId: string) {
+    await this.assertInventoryCountEnabled();
     const committee = await this.getWarehouseCommitteeOrThrow(committeeId);
     const actor = await this.prisma.user.findUnique({
       where: { id: user.id },
@@ -646,6 +656,7 @@ export class InventoryCountService {
       relocationToPersonId?: string;
     },
   ) {
+    await this.assertInventoryCountEnabled();
     if (user.role === 'admin') {
       throw new ForbiddenException('Administrator cannot record inventory lines');
     }
@@ -803,6 +814,7 @@ export class InventoryCountService {
   }
 
   async closeCommittee(user: AuthenticatedUser, committeeId: string) {
+    await this.assertInventoryCountEnabled();
     if (user.role === 'admin') {
       throw new ForbiddenException('Administrator cannot close inventory committee list');
     }
@@ -841,6 +853,7 @@ export class InventoryCountService {
   }
 
   async closeSession(user: AuthenticatedUser, sessionId: string) {
+    await this.assertInventoryCountEnabled();
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: sessionId },
       include: {

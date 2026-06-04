@@ -11,7 +11,8 @@ interface PublicEquipmentPageProps {
 }
 
 export const PublicEquipmentPage = ({ equipmentId }: PublicEquipmentPageProps) => {
-  const { settings } = usePublicSettings();
+  const { settings, getBoolean } = usePublicSettings();
+  const lookupEnabled = getBoolean('features.public_equipment_lookup', true);
   const [equipment, setEquipment] = useState<PublicEquipmentDto | null>(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -33,7 +34,17 @@ export const PublicEquipmentPage = ({ equipmentId }: PublicEquipmentPageProps) =
       }
     };
     void load();
-  }, [equipmentId]);
+  }, [equipmentId, lookupEnabled]);
+
+  if (!lookupEnabled) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
+        <p className="text-sm text-slate-600 text-center max-w-sm">
+          Javni pregled opreme putem QR linka trenutno nije omogućen.
+        </p>
+      </div>
+    );
+  }
 
   const companyLine = buildCompanyAddressLine(company);
 

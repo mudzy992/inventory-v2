@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import type { Notification, NotificationType } from '../../../generated/prisma/client';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
@@ -13,6 +13,7 @@ import {
   collectDisposalCommissionMemberUserIds,
   collectInventorySessionStakeholderUserIds,
 } from './notification-inventory-recipients.util';
+import { SettingsService } from '../settings/settings.service';
 import { NotificationsGateway } from './notifications.gateway';
 
 export interface NotificationResponse {
@@ -52,6 +53,8 @@ export class NotificationsService {
     private readonly registrarScope: RegistrarScopeService,
     private readonly locationResolutionService: LocationResolutionService,
     private readonly gateway: NotificationsGateway,
+    @Inject(forwardRef(() => SettingsService))
+    private readonly settingsService: SettingsService,
   ) {}
 
   async findAllForUser(user: AuthenticatedUser): Promise<NotificationResponse[]> {
@@ -349,11 +352,7 @@ export class NotificationsService {
   }
 
   private async areNotificationsEnabled(): Promise<boolean> {
-    const row = await this.prisma.setting.findUnique({ where: { key: 'notifications.enabled' } });
-    if (!row) {
-      return true;
-    }
-    return row.value === 'true';
+    return this.settingsService.getBooleanValue('notifications.enabled', true);
   }
 
   private async getOwnedNotification(userId: string, id: string): Promise<Notification> {

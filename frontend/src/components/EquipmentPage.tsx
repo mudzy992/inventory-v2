@@ -3,6 +3,7 @@ import { useStore, useRefreshData } from '../useStore';
 import { createEquipmentApi, updateEquipmentApi } from '../api/data-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
+import { usePublicSettings } from '../contexts/public-settings-context';
 import { Plus, Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon } from 'lucide-react';
 import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser, equipmentMatchesScope } from '../store';
 import { LabelPrintSheet } from './LabelPrintSheet';
@@ -24,6 +25,8 @@ interface EquipmentPageProps {
 }
 
 export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
+  const { getBoolean } = usePublicSettings();
+  const labelsEnabled = getBoolean('features.equipment_labels', true);
   const [state] = useStore();
   const refresh = useRefreshData();
   const [search, setSearch] = useState('');
@@ -161,11 +164,13 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Oprema</h1>
           <p className="text-gray-500 mt-1">
-            Evidencija opreme. Naljepnice: označite redove u tabeli (checkbox), zatim „Štampaj naljepnice“.
+            {labelsEnabled
+              ? 'Evidencija opreme. Naljepnice: označite redove u tabeli (checkbox), zatim „Štampaj naljepnice“.'
+              : 'Evidencija opreme.'}
           </p>
         </div>
         <div className="flex gap-2">
-          {selectedIds.size > 0 && (
+          {labelsEnabled && selectedIds.size > 0 && (
             <button
               type="button"
               onClick={() => setShowLabels(true)}
@@ -265,20 +270,22 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left">
-                <th className="px-4 py-3 w-10">
-                  <input
-                    type="checkbox"
-                    checked={filtered.length > 0 && filtered.every((eq) => selectedIds.has(eq.id))}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedIds(new Set(filtered.map((eq) => eq.id)));
-                      } else {
-                        setSelectedIds(new Set());
-                      }
-                    }}
-                    aria-label="Odaberi sve"
-                  />
-                </th>
+                {labelsEnabled ? (
+                  <th className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={filtered.length > 0 && filtered.every((eq) => selectedIds.has(eq.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds(new Set(filtered.map((eq) => eq.id)));
+                        } else {
+                          setSelectedIds(new Set());
+                        }
+                      }}
+                      aria-label="Odaberi sve"
+                    />
+                  </th>
+                ) : null}
                 <th className="px-4 py-3 font-medium text-gray-600">Inv. broj</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Kategorija</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Ključne spec.</th>
@@ -298,24 +305,26 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
 
                 return (
                   <tr key={eq.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(eq.id)}
-                        onChange={() => {
-                          setSelectedIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(eq.id)) {
-                              next.delete(eq.id);
-                            } else {
-                              next.add(eq.id);
-                            }
-                            return next;
-                          });
-                        }}
-                        aria-label={`Odaberi ${eq.inventoryNumber}`}
-                      />
-                    </td>
+                    {labelsEnabled ? (
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(eq.id)}
+                          onChange={() => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(eq.id)) {
+                                next.delete(eq.id);
+                              } else {
+                                next.add(eq.id);
+                              }
+                              return next;
+                            });
+                          }}
+                          aria-label={`Odaberi ${eq.inventoryNumber}`}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</span>
                     </td>
@@ -363,7 +372,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={9} className="text-center text-gray-400 py-12">Nema rezultata</td></tr>
+                <tr><td colSpan={labelsEnabled ? 9 : 8} className="text-center text-gray-400 py-12">Nema rezultata</td></tr>
               )}
             </tbody>
           </table>
@@ -372,7 +381,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
         </>
       ) : null}
 
-      {showLabels && (
+      {labelsEnabled && showLabels && (
         <LabelPrintSheet
           items={state.equipment.filter((eq) => selectedIds.has(eq.id))}
           categories={state.categories}

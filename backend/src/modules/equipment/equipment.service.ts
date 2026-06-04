@@ -11,6 +11,7 @@ import { RegistrarScopeService } from '../../common/services/registrar-scope.ser
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { validateSpecifications } from '../../common/utils/category-fields.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { WarehousesService } from '../warehouses/warehouses.service';
 import { CategoriesService } from '../categories/categories.service';
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
@@ -32,6 +33,7 @@ export class EquipmentService {
     private readonly configService: ConfigService,
     private readonly warehousesService: WarehousesService,
     private readonly inventoryFreeze: InventoryFreezeService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async findAll(user: AuthenticatedUser, query: ListEquipmentQueryDto): Promise<Equipment[]> {
@@ -62,6 +64,7 @@ export class EquipmentService {
   }
 
   async create(user: AuthenticatedUser, dto: CreateEquipmentDto): Promise<Equipment> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
     if (user.role === 'user') {
       throw new ForbiddenException('Users cannot create equipment');
     }
@@ -120,6 +123,7 @@ export class EquipmentService {
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateEquipmentDto): Promise<Equipment> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
     const existing = await this.prisma.equipment.findUnique({
       where: { id },
       include: { currentHolder: true },
@@ -169,6 +173,7 @@ export class EquipmentService {
   }
 
   async remove(user: AuthenticatedUser, id: string): Promise<void> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
     const existing = await this.prisma.equipment.findUnique({
       where: { id },
       include: { currentHolder: true },

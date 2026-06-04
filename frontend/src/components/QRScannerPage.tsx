@@ -3,13 +3,25 @@ import { useStore } from '../useStore';
 import { QrCode, Search, Package, Camera, X } from 'lucide-react';
 import { EquipmentCard } from './EquipmentCard';
 import { isAdmin } from '../store';
+import { usePublicSettings } from '../contexts/public-settings-context';
+import { EmptyState } from './ui/empty-state';
 
 export function QRScannerPage() {
+  const { getBoolean } = usePublicSettings();
   const [state] = useStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEquipId, setSelectedEquipId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const admin = isAdmin();
+  const qrEnabled = getBoolean('features.qr_scanner', true);
+
+  if (!qrEnabled) {
+    return (
+      <div className="p-6">
+        <EmptyState message="QR skener modul je isključen u postavkama aplikacije." />
+      </div>
+    );
+  }
 
   // Parse QR code data or search by inventory number
   function handleSearch() {
