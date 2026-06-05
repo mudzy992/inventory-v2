@@ -10,7 +10,8 @@
 ## Javni QR pregled
 
 - Sken otvara `/equipment/:id` (SPA, bez auth)
-- API: `GET /backend/public/equipment/:id` — read-only detalji
+- API: `GET /backend/public/equipment/:id` — read-only detalji, `productName` iz stock lota, zaduženje/skaldište, historija kretanja (bez internih ID-jeva)
+- Stranica: summary kartica (kategorija, productName, inv, status, unikatna polja) + tabovi (Zaduženje / Specifikacije / Historija)
 
 ## Gdje
 

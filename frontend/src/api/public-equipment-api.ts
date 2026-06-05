@@ -5,14 +5,36 @@ export interface UniqueFieldDisplayDto {
   value: string;
 }
 
+export interface PublicEquipmentHolderDto {
+  fullName: string;
+  title: string;
+  orgUnitPath: string;
+}
+
+export interface PublicEquipmentWarehouseDto {
+  name: string;
+}
+
+export interface PublicEquipmentMovementDto {
+  date: string;
+  type: string;
+  status: string;
+  fromLabel: string;
+  toLabel: string;
+  documentNumber: string;
+}
+
 export interface PublicEquipmentDto {
   id: string;
   inventoryNumber: string;
   status: string;
   categoryName: string;
-  displayName: string;
-  uniqueField: UniqueFieldDisplayDto | null;
+  productName: string | null;
+  uniqueFields: UniqueFieldDisplayDto[];
   specifications: Record<string, string>;
+  currentHolder: PublicEquipmentHolderDto | null;
+  warehouse: PublicEquipmentWarehouseDto | null;
+  movements: PublicEquipmentMovementDto[];
 }
 
 export const fetchPublicEquipmentApi = (id: string): Promise<PublicEquipmentDto> =>
