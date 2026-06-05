@@ -23,7 +23,12 @@ export class DisposalCommissionsService {
     private readonly settingsService: SettingsService,
   ) {}
 
+  private async assertDisposalCommissionsEnabled(): Promise<void> {
+    await this.settingsService.assertFeatureEnabled('features.disposal_commissions');
+  }
+
   async findAll(cityId?: string) {
+    await this.assertDisposalCommissionsEnabled();
     return this.prisma.disposalCommission.findMany({
       where: cityId ? { cityId, isActive: true } : { isActive: true },
       include: {
@@ -35,7 +40,7 @@ export class DisposalCommissionsService {
   }
 
   async create(cityId: string, name: string, members: MemberInput[]) {
-    await this.settingsService.assertFeatureEnabled('features.disposal_commissions');
+    await this.assertDisposalCommissionsEnabled();
     const city = await this.prisma.city.findUnique({ where: { id: cityId } });
     if (!city) {
       throw new BadRequestException('City not found');
@@ -54,6 +59,7 @@ export class DisposalCommissionsService {
   }
 
   async findOne(id: string) {
+    await this.assertDisposalCommissionsEnabled();
     const commission = await this.prisma.disposalCommission.findUnique({
       where: { id },
       include: {
@@ -68,6 +74,7 @@ export class DisposalCommissionsService {
   }
 
   async resolveForEquipment(equipmentId: string) {
+    await this.assertDisposalCommissionsEnabled();
     const equipment = await this.prisma.equipment.findUnique({
       where: { id: equipmentId },
       include: { currentHolder: true, warehouse: true },
@@ -88,6 +95,7 @@ export class DisposalCommissionsService {
   }
 
   async findPendingApprovals(user: AuthenticatedUser) {
+    await this.assertDisposalCommissionsEnabled();
     const approvals = await this.prisma.disposalApproval.findMany({
       where: { status: 'pending' },
       include: {
@@ -121,7 +129,7 @@ export class DisposalCommissionsService {
   }
 
   async vote(user: AuthenticatedUser, approvalId: string, approved: boolean, note?: string) {
-    await this.settingsService.assertFeatureEnabled('features.disposal_commissions');
+    await this.assertDisposalCommissionsEnabled();
     const approval = await this.prisma.disposalApproval.findUnique({
       where: { id: approvalId },
       include: {
@@ -165,6 +173,7 @@ export class DisposalCommissionsService {
   }
 
   async createApprovalForTransfer(transferId: string, cityId: string): Promise<void> {
+    await this.assertDisposalCommissionsEnabled();
     const commission = await this.prisma.disposalCommission.findFirst({
       where: { cityId, isActive: true },
       include: { members: true },

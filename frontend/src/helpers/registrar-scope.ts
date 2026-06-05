@@ -103,6 +103,20 @@ const matchesAssignmentEmployee = (
   return subtree.has(employee.orgUnitId);
 };
 
+export const resolveEquipmentCityId = (state: AppState, equipment: Equipment): string | null => {
+  if (equipment.currentHolderId) {
+    const holder = state.employees.find((row) => row.id === equipment.currentHolderId);
+    if (holder) {
+      return getEffectiveCityForOrgUnit(state.orgUnits, holder.orgUnitId);
+    }
+  }
+  if (equipment.warehouseId) {
+    const warehouse = state.warehouses.find((row) => row.id === equipment.warehouseId);
+    return warehouse?.cityId ?? null;
+  }
+  return null;
+};
+
 export const equipmentMatchesScope = (
   equipment: Equipment,
   state: AppState,

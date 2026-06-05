@@ -6,7 +6,8 @@ import {
   type CreateUserPayload,
   type UpdateUserPayload,
 } from '../../api/data-api';
-import { getEmployeeFullName } from '../../helpers';
+import { getEmployeeFullName, getOrgUnitPath } from '../../helpers';
+import { SearchableAutocomplete, type SearchableOption } from '../searchable-autocomplete';
 import type {
   Category,
   City,
@@ -78,6 +79,19 @@ export const UserFormModal = ({
     const linked = employees.find((row) => row.id === user.employeeId);
     return linked ? [linked] : employees;
   }, [mode, employees, employeesWithoutAccount, user]);
+
+  const searchableEmployeeOptions = useMemo((): SearchableOption[] => {
+    return employeeOptions.map((employee) => {
+      const orgUnit = orgUnits.find((unit) => unit.id === employee.orgUnitId);
+      const orgPath = orgUnit ? getOrgUnitPath(orgUnits, orgUnit.id) : '—';
+      return {
+        id: employee.id,
+        label: getEmployeeFullName(employee),
+        subLabel: `${employee.title || '—'} · ${orgPath}`,
+        searchText: `${employee.email ?? ''} ${orgPath}`,
+      };
+    });
+  }, [employeeOptions, orgUnits]);
 
   useEffect(() => {
     if (mode === 'edit' && user) {
@@ -198,20 +212,20 @@ export const UserFormModal = ({
                 <label htmlFor="user-employee" className="block text-sm font-medium text-gray-700 mb-1">
                   Radnik
                 </label>
-                <select
+                <SearchableAutocomplete
                   id="user-employee"
+                  options={searchableEmployeeOptions}
                   value={employeeId}
-                  onChange={(event) => handleEmployeeChange(event.target.value)}
+                  onChange={handleEmployeeChange}
+                  emptyOption={{ id: '', label: '— Odaberite —' }}
+                  placeholder="Pretraži radnika…"
+                  ariaLabel="Radnik"
+                  required={mode === 'create'}
                   disabled={mode === 'edit'}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-50"
-                >
-                  <option value="">— Odaberite —</option>
-                  {employeeOptions.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {getEmployeeFullName(employee)}
-                    </option>
-                  ))}
-                </select>
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Prikaz: ime · pozicija · org. putanja. Pri kucanju: pretraga po imenu, poziciji ili emailu.
+                </p>
               </div>
               <div>
                 <label htmlFor="user-username" className="block text-sm font-medium text-gray-700 mb-1">

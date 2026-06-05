@@ -38,6 +38,7 @@
 | `features.my_equipment` | true | `my-equipment` |
 | `features.qr_scanner` | true | `qr-scanner` |
 | `features.public_equipment_lookup` | true | Javni QR pregled |
+| `features.maintenance_parts` | true | Skladište održavanje + ugrađeni dijelovi na opremi |
 
 ### Prenosi (tab: Prenosi)
 
@@ -98,8 +99,9 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 |-------|----------------|
 | `upload.max_mb` | `UploadsService` |
 | `features.transfers` + `transfer.generation.*` + upload PDF | `TransfersService`, `WarehouseStockService`, `InventoryCountService`, `UploadsService` |
-| `features.disposal_commissions` | `DisposalCommissionsService` |
-| `features.inventory_count` | `InventoryCountService` |
+| `features.disposal_commissions` | `DisposalCommissionsService` (sve javne metode, uklj. read) |
+| `features.inventory_count` | `InventoryCountService` (sesije, komiteti, freeze banner, izvještaji) |
+| `features.warehouse_inventory` | `InventoryCountService` (warehouse committees, record/close warehouse lines) |
 | `features.public_equipment_lookup` | `PublicEquipmentService` |
 | `notifications.enabled` | `NotificationsService` |
 | `features.organization` | `OrgUnitsService` |
@@ -110,6 +112,7 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 | `features.user_management` | `UsersService` |
 | `features.warehouses` | `WarehousesService` |
 | `features.registrar_stock` | `WarehouseStockService` (receive/issue) |
+| `features.maintenance_parts` | `MaintenancePartsService` |
 
 ## Enforcement (frontend)
 
@@ -119,6 +122,9 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 | Stranica blokirana | `layout-nav-gate.tsx`, `module-disabled-state.tsx` |
 | Mapiranje stranica | `page-feature-settings.util.ts` |
 | Public cache + socket patch | `public-settings-context.tsx`, `SocketContext` |
+| Registry default merge | `public-feature-defaults.ts` — nedostajući `features.*` ≠ uključeno |
+| Optimistički PATCH | `settings-page.tsx` → `patchLocal` za public ključeve |
+| Hook | `use-is-page-enabled.ts` — Dashboard, freeze banner/hint |
 | Admin cache | `admin-settings-context.tsx` |
 | `notifications.realtime` | `SocketContext` — bez socket-a, polling ostaje |
 

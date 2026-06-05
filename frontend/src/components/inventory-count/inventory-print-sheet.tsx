@@ -92,12 +92,12 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
   const company = companyHeaderFromSettings(settings);
   const companyLine = buildCompanyAddressLine(company);
   const { committee, equipment } = scope;
-  const categoryLabels =
-    committee.categories
-      ?.map((row) => row.category?.name)
-      .filter(Boolean)
-      .join(', ') ?? '';
-  const year = committee.sessions?.[0]?.year ?? new Date().getFullYear();
+  const categoryLabels = committee.category?.name ?? '';
+  const year = committee.session?.year ?? new Date().getFullYear();
+  const cityLabel =
+    committee.session?.orgUnit?.effectiveLocationCity?.name ??
+    committee.session?.orgUnit?.effectiveLocationCityId ??
+    '—';
   const groups = useMemo(() => {
     const byHolder = new Map<string, PrintGroup>();
     const warehouseGroup: PrintGroup = {
@@ -169,7 +169,7 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
                 ) : null}
                 <h1 className="text-lg font-bold">{committee.name}</h1>
                 <p className="text-gray-600 mt-1">
-                  Grad: {committee.city?.name ?? committee.cityId} · Godina: {year}
+                  Grad: {cityLabel} · Godina: {year}
                 </p>
                 <p className="text-gray-600">Popisuje se: {categoryLabels || '—'}</p>
               </header>

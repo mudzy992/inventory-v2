@@ -14,6 +14,7 @@ import {
 } from '../store';
 import { formatRegistrarAssignmentLabel } from '../helpers/org-warehouse.util';
 import type { PageId } from './Layout';
+import { useIsPageEnabled } from '../hooks/use-is-page-enabled';
 import { Package, Users, ArrowLeftRight, AlertTriangle, MapPin, Layers, Clock } from 'lucide-react';
 import { getEmployeeFullName } from '../helpers';
 
@@ -25,6 +26,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [state] = useStore();
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
+  const inventoryCountEnabled = useIsPageEnabled('inventory-count');
   const user = getCurrentUser();
   const scopes = getRegistrarScopes();
 
@@ -140,13 +142,15 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 >
                   Zaduženja
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('inventory-count')}
-                  className="text-xs font-medium text-purple-800 underline"
-                >
-                  Popis (pregled)
-                </button>
+                {inventoryCountEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('inventory-count')}
+                    className="text-xs font-medium text-purple-800 underline"
+                  >
+                    Popis (pregled)
+                  </button>
+                ) : null}
               </>
             ) : null}
           </div>

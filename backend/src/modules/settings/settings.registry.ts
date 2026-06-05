@@ -272,6 +272,16 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'modules',
   }),
   def({
+    key: 'features.maintenance_parts',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Oprema za održavanje',
+    description:
+      'Količinski dijelovi na skladištu, ugradnja na host opremu, zamjene i defekti (po kategoriji i skladištu).',
+    group: 'modules',
+  }),
+  def({
     key: 'features.cross_service_transfer',
     scope: 'private',
     valueType: 'boolean',

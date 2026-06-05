@@ -87,6 +87,29 @@ enum WarehouseStockLotStatus {
   zatvoreno
 }
 
+enum CategoryKind {
+  ASSET
+  MAINTENANCE
+}
+
+enum WarehouseStockLotKind {
+  ISSUABLE
+  MAINTENANCE
+}
+
+enum InstalledPartStatus {
+  active
+  faulty
+  removed
+}
+
+enum InstalledPartEventAction {
+  installed
+  marked_faulty
+  removed
+  replaced
+}
+
 enum InventoryWarehouseLineStatus {
   prisutna
   nije_prisutna
@@ -237,6 +260,8 @@ model User {
   stockLotsSpecDefined    WarehouseStockLot[]      @relation("StockLotSpecDefinedBy")
   closedInventoryWarehouseCommittees InventoryWarehouseCommittee[] @relation("InventoryWarehouseCommitteeClosedBy")
   warehouseTransferTemplatesUploaded WarehouseTransferTemplate[] @relation("WarehouseTransferTemplateUploadedBy")
+  installedPartsCreated            EquipmentInstalledPart[]      @relation("InstalledPartByUser")
+  installedPartEvents                EquipmentInstalledPartEvent[] @relation("InstalledPartEventActor")
 
   @@index([role])
   @@map("users")
@@ -393,14 +418,15 @@ model WarehouseKeeper {
 }
 
 model Category {
-  id             String   @id @default(uuid())
-  name           String   @db.VarChar(255)
-  description    String   @db.Text
+  id             String       @id @default(uuid())
+  name           String       @db.VarChar(255)
+  description    String       @db.Text
   parentId       String?
+  categoryKind   CategoryKind @default(ASSET)
   fields         Json
-  optionalFields Json     @default("[]")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  optionalFields Json         @default("[]")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   parent              Category?            @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
   children            Category[]           @relation("CategoryTree")
@@ -408,9 +434,27 @@ model Category {
   registrarAssignments RegistrarAssignment[]
   inventoryCommittees  InventoryCommittee[]
   stockLots            WarehouseStockLot[]
+  hostMaintenanceLinks    CategoryMaintenanceLink[] @relation("HostCategoryMaintenance")
+  linkedAsMaintenanceLeaf CategoryMaintenanceLink[] @relation("MaintenanceCategoryLink")
+  installedPartsAsType    EquipmentInstalledPart[]
 
   @@index([parentId])
+  @@index([categoryKind])
   @@map("categories")
+}
+
+model CategoryMaintenanceLink {
+  id                    String   @id @default(uuid())
+  hostCategoryId        String
+  maintenanceCategoryId String
+  createdAt             DateTime @default(now())
+
+  hostCategory        Category @relation("HostCategoryMaintenance", fields: [hostCategoryId], references: [id], onDelete: Cascade)
+  maintenanceCategory Category @relation("MaintenanceCategoryLink", fields: [maintenanceCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([hostCategoryId, maintenanceCategoryId], map: "cat_maint_links_host_maint_uq")
+  @@index([maintenanceCategoryId], map: "cat_maint_links_maint_cat_idx")
+  @@map("category_maintenance_links")
 }
 
 model Equipment {
@@ -439,6 +483,7 @@ model Equipment {
   inventoryPendingActions InventoryPendingAction[]
   equipmentEvents       EquipmentEvent[]
   disposalInventoryApprovals DisposalInventoryApproval[]
+  installedParts           EquipmentInstalledPart[]
 
   @@index([categoryId])
   @@index([stockLotId])
@@ -452,6 +497,7 @@ model WarehouseStockLot {
   id                  String                  @id @default(uuid())
   warehouseId         String
   categoryId          String
+  lotKind             WarehouseStockLotKind     @default(ISSUABLE)
   productName         String                  @db.VarChar(255)
   quantityReceived    Int
   quantityOnHand      Int
@@ -470,13 +516,62 @@ model WarehouseStockLot {
   category       Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   receivedBy     User        @relation("StockLotReceivedBy", fields: [receivedByUserId], references: [id], onDelete: Restrict)
   specDefinedBy  User?       @relation("StockLotSpecDefinedBy", fields: [specDefinedByUserId], references: [id], onDelete: SetNull)
-  issuedUnits    Equipment[]
-  inventoryLines InventoryWarehouseLine[]
+  issuedUnits      Equipment[]
+  inventoryLines   InventoryWarehouseLine[]
+  installedParts   EquipmentInstalledPart[]
 
   @@index([warehouseId])
   @@index([categoryId])
   @@index([status])
+  @@index([lotKind], map: "wh_stock_lots_lotKind_idx")
   @@map("warehouse_stock_lots")
+}
+
+model EquipmentInstalledPart {
+  id                    String              @id @default(uuid())
+  hostEquipmentId       String
+  stockLotId            String?
+  maintenanceCategoryId String
+  quantity              Int
+  legacySpecs           Json                @default("{}")
+  status                InstalledPartStatus @default(active)
+  installedAt           DateTime            @default(now())
+  removedAt             DateTime?
+  replacedById          String?             @unique(map: "equip_inst_parts_replaced_uq")
+  notes                 String?             @db.Text
+  installedByUserId     String
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  hostEquipment       Equipment  @relation(fields: [hostEquipmentId], references: [id], onDelete: Cascade)
+  stockLot            WarehouseStockLot? @relation(fields: [stockLotId], references: [id], onDelete: SetNull)
+  maintenanceCategory Category   @relation(fields: [maintenanceCategoryId], references: [id], onDelete: Restrict)
+  installedBy         User       @relation("InstalledPartByUser", fields: [installedByUserId], references: [id], onDelete: Restrict)
+  replacedBy          EquipmentInstalledPart?  @relation("InstalledPartReplacement", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces            EquipmentInstalledPart?  @relation("InstalledPartReplacement")
+  events              EquipmentInstalledPartEvent[]
+
+  @@index([hostEquipmentId], map: "equip_inst_parts_host_idx")
+  @@index([status], map: "equip_inst_parts_status_idx")
+  @@index([maintenanceCategoryId], map: "equip_inst_parts_maint_cat_idx")
+  @@index([stockLotId], map: "equip_inst_parts_lot_idx")
+  @@map("equipment_installed_parts")
+}
+
+model EquipmentInstalledPartEvent {
+  id              String                   @id @default(uuid())
+  installedPartId String
+  actorUserId     String
+  action          InstalledPartEventAction
+  payload         Json                     @default("{}")
+  createdAt       DateTime                 @default(now())
+
+  installedPart EquipmentInstalledPart @relation(fields: [installedPartId], references: [id], onDelete: Cascade)
+  actor         User                     @relation("InstalledPartEventActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([installedPartId], map: "equip_inst_ev_part_idx")
+  @@index([actorUserId], map: "equip_inst_ev_actor_idx")
+  @@map("equipment_installed_part_events")
 }
 
 model EquipmentEvent {

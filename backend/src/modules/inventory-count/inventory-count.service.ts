@@ -57,7 +57,12 @@ export class InventoryCountService {
     await this.settingsService.assertFeatureEnabled('features.inventory_count');
   }
 
+  private async assertWarehouseInventoryEnabled(): Promise<void> {
+    await this.settingsService.assertFeatureEnabled('features.warehouse_inventory');
+  }
+
   async findCommittees(sessionId: string) {
+    await this.assertInventoryCountEnabled();
     return this.prisma.inventoryCommittee.findMany({
       where: { sessionId },
       include: {
@@ -156,6 +161,7 @@ export class InventoryCountService {
   }
 
   async getPrintScopeForUser(user: AuthenticatedUser, committeeId: string) {
+    await this.assertInventoryCountEnabled();
     const committee = await this.prisma.inventoryCommittee.findUnique({
       where: { id: committeeId },
       include: {
@@ -257,6 +263,7 @@ export class InventoryCountService {
   }
 
   async resolveCommitteeEquipment(committeeId: string) {
+    await this.assertInventoryCountEnabled();
     const committee = await this.prisma.inventoryCommittee.findUnique({
       where: { id: committeeId },
       include: { session: true },
@@ -293,6 +300,7 @@ export class InventoryCountService {
   }
 
   async findSessionsForUser(user: AuthenticatedUser, orgUnitId?: string) {
+    await this.assertInventoryCountEnabled();
     if (user.role === 'admin' || user.role === 'evidenticar') {
       return this.prisma.inventorySession.findMany({
         where: orgUnitId ? { orgUnitId } : undefined,
@@ -338,6 +346,7 @@ export class InventoryCountService {
   }
 
   async getFreezeBannerForUser(user: AuthenticatedUser) {
+    await this.assertInventoryCountEnabled();
     const cityIds = await this.resolveFreezeCityIdsForUser(user);
     const where: Prisma.InventorySessionWhereInput = { status: 'active' };
     if (user.role !== 'admin') {
@@ -414,6 +423,7 @@ export class InventoryCountService {
   }
 
   async activateSession(sessionId: string) {
+    await this.assertInventoryCountEnabled();
     const session = await this.getSessionOrThrow(sessionId);
     if (session.status !== 'draft') {
       throw new BadRequestException('Only draft sessions can be activated');
@@ -437,6 +447,7 @@ export class InventoryCountService {
   }
 
   async findWarehouseCommittees(sessionId: string) {
+    await this.assertWarehouseInventoryEnabled();
     return this.prisma.inventoryWarehouseCommittee.findMany({
       where: { sessionId },
       include: {
@@ -449,6 +460,7 @@ export class InventoryCountService {
   }
 
   async findWarehouseCommitteesForUser(user: AuthenticatedUser) {
+    await this.assertWarehouseInventoryEnabled();
     const actor = await this.prisma.user.findUnique({
       where: { id: user.id },
       select: { employeeId: true },
@@ -471,6 +483,7 @@ export class InventoryCountService {
   }
 
   async getWarehouseCommitteeScope(user: AuthenticatedUser, committeeId: string) {
+    await this.assertWarehouseInventoryEnabled();
     const committee = await this.getWarehouseCommitteeOrThrow(committeeId);
     await this.assertWarehouseCommitteeMember(user, committee);
     const lots = await this.prisma.warehouseStockLot.findMany({
@@ -502,7 +515,7 @@ export class InventoryCountService {
     quantityCounted: number,
     note?: string,
   ) {
-    await this.assertInventoryCountEnabled();
+    await this.assertWarehouseInventoryEnabled();
     if (user.role === 'admin') {
       throw new ForbiddenException('Administrator cannot record warehouse inventory lines');
     }
@@ -549,7 +562,7 @@ export class InventoryCountService {
   }
 
   async closeWarehouseCommittee(user: AuthenticatedUser, committeeId: string) {
-    await this.assertInventoryCountEnabled();
+    await this.assertWarehouseInventoryEnabled();
     const committee = await this.getWarehouseCommitteeOrThrow(committeeId);
     const actor = await this.prisma.user.findUnique({
       where: { id: user.id },
@@ -909,6 +922,7 @@ export class InventoryCountService {
   }
 
   async getCloseJob(sessionId: string) {
+    await this.assertInventoryCountEnabled();
     const job = await this.prisma.inventorySessionCloseJob.findUnique({ where: { sessionId } });
     if (!job) {
       return null;
@@ -1037,6 +1051,7 @@ export class InventoryCountService {
   }
 
   async getSessionReport(sessionId: string) {
+    await this.assertInventoryCountEnabled();
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: sessionId },
       include: {
@@ -1064,6 +1079,7 @@ export class InventoryCountService {
   }
 
   async getDisposalReport(sessionId: string) {
+    await this.assertInventoryCountEnabled();
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: sessionId },
       include: { orgUnit: true },
@@ -1091,6 +1107,7 @@ export class InventoryCountService {
   }
 
   async getDisposalInboxForUser(user: AuthenticatedUser, sessionId: string) {
+    await this.assertInventoryCountEnabled();
     const actor = await this.prisma.user.findUnique({
       where: { id: user.id },
       select: { employeeId: true },
@@ -1122,6 +1139,7 @@ export class InventoryCountService {
     approved: boolean,
     note?: string,
   ) {
+    await this.assertInventoryCountEnabled();
     const approval = await this.prisma.disposalInventoryApproval.findUnique({
       where: { id: approvalId },
       include: {

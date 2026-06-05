@@ -21,7 +21,7 @@ import { PageTabs } from '../ui/page-tabs';
 import { SettingFieldRow } from './setting-field-row';
 
 export const SettingsPage = () => {
-  const { refresh: refreshPublic } = usePublicSettings();
+  const { refresh: refreshPublic, patchLocal } = usePublicSettings();
   const { refresh: refreshAdmin } = useAdminSettings();
   const { toastSuccess, toastError } = useToast();
   const [rows, setRows] = useState<SettingDto[]>([]);
@@ -107,6 +107,9 @@ export const SettingsPage = () => {
     setSavingKey(row.key);
     try {
       await patchSettingApi(row.key, value);
+      if (row.scope === 'public' || row.key.startsWith('features.')) {
+        patchLocal(row.key, value);
+      }
       toastSuccess('Postavka sačuvana');
       await Promise.all([refreshPublic(), refreshAdmin()]);
     } catch {

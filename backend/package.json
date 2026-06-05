@@ -4,6 +4,7 @@
   "private": true,
   "description": "Inventory v2 API — NestJS + Prisma 7",
   "scripts": {
+    "prebuild": "prisma generate",
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "nest start",
@@ -14,6 +15,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:seed:demo": "tsx prisma/seed-demo.ts",
+    "db:remap-maintenance-links": "tsx prisma/remap-child-maintenance-links.ts",
     "db:studio": "prisma studio",
     "test:unit": "node --import tsx --test src/common/utils/org-hierarchy-validation.util.spec.ts src/common/utils/resolve-effective-warehouse.util.spec.ts src/common/utils/collect-open-org-subtree.util.spec.ts src/common/utils/document-number.util.spec.ts"
   },

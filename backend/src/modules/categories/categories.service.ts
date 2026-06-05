@@ -14,6 +14,7 @@ export interface CategoryTreeNode {
   name: string;
   description: string;
   parentId: string | null;
+  categoryKind: string;
   fields: CategoryFieldDefinition[];
   optionalFields: CategoryFieldDefinition[];
   children: CategoryTreeNode[];
@@ -48,11 +49,13 @@ export class CategoriesService {
     if (dto.parentId) {
       await this.findOne(dto.parentId);
     }
+    const categoryKind = dto.categoryKind ?? (dto.parentId ? 'ASSET' : 'ASSET');
     return this.prisma.category.create({
       data: {
         name: dto.name,
         description: dto.description,
         parentId: dto.parentId ?? null,
+        categoryKind,
         fields: dto.fields as unknown as Prisma.InputJsonValue,
         optionalFields: (dto.optionalFields ?? []) as unknown as Prisma.InputJsonValue,
       },
@@ -74,6 +77,7 @@ export class CategoriesService {
         name: dto.name,
         description: dto.description,
         parentId: dto.parentId,
+        categoryKind: dto.categoryKind,
         fields: dto.fields as unknown as Prisma.InputJsonValue | undefined,
         optionalFields: dto.optionalFields as unknown as Prisma.InputJsonValue | undefined,
       },
@@ -120,6 +124,7 @@ export class CategoriesService {
         name: category.name,
         description: category.description,
         parentId: category.parentId,
+        categoryKind: category.categoryKind,
         fields: parseCategoryFields(category.fields),
         optionalFields: parseCategoryFields(category.optionalFields),
         children: [],

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { fetchPrivateSettingsApi, type SettingDto } from '../api/settings-api';
+import { fetchPrivateSettingsApi } from '../api/settings-api';
 import { isAdmin } from '../store';
 import { useAuth } from './AuthContext';
 

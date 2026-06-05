@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsOptional, IsString, IsUUID, MaxLength, ValidateNested } from 'class-validator';
+import { IsArray, IsEnum, IsOptional, IsString, IsUUID, MaxLength, ValidateNested } from 'class-validator';
+import { CategoryKind } from '../../../../generated/prisma/client';
 import { CategoryFieldDto } from './category-field.dto';
 
 export class UpdateCategoryDto {
@@ -15,6 +16,10 @@ export class UpdateCategoryDto {
   @IsOptional()
   @IsUUID()
   parentId?: string | null;
+
+  @IsOptional()
+  @IsEnum(CategoryKind)
+  categoryKind?: CategoryKind;
 
   @IsOptional()
   @IsArray()

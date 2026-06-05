@@ -1,6 +1,10 @@
+import type { ReactNode } from 'react';
+import { cn } from '../../utils/cn';
+
 interface AlertBannerProps {
   tone?: 'info' | 'warning' | 'success';
-  children: string;
+  className?: string;
+  children: ReactNode;
 }
 
 const toneClass = {
@@ -9,6 +13,6 @@ const toneClass = {
   success: 'bg-green-50 border-green-200 text-green-900',
 };
 
-export const AlertBanner = ({ tone = 'info', children }: AlertBannerProps) => (
-  <p className={`text-xs border rounded-lg p-2 ${toneClass[tone]}`}>{children}</p>
+export const AlertBanner = ({ tone = 'info', className, children }: AlertBannerProps) => (
+  <div className={cn('text-xs border rounded-lg p-2', toneClass[tone], className)}>{children}</div>
 );

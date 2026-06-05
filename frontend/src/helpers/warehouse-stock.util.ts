@@ -11,10 +11,17 @@ export const getStockLotStatusLabel = (status: WarehouseStockLotStatus): string 
 };
 
 export const getLeafCategories = (
-  categories: { id: string; parentId: string | null }[],
-): { id: string; name: string }[] => {
+  categories: { id: string; parentId: string | null; name: string; categoryKind?: string }[],
+): { id: string; name: string; categoryKind?: string }[] => {
   const parentIds = new Set(categories.map((row) => row.parentId).filter(Boolean));
   return categories
     .filter((row) => !parentIds.has(row.id))
-    .map((row) => ({ id: row.id, name: (row as { name: string }).name }));
+    .map((row) => ({ id: row.id, name: row.name, categoryKind: row.categoryKind }));
 };
+
+export const getAssetLeafCategories = (
+  categories: { id: string; parentId: string | null; name: string; categoryKind?: string }[],
+): { id: string; name: string }[] =>
+  getLeafCategories(categories)
+    .filter((row) => (row.categoryKind ?? 'ASSET') === 'ASSET')
+    .map((row) => ({ id: row.id, name: row.name }));

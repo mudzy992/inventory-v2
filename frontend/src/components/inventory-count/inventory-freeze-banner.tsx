@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import type { InventoryFreezeBannerSessionDto } from '../../api/inventory-api';
 import type { PageId } from '../Layout';
+import { useIsPageEnabled } from '../../hooks/use-is-page-enabled';
 
 interface InventoryFreezeBannerProps {
   sessions: InventoryFreezeBannerSessionDto[];
@@ -8,7 +9,8 @@ interface InventoryFreezeBannerProps {
 }
 
 export const InventoryFreezeBanner = ({ sessions, onNavigate }: InventoryFreezeBannerProps) => {
-  if (sessions.length === 0) {
+  const inventoryCountEnabled = useIsPageEnabled('inventory-count');
+  if (sessions.length === 0 || !inventoryCountEnabled) {
     return null;
   }
   const primary = sessions[0];

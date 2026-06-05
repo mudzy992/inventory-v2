@@ -1,6 +1,9 @@
-import type { OrgUnit, Employee, AppState, City, Canton } from './types';
+import type { OrgUnit, Employee, AppState, City } from './types';
 
-export function getCityLabel(cities: City[], cityId: string | null | undefined): string {
+export function getCityLabel(
+  cities: (Pick<City, 'id' | 'name'> & { canton?: { name: string } })[],
+  cityId: string | null | undefined,
+): string {
   if (!cityId) {
     return '—';
   }
@@ -62,7 +65,7 @@ export function getEmployeesForUnit(employees: Employee[], unitId: string): Empl
   return employees.filter(e => e.orgUnitId === unitId);
 }
 
-export function getEmployeeFullName(emp: Employee): string {
+export function getEmployeeFullName(emp: Pick<Employee, 'firstName' | 'lastName'>): string {
   return `${emp.firstName} ${emp.lastName}`;
 }
 

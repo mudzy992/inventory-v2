@@ -85,11 +85,14 @@ export interface CategoryField {
   options?: string[];
 }
 
+export type CategoryKind = 'ASSET' | 'MAINTENANCE';
+
 export interface Category {
   id: string;
   name: string;
   description: string;
   parentId: string | null;
+  categoryKind?: CategoryKind;
   fields: CategoryField[];
   optionalFields: CategoryField[];
 }
@@ -99,10 +102,13 @@ export type WarehouseStockLotStatus =
   | 'spremno_za_izdavanje'
   | 'zatvoreno';
 
+export type WarehouseStockLotKind = 'ISSUABLE' | 'MAINTENANCE';
+
 export interface WarehouseStockLot {
   id: string;
   warehouseId: string;
   categoryId: string;
+  lotKind?: WarehouseStockLotKind;
   categoryName?: string;
   warehouseName?: string;
   productName: string;

@@ -151,10 +151,6 @@ export function OrganizationPage() {
   const hasDirekcija = state.orgUnits.some((unit) => unit.type === 'direkcija');
   const isCreate = !editingUnit;
 
-  const formParentType = formParentId
-    ? state.orgUnits.find((unit) => unit.id === formParentId)?.type ?? null
-    : null;
-
   const formTypeOptions = useMemo((): readonly OrgUnitType[] => {
     if (editingUnit) {
       return ALL_ORG_UNIT_TYPE_OPTIONS;

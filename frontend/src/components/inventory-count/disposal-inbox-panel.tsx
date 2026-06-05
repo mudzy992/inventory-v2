@@ -51,12 +51,15 @@ export const DisposalInboxPanel = ({ sessionId, sessionStatus }: DisposalInboxPa
   });
 
   const handleReview = async (approvalId: string, approved: boolean) => {
-    const note = approved ? undefined : window.prompt('Razlog odbijanja:') ?? '';
-    if (!approved && !note.trim()) {
+    const rejectionNote = approved ? '' : (window.prompt('Razlog odbijanja:') ?? '');
+    if (!approved && !rejectionNote.trim()) {
       return;
     }
     try {
-      await reviewDisposalApprovalApi(approvalId, { approved, note: note || undefined });
+      await reviewDisposalApprovalApi(approvalId, {
+        approved,
+        note: approved ? undefined : rejectionNote,
+      });
       await loadInbox();
       toastSuccess(approved ? 'Rashod je odobren.' : 'Rashod je odbijen.');
     } catch (err) {

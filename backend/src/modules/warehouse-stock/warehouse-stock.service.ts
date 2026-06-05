@@ -62,7 +62,7 @@ export class WarehouseStockService {
   async listForWarehouse(user: AuthenticatedUser, warehouseId: string) {
     await this.assertCanAccessWarehouse(user, warehouseId);
     const lots = await this.prisma.warehouseStockLot.findMany({
-      where: { warehouseId },
+      where: { warehouseId, lotKind: 'ISSUABLE' },
       include: { category: true },
       orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
     });
@@ -76,6 +76,7 @@ export class WarehouseStockService {
     const assignments = user.role === 'admin' ? null : user.registrarScopes;
     const lots = await this.prisma.warehouseStockLot.findMany({
       where: {
+        lotKind: 'ISSUABLE',
         status: { in: ['ceka_specifikaciju', 'spremno_za_izdavanje'] },
         quantityOnHand: { gt: 0 },
       },
@@ -120,11 +121,15 @@ export class WarehouseStockService {
       throw new BadRequestException('Warehouse not found or inactive');
     }
     await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_create');
-    await this.categoriesService.assertLeafCategory(dto.categoryId);
+    const category = await this.categoriesService.assertLeafCategory(dto.categoryId);
+    if (category.categoryKind === 'MAINTENANCE') {
+      throw new BadRequestException('Use maintenance stock endpoint for maintenance categories');
+    }
     const lot = await this.prisma.warehouseStockLot.create({
       data: {
         warehouseId,
         categoryId: dto.categoryId,
+        lotKind: 'ISSUABLE',
         productName: dto.productName.trim(),
         quantityReceived: dto.quantity,
         quantityOnHand: dto.quantity,
@@ -183,6 +188,9 @@ export class WarehouseStockService {
       throw new ForbiddenException('Only registrar can issue stock');
     }
     const lot = await this.getLotOrThrow(lotId);
+    if (lot.lotKind === 'MAINTENANCE') {
+      throw new BadRequestException('Maintenance stock lots cannot issue equipment units');
+    }
     await this.registrarScope.assertCanAccessStockLot(user, lot);
     if (lot.status !== 'spremno_za_izdavanje') {
       throw new BadRequestException('Define lot specifications before issuing units');

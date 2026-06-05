@@ -1,5 +1,5 @@
 import { refreshTokensApi } from './auth-refresh';
-import { API_BASE, getApiBaseUrl } from './api-base';
+import { API_BASE } from './api-base';
 import {
   clearTokens,
   dispatchSessionExpired,

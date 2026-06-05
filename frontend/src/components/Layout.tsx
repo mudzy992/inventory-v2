@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Building2, Users, Package, ArrowLeftRight, FolderTree,
   FileText, LayoutDashboard, ChevronLeft, ChevronRight,
   LogOut, User, Shield, Briefcase, QrCode, List, Layers, ChevronDown, ClipboardList,
   MapPin, Warehouse, Trash2, ClipboardCheck, Settings,
 } from 'lucide-react';
+import { useAdminSettings } from '../contexts/admin-settings-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
+import { useIsPageEnabled } from '../hooks/use-is-page-enabled';
 import { isNavPageEnabled } from '../utils/settings-feature.util';
 import { cn } from '../utils/cn';
 import { getCurrentEmployee, isAdmin, isEvidenticar, isSkladistar, getUserRole } from '../store';
@@ -43,6 +45,32 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+const NavSection = ({
+  label,
+  collapsed,
+  show,
+  children,
+  className,
+}: {
+  label: string;
+  collapsed: boolean;
+  show: boolean;
+  children: ReactNode;
+  className?: string;
+}) => {
+  if (!show) {
+    return null;
+  }
+  return (
+    <div className={className}>
+      {!collapsed ? (
+        <p className="px-4 text-xs text-slate-500 font-semibold uppercase mb-2">{label}</p>
+      ) : null}
+      {children}
+    </div>
+  );
+};
+
 export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -55,12 +83,41 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
   const skladistar = isSkladistar();
   const role = getUserRole();
   const orgUnit = currentEmployee ? state.orgUnits.find(o => o.id === currentEmployee.orgUnitId) : null;
-  const { sessions: freezeSessions } = useInventoryFreezeBanner(Boolean(currentEmployee));
+  const inventoryCountEnabled = useIsPageEnabled('inventory-count');
+  const { sessions: freezeSessions } = useInventoryFreezeBanner(
+    Boolean(currentEmployee) && inventoryCountEnabled,
+  );
   const { settings: publicSettings, getString: getPublicString } = usePublicSettings();
+  const { settings: adminSettings } = useAdminSettings();
   const appName = getPublicString('app.name', 'Inventar');
   const appSubtitle = getPublicString('app.subtitle', 'Upravljanje opremom');
   const showNavPage = (pageId: PageId): boolean =>
-    isNavPageEnabled(pageId, publicSettings, publicSettings);
+    isNavPageEnabled(pageId, publicSettings, adminSettings);
+  const showEquipmentSection =
+    (admin || evidenticar) &&
+    (showNavPage('equipment') || showNavPage('transfers') || showNavPage('documents'));
+  const showProcessSection =
+    (admin && (showNavPage('inventory-count') || showNavPage('disposal-commissions'))) ||
+    (evidenticar && !admin && showNavPage('inventory-count'));
+  const showMasterDataSection =
+    admin &&
+    (showNavPage('organization') ||
+      showNavPage('locations') ||
+      showNavPage('warehouses') ||
+      showNavPage('employees') ||
+      showNavPage('categories') ||
+      showNavPage('registrar-stock'));
+  const showRegistrarSection =
+    evidenticar &&
+    !admin &&
+    (showNavPage('employees') || showNavPage('registrar-stock'));
+  const showProfileSection = showNavPage('my-equipment') || showNavPage('qr-scanner');
+
+  useEffect(() => {
+    if (currentPage === 'equipment' || currentPage === 'equipment-by-category') {
+      setEquipmentMenuOpen(true);
+    }
+  }, [currentPage]);
 
   const handleLogout = () => {
     onLogout();
@@ -124,102 +181,260 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
         )}
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 overflow-y-auto">
-          {/* Admin section */}
-          {admin && (
-            <>
-              {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mb-2">Administracija</p>}
-              <SidebarNavButton pageId="dashboard" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Kontrolna tabla" icon={LayoutDashboard} visible={showNavPage('dashboard')} />
-              <SidebarNavButton pageId="organization" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Organizacija" icon={Building2} visible={showNavPage('organization')} />
-              <SidebarNavButton pageId="locations" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Lokacije" icon={MapPin} visible={showNavPage('locations')} />
-              <SidebarNavButton pageId="warehouses" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Skladišta" icon={Warehouse} visible={showNavPage('warehouses')} />
-              <SidebarNavButton pageId="employees" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Radnici" icon={Users} visible={showNavPage('employees')} />
-              <SidebarNavButton pageId="categories" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Kategorije" icon={FolderTree} visible={showNavPage('categories')} />
-              <SidebarNavButton pageId="disposal-commissions" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Komisija rashod" icon={Trash2} visible={showNavPage('disposal-commissions')} />
-              <SidebarNavButton pageId="inventory-count" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Popis" icon={ClipboardCheck} visible={showNavPage('inventory-count')} />
-              <SidebarNavButton pageId="user-management" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Korisnici" icon={ClipboardList} visible={showNavPage('user-management')} />
-              <SidebarNavButton pageId="settings" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Postavke" icon={Settings} visible={true} />
-            </>
-          )}
+        <nav className="flex-1 py-4 overflow-y-auto space-y-4">
+          <NavSection
+            label="Pregled"
+            collapsed={collapsed}
+            show={(admin || evidenticar) && showNavPage('dashboard')}
+          >
+            <SidebarNavButton
+              pageId="dashboard"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Kontrolna tabla"
+              icon={LayoutDashboard}
+              visible={showNavPage('dashboard')}
+            />
+          </NavSection>
 
-          {/* Evidenticar section - Dashboard */}
-          {evidenticar && !admin && (
-            <>
-              {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mb-2">Evidencija</p>}
-              <SidebarNavButton pageId="dashboard" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Kontrolna tabla" icon={LayoutDashboard} visible={showNavPage('dashboard')} />
-              <SidebarNavButton pageId="registrar-stock" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Skladišna roba" icon={Package} visible={showNavPage('registrar-stock')} />
-              <SidebarNavButton pageId="employees" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Radnici" icon={Users} visible={showNavPage('employees')} />
-              <SidebarNavButton pageId="inventory-count" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Popis" icon={ClipboardCheck} visible={showNavPage('inventory-count')} />
-            </>
-          )}
-
-          {skladistar && !admin && (
-            <>
-              {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mb-2">Skladište</p>}
-              <SidebarNavButton pageId="warehouses" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Moja skladišta" icon={Package} visible={showNavPage('warehouses')} />
-              <SidebarNavButton pageId="warehouse-inventory" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Popis skladišta" icon={ClipboardCheck} visible={showNavPage('warehouse-inventory')} />
-            </>
-          )}
-
-          {(admin || evidenticar) &&
-            (showNavPage('equipment') || showNavPage('transfers') || showNavPage('documents')) && (
-            <>
-              {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mt-4 mb-2">Oprema</p>}
-              {showNavPage('equipment') && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => !collapsed && setEquipmentMenuOpen(!equipmentMenuOpen)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
-                  >
-                    <Package size={20} />
-                    {!collapsed && (
-                      <>
-                        <span className="flex-1 text-left">Oprema</span>
-                        <ChevronDown size={14} className={cn('transition-transform', equipmentMenuOpen && 'rotate-180')} />
-                      </>
-                    )}
-                  </button>
-                  {(equipmentMenuOpen || collapsed) && (
-                    <div className={cn(!collapsed && 'ml-4 border-l border-slate-700')}>
-                      <SidebarNavButton
-                        pageId="equipment"
-                        currentPage={currentPage}
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        label="Sva oprema"
-                        icon={List}
-                        visible
-                        title="Sva oprema"
-                        className="py-2 text-slate-400 hover:text-white"
-                      />
-                      <SidebarNavButton
-                        pageId="equipment-by-category"
-                        currentPage={currentPage}
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        label="Po kategorijama"
-                        icon={Layers}
-                        visible
-                        title="Po kategorijama"
-                        className="py-2 text-slate-400 hover:text-white"
-                      />
-                    </div>
+          <NavSection label="Oprema" collapsed={collapsed} show={showEquipmentSection}>
+            {showNavPage('equipment') ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => !collapsed && setEquipmentMenuOpen(!equipmentMenuOpen)}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                    currentPage === 'equipment' || currentPage === 'equipment-by-category'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-300 hover:bg-slate-800',
                   )}
-                </>
-              )}
-              <SidebarNavButton pageId="transfers" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Zaduženja" icon={ArrowLeftRight} visible={showNavPage('transfers')} />
-              <SidebarNavButton pageId="documents" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Prenosnice" icon={FileText} visible={showNavPage('documents')} />
-            </>
-          )}
+                >
+                  <Package size={20} />
+                  {!collapsed ? (
+                    <>
+                      <span className="flex-1 text-left">Oprema</span>
+                      <ChevronDown
+                        size={14}
+                        className={cn('transition-transform', equipmentMenuOpen && 'rotate-180')}
+                      />
+                    </>
+                  ) : null}
+                </button>
+                {(equipmentMenuOpen || collapsed) ? (
+                  <div className={cn(!collapsed && 'ml-4 border-l border-slate-700')}>
+                    <SidebarNavButton
+                      pageId="equipment"
+                      currentPage={currentPage}
+                      onNavigate={onNavigate}
+                      collapsed={collapsed}
+                      label="Sva oprema"
+                      icon={List}
+                      visible={showNavPage('equipment')}
+                      title="Sva oprema"
+                      className="py-2 text-slate-400 hover:text-white"
+                    />
+                    <SidebarNavButton
+                      pageId="equipment-by-category"
+                      currentPage={currentPage}
+                      onNavigate={onNavigate}
+                      collapsed={collapsed}
+                      label="Po kategorijama"
+                      icon={Layers}
+                      visible={showNavPage('equipment-by-category')}
+                      title="Po kategorijama"
+                      className="py-2 text-slate-400 hover:text-white"
+                    />
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+            <SidebarNavButton
+              pageId="transfers"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Zaduženja"
+              icon={ArrowLeftRight}
+              visible={showNavPage('transfers')}
+            />
+            <SidebarNavButton
+              pageId="documents"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Prenosnice"
+              icon={FileText}
+              visible={showNavPage('documents')}
+            />
+          </NavSection>
 
-          {(showNavPage('my-equipment') || showNavPage('qr-scanner')) && (
-            <>
-              {!collapsed && <p className="px-4 text-xs text-slate-500 font-semibold uppercase mt-4 mb-2">Moj profil</p>}
-              <SidebarNavButton pageId="my-equipment" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="Moja oprema" icon={Briefcase} visible={showNavPage('my-equipment')} />
-              <SidebarNavButton pageId="qr-scanner" currentPage={currentPage} onNavigate={onNavigate} collapsed={collapsed} label="QR Skener" icon={QrCode} visible={showNavPage('qr-scanner')} />
-            </>
-          )}
+          <NavSection label="Procesi" collapsed={collapsed} show={showProcessSection}>
+            <SidebarNavButton
+              pageId="inventory-count"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Popis"
+              icon={ClipboardCheck}
+              visible={showNavPage('inventory-count') && (admin || evidenticar)}
+            />
+            <SidebarNavButton
+              pageId="disposal-commissions"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Komisija rashod"
+              icon={Trash2}
+              visible={admin && showNavPage('disposal-commissions')}
+            />
+          </NavSection>
+
+          <NavSection
+            label="Skladište"
+            collapsed={collapsed}
+            show={skladistar && !admin && (showNavPage('warehouses') || showNavPage('warehouse-inventory'))}
+          >
+            <SidebarNavButton
+              pageId="warehouses"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Moja skladišta"
+              icon={Warehouse}
+              visible={showNavPage('warehouses')}
+            />
+            <SidebarNavButton
+              pageId="warehouse-inventory"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Popis skladišta"
+              icon={ClipboardCheck}
+              visible={showNavPage('warehouse-inventory')}
+            />
+          </NavSection>
+
+          <NavSection label="Šifarnici" collapsed={collapsed} show={showMasterDataSection}>
+            <SidebarNavButton
+              pageId="organization"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Organizacija"
+              icon={Building2}
+              visible={showNavPage('organization')}
+            />
+            <SidebarNavButton
+              pageId="locations"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Lokacije"
+              icon={MapPin}
+              visible={showNavPage('locations')}
+            />
+            <SidebarNavButton
+              pageId="warehouses"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Skladišta"
+              icon={Warehouse}
+              visible={showNavPage('warehouses')}
+            />
+            <SidebarNavButton
+              pageId="employees"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Radnici"
+              icon={Users}
+              visible={showNavPage('employees')}
+            />
+            <SidebarNavButton
+              pageId="categories"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Kategorije"
+              icon={FolderTree}
+              visible={showNavPage('categories')}
+            />
+            <SidebarNavButton
+              pageId="registrar-stock"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Skladišna roba"
+              icon={Package}
+              visible={showNavPage('registrar-stock')}
+            />
+          </NavSection>
+
+          <NavSection label="Registar" collapsed={collapsed} show={showRegistrarSection}>
+            <SidebarNavButton
+              pageId="employees"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Radnici"
+              icon={Users}
+              visible={showNavPage('employees')}
+            />
+            <SidebarNavButton
+              pageId="registrar-stock"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Skladišna roba"
+              icon={Package}
+              visible={showNavPage('registrar-stock')}
+            />
+          </NavSection>
+
+          <NavSection label="Sistem" collapsed={collapsed} show={admin}>
+            <SidebarNavButton
+              pageId="user-management"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Korisnici"
+              icon={ClipboardList}
+              visible={showNavPage('user-management')}
+            />
+            <SidebarNavButton
+              pageId="settings"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Postavke"
+              icon={Settings}
+              visible={true}
+            />
+          </NavSection>
+
+          <NavSection label="Moj profil" collapsed={collapsed} show={showProfileSection}>
+            <SidebarNavButton
+              pageId="my-equipment"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="Moja oprema"
+              icon={Briefcase}
+              visible={showNavPage('my-equipment')}
+            />
+            <SidebarNavButton
+              pageId="qr-scanner"
+              currentPage={currentPage}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+              label="QR Skener"
+              icon={QrCode}
+              visible={showNavPage('qr-scanner')}
+            />
+          </NavSection>
         </nav>
 
         {/* Footer actions */}

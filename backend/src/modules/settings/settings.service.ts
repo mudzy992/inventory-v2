@@ -31,6 +31,16 @@ export class SettingsService {
     for (const definition of SETTINGS_REGISTRY) {
       const existing = await this.prisma.setting.findUnique({ where: { key: definition.key } });
       if (existing) {
+        if (existing.scope !== definition.scope || existing.valueType !== definition.valueType) {
+          await this.prisma.setting.update({
+            where: { key: definition.key },
+            data: {
+              scope: definition.scope,
+              valueType: definition.valueType,
+              description: definition.description,
+            },
+          });
+        }
         continue;
       }
       await this.prisma.setting.create({

@@ -1,6 +1,6 @@
 import { cn } from '../../utils/cn';
 
-interface BadgeProps {
+export interface BadgeProps {
   children: string;
   tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 }

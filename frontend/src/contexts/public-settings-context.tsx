@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { fetchPublicSettingsApi, publicSettingsToMap } from '../api/public-settings-api';
+import { mergePublicSettingsWithFeatureDefaults } from '../constants/public-feature-defaults';
 
 interface PublicSettingsContextValue {
   settings: Record<string, string | number | boolean>;
@@ -28,7 +29,7 @@ export const PublicSettingsProvider = ({ children }: { children: ReactNode }) =>
     setIsLoading(true);
     try {
       const rows = await fetchPublicSettingsApi();
-      setSettings(publicSettingsToMap(rows));
+      setSettings(mergePublicSettingsWithFeatureDefaults(publicSettingsToMap(rows)));
     } catch {
       setSettings({});
     } finally {
@@ -53,7 +54,7 @@ export const PublicSettingsProvider = ({ children }: { children: ReactNode }) =>
   );
 
   const patchLocal = useCallback((key: string, value: string | number | boolean) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
+    setSettings((prev) => mergePublicSettingsWithFeatureDefaults({ ...prev, [key]: value }));
   }, []);
 
   useEffect(() => {

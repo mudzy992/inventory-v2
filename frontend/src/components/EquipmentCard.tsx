@@ -18,6 +18,7 @@ import type { TransferType } from '../types';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
 import { AlertBanner } from './ui/alert-banner';
 import { ModalRoot } from './ui/modal-root';
+import { EquipmentInstalledPartsPanel } from './maintenance-parts/equipment-installed-parts-panel';
 
 interface EquipmentCardProps {
   equipmentId: string;
@@ -367,6 +368,14 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   <p className="text-xs text-gray-400 text-center">Klikni &quot;Prikaži&quot; za QR kod opreme</p>
                 )}
               </div>
+
+              {eq.status !== 'rashodovano' && cat ? (
+                <EquipmentInstalledPartsPanel
+                  equipmentId={equipmentId}
+                  equipmentCategoryId={eq.categoryId}
+                  categories={state.categories}
+                />
+              ) : null}
 
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">

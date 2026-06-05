@@ -9,7 +9,6 @@ import {
   equipmentMatchesScope,
   employeeMatchesScope,
   transferMatchesScope,
-  isCrossRegistrarScopeTransfer,
   isCrossServiceTransfer,
 } from '../store';
 import { createTransferApi } from '../api/data-api';

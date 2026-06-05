@@ -1,4 +1,5 @@
 import { useInventoryFreezeBanner } from '../../hooks/use-inventory-freeze-banner';
+import { useIsPageEnabled } from '../../hooks/use-is-page-enabled';
 import type { PageId } from '../Layout';
 import { AlertBanner } from '../ui/alert-banner';
 
@@ -7,13 +8,15 @@ interface InventoryFreezeActionHintProps {
 }
 
 export const useInventoryFreezeActive = (): boolean => {
-  const { sessions } = useInventoryFreezeBanner(true);
-  return sessions.length > 0;
+  const inventoryCountEnabled = useIsPageEnabled('inventory-count');
+  const { sessions } = useInventoryFreezeBanner(inventoryCountEnabled);
+  return inventoryCountEnabled && sessions.length > 0;
 };
 
 export const InventoryFreezeActionHint = ({ onOpenInventory }: InventoryFreezeActionHintProps) => {
-  const { sessions } = useInventoryFreezeBanner(true);
-  if (sessions.length === 0) {
+  const inventoryCountEnabled = useIsPageEnabled('inventory-count');
+  const { sessions } = useInventoryFreezeBanner(inventoryCountEnabled);
+  if (!inventoryCountEnabled || sessions.length === 0) {
     return null;
   }
   const primary = sessions[0];

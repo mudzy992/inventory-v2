@@ -16,7 +16,7 @@ import {
 } from '../api/inventory-api';
 import { ApiError } from '../api/client';
 import { formatDate } from '../helpers';
-import { isAdmin, isEvidenticar, getCurrentUser } from '../store';
+import { isAdmin, getCurrentUser } from '../store';
 import { useStore } from '../useStore';
 import { useToast } from '../contexts/toast-context';
 import { useInventorySocketEvents } from '../hooks/use-inventory-socket-events';
@@ -55,7 +55,6 @@ const mapScopeToEquipment = (scope: InventoryPrintScopeDto): Equipment[] =>
 export const InventoryCountPage = () => {
   const [state] = useStore();
   const admin = isAdmin();
-  const evidenticar = isEvidenticar();
   const user = getCurrentUser();
   const userId = user?.id ?? null;
   const { toastError, toastSuccess } = useToast();

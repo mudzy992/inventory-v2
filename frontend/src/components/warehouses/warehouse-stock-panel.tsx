@@ -4,7 +4,7 @@ import { createStockLotApi, fetchWarehouseStockLotsApi } from '../../api/warehou
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { formatDate } from '../../helpers';
-import { getLeafCategories, getStockLotStatusLabel } from '../../helpers/warehouse-stock.util';
+import { getAssetLeafCategories, getStockLotStatusLabel } from '../../helpers/warehouse-stock.util';
 import type { WarehouseStockLot } from '../../types';
 import { useStore } from '../../useStore';
 import { Button } from '../ui/button';
@@ -32,7 +32,7 @@ export const WarehouseStockPanel = ({ warehouseId, canReceive }: WarehouseStockP
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
   const [contractNumber, setContractNumber] = useState('');
   const [saving, setSaving] = useState(false);
-  const leafCategories = getLeafCategories(state.categories);
+  const leafCategories = getAssetLeafCategories(state.categories);
   const loadLots = useCallback(async () => {
     setLoading(true);
     try {

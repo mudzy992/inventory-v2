@@ -1,5 +1,15 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-04 (nav toggle fix)
+
+- Frontend: `Layout` / `useIsPageEnabled` / `LayoutNavGate` sada koriste i `adminSettings`; `isSettingFlagEnabled` parsira string `"true"`/`"false"`; `patchLocal` za sve `features.*` ključeve; `publicSettingsToMap` normalizuje boolean po `valueType`.
+- Backend: `ensureDefaults` usklađuje `scope`/`valueType` postojećih redova sa registry-jem (fix kad su moduli bili private u DB).
+
+## 2026-06-04 (nav gating hardening)
+
+- Frontend: merge `PUBLIC_FEATURE_DEFAULTS` pri učitavanju public postavki; `patchLocal` na snimanju u Postavkama; `useIsPageEnabled`; gate Dashboard/freeze/podmeni Oprema.
+- Backend: `DisposalCommissionsService` guard na svim javnim metodama; `InventoryCountService` guard na read/mutate (warehouse inventory → `features.warehouse_inventory`).
+
 ## 2026-06-04 (prenosnice)
 
 - Registry: `transfer.generation.*`, `transfer.generate_print_pdf`, `transfer.require_signed_pdf_upload`, `transfer.template_placeholders_help`.

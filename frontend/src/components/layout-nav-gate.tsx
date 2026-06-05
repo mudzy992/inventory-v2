@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { PageId } from './Layout';
+import { useAdminSettings } from '../contexts/admin-settings-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { isNavPageEnabled } from '../utils/settings-feature.util';
 import { ModuleDisabledState } from './settings/module-disabled-state';
@@ -10,8 +11,9 @@ interface LayoutNavGateProps {
 }
 
 export const LayoutNavGate = ({ pageId, children }: LayoutNavGateProps) => {
-  const { settings } = usePublicSettings();
-  if (!isNavPageEnabled(pageId, settings, settings)) {
+  const { settings: publicSettings } = usePublicSettings();
+  const { settings: adminSettings } = useAdminSettings();
+  if (!isNavPageEnabled(pageId, publicSettings, adminSettings)) {
     return <ModuleDisabledState />;
   }
   return <>{children}</>;

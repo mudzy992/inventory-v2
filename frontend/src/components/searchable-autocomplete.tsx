@@ -14,6 +14,8 @@ interface SearchableAutocompleteProps {
   onChange: (id: string) => void;
   placeholder?: string;
   required?: boolean;
+  disabled?: boolean;
+  id?: string;
   className?: string;
   ariaLabel?: string;
   emptyOption?: SearchableOption;
@@ -26,6 +28,8 @@ export const SearchableAutocomplete = ({
   onChange,
   placeholder = 'Pretraži…',
   required = false,
+  disabled = false,
+  id,
   className,
   ariaLabel = 'Odabir',
   emptyOption,
@@ -62,7 +66,7 @@ export const SearchableAutocomplete = ({
       return a.label.localeCompare(b.label);
     });
     const isInheritPlaceholderActive =
-      Boolean(emptyOption) && value === emptyOption.id && query === emptyOption.label;
+      Boolean(emptyOption) && value === emptyOption?.id && query === (emptyOption?.label ?? '');
     if (!normalized || isInheritPlaceholderActive) {
       return sorted;
     }
@@ -120,6 +124,7 @@ export const SearchableAutocomplete = ({
   return (
     <div ref={containerRef} className={cn('relative', className)}>
       <input
+        id={id}
         type="text"
         value={query}
         required={required && !isInheritValue && !value}
@@ -132,7 +137,11 @@ export const SearchableAutocomplete = ({
             onChange('');
           }
         }}
+        disabled={disabled}
         onFocus={(event) => {
+          if (disabled) {
+            return;
+          }
           setOpen(true);
           if (emptyOption && value === emptyOption.id && query === emptyOption.label) {
             event.currentTarget.select();
@@ -148,7 +157,10 @@ export const SearchableAutocomplete = ({
         }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+        className={cn(
+          'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none',
+          disabled && 'bg-gray-50 cursor-not-allowed',
+        )}
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-autocomplete="list"

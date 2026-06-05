@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Package, ArrowLeftRight, Trash2, Building2 } from 'lucide-react';
+import { ArrowLeft, Package, ArrowLeftRight, Trash2, Building2, Wrench } from 'lucide-react';
+import { usePublicSettings } from '../../contexts/public-settings-context';
 import { filterTransfersForWarehouse, isCentralWarehouse } from '../../helpers/org-warehouse.util';
 import { WarehouseStockPanel } from './warehouse-stock-panel';
+import { WarehouseMaintenanceStockPanel } from './warehouse-maintenance-stock-panel';
 import { isSkladistar, isAdmin } from '../../store';
 import { getCityLabel, formatDate } from '../../helpers';
 import { useStore } from '../../useStore';
@@ -12,7 +14,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../../utils/cn';
 
-type WarehouseTab = 'stock' | 'transfers' | 'destruction' | 'context';
+type WarehouseTab = 'stock' | 'maintenance' | 'transfers' | 'destruction' | 'context';
 
 interface WarehouseDetailViewProps {
   warehouseId: string;
@@ -33,6 +35,8 @@ export const WarehouseDetailView = ({
 }: WarehouseDetailViewProps) => {
   const admin = isAdmin();
   const skladistar = isSkladistar();
+  const { getBoolean } = usePublicSettings();
+  const maintenanceEnabled = getBoolean('features.maintenance_parts', true);
   const [state] = useStore();
   const [tab, setTab] = useState<WarehouseTab>('stock');
   const warehouse = state.warehouses.find((row) => row.id === warehouseId);
@@ -50,6 +54,9 @@ export const WarehouseDetailView = ({
   }
   const tabs: { id: WarehouseTab; label: string; icon: typeof Package }[] = [
     { id: 'stock', label: 'Na skladištu', icon: Package },
+    ...(maintenanceEnabled
+      ? [{ id: 'maintenance' as const, label: 'Održavanje', icon: Wrench }]
+      : []),
     { id: 'transfers', label: 'Zaduženja / Razduženja', icon: ArrowLeftRight },
     { id: 'destruction', label: 'Rashod / Uništenje', icon: Trash2 },
     { id: 'context', label: 'Kontekst', icon: Building2 },
@@ -100,6 +107,12 @@ export const WarehouseDetailView = ({
       </div>
       {tab === 'stock' ? (
         <WarehouseStockPanel warehouseId={warehouse.id} canReceive={canReceiveStock} />
+      ) : null}
+      {tab === 'maintenance' && maintenanceEnabled ? (
+        <WarehouseMaintenanceStockPanel
+          warehouseId={warehouse.id}
+          canReceive={canReceiveStock || admin || skladistar}
+        />
       ) : null}
       {tab === 'transfers' ? (
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">

@@ -20,6 +20,7 @@ import { PublicEquipmentModule } from './modules/public-equipment/public-equipme
 import { SettingsModule } from './modules/settings/settings.module';
 import { SetupModule } from './modules/setup/setup.module';
 import { UsersModule } from './modules/users/users.module';
+import { MaintenancePartsModule } from './modules/maintenance-parts/maintenance-parts.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -45,6 +46,7 @@ import { PrismaModule } from './prisma/prisma.module';
     EmployeesModule,
     CategoriesModule,
     EquipmentModule,
+    MaintenancePartsModule,
     TransfersModule,
     UploadsModule,
     NotificationsModule,

@@ -6,8 +6,9 @@ import { useToast } from '../contexts/toast-context';
 import { isAdmin, isEvidenticar, getCurrentUser, employeeMatchesScope } from '../store';
 import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
+import { EmployeeTitleAutocomplete } from './employee-title-autocomplete';
+import { resolveCanonicalEmployeeTitle } from './employee-title-suggestions';
 import { OrgUnitAutocomplete } from './org-unit-autocomplete';
-import { v4 as uuidv4 } from 'uuid';
 import type { Employee } from '../types';
 
 export function EmployeesPage() {
@@ -87,7 +88,7 @@ export function EmployeesPage() {
       const payload = {
         firstName: fFirstName.trim(),
         lastName: fLastName.trim(),
-        title: fTitle.trim(),
+        title: resolveCanonicalEmployeeTitle(state.employees, fTitle).trim(),
         orgUnitId: fOrgUnit,
         email: fEmail || undefined,
         phone: fPhone || undefined,
@@ -255,9 +256,14 @@ export function EmployeesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Pozicija / Titula</label>
-                <input type="text" value={fTitle} onChange={e => setFTitle(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  placeholder="Npr. Stručni saradnik" />
+                <EmployeeTitleAutocomplete
+                  employees={state.employees}
+                  value={fTitle}
+                  onChange={setFTitle}
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Pri fokusu: nedavne pozicije. Pri kucanju: pretraga postojećih naziva radi dosljednosti.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Org. jedinica *</label>
@@ -267,6 +273,9 @@ export function EmployeesPage() {
                   onChange={setFOrgUnit}
                   required
                 />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Pri fokusu: lista org. jedinica. Pri kucanju: pretraga po nazivu, tipu ili putanji.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

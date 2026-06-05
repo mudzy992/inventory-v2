@@ -220,7 +220,6 @@ export const SessionLinesPanel = ({
         actionStatus === 'skipped');
     const transferPending = savedLine ? isTransferPending(savedLine) : false;
     const transferId = savedLine?.generatedTransfer?.id ?? null;
-    const lineApplied = actionStatus === 'applied';
     return (
       <div key={item.id} className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
