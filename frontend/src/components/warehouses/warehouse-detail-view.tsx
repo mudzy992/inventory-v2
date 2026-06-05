@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, Package, ArrowLeftRight, Trash2, Building2, Wrench } from 'lucide-react';
 import { usePublicSettings } from '../../contexts/public-settings-context';
 import { filterTransfersForWarehouse, isCentralWarehouse } from '../../helpers/org-warehouse.util';
-import { WarehouseStockPanel } from './warehouse-stock-panel';
+import { WarehouseStockBrowsePanel } from './warehouse-stock-browse-panel';
+import { WarehouseStockReceivePage } from './warehouse-stock-receive-page';
 import { WarehouseMaintenanceStockPanel } from './warehouse-maintenance-stock-panel';
 import { isSkladistar, isAdmin } from '../../store';
 import { getCityLabel, formatDate } from '../../helpers';
@@ -15,6 +16,7 @@ import { Button } from '../ui/button';
 import { cn } from '../../utils/cn';
 
 type WarehouseTab = 'stock' | 'maintenance' | 'transfers' | 'destruction' | 'context';
+type StockSubview = 'browse' | 'receive';
 
 interface WarehouseDetailViewProps {
   warehouseId: string;
@@ -39,6 +41,8 @@ export const WarehouseDetailView = ({
   const maintenanceEnabled = getBoolean('features.maintenance_parts', true);
   const [state] = useStore();
   const [tab, setTab] = useState<WarehouseTab>('stock');
+  const [stockSubview, setStockSubview] = useState<StockSubview>('browse');
+  const [stockRefreshKey, setStockRefreshKey] = useState(0);
   const warehouse = state.warehouses.find((row) => row.id === warehouseId);
   const orgUnit = warehouse?.orgUnitId
     ? state.orgUnits.find((row) => row.id === warehouse.orgUnitId)
@@ -78,7 +82,7 @@ export const WarehouseDetailView = ({
             <Badge tone={isCentralWarehouse(warehouse) ? 'info' : 'success'}>
               {isCentralWarehouse(warehouse) ? 'Centralno skladište' : 'Org-jedinica'}
             </Badge>
-            <Badge tone="neutral">Lotovi (neizdana roba)</Badge>
+            <Badge tone="neutral">Roba na skladištu (lotovi)</Badge>
           </div>
         </div>
         {onNavigate && (admin || !skladistar) ? (
@@ -92,7 +96,12 @@ export const WarehouseDetailView = ({
           <button
             key={row.id}
             type="button"
-            onClick={() => setTab(row.id)}
+            onClick={() => {
+              setTab(row.id);
+              if (row.id !== 'stock') {
+                setStockSubview('browse');
+              }
+            }}
             className={cn(
               'inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border',
               tab === row.id
@@ -105,8 +114,20 @@ export const WarehouseDetailView = ({
           </button>
         ))}
       </div>
-      {tab === 'stock' ? (
-        <WarehouseStockPanel warehouseId={warehouse.id} canReceive={canReceiveStock} />
+      {tab === 'stock' && stockSubview === 'browse' ? (
+        <WarehouseStockBrowsePanel
+          key={stockRefreshKey}
+          warehouseId={warehouse.id}
+          canReceive={canReceiveStock}
+          onOpenReceive={() => setStockSubview('receive')}
+        />
+      ) : null}
+      {tab === 'stock' && stockSubview === 'receive' ? (
+        <WarehouseStockReceivePage
+          warehouseId={warehouse.id}
+          onBack={() => setStockSubview('browse')}
+          onSaved={() => setStockRefreshKey((value) => value + 1)}
+        />
       ) : null}
       {tab === 'maintenance' && maintenanceEnabled ? (
         <WarehouseMaintenanceStockPanel
@@ -116,7 +137,8 @@ export const WarehouseDetailView = ({
       ) : null}
       {tab === 'transfers' ? (
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
             <thead className="bg-gray-50 text-gray-600">
               <tr>
                 <th className="text-left px-4 py-2">Dokument</th>
@@ -148,6 +170,7 @@ export const WarehouseDetailView = ({
               ) : null}
             </tbody>
           </table>
+          </div>
           {onNavigate ? (
             <div className="p-3 border-t">
               <Button variant="secondary" onClick={() => onNavigate('transfers')}>

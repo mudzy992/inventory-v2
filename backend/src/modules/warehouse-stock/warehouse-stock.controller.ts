@@ -5,6 +5,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { BulkCreateStockLotDto } from './dto/bulk-create-stock-lot.dto';
 import { CreateStockLotDto } from './dto/create-stock-lot.dto';
 import { IssueStockLotDto } from './dto/issue-stock-lot.dto';
 import { UpdateStockLotSpecDto } from './dto/update-stock-lot-spec.dto';
@@ -38,6 +39,16 @@ export class WarehouseStockController {
     @Body() body: CreateStockLotDto,
   ) {
     return this.warehouseStockService.receive(user, warehouseId, body);
+  }
+
+  @Post('warehouses/:warehouseId/stock-lots/bulk')
+  @Roles(UserRole.admin, UserRole.skladistar)
+  receiveBulk(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('warehouseId') warehouseId: string,
+    @Body() body: BulkCreateStockLotDto,
+  ) {
+    return this.warehouseStockService.receiveBulk(user, warehouseId, body);
   }
 
   @Get('stock-lots/:id')

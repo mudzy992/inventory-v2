@@ -11,6 +11,7 @@ import {
 } from '../helpers/company-header.util';
 import { Search, Filter, FileText, Printer, Upload, CheckCircle, Eye } from 'lucide-react';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
+import { PageHeaderRow } from './ui/page-header-row';
 
 export function DocumentsPage() {
   const [state] = useStore();
@@ -173,27 +174,25 @@ export function DocumentsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Prenosnice</h1>
-          <p className="text-gray-500 mt-1">Dokumentacija prenosa opreme — RAW i potpisani dokumenti</p>
-        </div>
-        <div className="flex gap-3 text-sm">
-          <span className="bg-yellow-50 border border-yellow-200 px-3 py-1.5 rounded-lg text-yellow-700 font-medium">
-            RAW: {state.transfers.filter(t => t.status === 'raw').length}
-          </span>
-          <span className="bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg text-green-700 font-medium">
-            Potpisano: {state.transfers.filter(t => t.status === 'potpisan').length}
-          </span>
-        </div>
-      </div>
+      <PageHeaderRow
+        title="Prenosnice"
+        description="Dokumentacija prenosa opreme — RAW i potpisani dokumenti"
+        actions={
+          <div className="flex flex-wrap gap-2 text-sm">
+            <span className="bg-yellow-50 border border-yellow-200 px-3 py-1.5 rounded-lg text-yellow-700 font-medium">
+              RAW: {state.transfers.filter(t => t.status === 'raw').length}
+            </span>
+            <span className="bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg text-green-700 font-medium">
+              Potpisano: {state.transfers.filter(t => t.status === 'potpisan').length}
+            </span>
+          </div>
+        }
+      />
 
-      {/* Hidden file input */}
       <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileUpload} />
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex gap-4 flex-wrap items-center">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
+        <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Pretraži po broju dokumenta, inv. broju..."

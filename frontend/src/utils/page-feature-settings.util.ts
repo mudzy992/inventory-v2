@@ -15,6 +15,7 @@ export const PAGE_FEATURE_SETTING_KEY: Partial<Record<PageId, string>> = {
   'disposal-commissions': 'features.disposal_commissions',
   'inventory-count': 'features.inventory_count',
   'registrar-stock': 'features.registrar_stock',
+  'employee-relocation': 'features.employee_relocation',
   'warehouse-inventory': 'features.warehouse_inventory',
   'my-equipment': 'features.my_equipment',
   'qr-scanner': 'features.qr_scanner',

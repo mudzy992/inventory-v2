@@ -16,8 +16,10 @@ import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
-import type { PageId } from './Layout';
+import type { PageId } from './page-id';
 import { PageTabs } from './ui/page-tabs';
+import { PageHeaderRow } from './ui/page-header-row';
+import { ResponsiveTable } from './ui/responsive-table';
 
 interface EquipmentPageProps {
   onNavigate?: (page: PageId) => void;
@@ -146,17 +148,15 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Oprema</h1>
-          <p className="text-gray-500 mt-1">
-            {labelsEnabled
-              ? 'Evidencija opreme. Naljepnice: označite redove u tabeli (checkbox), zatim „Štampaj naljepnice“.'
-              : 'Evidencija opreme.'}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {labelsEnabled && selectedIds.size > 0 && (
+      <PageHeaderRow
+        title="Oprema"
+        description={
+          labelsEnabled
+            ? 'Evidencija opreme. Naljepnice: označite redove u tabeli (checkbox), zatim „Štampaj naljepnice“.'
+            : 'Evidencija opreme.'
+        }
+        actions={
+          labelsEnabled && selectedIds.size > 0 ? (
             <button
               type="button"
               onClick={() => setShowLabels(true)}
@@ -164,9 +164,9 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
             >
               <Printer size={16} /> Štampaj naljepnice ({selectedIds.size})
             </button>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {canManage && (
         <div className="mb-4 flex flex-wrap items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
@@ -237,14 +237,14 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
       {viewMode === 'list' ? (
         <>
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex gap-4 flex-wrap items-center">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
+        <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Pretraži po inv. broju, serijskom broju, osobi..."
             className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Filter size={14} className="text-gray-400" />
           <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
@@ -262,16 +262,45 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
       </div>
 
       {/* Summary */}
-      <div className="flex gap-3 mb-4 text-xs">
+      <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 text-xs">
         <span className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg">Prikazano: <strong>{filtered.length}</strong> od {state.equipment.length}</span>
         <span className="bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-blue-700">Skladište: <strong>{filtered.filter(e => e.status === 'skladiste').length}</strong></span>
         <span className="bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg text-green-700">Zaduženo: <strong>{filtered.filter(e => e.status === 'zaduzeno').length}</strong></span>
         <span className="bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-red-700">Rashod: <strong>{filtered.filter(e => e.status === 'rashodovano').length}</strong></span>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+      <ResponsiveTable
+        isEmpty={filtered.length === 0}
+        emptyMessage="Nema rezultata"
+        mobile={filtered.map((eq) => {
+          const cat = state.categories.find(c => c.id === eq.categoryId);
+          const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
+          return (
+            <div key={eq.id} className="p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</p>
+                  <p className="text-sm text-gray-600">{cat?.name || '—'}</p>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${getStatusColor(eq.status)}`}>
+                  {getStatusLabel(eq.status)}
+                </span>
+              </div>
+              {holder ? <p className="text-xs text-gray-500">{getEmployeeFullName(holder)}</p> : null}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-blue-600 p-1" title="Detalji">
+                  <Eye size={14} />
+                </button>
+                {eq.status !== 'rashodovano' && canManage && (
+                  <button type="button" onClick={() => openEdit(eq)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
+                    <Edit2 size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        desktop={
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left">
@@ -360,14 +389,14 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
                     <td className="px-4 py-3 text-xs text-gray-500">{formatDate(eq.entryDate)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        <button onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-blue-600 p-1" title="Pogledaj detalje / QR">
+                        <button type="button" onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-blue-600 p-1" title="Pogledaj detalje / QR">
                           <QrCode size={14} />
                         </button>
-                        <button onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-gray-700 p-1" title="Pogledaj detalje">
+                        <button type="button" onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-gray-700 p-1" title="Pogledaj detalje">
                           <Eye size={14} />
                         </button>
                         {eq.status !== 'rashodovano' && canManage && (
-                          <button onClick={() => openEdit(eq)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
+                          <button type="button" onClick={() => openEdit(eq)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                             <Edit2 size={14} />
                           </button>
                         )}
@@ -376,13 +405,10 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
-                <tr><td colSpan={labelsEnabled ? 9 : 8} className="text-center text-gray-400 py-12">Nema rezultata</td></tr>
-              )}
             </tbody>
           </table>
-        </div>
-      </div>
+        }
+      />
         </>
       ) : null}
 
@@ -405,8 +431,8 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
 
       {/* Edit Form Modal */}
       {showForm && editing && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => { setShowForm(false); setEditing(null); }}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={() => { setShowForm(false); setEditing(null); }}>
+          <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-semibold">Uredi opremu</h2>
             </div>

@@ -18,7 +18,7 @@ import { employeeMatchesScope } from '../../helpers/registrar-scope';
 import { useStore, useRefreshData } from '../../useStore';
 import { getCurrentUser } from '../../store';
 import type { Category, WarehouseStockLot, WarehouseStockLotStatus } from '../../types';
-import { PageHeader } from '../ui/page-header';
+import { PageHeaderRow } from '../ui/page-header-row';
 import { Button } from '../ui/button';
 import { cardClass, inputClass, labelClass } from '../ui/form-styles';
 import { Badge, type BadgeProps } from '../ui/badge';
@@ -373,7 +373,7 @@ export const RegistrarStockPage = () => {
   }
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHeaderRow
         title="Skladišna roba"
         description="Definišite specifikaciju lotova i izdajte pojedinačne komade na radnike."
       />

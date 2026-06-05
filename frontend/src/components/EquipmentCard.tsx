@@ -239,8 +239,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
         closeOnBackdrop={!showTransferModal}
         panelClassName="max-w-3xl"
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+        <div className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full max-h-[90dvh] overflow-hidden flex flex-col">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
               <Package size={20} className="text-white" />
@@ -264,7 +264,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-5">
               {holder && (

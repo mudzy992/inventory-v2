@@ -78,7 +78,41 @@ enum NotificationType {
   inventory_session_closed
   disposal_approval_pending
   warehouse_stock_received
+  employee_relocation_action_required
+  employee_relocation_incoming
+  employee_relocation_admin_alert
+  employee_relocation_resolved
   info
+}
+
+enum EmployeeRelocationCaseStatus {
+  open
+  resolved
+  cancelled
+}
+
+enum EmployeeRelocationLineStatus {
+  pending_source
+  pending_dest
+  accepted
+  rejected
+  discharged
+}
+
+enum EmployeeRelocationSourceAction {
+  transfer
+  discharge
+}
+
+enum EmployeeRelocationEventAction {
+  case_opened
+  source_transfer
+  source_discharge
+  dest_accepted
+  dest_rejected
+  case_resolved
+  case_cancelled
+  superseded
 }
 
 enum WarehouseStockLotStatus {
@@ -262,6 +296,10 @@ model User {
   warehouseTransferTemplatesUploaded WarehouseTransferTemplate[] @relation("WarehouseTransferTemplateUploadedBy")
   installedPartsCreated            EquipmentInstalledPart[]      @relation("InstalledPartByUser")
   installedPartEvents                EquipmentInstalledPartEvent[] @relation("InstalledPartEventActor")
+  relocationCasesCreated           EmployeeRelocationCase[]      @relation("RelocationCaseCreatedBy")
+  relocationLinesSourceResolved    EmployeeRelocationLine[]      @relation("RelocationLineSourceResolver")
+  relocationLinesDestResolved      EmployeeRelocationLine[]      @relation("RelocationLineDestResolver")
+  relocationEvents                 EmployeeRelocationEvent[]     @relation("RelocationEventActor")
 
   @@index([role])
   @@map("users")
@@ -311,6 +349,7 @@ model Employee {
   inventoryCommitteeMembers InventoryCommitteeMember[]
   inventoryWarehouseCommitteeMembers InventoryWarehouseCommitteeMember[]
   inventoryLineRelocations  InventoryLine[]            @relation("InventoryLineRelocationPerson")
+  relocationCases           EmployeeRelocationCase[]
 
   @@index([orgUnitId])
   @@map("employees")
@@ -438,10 +477,29 @@ model Category {
   hostMaintenanceLinks    CategoryMaintenanceLink[] @relation("HostCategoryMaintenance")
   linkedAsMaintenanceLeaf CategoryMaintenanceLink[] @relation("MaintenanceCategoryLink")
   installedPartsAsType    EquipmentInstalledPart[]
+  catalogItems            EquipmentCatalogItem[]
 
   @@index([parentId])
   @@index([categoryKind])
   @@map("categories")
+}
+
+model EquipmentCatalogItem {
+  id         String   @id @default(uuid())
+  code       String   @unique @db.VarChar(64)
+  name       String   @db.VarChar(255)
+  categoryId String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category   Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  stockLots  WarehouseStockLot[]
+  equipment  Equipment[]
+
+  @@index([categoryId])
+  @@index([name])
+  @@map("equipment_catalog_items")
 }
 
 model CategoryMaintenanceLink {
@@ -461,6 +519,7 @@ model CategoryMaintenanceLink {
 model Equipment {
   id                 String              @id @default(uuid())
   categoryId         String
+  catalogItemId      String?
   stockLotId         String?
   inventoryNumber    String              @unique @db.VarChar(120)
   specifications     Json
@@ -475,6 +534,7 @@ model Equipment {
   updatedAt          DateTime            @updatedAt
 
   category       Category        @relation(fields: [categoryId], references: [id])
+  catalogItem    EquipmentCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
   stockLot       WarehouseStockLot? @relation(fields: [stockLotId], references: [id], onDelete: SetNull)
   currentHolder  Employee?       @relation("EquipmentHolder", fields: [currentHolderId], references: [id], onDelete: SetNull)
   warehouse      Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
@@ -485,8 +545,10 @@ model Equipment {
   equipmentEvents       EquipmentEvent[]
   disposalInventoryApprovals DisposalInventoryApproval[]
   installedParts           EquipmentInstalledPart[]
+  relocationLines          EmployeeRelocationLine[]
 
   @@index([categoryId])
+  @@index([catalogItemId])
   @@index([stockLotId])
   @@index([status])
   @@index([currentHolderId])
@@ -498,8 +560,10 @@ model WarehouseStockLot {
   id                  String                  @id @default(uuid())
   warehouseId         String
   categoryId          String
+  catalogItemId       String?
   lotKind             WarehouseStockLotKind     @default(ISSUABLE)
   productName         String                  @db.VarChar(255)
+  incomingRelocation  Boolean                 @default(false)
   quantityReceived    Int
   quantityOnHand      Int
   status              WarehouseStockLotStatus
@@ -515,14 +579,17 @@ model WarehouseStockLot {
 
   warehouse      Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   category       Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  catalogItem    EquipmentCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
   receivedBy     User        @relation("StockLotReceivedBy", fields: [receivedByUserId], references: [id], onDelete: Restrict)
   specDefinedBy  User?       @relation("StockLotSpecDefinedBy", fields: [specDefinedByUserId], references: [id], onDelete: SetNull)
   issuedUnits      Equipment[]
   inventoryLines   InventoryWarehouseLine[]
   installedParts   EquipmentInstalledPart[]
+  relocationDestLines EmployeeRelocationLine[] @relation("RelocationDestStockLot")
 
   @@index([warehouseId])
   @@index([categoryId])
+  @@index([catalogItemId])
   @@index([status])
   @@index([lotKind], map: "wh_stock_lots_lotKind_idx")
   @@map("warehouse_stock_lots")
@@ -951,6 +1018,72 @@ model InventoryWarehouseLine {
   @@unique([committeeId, stockLotId])
   @@index([committeeId])
   @@map("inventory_warehouse_lines")
+}
+
+model EmployeeRelocationCase {
+  id              String                     @id @default(uuid())
+  employeeId      String
+  fromOrgUnitId   String
+  toOrgUnitId     String
+  fromWarehouseId String
+  toWarehouseId   String
+  status          EmployeeRelocationCaseStatus @default(open)
+  createdByUserId String
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  resolvedAt      DateTime?
+
+  employee      Employee                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy     User                     @relation("RelocationCaseCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lines         EmployeeRelocationLine[]
+  events        EmployeeRelocationEvent[]
+
+  @@index([employeeId, status])
+  @@index([status])
+  @@map("employee_relocation_cases")
+}
+
+model EmployeeRelocationLine {
+  id                   String                        @id @default(uuid())
+  caseId               String
+  equipmentId          String
+  categoryId           String
+  status               EmployeeRelocationLineStatus  @default(pending_source)
+  sourceAction         EmployeeRelocationSourceAction?
+  sourceResolvedByUserId String?
+  destResolvedByUserId   String?
+  destStockLotId       String?
+  resolvedAt           DateTime?
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+
+  case             EmployeeRelocationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  equipment        Equipment              @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  sourceResolvedBy User?                  @relation("RelocationLineSourceResolver", fields: [sourceResolvedByUserId], references: [id], onDelete: SetNull)
+  destResolvedBy   User?                  @relation("RelocationLineDestResolver", fields: [destResolvedByUserId], references: [id], onDelete: SetNull)
+  destStockLot     WarehouseStockLot?     @relation("RelocationDestStockLot", fields: [destStockLotId], references: [id], onDelete: SetNull)
+
+  @@unique([caseId, equipmentId])
+  @@index([caseId, status])
+  @@index([equipmentId])
+  @@map("employee_relocation_lines")
+}
+
+model EmployeeRelocationEvent {
+  id        String                        @id @default(uuid())
+  caseId    String
+  lineId    String?
+  actorUserId String
+  action    EmployeeRelocationEventAction
+  payload   Json                          @default("{}")
+  createdAt DateTime                      @default(now())
+
+  case  EmployeeRelocationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  actor User                   @relation("RelocationEventActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([actorUserId])
+  @@map("employee_relocation_events")
 }
 
 model Notification {

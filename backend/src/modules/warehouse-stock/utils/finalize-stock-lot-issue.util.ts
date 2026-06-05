@@ -7,6 +7,7 @@ interface FinalizeStockLotIssueInput {
     id: string;
     warehouseId: string;
     categoryId: string;
+    catalogItemId: string | null;
     contractNumber: string | null;
     entryDate: Date;
     specifications: Prisma.JsonValue;
@@ -26,6 +27,7 @@ export const executeStockLotIssueInTx = async (
   const equipment = await tx.equipment.create({
     data: {
       categoryId: input.lot.categoryId,
+      catalogItemId: input.lot.catalogItemId,
       stockLotId: input.lot.id,
       inventoryNumber: input.inventoryNumber,
       specifications: input.mergedSpecifications,

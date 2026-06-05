@@ -22,6 +22,7 @@ import { cn } from '../utils/cn';
 import type { OrgUnit, OrgUnitType } from '../types';
 import { OrgUnitWarehousesSection } from './organization/org-unit-warehouses-section';
 import { SearchableAutocomplete, type SearchableOption } from './searchable-autocomplete';
+import { PageHeaderRow } from './ui/page-header-row';
 
 const PARENT_ROOT_ID = '__parent_root__';
 const SIGNER_INHERIT_ID = '__inherit_signer__';
@@ -67,12 +68,12 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
   };
 
   return (
-    <div className={cn('ml-0', level > 0 && 'ml-6')}>
+    <div className={cn('ml-0', level > 0 && 'ml-3 sm:ml-6')}>
       <div className={cn(
         'border-l-4 rounded-r-lg mb-1 transition-colors',
         typeColors[unit.type] || 'border-l-gray-300 bg-gray-50'
       )}>
-        <div className="flex items-center gap-2 px-3 py-2 group">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 group">
           <button
             onClick={() => setExpanded(!expanded)}
             className="text-gray-400 hover:text-gray-600 flex-shrink-0 w-5"
@@ -100,7 +101,7 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
           <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
             <Users size={10} />{employees.length}
           </span>
-          <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+          <div className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 flex gap-1 transition-opacity ml-auto">
             <button onClick={() => onAdd(unit.id)} className="text-green-500 hover:text-green-700 p-0.5" title="Dodaj podjedinicu">
               <Plus size={14} />
             </button>
@@ -443,18 +444,19 @@ export function OrganizationPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Organizacijska struktura</h1>
-          <p className="text-gray-500 mt-1">Hijerarhija preduzeća — direkcija, distribucije, područja, podružnice</p>
-        </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
-        >
-          <Plus size={16} /> Nova jedinica
-        </button>
-      </div>
+      <PageHeaderRow
+        title="Organizacijska struktura"
+        description="Hijerarhija preduzeća — direkcija, distribucije, područja, podružnice"
+        actions={
+          <button
+            type="button"
+            onClick={openCreate}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
+          >
+            <Plus size={16} /> Nova jedinica
+          </button>
+        }
+      />
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         {rootUnits.map(unit => (
@@ -466,8 +468,8 @@ export function OrganizationPage() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold">
                 {editingUnit ? 'Uredi organizacijsku jedinicu' : 'Nova organizacijska jedinica'}

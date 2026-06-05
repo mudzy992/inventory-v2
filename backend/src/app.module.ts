@@ -21,6 +21,8 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { SetupModule } from './modules/setup/setup.module';
 import { UsersModule } from './modules/users/users.module';
 import { MaintenancePartsModule } from './modules/maintenance-parts/maintenance-parts.module';
+import { EquipmentCatalogModule } from './modules/equipment-catalog/equipment-catalog.module';
+import { EmployeeRelocationModule } from './modules/employee-relocation/employee-relocation.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -47,6 +49,8 @@ import { PrismaModule } from './prisma/prisma.module';
     CategoriesModule,
     EquipmentModule,
     MaintenancePartsModule,
+    EquipmentCatalogModule,
+    EmployeeRelocationModule,
     TransfersModule,
     UploadsModule,
     NotificationsModule,

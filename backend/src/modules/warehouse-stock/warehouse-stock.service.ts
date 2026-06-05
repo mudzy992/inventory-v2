@@ -17,9 +17,11 @@ import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-acce
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CategoriesService } from '../categories/categories.service';
+import { EquipmentCatalogService } from '../equipment-catalog/equipment-catalog.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { WarehousesService } from '../warehouses/warehouses.service';
+import { BulkCreateStockLotDto } from './dto/bulk-create-stock-lot.dto';
 import { CreateStockLotDto } from './dto/create-stock-lot.dto';
 import { IssueStockLotDto } from './dto/issue-stock-lot.dto';
 import { UpdateStockLotSpecDto } from './dto/update-stock-lot-spec.dto';
@@ -50,6 +52,7 @@ export class WarehouseStockService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly categoriesService: CategoriesService,
+    private readonly catalogService: EquipmentCatalogService,
     private readonly registrarScope: RegistrarScopeService,
     private readonly inventoryFreeze: InventoryFreezeService,
     private readonly warehousesService: WarehousesService,
@@ -125,12 +128,21 @@ export class WarehouseStockService {
     if (category.categoryKind === 'MAINTENANCE') {
       throw new BadRequestException('Use maintenance stock endpoint for maintenance categories');
     }
+    const resolved = await this.catalogService.resolveForStockLot({
+      catalogItemId: dto.catalogItemId,
+      productName: dto.productName ?? '',
+      categoryId: dto.categoryId,
+    });
+    if (!resolved.productName) {
+      throw new BadRequestException('Naziv robe ili stavka šifrarnika je obavezan');
+    }
     const lot = await this.prisma.warehouseStockLot.create({
       data: {
         warehouseId,
         categoryId: dto.categoryId,
+        catalogItemId: resolved.catalogItemId,
         lotKind: 'ISSUABLE',
-        productName: dto.productName.trim(),
+        productName: resolved.productName,
         quantityReceived: dto.quantity,
         quantityOnHand: dto.quantity,
         status: 'ceka_specifikaciju',
@@ -144,6 +156,61 @@ export class WarehouseStockService {
     });
     await this.notificationsService.notifyWarehouseStockReceived(lot.id);
     return this.mapLotForUser(user, lot, true);
+  }
+
+  async receiveBulk(user: AuthenticatedUser, warehouseId: string, dto: BulkCreateStockLotDto) {
+    await this.settingsService.assertFeatureEnabled('features.registrar_stock');
+    if (user.role !== 'skladistar' && user.role !== 'admin') {
+      throw new ForbiddenException('Only warehouse keeper can receive stock');
+    }
+    if (user.role === 'skladistar') {
+      await this.warehousesService.assertKeeperCanManageWarehouse(user, warehouseId);
+    }
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { cityId: true, isActive: true },
+    });
+    if (!warehouse?.isActive) {
+      throw new BadRequestException('Warehouse not found or inactive');
+    }
+    await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_create');
+    const createdLots = await this.prisma.$transaction(async (tx) => {
+      const lots = [];
+      for (const item of dto.items) {
+        const category = await this.categoriesService.assertLeafCategory(item.categoryId);
+        if (category.categoryKind === 'MAINTENANCE') {
+          throw new BadRequestException('Use maintenance stock endpoint for maintenance categories');
+        }
+        const resolved = await this.catalogService.resolveForStockLot({
+          catalogItemId: item.catalogItemId,
+          productName: '',
+          categoryId: item.categoryId,
+        });
+        const lot = await tx.warehouseStockLot.create({
+          data: {
+            warehouseId,
+            categoryId: item.categoryId,
+            catalogItemId: resolved.catalogItemId,
+            lotKind: 'ISSUABLE',
+            productName: resolved.productName,
+            quantityReceived: item.quantity,
+            quantityOnHand: item.quantity,
+            status: 'ceka_specifikaciju',
+            specifications: {},
+            contractNumber: item.contractNumber?.trim() || null,
+            entryDate: new Date(item.entryDate),
+            receivedByUserId: user.id,
+          },
+          include: { category: true, warehouse: true },
+        });
+        lots.push(lot);
+      }
+      return lots;
+    });
+    for (const lot of createdLots) {
+      await this.notificationsService.notifyWarehouseStockReceived(lot.id);
+    }
+    return createdLots.map((lot) => this.mapLotForUser(user, lot, true));
   }
 
   async defineSpecifications(
@@ -234,6 +301,7 @@ export class WarehouseStockService {
             id: lot.id,
             warehouseId: lot.warehouseId,
             categoryId: lot.categoryId,
+            catalogItemId: lot.catalogItemId,
             contractNumber: lot.contractNumber,
             entryDate: lot.entryDate,
             specifications: lot.specifications,

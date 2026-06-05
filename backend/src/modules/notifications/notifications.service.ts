@@ -246,6 +246,57 @@ export class NotificationsService {
     });
   }
 
+  async notifyEmployeeRelocationActionRequired(input: {
+    userId: string;
+    employeeName: string;
+    caseId: string;
+    messageSuffix?: string;
+  }): Promise<void> {
+    if (!(await this.areNotificationsEnabled())) {
+      return;
+    }
+    await this.createForUsers([input.userId], {
+      type: 'employee_relocation_action_required',
+      title: 'Promjena org. jedinice — potrebna akcija',
+      message: `Radnik ${input.employeeName} promijenio org. jedinicu. Potrebna akcija za zaduženu opremu${input.messageSuffix ?? ''}.`,
+      relatedId: input.caseId,
+    });
+  }
+
+  async notifyEmployeeRelocationIncoming(input: {
+    userId: string;
+    employeeName: string;
+    inventoryNumber: string;
+    lineId: string;
+  }): Promise<void> {
+    if (!(await this.areNotificationsEnabled())) {
+      return;
+    }
+    await this.createForUsers([input.userId], {
+      type: 'employee_relocation_incoming',
+      title: 'Nova oprema za prihvat',
+      message: `Oprema ${input.inventoryNumber} (radnik ${input.employeeName}) čeka prihvat na vaše skladište.`,
+      relatedId: input.lineId,
+    });
+  }
+
+  async notifyEmployeeRelocationAdminAlert(input: {
+    userIds: string[];
+    title: string;
+    message: string;
+    relatedId: string;
+  }): Promise<void> {
+    if (!(await this.areNotificationsEnabled())) {
+      return;
+    }
+    await this.createForUsers(input.userIds, {
+      type: 'employee_relocation_admin_alert',
+      title: input.title,
+      message: input.message,
+      relatedId: input.relatedId,
+    });
+  }
+
   async notifyWarehouseStockReceived(lotId: string): Promise<void> {
     if (!(await this.areNotificationsEnabled())) {
       return;

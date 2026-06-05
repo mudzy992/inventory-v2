@@ -4,6 +4,7 @@ import { LocationResolutionService } from '../../common/services/location-resolu
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EmployeeRelocationService } from '../employee-relocation/employee-relocation.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
@@ -16,6 +17,7 @@ export class EmployeesService {
     private readonly registrarScope: RegistrarScopeService,
     private readonly locationResolutionService: LocationResolutionService,
     private readonly settingsService: SettingsService,
+    private readonly employeeRelocationService: EmployeeRelocationService,
   ) {}
 
   async findAll(user: AuthenticatedUser, query: ListEmployeesQueryDto): Promise<Employee[]> {
@@ -66,13 +68,26 @@ export class EmployeesService {
     return this.prisma.employee.create({ data: dto });
   }
 
-  async update(id: string, dto: UpdateEmployeeDto): Promise<Employee> {
+  async update(
+    id: string,
+    dto: UpdateEmployeeDto,
+    actorUserId?: string,
+  ): Promise<Employee> {
     await this.settingsService.assertFeatureEnabled('features.employees');
-    await this.findByIdOrThrow(id);
+    const existing = await this.findByIdOrThrow(id);
     if (dto.orgUnitId) {
       await this.assertOrgUnitExists(dto.orgUnitId);
     }
-    return this.prisma.employee.update({ where: { id }, data: dto });
+    const updated = await this.prisma.employee.update({ where: { id }, data: dto });
+    if (dto.orgUnitId && dto.orgUnitId !== existing.orgUnitId && actorUserId) {
+      await this.employeeRelocationService.handleOrgUnitChange(
+        id,
+        existing.orgUnitId,
+        dto.orgUnitId,
+        actorUserId,
+      );
+    }
+    return updated;
   }
 
   async remove(id: string): Promise<void> {

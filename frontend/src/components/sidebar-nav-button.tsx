@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '../utils/cn';
-import type { PageId } from './Layout';
+import type { PageId } from './page-id';
 
 interface SidebarNavButtonProps {
   pageId: PageId;

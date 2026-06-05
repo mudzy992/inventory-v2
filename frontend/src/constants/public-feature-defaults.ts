@@ -19,6 +19,8 @@ export const PUBLIC_FEATURE_DEFAULTS: Record<string, boolean> = {
   'features.qr_scanner': true,
   'features.public_equipment_lookup': true,
   'features.maintenance_parts': true,
+  'features.equipment_catalog': true,
+  'features.employee_relocation': true,
 };
 
 const isExplicitBooleanSetting = (value: string | number | boolean | undefined): boolean =>

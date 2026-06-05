@@ -16,6 +16,23 @@ export const createStockLotApi = (warehouseId: string, body: Record<string, unkn
     body: JSON.stringify(body),
   });
 
+export const bulkCreateStockLotsApi = (
+  warehouseId: string,
+  body: {
+    items: Array<{
+      categoryId: string;
+      catalogItemId: string;
+      quantity: number;
+      entryDate: string;
+      contractNumber?: string;
+    }>;
+  },
+) =>
+  apiRequest<WarehouseStockLot[]>(`/warehouses/${warehouseId}/stock-lots/bulk`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
 export const updateStockLotSpecApi = (id: string, specifications: Record<string, string>) =>
   apiRequest<WarehouseStockLot>(`/stock-lots/${id}/specifications`, {
     method: 'PATCH',

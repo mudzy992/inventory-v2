@@ -57,13 +57,18 @@ export const ModalRoot = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 bg-black/50"
+      className="fixed inset-0 flex items-end sm:items-center justify-center sm:p-4 bg-black/50"
       style={{ zIndex }}
       onClick={closeOnBackdrop ? onClose : undefined}
       role="presentation"
     >
       <div
-        className={cn('w-full', SIZE_CLASS[size], panelClassName)}
+        className={cn(
+          'w-full max-h-[90dvh] overflow-y-auto',
+          'rounded-t-xl sm:rounded-xl',
+          SIZE_CLASS[size],
+          panelClassName,
+        )}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"

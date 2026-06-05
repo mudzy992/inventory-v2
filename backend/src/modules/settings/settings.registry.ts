@@ -282,6 +282,25 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'modules',
   }),
   def({
+    key: 'features.equipment_catalog',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Šifrarnik opreme',
+    description: 'Globalni šifrarnik tipova opreme po kategoriji za mapiranje između skladišta.',
+    group: 'modules',
+  }),
+  def({
+    key: 'features.employee_relocation',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Promjena org. jedinice i oprema',
+    description:
+      'Workflow kada radnik mijenja org. jedinicu između skladišta — akcije evidentičara i međuskladišni transfer.',
+    group: 'modules',
+  }),
+  def({
     key: 'features.cross_service_transfer',
     scope: 'private',
     valueType: 'boolean',

@@ -11,7 +11,7 @@ import {
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { useStore, useRefreshData } from '../useStore';
-import { PageHeader } from './ui/page-header';
+import { PageHeaderRow } from './ui/page-header-row';
 import { FormCard } from './ui/form-card';
 import { Button } from './ui/button';
 import { PageTabs } from './ui/page-tabs';
@@ -153,7 +153,7 @@ export const LocationsPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Lokacije" description="Kantoni i gradovi — vezuju se na org. jedinice" />
+      <PageHeaderRow title="Lokacije" description="Kantoni i gradovi — vezuju se na org. jedinice" />
       <PageTabs
         tabs={[
           { id: 'registry', label: 'Registar', icon: List },

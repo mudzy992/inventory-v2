@@ -23,6 +23,11 @@ In-app notifikacije za autentificirane korisnike. Realtime preko Socket.IO; REST
 | `inventory_transfer_upload_pending` | Draft prenosnica na liniji popisa (`promjena_lokacije`) bez uploada | članovi komisije popisa |
 | `inventory_session_closed` | Close job `done` | admin, članovi komisija sesije, evidentičari u scope-u distribucije |
 | `disposal_approval_pending` | `DisposalInventoryApproval` status `pending` (popisni rashod) | članovi komisije rashoda vezanog uz komitet |
+| `warehouse_stock_received` | Prijem stock lota | evidentičari za `(warehouseId, categoryId)` |
+| `employee_relocation_action_required` | Promjena org. jedinice između skladišta | izvorni evidentičar po kategoriji |
+| `employee_relocation_incoming` | Izvor poslao transfer opreme | ciljni evidentičar |
+| `employee_relocation_admin_alert` | Nema evidentičara / legacy šifrarnik / sažetak | admin |
+| `employee_relocation_resolved` | Case resolved (buduće) | admin, radnik |
 | `info` | Ručno / buduće | po definiciji |
 
 ## REST API

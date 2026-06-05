@@ -17,11 +17,10 @@ import {
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
 import type { PageId } from './Layout';
-import { PageHeader } from './ui/page-header';
+import { PageHeaderRow } from './ui/page-header-row';
+import { ResponsiveTable } from './ui/responsive-table';
 import { FormCard } from './ui/form-card';
 import { Button } from './ui/button';
-import { DataTable } from './ui/data-table';
-import { EmptyState } from './ui/empty-state';
 import { Badge } from './ui/badge';
 import { inputClass, labelClass, selectClass } from './ui/form-styles';
 import { PageTabs } from './ui/page-tabs';
@@ -120,7 +119,7 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
   }
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeaderRow
         title={skladistar && !admin ? 'Moja skladišta' : 'Skladišta'}
         description={
           skladistar && !admin
@@ -232,7 +231,32 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
         </FormCard>
       ) : null}
       {tab === 'list' ? (
-      <DataTable>
+      <ResponsiveTable
+        isEmpty={visibleWarehouses.length === 0}
+        emptyMessage="Nema skladišta u vašem opsegu."
+        mobile={visibleWarehouses.map((wh) => {
+          const org = wh.orgUnitId ? state.orgUnits.find((row) => row.id === wh.orgUnitId) : null;
+          return (
+            <div key={wh.id} className="p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-medium text-gray-800">{wh.name}</p>
+                <Badge tone={isCentralWarehouse(wh) ? 'info' : 'success'}>
+                  {isCentralWarehouse(wh) ? 'Centralno' : 'Org'}
+                </Badge>
+              </div>
+              <p className="text-xs text-gray-500">{getCityLabel(state.cities, wh.cityId)}</p>
+              {org ? <p className="text-xs text-gray-500">{org.name}</p> : null}
+              <button
+                type="button"
+                className="text-sm text-blue-600 underline"
+                onClick={() => setSelectedWarehouseId(wh.id)}
+              >
+                Otvori detalj
+              </button>
+            </div>
+          );
+        })}
+        desktop={
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
@@ -268,16 +292,10 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
                 </tr>
               );
             })}
-            {visibleWarehouses.length === 0 ? (
-              <tr>
-                <td colSpan={5}>
-                  <EmptyState message="Nema skladišta u vašem opsegu." />
-                </td>
-              </tr>
-            ) : null}
           </tbody>
         </table>
-      </DataTable>
+        }
+      />
       ) : null}
     </div>
   );

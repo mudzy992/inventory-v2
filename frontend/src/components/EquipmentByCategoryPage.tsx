@@ -231,12 +231,12 @@ export function EquipmentByCategoryPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Oprema po kategorijama</h1>
-        <p className="text-gray-500 mt-1">Pregled i filtriranje opreme organizovano po kategorijama</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Oprema po kategorijama</h1>
+        <p className="text-gray-500 mt-1 text-sm sm:text-base">Pregled i filtriranje opreme organizovano po kategorijama</p>
       </div>
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-4 text-sm">
+      <div className="flex flex-wrap items-center gap-2 mb-4 text-sm">
         <button 
           onClick={() => { setSelectedParentId(null); setSelectedSubId(null); handleCloseEquipment(); }}
           className={`${!selectedParentId ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}

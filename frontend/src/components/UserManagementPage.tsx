@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Plus, Edit2, Search, User } from 'lucide-react';
+import { Plus, Edit2, Search } from 'lucide-react';
 import { useStore, useRefreshData } from '../useStore';
 import { getEmployeeFullName } from '../helpers';
 import { formatRegistrarAssignmentLabel } from '../helpers/org-warehouse.util';
 import { USER_ROLE_META } from './user-management/user-role-config';
 import { UserFormModal, type UserFormMode } from './user-management/user-form-modal';
 import type { UserAccount } from '../types';
+import { PageHeaderRow } from './ui/page-header-row';
+import { ResponsiveTable } from './ui/responsive-table';
 
 export function UserManagementPage() {
   const [state] = useStore();
@@ -49,20 +51,20 @@ export function UserManagementPage() {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Upravljanje korisnicima</h1>
-          <p className="text-gray-500 mt-1">Dodjeljivanje uloga i upravljanje pristupom</p>
-        </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          disabled={employeesWithoutAccount.length === 0}
-          className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Plus size={16} /> Novi korisnik
-        </button>
-      </div>
+      <PageHeaderRow
+        title="Upravljanje korisnicima"
+        description="Dodjeljivanje uloga i upravljanje pristupom"
+        actions={
+          <button
+            type="button"
+            onClick={openCreate}
+            disabled={employeesWithoutAccount.length === 0}
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={16} /> Novi korisnik
+          </button>
+        }
+      />
 
       {employeesWithoutAccount.length > 0 && (
         <p className="text-xs text-gray-500 mb-4">
@@ -70,8 +72,8 @@ export function UserManagementPage() {
         </p>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex gap-4 flex-wrap items-center">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
+        <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -105,8 +107,33 @@ export function UserManagementPage() {
         </span>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+      <ResponsiveTable
+        isEmpty={filteredUsers.length === 0}
+        emptyMessage="Nema rezultata"
+        mobile={filteredUsers.map((user) => {
+          const emp = state.employees.find((row) => row.id === user.employeeId);
+          const role = USER_ROLE_META[user.role];
+          return (
+            <div key={user.id} className="p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium text-gray-800">{emp ? getEmployeeFullName(emp) : user.username}</p>
+                  <p className="text-xs text-gray-500 font-mono">{user.username}</p>
+                </div>
+                <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium shrink-0 ${role.color}`}>
+                  {role.icon} {role.label}
+                </span>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full inline-block ${user.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {user.isActive ? 'Aktivan' : 'Neaktivan'}
+              </span>
+              <button type="button" onClick={() => openEdit(user)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
+                <Edit2 size={14} />
+              </button>
+            </div>
+          );
+        })}
+        desktop={
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left">
@@ -198,18 +225,10 @@ export function UserManagementPage() {
                   </tr>
                 );
               })}
-              {filteredUsers.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="text-center text-gray-400 py-12">
-                    <User size={24} className="mx-auto mb-2 opacity-40" />
-                    Nema rezultata
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
-        </div>
-      </div>
+        }
+      />
 
       {formMode && (
         <UserFormModal

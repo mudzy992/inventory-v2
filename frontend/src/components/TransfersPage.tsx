@@ -23,7 +23,9 @@ import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
-import type { PageId } from './Layout';
+import type { PageId } from './page-id';
+import { PageHeaderRow } from './ui/page-header-row';
+import { ResponsiveTable } from './ui/responsive-table';
 
 interface TransfersPageProps {
   onNavigate?: (page: PageId) => void;
@@ -185,48 +187,51 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Zaduženja i prenosi</h1>
-          <p className="text-gray-500 mt-1">Upravljanje kretanjem opreme — zaduženja, razduženja, rashod</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => openForm('zaduzenje')}
-            disabled={isFrozen}
-            className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
-          >
-            <Package size={16} /> Zaduži
-          </button>
-          <button
-            onClick={() => openForm('prenos')}
-            disabled={isFrozen}
-            className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 text-sm font-medium disabled:opacity-50"
-          >
-            <ArrowRight size={16} /> Prenos
-          </button>
-          <button
-            onClick={() => openForm('razduzenje')}
-            disabled={isFrozen}
-            className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
-          >
-            <Warehouse size={16} /> Razduži
-          </button>
-          <button
-            onClick={() => openForm('rashodovanje')}
-            disabled={isFrozen}
-            className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
-          >
-            <Trash2 size={16} /> Rashod
-          </button>
-        </div>
-      </div>
+      <PageHeaderRow
+        title="Zaduženja i prenosi"
+        description="Upravljanje kretanjem opreme — zaduženja, razduženja, rashod"
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => openForm('zaduzenje')}
+              disabled={isFrozen}
+              className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
+            >
+              <Package size={16} /> Zaduži
+            </button>
+            <button
+              type="button"
+              onClick={() => openForm('prenos')}
+              disabled={isFrozen}
+              className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 text-sm font-medium disabled:opacity-50"
+            >
+              <ArrowRight size={16} /> Prenos
+            </button>
+            <button
+              type="button"
+              onClick={() => openForm('razduzenje')}
+              disabled={isFrozen}
+              className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+            >
+              <Warehouse size={16} /> Razduži
+            </button>
+            <button
+              type="button"
+              onClick={() => openForm('rashodovanje')}
+              disabled={isFrozen}
+              className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+            >
+              <Trash2 size={16} /> Rashod
+            </button>
+          </>
+        }
+      />
 
       <InventoryFreezeActionHint onOpenInventory={onNavigate} />
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex gap-4 flex-wrap items-center">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
+        <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Pretraži..."
@@ -245,9 +250,44 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+      <ResponsiveTable
+        isEmpty={filtered.length === 0}
+        emptyMessage="Nema rezultata"
+        mobile={filtered.map((t) => {
+          const eq = state.equipment.find(e => e.id === t.equipmentId);
+          const cat = eq ? state.categories.find(c => c.id === eq.categoryId) : null;
+          const from = t.fromPersonId ? state.employees.find(e => e.id === t.fromPersonId) : null;
+          const to = t.toPersonId ? state.employees.find(e => e.id === t.toPersonId) : null;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              className={`w-full text-left p-4 space-y-1 ${selectedTransferId === t.id ? 'bg-blue-50' : ''}`}
+              onClick={() => setSelectedTransferId(t.id)}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-xs font-medium text-gray-800">{t.documentNumber}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getStatusColor(t.status)}`}>
+                  {t.status === 'raw' ? 'RAW' : 'Potpisan'}
+                </span>
+              </div>
+              <p className={`text-xs font-semibold ${
+                t.type === 'zaduzenje' ? 'text-green-600' :
+                t.type === 'razduzenje' ? 'text-blue-600' :
+                t.type === 'rashodovanje' ? 'text-red-600' :
+                'text-orange-600'
+              }`}>{getStatusLabel(t.type)}</p>
+              <p className="text-xs text-gray-600">{eq?.inventoryNumber} · {cat?.name}</p>
+              <p className="text-xs text-gray-500">{formatDate(t.date)}</p>
+              <p className="text-xs text-gray-500 truncate">
+                {t.fromType === 'skladiste' ? 'Skladište' : from ? getEmployeeFullName(from) : '—'}
+                {' → '}
+                {t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : to ? getEmployeeFullName(to) : '—'}
+              </p>
+            </button>
+          );
+        })}
+        desktop={
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left">
@@ -332,13 +372,10 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
-                <tr><td colSpan={9} className="text-center text-gray-400 py-12">Nema rezultata</td></tr>
-              )}
             </tbody>
           </table>
-        </div>
-      </div>
+        }
+      />
 
       {selectedTransferId && (() => {
         const selected = state.transfers.find((t) => t.id === selectedTransferId);
@@ -358,8 +395,8 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
 
       {/* New Transfer Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold">
                 {fType === 'zaduzenje' && '📦 Novo zaduženje — sa skladišta na osobu'}

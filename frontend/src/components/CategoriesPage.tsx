@@ -20,10 +20,12 @@ import { CategoryFieldBadges } from './categories/category-field-badges';
 import { CategoryMaintenanceCatalogBadges } from './categories/category-maintenance-catalog-badges';
 import { CategoryAssetSubcategoryDialog } from './categories/category-asset-subcategory-dialog';
 import { isAssetLeafCategory } from '../helpers/expand-maintenance-catalog.util';
+import { EquipmentCatalogPanel } from './catalog/equipment-catalog-panel';
 import { PageTabs } from './ui/page-tabs';
+import { PageHeaderRow } from './ui/page-header-row';
 import { inputClass, labelClass } from './ui/form-styles';
 
-type CategoriesTabId = 'asset' | 'maintenance';
+type CategoriesTabId = 'asset' | 'maintenance' | 'catalog';
 
 export function CategoriesPage() {
   const [state] = useStore();
@@ -31,6 +33,7 @@ export function CategoriesPage() {
   const { toastError, toastSuccess } = useToast();
   const { getBoolean } = usePublicSettings();
   const maintenanceEnabled = getBoolean('features.maintenance_parts', true);
+  const catalogEnabled = getBoolean('features.equipment_catalog', true);
   const [activeTab, setActiveTab] = useState<CategoriesTabId>('asset');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
@@ -187,31 +190,37 @@ export function CategoriesPage() {
     : (fParentId ? 'Nova podkategorija' : 'Nova glavna kategorija');
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Kategorije</h1>
-          <p className="text-gray-500 mt-1">Oprema i dijelovi za održavanje — odvojene hijerarhije</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => openAddParent(activeTab === 'asset' ? 'ASSET' : 'MAINTENANCE')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white ${
-            activeTab === 'asset' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700'
-          }`}
-        >
-          <Plus size={16} />
-          {activeTab === 'asset' ? 'Nova glavna (oprema)' : 'Nova grupa (održavanje)'}
-        </button>
-      </div>
+      <PageHeaderRow
+        title="Kategorije"
+        description="Oprema i dijelovi za održavanje — odvojene hijerarhije"
+        actions={
+          activeTab !== 'catalog' ? (
+            <button
+              type="button"
+              onClick={() => openAddParent(activeTab === 'asset' ? 'ASSET' : 'MAINTENANCE')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white ${
+                activeTab === 'asset' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700'
+              }`}
+            >
+              <Plus size={16} />
+              {activeTab === 'asset' ? 'Nova glavna (oprema)' : 'Nova grupa (održavanje)'}
+            </button>
+          ) : undefined
+        }
+      />
       <PageTabs
         tabs={[
           { id: 'asset', label: 'Kategorije opreme', icon: Folder },
           { id: 'maintenance', label: 'Kategorije održavanja', icon: Wrench },
+          ...(catalogEnabled
+            ? [{ id: 'catalog' as const, label: 'Šifrarnik opreme', icon: Layers }]
+            : []),
         ]}
         activeTab={activeTab}
         onChange={setActiveTab}
         className="mb-6"
       />
+      {activeTab === 'catalog' && catalogEnabled ? <EquipmentCatalogPanel /> : null}
       {activeTab === 'asset' ? (
         <div className="space-y-4">
           {assetParentCategories.map((parent) => {
@@ -293,7 +302,7 @@ export function CategoriesPage() {
             </div>
           ) : null}
         </div>
-      ) : (
+      ) : activeTab === 'maintenance' ? (
         <div className="space-y-4">
           {maintenanceParentCategories.map((parent) => {
             const subs = state.categories.filter((row) => row.parentId === parent.id);
@@ -361,7 +370,7 @@ export function CategoriesPage() {
             </div>
           ) : null}
         </div>
-      )}
+      ) : null}
       {isAssetSubcategoryForm ? (
         <CategoryAssetSubcategoryDialog
           key={editing?.id ?? `draft-${fParentId ?? 'new'}`}

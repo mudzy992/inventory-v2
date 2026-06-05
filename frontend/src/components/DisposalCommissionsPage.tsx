@@ -12,9 +12,9 @@ import { useToast } from '../contexts/toast-context';
 import { Badge } from './ui/badge';
 import { useStore, useRefreshData } from '../useStore';
 import { isAdmin } from '../store';
-import { PageHeader } from './ui/page-header';
+import { PageHeaderRow } from './ui/page-header-row';
+import { ResponsiveTable } from './ui/responsive-table';
 import { Button } from './ui/button';
-import { DataTable } from './ui/data-table';
 import { EmptyState } from './ui/empty-state';
 import { PageTabs } from './ui/page-tabs';
 import { DisposalCommissionFormModal } from './disposal-commissions/disposal-commission-form-modal';
@@ -73,18 +73,18 @@ export const DisposalCommissionsPage = () => {
   };
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <PageHeader
-          title="Komisije za rashod"
-          description="Jedna aktivna komisija po gradu. Rashod opreme se vezuje na grad lokacije radnika ili skladišta gdje je oprema."
-        />
-        {admin && tab === 'commissions' ? (
-          <Button onClick={() => setShowCreateModal(true)}>
-            <Plus size={16} />
-            Nova komisija
-          </Button>
-        ) : null}
-      </div>
+      <PageHeaderRow
+        title="Komisije za rashod"
+        description="Jedna aktivna komisija po gradu. Rashod opreme se vezuje na grad lokacije radnika ili skladišta gdje je oprema."
+        actions={
+          admin && tab === 'commissions' ? (
+            <Button onClick={() => setShowCreateModal(true)}>
+              <Plus size={16} />
+              Nova komisija
+            </Button>
+          ) : undefined
+        }
+      />
       <PageTabs
         tabs={[
           { id: 'commissions', label: 'Komisije', icon: Users },
@@ -96,7 +96,26 @@ export const DisposalCommissionsPage = () => {
       {tab === 'commissions' ? (
         <div>
           <h2 className="text-sm font-medium text-gray-800 mb-2">Aktivne komisije</h2>
-          <DataTable>
+          <ResponsiveTable
+            isEmpty={commissions.length === 0 && !loading}
+            emptyMessage="Nema komisija za rashod."
+            mobile={commissions.map((commission) => (
+              <div key={commission.id} className="p-4 space-y-2">
+                <p className="font-medium text-gray-800">{commission.city?.name ?? commission.cityId}</p>
+                <p className="text-sm text-gray-700">{commission.name}</p>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  {commission.members.map((member) => (
+                    <li key={member.employeeId}>
+                      {member.employee
+                        ? `${member.employee.firstName} ${member.employee.lastName}`
+                        : member.employeeId}
+                      {member.role === 'predsjednik' ? ' (predsjednik)' : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+            desktop={
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
@@ -129,16 +148,10 @@ export const DisposalCommissionsPage = () => {
                     </td>
                   </tr>
                 ))}
-                {commissions.length === 0 && !loading ? (
-                  <tr>
-                    <td colSpan={3}>
-                      <EmptyState message="Nema komisija za rashod." />
-                    </td>
-                  </tr>
-                ) : null}
               </tbody>
             </table>
-          </DataTable>
+            }
+          />
         </div>
       ) : null}
       {tab === 'legacy' ? (
@@ -151,7 +164,24 @@ export const DisposalCommissionsPage = () => {
             <p className="text-xs text-gray-500 mb-3">
               Odobrenja vezana uz transfer tipa rashodovanje. Popisni rashod obrađuje se u Godišnjem popisu (inbox komisije).
             </p>
-            <DataTable>
+            <ResponsiveTable
+              mobile={pendingApprovals.map((approval) => (
+                <div key={approval.id} className="p-4 space-y-2">
+                  <p className="font-mono text-xs">{approval.transfer.documentNumber}</p>
+                  <p className="text-sm text-gray-700">{approval.transfer.equipment?.inventoryNumber ?? '—'}</p>
+                  <div className="flex gap-2">
+                    <Button variant="secondary" className="!py-1 !px-2 text-xs" onClick={() => void handleVote(approval.id, true)}>
+                      <Check size={12} />
+                      Za
+                    </Button>
+                    <Button variant="danger" className="!py-1 !px-2 text-xs" onClick={() => void handleVote(approval.id, false)}>
+                      <X size={12} />
+                      Protiv
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              desktop={
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600">
                   <tr>
@@ -181,7 +211,8 @@ export const DisposalCommissionsPage = () => {
                   ))}
                 </tbody>
               </table>
-            </DataTable>
+              }
+            />
           </div>
         ) : (
           <EmptyState message="Nema legacy odobrenja na čekanju." />

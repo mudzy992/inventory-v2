@@ -1,4 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  fetchAdminRelocationAlertsApi,
+  type AdminRelocationAlerts,
+} from '../api/employee-relocation-api';
 import { useStore } from '../useStore';
 import {
   getCurrentUser,
@@ -62,6 +66,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const assignmentLabels = scopes.map((scope) => formatRegistrarAssignmentLabel(scope, state));
   const myWarehouseIds = new Set(scopes.map((scope) => scope.warehouseId));
   const myWarehouses = state.warehouses.filter((row) => myWarehouseIds.has(row.id));
+  const [relocationAlerts, setRelocationAlerts] = useState<AdminRelocationAlerts | null>(null);
+
+  useEffect(() => {
+    if (!admin) {
+      return;
+    }
+    void fetchAdminRelocationAlertsApi()
+      .then(setRelocationAlerts)
+      .catch(() => setRelocationAlerts(null));
+  }, [admin]);
 
   const stats = [
     { label: 'Ukupno opreme', value: totalEquipment, icon: <Package size={24} />, color: 'bg-blue-500' },
@@ -161,6 +175,46 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           ) : null}
         </div>
       )}
+      {admin && relocationAlerts ? (
+        <div className="mb-6 grid lg:grid-cols-2 gap-4">
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+            <h2 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+              <AlertTriangle size={16} />
+              Relocation i evidentičari
+            </h2>
+            <p className="text-sm text-amber-800 mt-2">
+              Otvorenih case-ova: <strong>{relocationAlerts.openCases}</strong> · Čeka prihvat na cilju:{' '}
+              <strong>{relocationAlerts.pendingDest}</strong>
+            </p>
+            {onNavigate && relocationAlerts.openCases > 0 ? (
+              <button
+                type="button"
+                className="text-xs font-medium text-amber-900 underline mt-2"
+                onClick={() => onNavigate('employee-relocation')}
+              >
+                Otvori akcije
+              </button>
+            ) : null}
+          </div>
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4 max-h-40 overflow-auto">
+            <h2 className="text-sm font-semibold text-red-900">Glavne kategorije bez evidentičara</h2>
+            {relocationAlerts.missingRegistrars.length === 0 ? (
+              <p className="text-sm text-red-800 mt-2">Sve aktivne kombinacije imaju evidentičara.</p>
+            ) : (
+              <ul className="mt-2 space-y-1 text-xs text-red-800">
+                {relocationAlerts.missingRegistrars.slice(0, 8).map((row) => (
+                  <li key={`${row.warehouseId}:${row.categoryId}`}>
+                    {row.warehouseName} — {row.categoryName}
+                  </li>
+                ))}
+                {relocationAlerts.missingRegistrars.length > 8 ? (
+                  <li>… i još {relocationAlerts.missingRegistrars.length - 8}</li>
+                ) : null}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-4">

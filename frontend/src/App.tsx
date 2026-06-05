@@ -21,6 +21,7 @@ import { WarehousesPage } from './components/WarehousesPage';
 import { DisposalCommissionsPage } from './components/DisposalCommissionsPage';
 import { InventoryCountPage } from './components/InventoryCountPage';
 import { RegistrarStockPage } from './components/registrar-stock/registrar-stock-page';
+import { EmployeeRelocationPage } from './components/employee-relocation/employee-relocation-page';
 import { WarehouseInventoryPage } from './components/inventory-count/warehouse-inventory-page';
 import { SettingsPage } from './components/settings/settings-page';
 import { isAdmin, isEvidenticar, isSkladistar } from './store';
@@ -50,6 +51,7 @@ const ADMIN_OR_EVIDENTICAR_PAGES: PageId[] = [
   'documents',
   'employees',
   'registrar-stock',
+  'employee-relocation',
 ];
 
 const SKLADISTAR_PAGES: PageId[] = ['warehouses', 'warehouse-inventory', 'my-equipment', 'qr-scanner'];
@@ -248,6 +250,11 @@ function AppMain() {
       {(admin || evidenticar) && currentPage === 'registrar-stock' && (
         <LayoutNavGate pageId="registrar-stock">
           <RegistrarStockPage />
+        </LayoutNavGate>
+      )}
+      {(admin || evidenticar) && currentPage === 'employee-relocation' && (
+        <LayoutNavGate pageId="employee-relocation">
+          <EmployeeRelocationPage />
         </LayoutNavGate>
       )}
       {skladistar && !admin && currentPage === 'warehouse-inventory' && (

@@ -38,7 +38,7 @@ import { computeInventorySessionStats } from './inventory-count/inventory-sessio
 import { AlertBanner } from './ui/alert-banner';
 import { Button } from './ui/button';
 import { FormCard } from './ui/form-card';
-import { PageHeader } from './ui/page-header';
+import { PageHeaderRow } from './ui/page-header-row';
 
 const mapScopeToEquipment = (scope: InventoryPrintScopeDto): Equipment[] =>
   scope.equipment.map((item) => ({
@@ -302,7 +302,7 @@ export const InventoryCountPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeaderRow
         title="Godišnji popis"
         description="Sesija popisa po distribuciji; komisije po skladištu i kategoriji; unos samo članovi komisije."
       />

@@ -1,12 +1,17 @@
-import { IsDateString, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateIf } from 'class-validator';
 
 export class CreateStockLotDto {
   @IsUUID()
   categoryId!: string;
 
+  @ValidateIf((dto: CreateStockLotDto) => !dto.catalogItemId)
   @IsString()
   @MaxLength(255)
-  productName!: string;
+  productName?: string;
+
+  @IsOptional()
+  @IsUUID()
+  catalogItemId?: string;
 
   @IsInt()
   @Min(1)

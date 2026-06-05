@@ -45,8 +45,12 @@ export class EmployeesController {
 
   @Patch(':id')
   @Roles(UserRole.admin)
-  update(@Param('id') id: string, @Body() body: UpdateEmployeeDto) {
-    return this.employeesService.update(id, body);
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: UpdateEmployeeDto,
+  ) {
+    return this.employeesService.update(id, body, user.id);
   }
 
   @Delete(':id')
