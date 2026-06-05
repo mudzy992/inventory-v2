@@ -4,7 +4,7 @@
 **Matrica:** [`.cursor/docs/matrices/list-performance/MATRIX.md`](../../docs/matrices/list-performance/MATRIX.md)  
 **Changelog:** [`.cursor/docs/matrices/list-performance/CHANGELOG.md`](../../docs/matrices/list-performance/CHANGELOG.md)  
 **Datum handoffa:** 2026-06-05  
-**Status:** Backend ~97% · Frontend ~97% · **Faza 5 cleanup gotov** · Testovi / ručni QA preostali
+**Status:** Backend ~98% · Frontend ~97% · **Unit testovi scope/paginacija** ✅ · Ručni QA preostaje
 
 ---
 
@@ -12,8 +12,25 @@
 
 Server-side paginacija (`{ items, meta }`) je implementirana za glavne list endpointe. Login koristi **`fetchBootstrap`** — `equipment`, `employees`, `transfers`, `users` u `AppState` su **prazni nizovi**. Kritične stranice i helperi više ne ovise o tim nizovima.
 
-**Build (sesija 5):** `backend npm run build` ✅ · `frontend npm run build` ✅  
-**E2E / ručni QA:** nije rađeno
+**Build (sesija 6):** `backend npm run build` ✅ · `frontend npm run build` ✅ · `npm run test:unit` ✅ (121 testova)  
+**E2E / ručni QA:** checklist spreman, nije izvršen — v. [`QA_CHECKLIST.md`](./QA_CHECKLIST.md)
+
+---
+
+## Šta je urađeno u sesiji 6
+
+### Unit testovi ✅
+
+| Fajl | Pokriva |
+|------|---------|
+| `registrar-scope.service.spec.ts` | `buildEquipmentWhere` / `buildEmployeeWhere` / `buildStockLotWhere` / `buildTransferWhere` po roli (admin, user, skladistar, evidenticar mode A/B); `canAccessEquipment`; `canCreateTransferType` |
+| `pagination.util.spec.ts` | Dodan u `test:unit`; `resolveListPageSize` + settings cap |
+
+Pokretanje: `cd backend && npm run test:unit` → **121 pass**
+
+### Ručni QA checklist
+
+- [`.cursor/plans/list-performance/QA_CHECKLIST.md`](./QA_CHECKLIST.md) — koraci za login bootstrap, paginaciju, scope, notifikacije, settings
 
 ---
 
@@ -55,19 +72,19 @@ Server-side paginacija (`{ items, meta }`) je implementirana za glavne list endp
 
 ## Šta NIJE gotovo (sljedeća sesija)
 
-### Prioritet 1 — testovi i QA
+### Prioritet 1 — ručni QA
 
-- [ ] Backend spec/e2e: paginacija + scope po roli (admin / evidentičar / user / skladistar)
-- [ ] Ručni QA checklist: login payload size, scroll 1000+ opreme, evidentičar scope, QR → EquipmentCard, warehouse stock browse, inventory lazy load, notifications load-more, settings lists tab
+- [ ] Proći [`QA_CHECKLIST.md`](./QA_CHECKLIST.md) s test korisnicima (admin / evidentičar / user / skladistar)
+- [ ] Opciono: HTTP e2e (Supertest) protiv seed baze — trenutno samo unit testovi
 
-### Prioritet 2 — manji UI gapovi (niski)
+### Prioritet 2 — manji UI gapovi
 
 | Stavka | Stanje |
 |--------|--------|
-| **`registrar-stock-page`** | Nema `usePaginatedList` + `PaginationControls` ako lista raste |
-| **`EquipmentByCategoryPage`** | Dinamički filteri na trenutnoj stranici (nije server-side) |
-| **`WarehousesPage`** | Evidentičar client-side filter — `meta.total` može biti netačan |
-| **Autocomplete cleanup** | `OrgUnitAutocomplete` još prima `orgUnits` prop |
+| **`registrar-stock-page`** | ✅ `usePaginatedList` + `PaginationControls` |
+| **`EquipmentByCategoryPage`** | ✅ Info banner: filteri/CSV samo na trenutnoj stranici |
+| **`WarehousesPage`** | ✅ Evidentičar scope u SQL (`buildListWhere`); uklonjen client filter |
+| **`OrgUnitAutocomplete`** | ✅ Čita `orgUnits` iz store-a; API search za ≥2 znaka |
 
 ### Prioritet 3 — opciono
 
@@ -113,9 +130,11 @@ rg "state\.(equipment|employees|transfers|users)" frontend/src
 |------|----------|
 | `backend npm run build` | ✅ (sesija 5) |
 | `frontend npm run build` | ✅ (sesija 5) |
+| `npm run test:unit` | ✅ 121/121 (sesija 6) |
+| `registrar-scope.service.spec.ts` | ✅ |
 | `pagination.util.spec.ts` | ✅ |
-| E2e / ručni QA | ❌ |
-| Scope regression (evidentičar) | ❌ |
+| E2e / ručni QA | ❌ (checklist spreman) |
+| Scope regression (evidentičar) | ⚠️ unit only, nije HTTP e2e |
 | Store/helper cleanup (Faza 5) | ✅ |
 | Notifications load-more | ✅ (implementirano, nije ručno testirano) |
 | Settings UI `lists.*` | ✅ |

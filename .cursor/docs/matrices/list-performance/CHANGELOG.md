@@ -1,5 +1,18 @@
 # Changelog — list performance
 
+## 2026-06-05 (sesija 7 — Prioritet 2 UI)
+
+- **`registrar-stock-page`**: paginirana lista lotova (`usePaginatedList` + `PaginationControls`).
+- **`WarehousesPage` / backend**: evidentičar scope u `GET /warehouses` SQL filteru; uklonjen client-side filter.
+- **`EquipmentByCategoryPage`**: banner da dinamički filteri/CSV važe samo za trenutnu stranicu.
+- **`OrgUnitAutocomplete`**: `orgUnits` iz store-a; uklonjen obavezan prop.
+
+## 2026-06-05 (sesija 6 — testovi)
+
+- **`registrar-scope.service.spec.ts`** — 23 testa: SQL scope po roli (admin/user/skladistar/evidenticar A/B), stock lots, transfer where, canAccessEquipment.
+- **`pagination.util.spec.ts`** uključen u `npm run test:unit`; test za `resolveListPageSize` + settings cap.
+- **`QA_CHECKLIST.md`** — ručni QA koraci za list-performance milestone.
+
 ## 2026-06-05 (sesija 5 — Faza 5 cleanup)
 
 - **Store/helper cleanup:** uklonjeni `getEquipmentStats`, `getNextDocumentNumber`, `getCurrentEmployee`; transfer signer i cross-service bez `state.employees`.

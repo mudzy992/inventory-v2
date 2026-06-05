@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { searchOrgUnitsApi } from '../api/org-units-api';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
+import { useStore } from '../useStore';
 import type { OrgUnit } from '../types';
 import { cn } from '../utils/cn';
 
 interface OrgUnitAutocompleteProps {
-  orgUnits: OrgUnit[];
   value: string;
   onChange: (orgUnitId: string) => void;
   placeholder?: string;
@@ -14,13 +14,14 @@ interface OrgUnitAutocompleteProps {
 }
 
 export const OrgUnitAutocomplete = ({
-  orgUnits,
   value,
   onChange,
   placeholder = 'Pretraži org. jedinicu…',
   required = false,
   className,
 }: OrgUnitAutocompleteProps) => {
+  const [state] = useStore();
+  const orgUnits = state.orgUnits;
   const containerRef = useRef<HTMLDivElement>(null);
   const selected = orgUnits.find((unit) => unit.id === value);
   const [query, setQuery] = useState('');
@@ -55,6 +56,8 @@ export const OrgUnitAutocomplete = ({
     }, 300);
     return () => window.clearTimeout(handle);
   }, [open, query]);
+
+  const orgUnitsById = useMemo(() => new Map(orgUnits.map((unit) => [unit.id, unit])), [orgUnits]);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -95,6 +98,16 @@ export const OrgUnitAutocomplete = ({
     onChange(unit.id);
     setQuery(unit.name);
     setOpen(false);
+  };
+
+  const resolvePathContext = (unit: OrgUnit): string => {
+    const pathOrgUnits = orgUnitsById.has(unit.id) ? orgUnits : [...orgUnits, unit];
+    const full = getOrgUnitPath(pathOrgUnits, unit.id);
+    if (full === unit.name) {
+      return getOrgUnitTypeLabel(unit.type);
+    }
+    const prefix = `${unit.name} → `;
+    return full.startsWith(prefix) ? full.slice(prefix.length) : full;
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -153,32 +166,22 @@ export const OrgUnitAutocomplete = ({
             <li className="px-3 py-2 text-xs text-gray-400">Učitavanje…</li>
           ) : null}
           {!loading &&
-            filtered.map((unit, index) => {
-              const parentPath = (() => {
-                const full = getOrgUnitPath(orgUnits, unit.id);
-                if (full === unit.name) {
-                  return getOrgUnitTypeLabel(unit.type);
-                }
-                const prefix = `${unit.name} → `;
-                return full.startsWith(prefix) ? full.slice(prefix.length) : full;
-              })();
-              return (
-                <li key={unit.id} role="option" aria-selected={index === highlightIndex}>
-                  <button
-                    type="button"
-                    className={cn(
-                      'w-full px-3 py-2 text-left hover:bg-gray-50',
-                      index === highlightIndex && 'bg-blue-50',
-                    )}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => handleSelect(unit)}
-                  >
-                    <span className="block text-sm font-medium text-gray-800">{unit.name}</span>
-                    <span className="block text-xs text-gray-500 truncate">{parentPath}</span>
-                  </button>
-                </li>
-              );
-            })}
+            filtered.map((unit, index) => (
+              <li key={unit.id} role="option" aria-selected={index === highlightIndex}>
+                <button
+                  type="button"
+                  className={cn(
+                    'w-full px-3 py-2 text-left hover:bg-gray-50',
+                    index === highlightIndex && 'bg-blue-50',
+                  )}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => handleSelect(unit)}
+                >
+                  <span className="block text-sm font-medium text-gray-800">{unit.name}</span>
+                  <span className="block text-xs text-gray-500 truncate">{resolvePathContext(unit)}</span>
+                </button>
+              </li>
+            ))}
         </ul>
       ) : null}
       {open && query.trim().length >= 2 && !loading && filtered.length === 0 ? (

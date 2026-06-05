@@ -7,14 +7,10 @@ import { usePaginatedList } from '../hooks/usePaginatedList';
 import { PaginationControls } from './ui/pagination-controls';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
-import { useAuth } from '../contexts/AuthContext';
 import { useStore, useRefreshData } from '../useStore';
 import { isAdmin, isSkladistar } from '../store';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
-import {
-  getUserWarehouseIds,
-  isCentralWarehouse,
-} from '../helpers/org-warehouse.util';
+import { isCentralWarehouse } from '../helpers/org-warehouse.util';
 import { getCityLabel, getOrgUnitTypeLabel } from '../helpers';
 import {
   InventoryFreezeActionHint,
@@ -37,7 +33,6 @@ interface WarehousesPageProps {
 
 export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
   const [state] = useStore();
-  const { user } = useAuth();
   const refresh = useRefreshData();
   const { toastError } = useToast();
   const admin = isAdmin();
@@ -50,10 +45,6 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
   const [address, setAddress] = useState('');
   const [keeperIds, setKeeperIds] = useState('');
   const [tab, setTab] = useState<WarehousesTab>('list');
-  const visibleWarehouseIds = useMemo(
-    () => getUserWarehouseIds(user?.role, user?.id, user?.registrarScopes ?? [], state.warehouses),
-    [state.warehouses, user?.id, user?.registrarScopes, user?.role],
-  );
   const fetchPage = useCallback(
     (params: Parameters<typeof fetchWarehousesPageApi>[0]) => fetchWarehousesPageApi(params),
     [],
@@ -62,12 +53,7 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
     fetchPage,
     enabled: tab === 'list',
   });
-  const visibleWarehouses = useMemo(() => {
-    if (admin || skladistar) {
-      return warehousesList.items;
-    }
-    return warehousesList.items.filter((row) => visibleWarehouseIds.has(row.id));
-  }, [admin, skladistar, visibleWarehouseIds, warehousesList.items]);
+  const visibleWarehouses = warehousesList.items;
   const [skladistarUsers, setSkladistarUsers] = useState<UserAccount[]>([]);
   useEffect(() => {
     if (!admin) {

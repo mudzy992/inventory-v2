@@ -318,7 +318,6 @@ export function EmployeesPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Org. jedinica *</label>
                 <OrgUnitAutocomplete
-                  orgUnits={state.orgUnits}
                   value={fOrgUnit}
                   onChange={setFOrgUnit}
                   required

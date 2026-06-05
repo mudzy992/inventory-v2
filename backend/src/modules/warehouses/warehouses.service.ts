@@ -68,6 +68,10 @@ export class WarehousesService {
     if (user.role === 'skladistar') {
       filters.push({ keepers: { some: { userId: user.id } } });
     }
+    if (user.role === 'evidenticar') {
+      const warehouseIds = [...new Set(user.registrarScopes.map((row) => row.warehouseId))];
+      filters.push(warehouseIds.length > 0 ? { id: { in: warehouseIds } } : { id: { in: [] } });
+    }
     const searchWhere = buildContainsSearchWhere(query.search, ['name']);
     if (searchWhere) {
       filters.push(searchWhere);

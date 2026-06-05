@@ -1,9 +1,11 @@
+import 'reflect-metadata';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildContainsSearchWhere,
   buildOrderBy,
   parsePagination,
+  resolveListPageSize,
 } from './pagination.util';
 import { buildPaginatedResponse } from '../types/paginated-response.type';
 
@@ -33,5 +35,25 @@ describe('pagination.util', () => {
     const res = buildPaginatedResponse(['a'], 26, 2, 25);
     assert.equal(res.meta.totalPages, 2);
     assert.equal(res.meta.page, 2);
+  });
+
+  it('resolveListPageSize applies settings defaults and max cap', async () => {
+    const settings = {
+      getNumberValue: async (key: string, fallback: number) => {
+        if (key === 'lists.default_page_size') {
+          return 25;
+        }
+        if (key === 'lists.max_page_size') {
+          return 100;
+        }
+        return fallback;
+      },
+    };
+    const resolved = await resolveListPageSize(undefined, settings);
+    assert.equal(resolved.pageSize, 25);
+    assert.equal(resolved.maxPageSize, 100);
+
+    const capped = await resolveListPageSize(500, settings);
+    assert.equal(capped.pageSize, 100);
   });
 });

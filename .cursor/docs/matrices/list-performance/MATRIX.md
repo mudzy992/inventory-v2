@@ -45,7 +45,7 @@
 | `GET /employees` | da | da | da | da |
 | `GET /employees/search` | limit 20 | da | — | da |
 | `GET /users` | da | da | da | admin |
-| `GET /warehouses` | da | da | da | da |
+| `GET /warehouses` | da | da | da | da (skladistar keeper; evidentičar registrar scope) |
 | `GET /warehouse-stock/...` | da | da | da | da |
 | `GET /employee-relocation` | da | — | da | da |
 | `GET /disposal-commissions` | da | — | da | da |
@@ -64,6 +64,14 @@
 - `fetchBootstrap` — zamjena za puni `fetchAppState` (notifikacije + minimalni kontekst)
 - Settings UI tab **Liste** — admin uređuje `lists.default_page_size` / `lists.max_page_size`
 - `useCurrentEmployee` — profil u headeru/sidebaru bez bootstrap employees niza
+- Unit testovi: `RegistrarScopeService` scope po roli; `pagination.util` + settings
+
+## Testovi
+
+| Komanda | Opis |
+|---------|------|
+| `cd backend && npm run test:unit` | 121 unit testova (uključujući scope + paginaciju) |
+| Ručni QA | `.cursor/plans/list-performance/QA_CHECKLIST.md` |
 
 ## Implementacijske faze
 

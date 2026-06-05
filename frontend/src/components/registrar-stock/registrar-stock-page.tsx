@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, Package, ChevronRight } from 'lucide-react';
 import {
-  fetchAssignedStockLotsApi,
+  fetchAssignedStockLotsPageApi,
   fetchStockLotApi,
   issueStockLotUnitApi,
   updateStockLotSpecApi,
@@ -16,10 +16,12 @@ import {
 import { getStockLotStatusLabel } from '../../helpers/warehouse-stock.util';
 import { fetchEmployeesPageApi } from '../../api/employees-api';
 import { fetchAllPaginatedItems } from '../../api/fetch-all-paginated';
+import { usePaginatedList } from '../../hooks/usePaginatedList';
 import { useStore, useRefreshData } from '../../useStore';
 import type { Category, Employee, WarehouseStockLot, WarehouseStockLotStatus } from '../../types';
 import { PageHeaderRow } from '../ui/page-header-row';
 import { Button } from '../ui/button';
+import { PaginationControls } from '../ui/pagination-controls';
 import { cardClass, inputClass, labelClass } from '../ui/form-styles';
 import { Badge, type BadgeProps } from '../ui/badge';
 import { SearchableAutocomplete, type SearchableOption } from '../searchable-autocomplete';
@@ -85,7 +87,6 @@ export const RegistrarStockPage = () => {
   const { toastError, toastSuccess } = useToast();
   const [scopedEmployees, setScopedEmployees] = useState<Employee[]>([]);
   const isFrozen = useInventoryFreezeActive();
-  const [lots, setLots] = useState<WarehouseStockLot[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WarehouseStockLot | null>(null);
   const [specs, setSpecs] = useState<Record<string, string>>({});
@@ -96,17 +97,12 @@ export const RegistrarStockPage = () => {
   const [uniqueAvailability, setUniqueAvailability] = useState<Record<string, AvailabilityStatus>>({});
   const [saving, setSaving] = useState(false);
   const inventoryAvailability = useInventoryNumberAvailability(inventoryNumber);
-  const loadLots = useCallback(async () => {
-    try {
-      const rows = await fetchAssignedStockLotsApi();
-      setLots(rows);
-    } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška');
-    }
-  }, [toastError]);
-  useEffect(() => {
-    void loadLots();
-  }, [loadLots]);
+  const stockList = usePaginatedList<WarehouseStockLot>({
+    fetchPage: fetchAssignedStockLotsPageApi,
+    initialSortBy: 'status',
+    initialSortDir: 'asc',
+  });
+  const lots = stockList.items;
   useEffect(() => {
     void fetchAllPaginatedItems((params) => fetchEmployeesPageApi(params), 100)
       .then(setScopedEmployees)
@@ -185,7 +181,7 @@ export const RegistrarStockPage = () => {
       const updated = await updateStockLotSpecApi(detail.id, specs);
       setDetail(updated);
       toastSuccess('Specifikacija lota je sačuvana');
-      await loadLots();
+      await stockList.refresh();
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška');
     } finally {
@@ -209,7 +205,7 @@ export const RegistrarStockPage = () => {
       setUniqueSpecs({});
       setEmployeeId('');
       toastSuccess('Komad je izdat i zadužen');
-      await loadLots();
+      await stockList.refresh();
       await refresh();
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška pri izdavanju');
@@ -400,10 +396,20 @@ export const RegistrarStockPage = () => {
             <ChevronRight size={16} className="text-gray-400 shrink-0" />
           </button>
         ))}
-        {lots.length === 0 ? (
+        {lots.length === 0 && !stockList.isLoading ? (
           <p className="px-4 py-12 text-center text-sm text-gray-400">Nema lotova u vašem opsegu.</p>
         ) : null}
       </div>
+      {stockList.meta ? (
+        <PaginationControls
+          page={stockList.meta.page}
+          pageSize={stockList.meta.pageSize}
+          total={stockList.meta.total}
+          totalPages={stockList.meta.totalPages}
+          onPageChange={stockList.setPage}
+          onPageSizeChange={stockList.setPageSize}
+        />
+      ) : null}
     </div>
   );
 };

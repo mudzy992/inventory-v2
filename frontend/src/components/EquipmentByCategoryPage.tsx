@@ -14,6 +14,7 @@ import { ChevronRight, Folder, Layers, Search, Filter, Download, X, Eye, QrCode,
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName } from '../helpers';
 import { EquipmentCard } from './EquipmentCard';
+import { AlertBanner } from './ui/alert-banner';
 import type { Equipment, FilterCondition } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { ModalRoot } from './ui/modal-root';
@@ -441,6 +442,13 @@ export function EquipmentByCategoryPage() {
             </div>
 
             {/* Active Filters */}
+            {activeFilters.length > 0 ? (
+              <AlertBanner tone="info" className="mt-3">
+                Dinamički filteri i CSV export primjenjuju se samo na trenutnu stranicu liste
+                ({filteredEquipment.length} od {equipmentList.meta?.total ?? categoryEquipment.length} stavki u opsegu).
+                Za pretragu cijele kategorije koristite polje „Pretraži”.
+              </AlertBanner>
+            ) : null}
             {activeFilters.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
                 {activeFilters.map((filter, i) => (
