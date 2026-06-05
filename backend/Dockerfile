@@ -7,6 +7,8 @@ RUN npm ci
 
 FROM deps AS build
 COPY . .
+# prisma.config.ts zahtijeva DATABASE_URL pri učitavanju; generate ne spaja se na bazu
+ENV DATABASE_URL="mysql://mudzy:nije,kikiriki@sql.ba101.top:3306/inventory-v3"
 RUN npx prisma generate
 RUN npm run build
 
@@ -22,6 +24,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./
 COPY --from=build /app/generated ./generated
+# Mount point za bind mount (produkcija: /mnt/shared-app-files/inventory-v2 → /app/uploads)
 RUN mkdir -p /app/uploads && chown -R app:app /app
 USER app
 EXPOSE 3000

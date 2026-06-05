@@ -1,5 +1,6 @@
 # Produkcija — Traefik (mreža web), TLS le, host inventory-v2.ba101.top
-# MySQL: eksterni server preko DATABASE_URL u .env
+# Prije build/up: root .env sa DATABASE_URL, JWT_SECRET, UPLOAD_DIR=/app/uploads
+# Host upload: mkdir -p /mnt/shared-app-files/inventory-v2 && chown prema `docker compose run --rm backend id app`
 services:
   backend:
     build:
@@ -33,6 +34,7 @@ services:
       args:
         VITE_API_URL: https://inventory-v2.ba101.top/backend
         VITE_APP_NAME: Inventory v2
+        VITE_APP_URL: https://inventory-v2.ba101.top
     networks:
       - web
     restart: unless-stopped
