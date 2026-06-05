@@ -9,9 +9,11 @@ import { SignerResolutionService } from '../../common/services/signer-resolution
 import { OrgScopeService, type OrgUnitTreeNode } from '../../common/services/org-scope.service';
 import { ORG_HIERARCHY_MESSAGES } from '../../common/utils/org-hierarchy-messages.util';
 import { assertValidOrgUnitParentChild } from '../../common/utils/org-hierarchy-validation.util';
+import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateOrgUnitDto } from './dto/create-org-unit.dto';
+import { SearchOrgUnitsQueryDto } from './dto/search-org-units-query.dto';
 import { UpdateOrgUnitDto } from './dto/update-org-unit.dto';
 
 @Injectable()
@@ -28,6 +30,18 @@ export class OrgUnitsService {
     return this.prisma.orgUnit.findMany({ orderBy: { name: 'asc' } });
   }
 
+  async search(query: SearchOrgUnitsQueryDto): Promise<OrgUnit[]> {
+    const term = query.q.trim();
+    const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
+    return this.prisma.orgUnit.findMany({
+      where: {
+        name: { contains: term },
+      },
+      orderBy: { name: 'asc' },
+      take: limit,
+    });
+  }
+
   async findTree(): Promise<OrgUnitTreeNode[]> {
     const units = await this.findFlat();
     return this.orgScopeService.buildOrgUnitTree(units);
@@ -39,6 +53,29 @@ export class OrgUnitsService {
       throw new NotFoundException(ORG_HIERARCHY_MESSAGES.notFound);
     }
     return unit;
+  }
+
+  async countEquipmentInSubtree(orgUnitId: string): Promise<{ count: number }> {
+    await this.findOne(orgUnitId);
+    const subtreeIds = await this.orgScopeService.expandOrgUnitIds([orgUnitId]);
+    const assignedCount = await this.prisma.equipment.count({
+      where: {
+        status: 'zaduzeno',
+        currentHolder: { orgUnitId: { in: subtreeIds } },
+      },
+    });
+    const warehouseRows = await this.prisma.warehouse.findMany({
+      where: { orgUnitId: { in: subtreeIds } },
+      select: { id: true },
+    });
+    const warehouseIds = warehouseRows.map((row) => row.id);
+    const warehouseEquipmentCount =
+      warehouseIds.length > 0
+        ? await this.prisma.equipment.count({
+            where: { warehouseId: { in: warehouseIds } },
+          })
+        : 0;
+    return { count: assignedCount + warehouseEquipmentCount };
   }
 
   async create(dto: CreateOrgUnitDto): Promise<OrgUnit> {

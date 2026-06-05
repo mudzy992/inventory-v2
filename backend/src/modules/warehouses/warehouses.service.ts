@@ -4,15 +4,33 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Equipment } from '../../../generated/prisma/client';
+import type { Equipment, Prisma } from '../../../generated/prisma/client';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import {
+  buildContainsSearchWhere,
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
+import { ListWarehousesQueryDto } from './dto/list-warehouses-query.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
+
+const WAREHOUSE_LIST_INCLUDE = {
+  city: { include: { canton: true } },
+  keepers: { include: { user: { select: { id: true, username: true } } } },
+} satisfies Prisma.WarehouseInclude;
+
+const WAREHOUSE_SORT_FIELDS: Record<string, string> = {
+  name: 'name',
+  createdAt: 'createdAt',
+};
 
 @Injectable()
 export class WarehousesService {
@@ -23,20 +41,41 @@ export class WarehousesService {
     private readonly settingsService: SettingsService,
   ) {}
 
-  async findAll(user: AuthenticatedUser) {
-    const warehouses = await this.prisma.warehouse.findMany({
-      include: {
-        city: { include: { canton: true } },
-        keepers: { include: { user: { select: { id: true, username: true } } } },
-      },
-      orderBy: { name: 'asc' },
+  async findAll(user: AuthenticatedUser, query: ListWarehousesQueryDto) {
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = await this.buildListWhere(user, query);
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, WAREHOUSE_SORT_FIELDS, 'name');
+    return paginate({
+      findMany: (args) =>
+        this.prisma.warehouse.findMany({
+          ...args,
+          include: WAREHOUSE_LIST_INCLUDE,
+        }),
+      count: (args) => this.prisma.warehouse.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
     });
+  }
+
+  private async buildListWhere(
+    user: AuthenticatedUser,
+    query: ListWarehousesQueryDto,
+  ): Promise<Prisma.WarehouseWhereInput> {
+    const filters: Prisma.WarehouseWhereInput[] = [];
     if (user.role === 'skladistar') {
-      return warehouses.filter((warehouse) =>
-        warehouse.keepers.some((keeper) => keeper.userId === user.id),
-      );
+      filters.push({ keepers: { some: { userId: user.id } } });
     }
-    return warehouses;
+    const searchWhere = buildContainsSearchWhere(query.search, ['name']);
+    if (searchWhere) {
+      filters.push(searchWhere);
+    }
+    if (filters.length === 0) {
+      return {};
+    }
+    return filters.length === 1 ? filters[0]! : { AND: filters };
   }
 
   async resolveEffective(orgUnitId: string, cityId?: string) {

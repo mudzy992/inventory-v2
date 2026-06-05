@@ -103,12 +103,23 @@ const matchesAssignmentEmployee = (
   return subtree.has(employee.orgUnitId);
 };
 
-export const resolveEquipmentCityId = (state: AppState, equipment: Equipment): string | null => {
+const resolveEquipmentHolder = (
+  equipment: Equipment,
+  state: AppState,
+): Pick<Employee, 'id' | 'orgUnitId'> | undefined => {
+  if (equipment.currentHolder) {
+    return equipment.currentHolder;
+  }
   if (equipment.currentHolderId) {
-    const holder = state.employees.find((row) => row.id === equipment.currentHolderId);
-    if (holder) {
-      return getEffectiveCityForOrgUnit(state.orgUnits, holder.orgUnitId);
-    }
+    return state.employees.find((row) => row.id === equipment.currentHolderId);
+  }
+  return undefined;
+};
+
+export const resolveEquipmentCityId = (state: AppState, equipment: Equipment): string | null => {
+  const holder = resolveEquipmentHolder(equipment, state);
+  if (holder) {
+    return getEffectiveCityForOrgUnit(state.orgUnits, holder.orgUnitId);
   }
   if (equipment.warehouseId) {
     const warehouse = state.warehouses.find((row) => row.id === equipment.warehouseId);
@@ -132,11 +143,9 @@ export const equipmentMatchesScope = (
   if (assignments.length === 0) {
     return false;
   }
-  const holder = equipment.currentHolderId
-    ? state.employees.find((employee) => employee.id === equipment.currentHolderId)
-    : undefined;
+  const holder = resolveEquipmentHolder(equipment, state);
   return assignments.some((assignment) =>
-    matchesAssignmentEquipment(assignment, equipment, holder, state),
+    matchesAssignmentEquipment(assignment, equipment, holder as Employee | undefined, state),
   );
 };
 
@@ -155,27 +164,21 @@ export const employeeMatchesScope = (
   return assignments.some((assignment) => matchesAssignmentEmployee(assignment, employee, state));
 };
 
-export const isEmployeeInManagedUnits = (employeeId: string, state: AppState, user: UserAccount | null): boolean => {
-  const employee = state.employees.find((row) => row.id === employeeId);
-  if (!employee) {
-    return false;
-  }
-  return employeeMatchesScope(employee, state, user);
-};
+export const isEmployeeInManagedUnits = (
+  employee: Pick<Employee, 'id' | 'orgUnitId'>,
+  state: AppState,
+  user: UserAccount | null,
+): boolean => employeeMatchesScope(employee as Employee, state, user);
 
 export const transferMatchesScope = (
-  transfer: { equipmentId: string; fromPersonId?: string; toPersonId?: string },
+  equipment: Equipment | undefined,
   state: AppState,
   user: UserAccount | null,
 ): boolean => {
   if (!user || user.role === 'admin') {
     return true;
   }
-  if (user.role !== 'evidenticar') {
-    return false;
-  }
-  const equipment = state.equipment.find((row) => row.id === transfer.equipmentId);
-  if (!equipment) {
+  if (user.role !== 'evidenticar' || !equipment) {
     return false;
   }
   return equipmentMatchesScope(equipment, state, user);
@@ -184,22 +187,17 @@ export const transferMatchesScope = (
 export const isCrossRegistrarScopeTransfer = (
   state: AppState,
   user: UserAccount | null,
-  fromEmployeeId: string | undefined,
-  toEmployeeId: string | undefined,
+  toEmployee: Pick<Employee, 'id' | 'orgUnitId'> | undefined,
   equipment: Equipment,
 ): boolean => {
   if (!user || user.role === 'admin' || user.role !== 'evidenticar') {
     return false;
   }
-  if (!fromEmployeeId || !toEmployeeId) {
-    return false;
-  }
-  const toEmployee = state.employees.find((row) => row.id === toEmployeeId);
   if (!toEmployee) {
     return true;
   }
   if (!equipmentMatchesScope(equipment, state, user)) {
     return true;
   }
-  return !employeeMatchesScope(toEmployee, state, user);
+  return !employeeMatchesScope(toEmployee as Employee, state, user);
 };

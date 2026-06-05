@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { UserRole } from '../../../generated/prisma/client';
@@ -13,6 +14,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateOrgUnitDto } from './dto/create-org-unit.dto';
+import { SearchOrgUnitsQueryDto } from './dto/search-org-units-query.dto';
 import { UpdateOrgUnitDto } from './dto/update-org-unit.dto';
 import { OrgUnitsService } from './org-units.service';
 
@@ -31,6 +33,18 @@ export class OrgUnitsController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   findTree() {
     return this.orgUnitsService.findTree();
+  }
+
+  @Get('search')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  search(@Query() query: SearchOrgUnitsQueryDto) {
+    return this.orgUnitsService.search(query);
+  }
+
+  @Get(':id/equipment-subtree-count')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  countEquipmentInSubtree(@Param('id') id: string) {
+    return this.orgUnitsService.countEquipmentInSubtree(id);
   }
 
   @Get(':id')

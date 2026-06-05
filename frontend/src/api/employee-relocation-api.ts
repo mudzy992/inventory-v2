@@ -1,4 +1,6 @@
 import { apiRequest } from './client';
+import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
+import { buildListQueryString } from '../types/pagination';
 
 export interface RelocationPreview {
   employeeId: string;
@@ -49,8 +51,32 @@ export const previewRelocationApi = (employeeId: string, newOrgUnitId: string) =
     `/employee-relocation/preview?employeeId=${employeeId}&newOrgUnitId=${newOrgUnitId}`,
   );
 
-export const fetchRelocationWorkApi = () =>
-  apiRequest<{ sourceLines: RelocationLine[]; destLines: RelocationLine[] }>('/employee-relocation');
+export interface RelocationListResponse {
+  sourceLines: PaginatedResponse<RelocationLine>;
+  destLines: PaginatedResponse<RelocationLine>;
+  openCases: PaginatedResponse<{
+    id: string;
+    status: string;
+    employee: { id: string; firstName: string; lastName: string };
+    lines: RelocationLine[];
+  }>;
+}
+
+export const fetchRelocationWorkPageApi = (params: PaginatedListParams = {}) => {
+  const query = buildListQueryString(params);
+  return apiRequest<RelocationListResponse>(
+    `/employee-relocation${query ? `?${query}` : ''}`,
+  );
+};
+
+/** @deprecated Use fetchRelocationWorkPageApi */
+export const fetchRelocationWorkApi = async () => {
+  const response = await fetchRelocationWorkPageApi({ page: 1, pageSize: 100 });
+  return {
+    sourceLines: response.sourceLines.items,
+    destLines: response.destLines.items,
+  };
+};
 
 export const fetchAdminRelocationAlertsApi = () =>
   apiRequest<AdminRelocationAlerts>('/employee-relocation/admin-alerts');

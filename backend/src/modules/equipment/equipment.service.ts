@@ -6,24 +6,46 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Equipment, Prisma } from '../../../generated/prisma/client';
+import type { Equipment, EquipmentStatus, Prisma } from '../../../generated/prisma/client';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { validateSpecifications } from '../../common/utils/category-fields.util';
+import {
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { WarehousesService } from '../warehouses/warehouses.service';
 import { CategoriesService } from '../categories/categories.service';
-import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
 import {
   assertCanReadEquipment,
   assertCanWriteEquipment,
-  canReadEquipment,
 } from './equipment-access.util';
 import { CreateEquipmentDto } from './dto/create-equipment.dto';
 import { ListEquipmentQueryDto } from './dto/list-equipment-query.dto';
 import { UpdateEquipmentDto } from './dto/update-equipment.dto';
+
+const EQUIPMENT_LIST_INCLUDE = {
+  currentHolder: { select: { id: true, firstName: true, lastName: true, orgUnitId: true } },
+  category: { select: { id: true, name: true, parentId: true } },
+} satisfies Prisma.EquipmentInclude;
+
+const EQUIPMENT_SORT_FIELDS: Record<string, string> = {
+  inventoryNumber: 'inventoryNumber',
+  entryDate: 'entryDate',
+  status: 'status',
+  createdAt: 'createdAt',
+};
+
+export interface EquipmentSummary {
+  total: number;
+  byStatus: Record<EquipmentStatus, number>;
+}
 
 @Injectable()
 export class EquipmentService {
@@ -37,19 +59,56 @@ export class EquipmentService {
     private readonly settingsService: SettingsService,
   ) {}
 
-  async findAll(user: AuthenticatedUser, query: ListEquipmentQueryDto): Promise<Equipment[]> {
-    const items = await this.prisma.equipment.findMany({
-      where: await this.buildListWhere(user, query),
-      include: { currentHolder: true },
-      orderBy: { inventoryNumber: 'asc' },
+  async findAll(
+    user: AuthenticatedUser,
+    query: ListEquipmentQueryDto,
+  ): Promise<PaginatedResponse<Equipment>> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = await this.buildListWhere(user, query);
+    const orderBy = buildOrderBy(
+      query.sortBy,
+      query.sortDir,
+      EQUIPMENT_SORT_FIELDS,
+      'inventoryNumber',
+    );
+    return paginate({
+      findMany: (args) =>
+        this.prisma.equipment.findMany({
+          ...args,
+          include: EQUIPMENT_LIST_INCLUDE,
+        }),
+      count: (args) => this.prisma.equipment.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
     });
-    const filtered: Equipment[] = [];
-    for (const item of items) {
-      if (await canReadEquipment(user, item, item.currentHolder, this.registrarScope, this.prisma)) {
-        filtered.push(item);
-      }
+  }
+
+  async getSummary(user: AuthenticatedUser, categoryId?: string): Promise<EquipmentSummary> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
+    const scopeWhere = await this.registrarScope.buildEquipmentWhere(user);
+    const where: Prisma.EquipmentWhereInput = categoryId
+      ? { AND: [scopeWhere, { categoryId }] }
+      : scopeWhere;
+    const grouped = await this.prisma.equipment.groupBy({
+      by: ['status'],
+      where,
+      _count: { _all: true },
+    });
+    const byStatus = {
+      skladiste: 0,
+      zaduzeno: 0,
+      rashodovano: 0,
+    } satisfies Record<EquipmentStatus, number>;
+    let total = 0;
+    for (const row of grouped) {
+      byStatus[row.status] = row._count._all;
+      total += row._count._all;
     }
-    return filtered;
+    return { total, byStatus };
   }
 
   async findOne(user: AuthenticatedUser, id: string): Promise<Equipment> {
@@ -168,15 +227,17 @@ export class EquipmentService {
     if (!field) {
       throw new BadRequestException('Invalid unique specification field');
     }
-    const rows = await this.prisma.equipment.findMany({
-      where: { categoryId },
-      select: { specifications: true },
+    const existing = await this.prisma.equipment.findFirst({
+      where: {
+        categoryId,
+        specifications: {
+          path: fieldId,
+          equals: trimmed,
+        },
+      },
+      select: { id: true },
     });
-    const taken = rows.some((row) => {
-      const specifications = row.specifications as Record<string, string>;
-      return specifications[fieldId]?.trim() === trimmed;
-    });
-    return { available: !taken };
+    return { available: !existing };
   }
 
   async getQrPayload(user: AuthenticatedUser, id: string): Promise<{
@@ -197,29 +258,30 @@ export class EquipmentService {
     user: AuthenticatedUser,
     query: ListEquipmentQueryDto,
   ): Promise<Prisma.EquipmentWhereInput> {
-    const base: Prisma.EquipmentWhereInput = {
+    const scopeWhere = await this.registrarScope.buildEquipmentWhere(user);
+    const searchTerm = query.search?.trim();
+    const filters: Prisma.EquipmentWhereInput = {
       status: query.status,
       categoryId: query.categoryId,
       currentHolderId: query.currentHolderId,
+      ...(searchTerm
+        ? {
+            OR: [
+              { inventoryNumber: { contains: searchTerm } },
+              { contractNumber: { contains: searchTerm } },
+              { notes: { contains: searchTerm } },
+            ],
+          }
+        : {}),
     };
-    if (user.role !== 'skladistar') {
-      return base;
+    const parts = [scopeWhere, filters].filter((part) => Object.keys(part).length > 0);
+    if (parts.length === 0) {
+      return {};
     }
-    const keeperIds = [...(await loadKeeperWarehouseIds(this.prisma, user.id))];
-    if (keeperIds.length === 0) {
-      return { id: { in: [] } };
+    if (parts.length === 1) {
+      return parts[0]!;
     }
-    return {
-      ...base,
-      warehouseId: { in: keeperIds },
-      OR: [
-        { status: 'skladiste' },
-        {
-          status: 'rashodovano',
-          warehouseCondition: { in: ['spremno_za_unistenje', 'unisteno'] },
-        },
-      ],
-    };
+    return { AND: parts };
   }
 
   private async getEmployeeOrThrow(id: string) {

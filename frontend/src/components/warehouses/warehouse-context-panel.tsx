@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { fetchSkladistarUsersApi } from '../../api/users-api';
+import type { UserAccount } from '../../types';
 import { updateWarehouseApi } from '../../api/warehouses-api';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
@@ -24,10 +26,15 @@ export const WarehouseContextPanel = ({
   const refresh = useRefreshData();
   const { toastError, toastSuccess } = useToast();
   const admin = isAdmin();
-  const skladistarUsers = useMemo(
-    () => state.users.filter((user) => user.role === 'skladistar'),
-    [state.users],
-  );
+  const [skladistarUsers, setSkladistarUsers] = useState<UserAccount[]>([]);
+  useEffect(() => {
+    if (!admin) {
+      return;
+    }
+    void fetchSkladistarUsersApi()
+      .then(setSkladistarUsers)
+      .catch(() => setSkladistarUsers([]));
+  }, [admin]);
   const [name, setName] = useState(warehouse.name);
   const [cityId, setCityId] = useState(warehouse.cityId);
   const [address, setAddress] = useState(warehouse.address);

@@ -1,11 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore, useRefreshData } from '../useStore';
 import { updateEquipmentApi } from '../api/data-api';
+import { fetchEquipmentPageApi, fetchEquipmentSummaryApi, type EquipmentSummary } from '../api/equipment-api';
+import { usePaginatedList } from '../hooks/usePaginatedList';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon, Info } from 'lucide-react';
-import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser, equipmentMatchesScope } from '../store';
+import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser } from '../store';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, formatDate, getEmployeeFullName } from '../helpers';
 import type { Equipment } from '../types';
@@ -20,6 +22,7 @@ import type { PageId } from './page-id';
 import { PageTabs } from './ui/page-tabs';
 import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
+import { PaginationControls } from './ui/pagination-controls';
 
 interface EquipmentPageProps {
   onNavigate?: (page: PageId) => void;
@@ -30,9 +33,9 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
   const labelsEnabled = getBoolean('features.equipment_labels', true);
   const [state] = useStore();
   const refresh = useRefreshData();
-  const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [equipmentSummary, setEquipmentSummary] = useState<EquipmentSummary | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
   const [viewItemId, setViewItemId] = useState<string | null>(null);
@@ -74,20 +77,33 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
     return state.warehouses.filter((row) => row.isActive !== false);
   }, [admin, myWarehouseIds, skladistar, state.warehouses]);
 
-  const filtered = useMemo(() => {
-    return state.equipment.filter(eq => {
-      if (evidenticar && !admin && !equipmentMatchesScope(eq, state, user)) {
-        return false;
-      }
-      const cat = state.categories.find(c => c.id === eq.categoryId);
-      const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
-      const searchStr = `${eq.inventoryNumber} ${cat?.name || ''} ${holder ? `${holder.firstName} ${holder.lastName}` : ''} ${Object.values(eq.specifications).join(' ')}`.toLowerCase();
-      const matchSearch = search === '' || searchStr.includes(search.toLowerCase());
-      const matchCat = filterCategory === '' || eq.categoryId === filterCategory;
-      const matchStatus = filterStatus === '' || eq.status === filterStatus;
-      return matchSearch && matchCat && matchStatus;
+  const fetchPage = useCallback(
+    (params: Parameters<typeof fetchEquipmentPageApi>[0]) => fetchEquipmentPageApi(params),
+    [],
+  );
+
+  const list = usePaginatedList<Equipment, { categoryId?: string; status?: string }>({
+    fetchPage,
+    initialFilters: { categoryId: undefined, status: undefined },
+    enabled: viewMode === 'list',
+  });
+
+  useEffect(() => {
+    list.setFilters({
+      categoryId: filterCategory || undefined,
+      status: filterStatus || undefined,
     });
-  }, [state, admin, evidenticar, user, search, filterCategory, filterStatus]);
+  }, [filterCategory, filterStatus, list.setFilters]);
+
+  useEffect(() => {
+    void fetchEquipmentSummaryApi()
+      .then(setEquipmentSummary)
+      .catch(() => setEquipmentSummary(null));
+  }, [list.items]);
+
+  const filtered = list.items;
+  const search = list.search;
+  const setSearch = list.setSearch;
 
   const selectedCategory = state.categories.find(c => c.id === fCategoryId);
 
@@ -125,6 +141,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
     try {
       await updateEquipmentApi(editing.id, payload);
       await refresh();
+      await list.refresh();
       setShowForm(false);
       setEditing(null);
     } catch (err) {
@@ -212,11 +229,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
 
       {viewMode === 'warehouses' ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {myWarehouses.map((warehouse) => {
-            const count = state.equipment.filter(
-              (row) => row.warehouseId === warehouse.id && row.status === 'skladiste',
-            ).length;
-            return (
+          {myWarehouses.map((warehouse) => (
               <button
                 key={warehouse.id}
                 type="button"
@@ -224,10 +237,9 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
                 className="text-left bg-white border border-gray-100 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition"
               >
                 <p className="font-medium text-gray-900">{warehouse.name}</p>
-                <p className="text-xs text-gray-500 mt-1">{count} na skladištu</p>
+                <p className="text-xs text-gray-500 mt-1">Pregled skladišta</p>
               </button>
-            );
-          })}
+            ))}
           {myWarehouses.length === 0 ? (
             <p className="text-sm text-gray-500 col-span-full">Nema skladišta u vašem opsegu.</p>
           ) : null}
@@ -263,18 +275,35 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
 
       {/* Summary */}
       <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 text-xs">
-        <span className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg">Prikazano: <strong>{filtered.length}</strong> od {state.equipment.length}</span>
-        <span className="bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-blue-700">Skladište: <strong>{filtered.filter(e => e.status === 'skladiste').length}</strong></span>
-        <span className="bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg text-green-700">Zaduženo: <strong>{filtered.filter(e => e.status === 'zaduzeno').length}</strong></span>
-        <span className="bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-red-700">Rashod: <strong>{filtered.filter(e => e.status === 'rashodovano').length}</strong></span>
+        <span className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg">
+          Prikazano: <strong>{filtered.length}</strong>
+          {list.meta ? ` od ${list.meta.total}` : ''}
+        </span>
+        {equipmentSummary ? (
+          <>
+            <span className="bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-blue-700">
+              Skladište: <strong>{equipmentSummary.byStatus.skladiste ?? 0}</strong>
+            </span>
+            <span className="bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg text-green-700">
+              Zaduženo: <strong>{equipmentSummary.byStatus.zaduzeno ?? 0}</strong>
+            </span>
+            <span className="bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-red-700">
+              Rashod: <strong>{equipmentSummary.byStatus.rashodovano ?? 0}</strong>
+            </span>
+          </>
+        ) : null}
       </div>
 
+      {list.error ? (
+        <p className="text-sm text-red-600 mb-4">{list.error}</p>
+      ) : null}
+
       <ResponsiveTable
-        isEmpty={filtered.length === 0}
-        emptyMessage="Nema rezultata"
+        isEmpty={!list.isLoading && filtered.length === 0}
+        emptyMessage={list.isLoading ? 'Učitavanje…' : 'Nema rezultata'}
         mobile={filtered.map((eq) => {
           const cat = state.categories.find(c => c.id === eq.categoryId);
-          const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
+          const holder = eq.currentHolder;
           return (
             <div key={eq.id} className="p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
@@ -333,7 +362,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
             <tbody>
               {filtered.map(eq => {
                 const cat = state.categories.find(c => c.id === eq.categoryId);
-                const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
+                const holder = eq.currentHolder;
                 const holderOrg = holder ? state.orgUnits.find(o => o.id === holder.orgUnitId) : null;
                 const specPreviews = cat ? cat.fields.slice(0, 2).map(f => `${f.name}: ${eq.specifications[f.id] || '—'}`).join(' | ') : '';
 
@@ -409,12 +438,23 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
           </table>
         }
       />
+      {list.meta ? (
+        <PaginationControls
+          page={list.page}
+          pageSize={list.pageSize}
+          total={list.meta.total}
+          totalPages={list.meta.totalPages}
+          onPageChange={list.setPage}
+          onPageSizeChange={list.setPageSize}
+          className="rounded-b-xl border border-t-0 border-gray-100 mb-4"
+        />
+      ) : null}
         </>
       ) : null}
 
       {labelsEnabled && showLabels && (
         <LabelPrintSheet
-          items={state.equipment.filter((eq) => selectedIds.has(eq.id))}
+          items={filtered.filter((eq) => selectedIds.has(eq.id))}
           categories={state.categories}
           onClose={() => setShowLabels(false)}
         />

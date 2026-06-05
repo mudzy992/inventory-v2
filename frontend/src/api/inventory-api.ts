@@ -1,4 +1,6 @@
 import { apiRequest } from './client';
+import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
+import { buildListQueryString } from '../types/pagination';
 
 export type InventoryLineStatus =
   | 'prisutna'
@@ -26,6 +28,7 @@ export interface InventoryCommitteeMemberDto {
 export interface InventoryCommitteeDto {
   id: string;
   sessionId: string;
+  _count?: { lines: number };
   warehouseId?: string | null;
   categoryId: string;
   name?: string | null;
@@ -99,6 +102,7 @@ export interface InventorySessionCloseJobDto {
 export interface InventorySessionDto {
   id: string;
   name: string;
+  _count?: { committees: number };
   orgUnitId: string;
   year: number;
   startDate?: string | null;
@@ -124,6 +128,45 @@ export interface InventoryPrintScopeDto {
   committee: InventoryCommitteeDto;
   equipment: PrintScopeEquipmentDto[];
 }
+
+export const fetchInventorySessionsPageApi = (
+  params: PaginatedListParams & { orgUnitId?: string } = {},
+) => {
+  const query = buildListQueryString(params);
+  return apiRequest<PaginatedResponse<InventorySessionDto>>(
+    `/inventory-count/sessions${query ? `?${query}` : ''}`,
+  );
+};
+
+export const fetchInventoryCommitteesPageApi = (
+  sessionId: string,
+  params: PaginatedListParams = {},
+) => {
+  const query = buildListQueryString(params);
+  return apiRequest<PaginatedResponse<InventoryCommitteeDto>>(
+    `/inventory-count/sessions/${sessionId}/committees${query ? `?${query}` : ''}`,
+  );
+};
+
+export const fetchInventoryLinesPageApi = (
+  committeeId: string,
+  params: PaginatedListParams = {},
+) => {
+  const query = buildListQueryString(params);
+  return apiRequest<PaginatedResponse<InventoryLineDto>>(
+    `/inventory-count/committees/${committeeId}/lines${query ? `?${query}` : ''}`,
+  );
+};
+
+export const fetchInventoryEquipmentScopePageApi = (
+  committeeId: string,
+  params: PaginatedListParams = {},
+) => {
+  const query = buildListQueryString(params);
+  return apiRequest<PaginatedResponse<PrintScopeEquipmentDto>>(
+    `/inventory-count/committees/${committeeId}/equipment-scope${query ? `?${query}` : ''}`,
+  );
+};
 
 export const fetchInventoryCommitteesApi = (sessionId: string) =>
   apiRequest<InventoryCommitteeDto[]>(`/inventory-sessions/${sessionId}/committees`);
@@ -185,9 +228,9 @@ export const createInventoryCommitteeApi = (
 export const fetchInventoryPrintScopeApi = (committeeId: string) =>
   apiRequest<InventoryPrintScopeDto>(`/inventory-sessions/committees/${committeeId}/print-scope`);
 
-export const fetchInventorySessionsApi = (orgUnitId?: string) => {
-  const query = orgUnitId ? `?orgUnitId=${orgUnitId}` : '';
-  return apiRequest<InventorySessionDto[]>(`/inventory-sessions${query}`);
+export const fetchInventorySessionsApi = async (orgUnitId?: string) => {
+  const response = await fetchInventorySessionsPageApi({ orgUnitId, page: 1, pageSize: 100 });
+  return response.items;
 };
 
 export interface InventoryFreezeBannerSessionDto {

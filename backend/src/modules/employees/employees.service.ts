@@ -1,56 +1,73 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Employee, Prisma } from '../../../generated/prisma/client';
-import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
+import {
+  buildContainsSearchWhere,
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmployeeRelocationService } from '../employee-relocation/employee-relocation.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
+import { SearchEmployeesQueryDto } from './dto/search-employees-query.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+
+const EMPLOYEE_SORT_FIELDS: Record<string, string> = {
+  lastName: 'lastName',
+  firstName: 'firstName',
+  email: 'email',
+  createdAt: 'createdAt',
+};
 
 @Injectable()
 export class EmployeesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registrarScope: RegistrarScopeService,
-    private readonly locationResolutionService: LocationResolutionService,
     private readonly settingsService: SettingsService,
     private readonly employeeRelocationService: EmployeeRelocationService,
   ) {}
 
-  async findAll(user: AuthenticatedUser, query: ListEmployeesQueryDto): Promise<Employee[]> {
-    const employees = await this.prisma.employee.findMany({
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+  async findAll(
+    user: AuthenticatedUser,
+    query: ListEmployeesQueryDto,
+  ): Promise<PaginatedResponse<Employee>> {
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = await this.buildListWhere(user, query);
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, EMPLOYEE_SORT_FIELDS, 'lastName');
+    return paginate({
+      findMany: (args) => this.prisma.employee.findMany({ ...args, orderBy: [orderBy, { firstName: 'asc' }] }),
+      count: (args) => this.prisma.employee.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
     });
-    let filtered = employees;
-    if (user.role === 'user') {
-      filtered = user.employeeId
-        ? employees.filter((employee) => employee.id === user.employeeId)
-        : [];
-    } else if (user.role === 'evidenticar') {
-      const scoped: Employee[] = [];
-      for (const employee of employees) {
-        if (await this.registrarScope.canAccessEmployee(user, employee)) {
-          scoped.push(employee);
-        }
-      }
-      filtered = scoped;
-    }
-    if (query.orgUnitId) {
-      filtered = filtered.filter((employee) => employee.orgUnitId === query.orgUnitId);
-    }
-    if (query.search) {
-      const term = query.search.toLowerCase();
-      filtered = filtered.filter(
-        (employee) =>
-          employee.firstName.toLowerCase().includes(term) ||
-          employee.lastName.toLowerCase().includes(term) ||
-          (employee.email?.toLowerCase().includes(term) ?? false),
-      );
-    }
-    return filtered;
+  }
+
+  async search(query: SearchEmployeesQueryDto): Promise<Employee[]> {
+    const term = query.q.trim();
+    const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
+    return this.prisma.employee.findMany({
+      where: {
+        OR: [
+          { firstName: { contains: term } },
+          { lastName: { contains: term } },
+          { email: { contains: term } },
+          { title: { contains: term } },
+        ],
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      take: limit,
+    });
   }
 
   async findOne(user: AuthenticatedUser, id: string): Promise<Employee> {
@@ -93,6 +110,22 @@ export class EmployeesService {
   async remove(id: string): Promise<void> {
     await this.findByIdOrThrow(id);
     await this.prisma.employee.delete({ where: { id } });
+  }
+
+  private async buildListWhere(
+    user: AuthenticatedUser,
+    query: ListEmployeesQueryDto,
+  ): Promise<Prisma.EmployeeWhereInput> {
+    const scopeWhere = await this.registrarScope.buildEmployeeWhere(user);
+    const filters: Prisma.EmployeeWhereInput[] = [scopeWhere];
+    if (query.orgUnitId) {
+      filters.push({ orgUnitId: query.orgUnitId });
+    }
+    const searchWhere = buildContainsSearchWhere(query.search, ['firstName', 'lastName', 'email']);
+    if (searchWhere) {
+      filters.push(searchWhere);
+    }
+    return filters.length === 1 ? filters[0]! : { AND: filters };
   }
 
   private async assertCanReadEmployee(user: AuthenticatedUser, employee: Employee): Promise<void> {

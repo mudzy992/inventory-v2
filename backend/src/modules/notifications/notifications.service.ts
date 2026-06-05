@@ -2,7 +2,14 @@ import { Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/commo
 import type { Notification, NotificationType } from '../../../generated/prisma/client';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import {
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   collectTransferPendingRecipients,
@@ -14,6 +21,12 @@ import {
   collectInventorySessionStakeholderUserIds,
 } from './notification-inventory-recipients.util';
 import { SettingsService } from '../settings/settings.service';
+import { ListNotificationsQueryDto } from './dto/list-notifications-query.dto';
+
+const NOTIFICATION_SORT_FIELDS: Record<string, string> = {
+  createdAt: 'createdAt',
+  title: 'title',
+};
 import { NotificationsGateway } from './notifications.gateway';
 
 export interface NotificationResponse {
@@ -57,13 +70,29 @@ export class NotificationsService {
     private readonly settingsService: SettingsService,
   ) {}
 
-  async findAllForUser(user: AuthenticatedUser): Promise<NotificationResponse[]> {
-    const rows = await this.prisma.notification.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
+  async findAllForUser(
+    user: AuthenticatedUser,
+    query: ListNotificationsQueryDto,
+  ): Promise<PaginatedResponse<NotificationResponse>> {
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = {
+      userId: user.id,
+      ...(query.unread ? { read: false } : {}),
+    };
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, NOTIFICATION_SORT_FIELDS, 'createdAt');
+    const result = await paginate({
+      findMany: (args) => this.prisma.notification.findMany(args),
+      count: (args) => this.prisma.notification.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
     });
-    return rows.map((row) => this.toResponse(row));
+    return {
+      items: result.items.map((row) => this.toResponse(row)),
+      meta: result.meta,
+    };
   }
 
   async markRead(user: AuthenticatedUser, id: string): Promise<NotificationResponse> {

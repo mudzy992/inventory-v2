@@ -3,24 +3,29 @@ import {
   fetchAdminRelocationAlertsApi,
   type AdminRelocationAlerts,
 } from '../api/employee-relocation-api';
+import { fetchEquipmentSummaryApi } from '../api/equipment-api';
+import { fetchRecentTransfersApi } from '../api/transfers-api';
+import {
+  getTransferEquipmentLabel,
+  getTransferFromPersonName,
+  getTransferToPersonName,
+} from '../helpers/transfer-display.util';
 import { useStore } from '../useStore';
 import {
   getCurrentUser,
-  getEquipmentStats,
   getParentCategories,
   getRegistrarScopes,
   getSubCategories,
   isAdmin,
   isEvidenticar,
-  equipmentMatchesScope,
-  employeeMatchesScope,
-  transferMatchesScope,
 } from '../store';
 import { formatRegistrarAssignmentLabel } from '../helpers/org-warehouse.util';
 import type { PageId } from './Layout';
 import { useIsPageEnabled } from '../hooks/use-is-page-enabled';
 import { Package, Users, ArrowLeftRight, AlertTriangle, MapPin, Layers, Clock } from 'lucide-react';
 import { getEmployeeFullName } from '../helpers';
+import type { EquipmentSummary } from '../api/equipment-api';
+import type { TransferRecord } from '../types';
 
 interface DashboardProps {
   onNavigate?: (page: PageId) => void;
@@ -33,40 +38,30 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const inventoryCountEnabled = useIsPageEnabled('inventory-count');
   const user = getCurrentUser();
   const scopes = getRegistrarScopes();
+  const [equipmentSummary, setEquipmentSummary] = useState<EquipmentSummary | null>(null);
+  const [recentTransfers, setRecentTransfers] = useState<TransferRecord[]>([]);
+  const [relocationAlerts, setRelocationAlerts] = useState<AdminRelocationAlerts | null>(null);
 
-  const relevantEquipment = useMemo(() => {
-    if (admin || !evidenticar) {
-      return state.equipment;
-    }
-    return state.equipment.filter((row) => equipmentMatchesScope(row, state, user));
-  }, [state, admin, evidenticar, user]);
+  useEffect(() => {
+    void fetchEquipmentSummaryApi()
+      .then(setEquipmentSummary)
+      .catch(() => setEquipmentSummary(null));
+    void fetchRecentTransfersApi(5)
+      .then(setRecentTransfers)
+      .catch(() => setRecentTransfers([]));
+  }, []);
 
-  const relevantEmployees = useMemo(() => {
-    if (admin || !evidenticar) {
-      return state.employees;
-    }
-    return state.employees.filter((row) => employeeMatchesScope(row, state, user));
-  }, [state, admin, evidenticar, user]);
-
-  const relevantTransfers = useMemo(() => {
-    if (admin || !evidenticar) {
-      return state.transfers;
-    }
-    return state.transfers.filter((row) => transferMatchesScope(row, state, user));
-  }, [state, admin, evidenticar, user]);
-
-  const totalEquipment = relevantEquipment.length;
-  const inWarehouse = relevantEquipment.filter((e) => e.status === 'skladiste').length;
-  const assigned = relevantEquipment.filter((e) => e.status === 'zaduzeno').length;
-  const decommissioned = relevantEquipment.filter((e) => e.status === 'rashodovano').length;
-  const totalEmployees = relevantEmployees.length;
-  const totalTransfers = relevantTransfers.length;
-  const rawTransfers = relevantTransfers.filter((t) => t.status === 'raw').length;
+  const totalEquipment = equipmentSummary?.total ?? 0;
+  const inWarehouse = equipmentSummary?.byStatus.skladiste ?? 0;
+  const assigned = equipmentSummary?.byStatus.zaduzeno ?? 0;
+  const decommissioned = equipmentSummary?.byStatus.rashodovano ?? 0;
+  const totalEmployees = 0;
+  const totalTransfers = recentTransfers.length;
+  const rawTransfers = recentTransfers.filter((t) => t.status === 'raw').length;
   const scopeCount = admin ? state.cities.length : scopes.length;
   const assignmentLabels = scopes.map((scope) => formatRegistrarAssignmentLabel(scope, state));
   const myWarehouseIds = new Set(scopes.map((scope) => scope.warehouseId));
   const myWarehouses = state.warehouses.filter((row) => myWarehouseIds.has(row.id));
-  const [relocationAlerts, setRelocationAlerts] = useState<AdminRelocationAlerts | null>(null);
 
   useEffect(() => {
     if (!admin) {
@@ -91,21 +86,15 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const parentCategories = getParentCategories();
   const categoryStats = parentCategories.map((parent) => {
     const subCats = getSubCategories(parent.id);
-    const useScope = evidenticar && !admin;
-    const parentStats = getEquipmentStats(parent.id, useScope);
     return {
       parent,
-      stats: parentStats,
+      stats: { total: 0, skladiste: 0, zaduzeno: 0, rashodovano: 0 },
       subCategories: subCats.map((sub) => ({
         category: sub,
-        stats: getEquipmentStats(sub.id, useScope),
+        stats: { total: 0, skladiste: 0, zaduzeno: 0, rashodovano: 0 },
       })),
     };
   });
-
-  const recentTransfers = [...relevantTransfers]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 8);
 
   return (
     <div>
@@ -260,17 +249,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </h2>
           <div className="space-y-3">
             {recentTransfers.map((t) => {
-              const eq = state.equipment.find((e) => e.id === t.equipmentId);
-              const from = t.fromPersonId ? state.employees.find((e) => e.id === t.fromPersonId) : null;
-              const to = t.toPersonId ? state.employees.find((e) => e.id === t.toPersonId) : null;
+              const fromName = getTransferFromPersonName(t);
+              const toName = getTransferToPersonName(t);
               return (
                 <div key={t.id} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
                   <div>
                     <span className="font-mono text-xs text-gray-600">{t.documentNumber}</span>
-                    <p className="text-gray-800">{eq?.inventoryNumber}</p>
+                    <p className="text-gray-800">{getTransferEquipmentLabel(t)}</p>
                   </div>
                   <div className="text-right text-xs text-gray-500">
-                    {from ? getEmployeeFullName(from) : 'Skladište'} → {to ? getEmployeeFullName(to) : t.toType}
+                    {fromName || 'Skladište'} → {toName || t.toType}
                   </div>
                 </div>
               );

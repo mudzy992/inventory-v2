@@ -10,7 +10,15 @@ import type {
   InventoryWarehouseLineStatus,
   Prisma,
 } from '../../../generated/prisma/client';
+import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import {
+  buildContainsSearchWhere,
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { OrgScopeService } from '../../common/services/org-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
@@ -27,10 +35,64 @@ import {
   type CommitteeScopeDeps,
   countEquipmentInWarehouseCategoryScope,
   evaluateEquipmentInCommitteeScope,
-  filterEquipmentInCommitteeScope,
   isEmployeeInWarehouseCoverage,
   type WarehouseScopeEquipment,
 } from './utils/resolve-warehouse-committee-scope.util';
+import { ListCommitteesQueryDto } from './dto/list-committees-query.dto';
+import { ListInventoryLinesQueryDto } from './dto/list-inventory-lines-query.dto';
+import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
+
+const SESSION_LIST_INCLUDE = {
+  orgUnit: { include: { effectiveLocationCity: { include: { canton: true } } } },
+  _count: { select: { committees: true } },
+} satisfies Prisma.InventorySessionInclude;
+
+const COMMITTEE_LIST_INCLUDE = {
+  warehouse: { select: { id: true, name: true } },
+  category: { select: { id: true, name: true } },
+  members: { include: { employee: { select: { id: true, firstName: true, lastName: true } } } },
+  _count: { select: { lines: true } },
+} satisfies Prisma.InventoryCommitteeInclude;
+
+const COMMITTEE_LINE_LIST_INCLUDE = {
+  equipment: {
+    select: {
+      id: true,
+      inventoryNumber: true,
+      status: true,
+      categoryId: true,
+      currentHolder: { select: { id: true, firstName: true, lastName: true } },
+    },
+  },
+  pendingAction: { select: { id: true, status: true } },
+  generatedTransfer: { select: { id: true, status: true, documentNumber: true, scannedDocUrl: true } },
+} satisfies Prisma.InventoryLineInclude;
+
+const EQUIPMENT_SCOPE_INCLUDE = {
+  category: { select: { id: true, name: true } },
+  currentHolder: { select: { id: true, firstName: true, lastName: true, orgUnitId: true, title: true } },
+  warehouse: { select: { id: true, name: true, cityId: true } },
+} satisfies Prisma.EquipmentInclude;
+
+const SESSION_SORT_FIELDS: Record<string, string> = {
+  year: 'year',
+  createdAt: 'createdAt',
+  name: 'name',
+};
+
+const COMMITTEE_SORT_FIELDS: Record<string, string> = {
+  createdAt: 'createdAt',
+};
+
+const INVENTORY_LINE_SORT_FIELDS: Record<string, string> = {
+  createdAt: 'createdAt',
+  status: 'status',
+};
+
+const EQUIPMENT_SCOPE_SORT_FIELDS: Record<string, string> = {
+  inventoryNumber: 'inventoryNumber',
+  entryDate: 'entryDate',
+};
 
 interface CommitteeMemberInput {
   employeeId: string;
@@ -580,9 +642,229 @@ export class InventoryCountService {
 
   async resolveCommitteeEquipment(committeeId: string) {
     await this.assertInventoryCountEnabled();
+    const where = await this.buildCommitteeEquipmentWhere(committeeId);
+    return this.prisma.equipment.findMany({
+      where,
+      include: EQUIPMENT_SCOPE_INCLUDE,
+      orderBy: { inventoryNumber: 'asc' },
+    });
+  }
+
+  async findCommitteeEquipmentScopePaginated(
+    user: AuthenticatedUser,
+    committeeId: string,
+    query: ListCommitteesQueryDto,
+  ) {
+    await this.assertInventoryCountEnabled();
+    await this.assertCommitteeAccess(user, committeeId);
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = await this.buildCommitteeEquipmentWhere(committeeId);
+    const filters: Prisma.EquipmentWhereInput[] = [where];
+    const searchWhere = buildContainsSearchWhere(query.search, ['inventoryNumber']);
+    if (searchWhere) {
+      filters.push(searchWhere);
+    }
+    const combinedWhere: Prisma.EquipmentWhereInput =
+      filters.length === 1 ? filters[0]! : { AND: filters };
+    const orderBy = buildOrderBy(
+      query.sortBy,
+      query.sortDir,
+      EQUIPMENT_SCOPE_SORT_FIELDS,
+      'inventoryNumber',
+    );
+    return paginate({
+      findMany: (args) =>
+        this.prisma.equipment.findMany({
+          ...args,
+          include: EQUIPMENT_SCOPE_INCLUDE,
+        }),
+      count: (args) => this.prisma.equipment.count(args),
+      where: combinedWhere,
+      orderBy,
+      page,
+      pageSize: take,
+    });
+  }
+
+  async findCommitteesPaginated(
+    user: AuthenticatedUser,
+    sessionId: string,
+    query: ListCommitteesQueryDto,
+  ) {
+    await this.assertInventoryCountEnabled();
+    await this.assertSessionAccess(user, sessionId);
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = await this.buildSessionCommitteesWhere(user, sessionId);
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, COMMITTEE_SORT_FIELDS, 'createdAt');
+    return paginate({
+      findMany: (args) =>
+        this.prisma.inventoryCommittee.findMany({
+          ...args,
+          include: COMMITTEE_LIST_INCLUDE,
+        }),
+      count: (args) => this.prisma.inventoryCommittee.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
+    });
+  }
+
+  async findCommitteeLinesPaginated(
+    user: AuthenticatedUser,
+    committeeId: string,
+    query: ListInventoryLinesQueryDto,
+  ) {
+    await this.assertInventoryCountEnabled();
+    await this.assertCommitteeAccess(user, committeeId);
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const filters: Prisma.InventoryLineWhereInput[] = [{ committeeId }];
+    if (query.status) {
+      filters.push({ status: query.status });
+    }
+    if (query.search?.trim()) {
+      filters.push({
+        equipment: { inventoryNumber: { contains: query.search.trim() } },
+      });
+    }
+    const where: Prisma.InventoryLineWhereInput =
+      filters.length === 1 ? filters[0]! : { AND: filters };
+    const orderBy = buildOrderBy(
+      query.sortBy,
+      query.sortDir,
+      INVENTORY_LINE_SORT_FIELDS,
+      'createdAt',
+    );
+    return paginate({
+      findMany: (args) =>
+        this.prisma.inventoryLine.findMany({
+          ...args,
+          include: COMMITTEE_LINE_LIST_INCLUDE,
+        }),
+      count: (args) => this.prisma.inventoryLine.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
+    });
+  }
+
+  async findSessionsForUser(user: AuthenticatedUser, query: ListSessionsQueryDto) {
+    await this.assertInventoryCountEnabled();
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = await this.buildSessionsWhere(user, query.orgUnitId);
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, SESSION_SORT_FIELDS, 'year');
+    return paginate({
+      findMany: (args) =>
+        this.prisma.inventorySession.findMany({
+          ...args,
+          include: SESSION_LIST_INCLUDE,
+          orderBy: [orderBy, { createdAt: 'desc' }],
+        }),
+      count: (args) => this.prisma.inventorySession.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
+    });
+  }
+
+  private async buildSessionsWhere(
+    user: AuthenticatedUser,
+    orgUnitId?: string,
+  ): Promise<Prisma.InventorySessionWhereInput> {
+    const filters: Prisma.InventorySessionWhereInput[] = [];
+    if (orgUnitId) {
+      filters.push({ orgUnitId });
+    }
+    if (user.role !== 'admin' && user.role !== 'evidenticar') {
+      const actor = await this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { employeeId: true },
+      });
+      if (!actor?.employeeId) {
+        return { id: { in: [] } };
+      }
+      filters.push({
+        committees: { some: { members: { some: { employeeId: actor.employeeId } } } },
+      });
+    }
+    if (filters.length === 0) {
+      return {};
+    }
+    return filters.length === 1 ? filters[0]! : { AND: filters };
+  }
+
+  private async buildSessionCommitteesWhere(
+    user: AuthenticatedUser,
+    sessionId: string,
+  ): Promise<Prisma.InventoryCommitteeWhereInput> {
+    const base: Prisma.InventoryCommitteeWhereInput = { sessionId };
+    if (user.role === 'admin' || user.role === 'evidenticar') {
+      return base;
+    }
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (!actor?.employeeId) {
+      return { id: { in: [] } };
+    }
+    return {
+      ...base,
+      members: { some: { employeeId: actor.employeeId } },
+    };
+  }
+
+  private async assertSessionAccess(user: AuthenticatedUser, sessionId: string): Promise<void> {
+    const scopeWhere = await this.buildSessionsWhere(user);
+    const session = await this.prisma.inventorySession.findFirst({
+      where: { id: sessionId, ...scopeWhere },
+      select: { id: true },
+    });
+    if (!session) {
+      throw new ForbiddenException('Session outside your scope');
+    }
+  }
+
+  private async assertCommitteeAccess(user: AuthenticatedUser, committeeId: string): Promise<void> {
     const committee = await this.prisma.inventoryCommittee.findUnique({
       where: { id: committeeId },
-      include: { session: true, category: true },
+      select: { sessionId: true },
+    });
+    if (!committee) {
+      throw new NotFoundException('Inventory committee not found');
+    }
+    await this.assertSessionAccess(user, committee.sessionId);
+    if (user.role === 'admin' || user.role === 'evidenticar') {
+      return;
+    }
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    if (!actor?.employeeId) {
+      throw new ForbiddenException('Only committee members can access inventory scope');
+    }
+    const isMember = await this.prisma.inventoryCommitteeMember.findFirst({
+      where: { committeeId, employeeId: actor.employeeId },
+      select: { employeeId: true },
+    });
+    if (!isMember) {
+      throw new ForbiddenException('Only committee members can access inventory scope');
+    }
+  }
+
+  private async buildCommitteeEquipmentWhere(
+    committeeId: string,
+  ): Promise<Prisma.EquipmentWhereInput> {
+    const committee = await this.prisma.inventoryCommittee.findUnique({
+      where: { id: committeeId },
+      include: { session: true },
     });
     if (!committee) {
       throw new NotFoundException('Inventory committee not found');
@@ -593,83 +875,49 @@ export class InventoryCountService {
     if (!sessionCityId) {
       throw new BadRequestException('Session distribution must have effective location city configured');
     }
-    const categoryIds = await this.registrarScope.expandCategoryIds([committee.categoryId]);
-    const allEquipment = await this.prisma.equipment.findMany({
-      where: {
-        status: { not: 'rashodovano' },
-        categoryId: { in: [...categoryIds] },
-      },
-      include: {
-        category: true,
-        currentHolder: true,
-        warehouse: true,
-      },
-    });
-    const deps = this.buildCommitteeScopeDeps();
-    const scopeInput = {
-      categoryId: committee.categoryId,
-      warehouseId: committee.warehouseId,
-      sessionOrgUnitId: committee.session.orgUnitId,
+    const categoryIds = [...(await this.registrarScope.expandCategoryIds([committee.categoryId]))];
+    const base: Prisma.EquipmentWhereInput = {
+      status: { not: 'rashodovano' },
+      category: { categoryKind: 'ASSET' },
+      categoryId: { in: categoryIds },
     };
     if (!committee.warehouseId) {
-      const result: typeof allEquipment = [];
-      for (const item of allEquipment) {
-        const equipmentCityId = await this.resolveEquipmentCityId(item);
-        if (equipmentCityId === sessionCityId) {
-          result.push(item);
-        }
-      }
-      return result;
+      const warehousesInCity = await this.prisma.warehouse.findMany({
+        where: { cityId: sessionCityId },
+        select: { id: true },
+      });
+      const orgUnitsInCity = await this.prisma.orgUnit.findMany({
+        where: { effectiveLocationCityId: sessionCityId },
+        select: { id: true },
+      });
+      return {
+        ...base,
+        OR: [
+          { warehouseId: { in: warehousesInCity.map((row) => row.id) } },
+          { currentHolder: { orgUnitId: { in: orgUnitsInCity.map((row) => row.id) } } },
+        ],
+      };
     }
-    return filterEquipmentInCommitteeScope(deps, scopeInput, allEquipment);
-  }
-
-  async findSessionsForUser(user: AuthenticatedUser, orgUnitId?: string) {
-    await this.assertInventoryCountEnabled();
-    if (user.role === 'admin' || user.role === 'evidenticar') {
-      return this.prisma.inventorySession.findMany({
-        where: orgUnitId ? { orgUnitId } : undefined,
-        include: {
-          orgUnit: { include: { effectiveLocationCity: { include: { canton: true } } } },
-          committees: {
-            include: {
-              warehouse: true,
-              category: true,
-              members: { include: { employee: true } },
-              disposalCommission: { include: { members: { include: { employee: true } } } },
-              lines: { include: { equipment: true, pendingAction: true, generatedTransfer: true } },
-            },
-          },
-        },
-        orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: committee.warehouseId },
+      select: { id: true, orgUnitId: true },
+    });
+    if (!warehouse) {
+      throw new BadRequestException('Committee warehouse not found');
+    }
+    const coverageOrgUnitIds = warehouse.orgUnitId
+      ? await this.orgScopeService.expandOrgUnitIds([warehouse.orgUnitId])
+      : [];
+    const orConditions: Prisma.EquipmentWhereInput[] = [
+      { warehouseId: warehouse.id, status: 'skladiste' },
+    ];
+    if (coverageOrgUnitIds.length > 0) {
+      orConditions.push({
+        status: 'zaduzeno',
+        currentHolder: { orgUnitId: { in: coverageOrgUnitIds } },
       });
     }
-    const actor = await this.prisma.user.findUnique({
-      where: { id: user.id },
-      select: { employeeId: true },
-    });
-    if (!actor?.employeeId) {
-      return [];
-    }
-    const sessions = await this.prisma.inventorySession.findMany({
-      where: orgUnitId ? { orgUnitId } : undefined,
-      include: {
-        orgUnit: { include: { effectiveLocationCity: { include: { canton: true } } } },
-        committees: {
-          where: { members: { some: { employeeId: actor.employeeId } } },
-          include: {
-            warehouse: true,
-            category: true,
-            members: { include: { employee: true } },
-            disposalCommission: { include: { members: { include: { employee: true } } } },
-            lines: { include: { equipment: true, pendingAction: true, generatedTransfer: true } },
-          },
-          orderBy: [{ warehouse: { name: 'asc' } }, { category: { name: 'asc' } }, { createdAt: 'asc' }],
-        },
-      },
-      orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
-    });
-    return sessions.filter((session) => (session.committees ?? []).length > 0);
+    return { ...base, OR: orConditions };
   }
 
   async getFreezeBannerForUser(user: AuthenticatedUser) {

@@ -14,10 +14,27 @@ import { LocationResolutionService } from '../../common/services/location-resolu
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { isRegistrarModeA } from '../../common/types/registrar-scope.type';
+import {
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
+import { ListRelocationQueryDto } from './dto/list-relocation-query.dto';
 import { PreviewRelocationQueryDto } from './dto/preview-relocation-query.dto';
+
+const RELOCATION_LINE_SORT_FIELDS: Record<string, string> = {
+  createdAt: 'createdAt',
+  status: 'status',
+};
+
+const RELOCATION_CASE_SORT_FIELDS: Record<string, string> = {
+  createdAt: 'createdAt',
+};
 import {
   findAdminUserIds,
   findRegistrarUserIds,
@@ -225,33 +242,123 @@ export class EmployeeRelocationService {
     });
   }
 
-  async listForUser(user: AuthenticatedUser) {
+  async listForUser(user: AuthenticatedUser, query: ListRelocationQueryDto) {
     await this.settingsService.assertFeatureEnabled('features.employee_relocation');
-    if (user.role === 'admin') {
-      const [sourceLines, destLines, openCases] = await Promise.all([
-        this.prisma.employeeRelocationLine.findMany({
-          where: {
-            status: { in: ['pending_source', 'rejected'] },
-            case: { status: 'open' },
-          },
-          include: lineInclude,
-          orderBy: { createdAt: 'desc' },
-        }),
-        this.prisma.employeeRelocationLine.findMany({
-          where: { status: 'pending_dest', case: { status: 'open' } },
-          include: lineInclude,
-          orderBy: { createdAt: 'desc' },
-        }),
-        this.listCases(),
-      ]);
-      return { sourceLines, destLines, openCases };
-    }
-    if (user.role !== 'evidenticar') {
+    if (user.role !== 'admin' && user.role !== 'evidenticar') {
       throw new ForbiddenException('Only registrar or admin can list relocation cases');
     }
-    const sourceLines = await this.listSourceLinesForRegistrar(user);
-    const destLines = await this.listDestLinesForRegistrar(user);
-    return { sourceLines, destLines, openCases: [] };
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const lineOrderBy = buildOrderBy(
+      query.sortBy,
+      query.sortDir,
+      RELOCATION_LINE_SORT_FIELDS,
+      'createdAt',
+    );
+    const caseOrderBy = buildOrderBy(
+      query.sortBy,
+      query.sortDir,
+      RELOCATION_CASE_SORT_FIELDS,
+      'createdAt',
+    );
+    const sourceWhere = await this.buildSourceLinesWhere(user);
+    const destWhere = await this.buildDestLinesWhere(user);
+    const [sourceLines, destLines, openCases] = await Promise.all([
+      paginate({
+        findMany: (args) =>
+          this.prisma.employeeRelocationLine.findMany({ ...args, include: lineInclude }),
+        count: (args) => this.prisma.employeeRelocationLine.count(args),
+        where: sourceWhere,
+        orderBy: lineOrderBy,
+        page,
+        pageSize: take,
+      }),
+      paginate({
+        findMany: (args) =>
+          this.prisma.employeeRelocationLine.findMany({ ...args, include: lineInclude }),
+        count: (args) => this.prisma.employeeRelocationLine.count(args),
+        where: destWhere,
+        orderBy: lineOrderBy,
+        page,
+        pageSize: take,
+      }),
+      user.role === 'admin'
+        ? paginate({
+            findMany: (args) =>
+              this.prisma.employeeRelocationCase.findMany({
+                ...args,
+                include: {
+                  employee: { select: { id: true, firstName: true, lastName: true } },
+                  lines: { include: lineInclude },
+                },
+              }),
+            count: (args) => this.prisma.employeeRelocationCase.count(args),
+            where: { status: 'open' as const },
+            orderBy: caseOrderBy,
+            page,
+            pageSize: take,
+          })
+        : Promise.resolve({
+            items: [],
+            meta: { page, pageSize: take, total: 0, totalPages: 0 },
+          }),
+    ]);
+    return { sourceLines, destLines, openCases };
+  }
+
+  private async buildSourceLinesWhere(
+    user: AuthenticatedUser,
+  ): Promise<Prisma.EmployeeRelocationLineWhereInput> {
+    const base: Prisma.EmployeeRelocationLineWhereInput = {
+      status: { in: ['pending_source', 'rejected'] },
+      case: { status: 'open' },
+    };
+    if (user.role === 'admin') {
+      return base;
+    }
+    const scopeClauses = await this.buildRegistrarLineScopeClauses(user, 'source');
+    if (scopeClauses.length === 0) {
+      return { id: { in: [] } };
+    }
+    return { AND: [base, { OR: scopeClauses }] };
+  }
+
+  private async buildDestLinesWhere(
+    user: AuthenticatedUser,
+  ): Promise<Prisma.EmployeeRelocationLineWhereInput> {
+    const base: Prisma.EmployeeRelocationLineWhereInput = {
+      status: 'pending_dest',
+      case: { status: 'open' },
+    };
+    if (user.role === 'admin') {
+      return base;
+    }
+    const scopeClauses = await this.buildRegistrarLineScopeClauses(user, 'dest');
+    if (scopeClauses.length === 0) {
+      return { id: { in: [] } };
+    }
+    return { AND: [base, { OR: scopeClauses }] };
+  }
+
+  private async buildRegistrarLineScopeClauses(
+    user: AuthenticatedUser,
+    side: 'source' | 'dest',
+  ): Promise<Prisma.EmployeeRelocationLineWhereInput[]> {
+    const clauses: Prisma.EmployeeRelocationLineWhereInput[] = [];
+    for (const assignment of user.registrarScopes) {
+      if (!isRegistrarModeA(assignment)) {
+        continue;
+      }
+      const categoryIds = [...(await this.registrarScope.expandCategoryIds([assignment.categoryId]))];
+      clauses.push({
+        categoryId: { in: categoryIds },
+        case:
+          side === 'source'
+            ? { fromWarehouseId: assignment.warehouseId }
+            : { toWarehouseId: assignment.warehouseId },
+      });
+    }
+    return clauses;
   }
 
   async listEventsForEquipment(equipmentId: string) {
@@ -357,48 +464,6 @@ export class EmployeeRelocationService {
       where: { status: 'pending_dest' },
     });
     return { missingRegistrars, openCases, pendingDest };
-  }
-
-  private async listCases() {
-    return this.prisma.employeeRelocationCase.findMany({
-      where: { status: 'open' },
-      include: {
-        employee: { select: { id: true, firstName: true, lastName: true } },
-        lines: { include: lineInclude },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
-  }
-
-  private async listSourceLinesForRegistrar(user: AuthenticatedUser) {
-    const lines = await this.prisma.employeeRelocationLine.findMany({
-      where: { status: { in: ['pending_source', 'rejected'] } },
-      include: lineInclude,
-      orderBy: { createdAt: 'desc' },
-    });
-    const filtered = [];
-    for (const line of lines) {
-      if (await this.canActAsSourceRegistrar(user, line)) {
-        filtered.push(line);
-      }
-    }
-    return filtered;
-  }
-
-  private async listDestLinesForRegistrar(user: AuthenticatedUser) {
-    const lines = await this.prisma.employeeRelocationLine.findMany({
-      where: { status: 'pending_dest' },
-      include: lineInclude,
-      orderBy: { createdAt: 'desc' },
-    });
-    const filtered = [];
-    for (const line of lines) {
-      if (await this.canActAsDestRegistrar(user, line)) {
-        filtered.push(line);
-      }
-    }
-    return filtered;
   }
 
   private async executeDischarge(

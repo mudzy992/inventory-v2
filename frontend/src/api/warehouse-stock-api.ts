@@ -1,11 +1,35 @@
 import { apiRequest } from './client';
+import { fetchAllPaginatedItems } from './fetch-all-paginated';
+import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
+import { buildListQueryString } from '../types/pagination';
 import type { WarehouseStockLot } from '../types';
 
-export const fetchWarehouseStockLotsApi = (warehouseId: string) =>
-  apiRequest<WarehouseStockLot[]>(`/warehouses/${warehouseId}/stock-lots`);
+export const fetchWarehouseStockLotsPageApi = (
+  warehouseId: string,
+  params: PaginatedListParams = {},
+) => {
+  const query = buildListQueryString(params);
+  return apiRequest<PaginatedResponse<WarehouseStockLot>>(
+    `/warehouses/${warehouseId}/stock-lots${query ? `?${query}` : ''}`,
+  );
+};
 
-export const fetchAssignedStockLotsApi = () =>
-  apiRequest<WarehouseStockLot[]>('/warehouse-stock/assigned');
+export const fetchAssignedStockLotsPageApi = (params: PaginatedListParams = {}) => {
+  const query = buildListQueryString(params);
+  return apiRequest<PaginatedResponse<WarehouseStockLot>>(
+    `/warehouse-stock/assigned${query ? `?${query}` : ''}`,
+  );
+};
+
+/** @deprecated Use paginated fetchWarehouseStockLotsPageApi */
+export const fetchWarehouseStockLotsApi = (warehouseId: string) =>
+  fetchAllPaginatedItems((params) => fetchWarehouseStockLotsPageApi(warehouseId, params));
+
+/** @deprecated Use paginated fetchAssignedStockLotsPageApi */
+export const fetchAssignedStockLotsApi = async () => {
+  const response = await fetchAssignedStockLotsPageApi({ page: 1, pageSize: 100 });
+  return response.items;
+};
 
 export const fetchStockLotApi = (id: string) =>
   apiRequest<WarehouseStockLot>(`/stock-lots/${id}`);

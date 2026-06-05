@@ -1,4 +1,4 @@
-import { getSignerForEmployee } from '../helpers';
+import { getSignerIdForOrgUnit } from '../helpers';
 import type { AppState, Equipment, TransferType, UserAccount } from '../types';
 import { isCrossServiceTransfer } from '../store';
 import { resolveTransferWarehousePayload } from './transfer-warehouse.util';
@@ -9,6 +9,7 @@ export interface BuildTransferPayloadInput {
   equipment: Equipment;
   type: TransferType;
   toPersonId?: string;
+  toPersonOrgUnitId?: string;
   reason?: string;
   date?: string;
   notes?: string;
@@ -24,28 +25,28 @@ export interface BuildTransferPayloadResult {
 }
 
 const resolveSignerId = (
-  state: AppState,
+  orgUnits: AppState['orgUnits'],
   type: TransferType,
   equipment: Equipment,
-  toPersonId?: string,
+  toPersonOrgUnitId?: string,
 ): string => {
   if (type === 'zaduzenje' || type === 'prenos') {
-    const signer = getSignerForEmployee(state, toPersonId ?? '');
-    return signer?.id || state.employees[0]?.id || '';
+    if (toPersonOrgUnitId) {
+      return getSignerIdForOrgUnit(orgUnits, toPersonOrgUnitId) ?? '';
+    }
+    return '';
   }
-  if (type === 'razduzenje' && equipment.currentHolderId) {
-    const signer = getSignerForEmployee(state, equipment.currentHolderId);
-    return signer?.id || state.employees[0]?.id || '';
+  if (type === 'razduzenje' && equipment.currentHolder?.orgUnitId) {
+    return getSignerIdForOrgUnit(orgUnits, equipment.currentHolder.orgUnitId) ?? '';
   }
   if (type === 'rashodovanje') {
-    if (equipment.currentHolderId) {
-      const signer = getSignerForEmployee(state, equipment.currentHolderId);
-      return signer?.id || state.employees[0]?.id || '';
+    if (equipment.currentHolder?.orgUnitId) {
+      return getSignerIdForOrgUnit(orgUnits, equipment.currentHolder.orgUnitId) ?? '';
     }
-    const dirUnit = state.orgUnits.find((row) => row.type === 'direkcija');
-    return dirUnit?.signerId || state.employees[0]?.id || '';
+    const dirUnit = orgUnits.find((row) => row.type === 'direkcija');
+    return dirUnit?.effectiveSignerId ?? dirUnit?.signerId ?? '';
   }
-  return state.employees[0]?.id || '';
+  return '';
 };
 
 export const buildTransferCreatePayload = (
@@ -57,6 +58,7 @@ export const buildTransferCreatePayload = (
     equipment,
     type,
     toPersonId,
+    toPersonOrgUnitId,
     reason,
     date,
     notes,
@@ -69,8 +71,9 @@ export const buildTransferCreatePayload = (
     return { error: 'Odaberite osobu na koju prenosite opremu.' };
   }
 
+  const fromOrgUnitId = equipment.currentHolder?.orgUnitId;
   if (type === 'prenos' && evidenticar && !admin) {
-    const crossService = isCrossServiceTransfer(equipment.currentHolderId, toPersonId);
+    const crossService = isCrossServiceTransfer(fromOrgUnitId, toPersonOrgUnitId);
     if (crossService) {
       return { error: 'Prenos izvan vašeg opsega (grad/kategorija) može izvršiti samo administrator.' };
     }
@@ -88,8 +91,7 @@ export const buildTransferCreatePayload = (
     return { error: 'Razduženje zahtijeva ciljno skladište (nije definisano u hijerarhiji ili dodjeli).' };
   }
 
-  const crossService =
-    type === 'prenos' && isCrossServiceTransfer(equipment.currentHolderId, toPersonId);
+  const crossService = type === 'prenos' && isCrossServiceTransfer(fromOrgUnitId, toPersonOrgUnitId);
 
   return {
     payload: {
@@ -99,7 +101,7 @@ export const buildTransferCreatePayload = (
       fromPersonId: equipment.currentHolderId || undefined,
       toType: type === 'razduzenje' ? 'skladiste' : type === 'rashodovanje' ? 'rashod' : 'osoba',
       toPersonId: type === 'zaduzenje' || type === 'prenos' ? toPersonId : undefined,
-      signerId: resolveSignerId(state, type, equipment, toPersonId),
+      signerId: resolveSignerId(state.orgUnits, type, equipment, toPersonOrgUnitId),
       date: date ?? new Date().toISOString().slice(0, 10),
       reason: reason || undefined,
       notes: notes || undefined,

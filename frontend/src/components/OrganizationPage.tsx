@@ -1,4 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { fetchEmployeesPageApi } from '../api/employees-api';
+import { fetchAllPaginatedItems } from '../api/fetch-all-paginated';
+import type { Employee } from '../types';
 import { useStore, useRefreshData } from '../useStore';
 import { createOrgUnitApi, deleteOrgUnitApi, updateOrgUnitApi } from '../api/data-api';
 import { ApiError } from '../api/client';
@@ -28,19 +31,20 @@ const PARENT_ROOT_ID = '__parent_root__';
 const SIGNER_INHERIT_ID = '__inherit_signer__';
 const CITY_INHERIT_ID = '__inherit_city__';
 
-function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
+function OrgTreeNode({ unit, level, state, employees, onEdit, onDelete, onAdd }: {
   unit: OrgUnit;
   level: number;
   state: ReturnType<typeof useStore>[0];
+  employees: Employee[];
   onEdit: (unit: OrgUnit) => void;
   onDelete: (id: string) => void;
   onAdd: (parentId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(level === 0);
   const children = state.orgUnits.filter(o => o.parentId === unit.id);
-  const employees = state.employees.filter(e => e.orgUnitId === unit.id);
-  const explicitSigner = unit.signerId ? state.employees.find((e) => e.id === unit.signerId) : null;
-  const effectiveSigner = getEffectiveSignerForOrgUnit(state.orgUnits, state.employees, unit.id);
+  const unitEmployees = employees.filter(e => e.orgUnitId === unit.id);
+  const explicitSigner = unit.signerId ? employees.find((e) => e.id === unit.signerId) : null;
+  const effectiveSigner = getEffectiveSignerForOrgUnit(state.orgUnits, employees, unit.id);
   const inheritedSigner =
     effectiveSigner && effectiveSigner.id !== unit.signerId ? effectiveSigner : null;
   const hasChildren = children.length > 0;
@@ -78,7 +82,7 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
             onClick={() => setExpanded(!expanded)}
             className="text-gray-400 hover:text-gray-600 flex-shrink-0 w-5"
           >
-            {hasChildren || employees.length > 0
+            {hasChildren || unitEmployees.length > 0
               ? (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />)
               : <span className="w-4" />
             }
@@ -99,7 +103,7 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
             </span>
           )}
           <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
-            <Users size={10} />{employees.length}
+            <Users size={10} />{unitEmployees.length}
           </span>
           <div className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 flex gap-1 transition-opacity ml-auto">
             <button onClick={() => onAdd(unit.id)} className="text-green-500 hover:text-green-700 p-0.5" title="Dodaj podjedinicu">
@@ -108,16 +112,16 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
             <button onClick={() => onEdit(unit)} className="text-blue-500 hover:text-blue-700 p-0.5" title="Uredi">
               <Edit2 size={14} />
             </button>
-            {children.length === 0 && employees.length === 0 && (
+            {children.length === 0 && unitEmployees.length === 0 && (
               <button onClick={() => onDelete(unit.id)} className="text-red-500 hover:text-red-700 p-0.5" title="Obriši">
                 <Trash2 size={14} />
               </button>
             )}
           </div>
         </div>
-        {expanded && employees.length > 0 && (
+        {expanded && unitEmployees.length > 0 && (
           <div className="px-10 pb-2">
-            {employees.map(emp => (
+            {unitEmployees.map(emp => (
               <div key={emp.id} className="flex items-center gap-2 text-xs text-gray-500 py-0.5">
                 <Users size={12} className="text-gray-300" />
                 <span className="text-gray-700">{emp.firstName} {emp.lastName}</span>
@@ -128,7 +132,7 @@ function OrgTreeNode({ unit, level, state, onEdit, onDelete, onAdd }: {
         )}
       </div>
       {expanded && children.map(child => (
-        <OrgTreeNode key={child.id} unit={child} level={level + 1} state={state} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} />
+        <OrgTreeNode key={child.id} unit={child} level={level + 1} state={state} employees={employees} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} />
       ))}
     </div>
   );
@@ -138,6 +142,7 @@ export function OrganizationPage() {
   const [state, setState] = useStore();
   const refresh = useRefreshData();
   const { toastError, toastSuccess } = useToast();
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [editingUnit, setEditingUnit] = useState<OrgUnit | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -147,6 +152,12 @@ export function OrganizationPage() {
   const [formType, setFormType] = useState<OrgUnitType>('sektor');
   const [formSignerId, setFormSignerId] = useState('');
   const [formLocationCityId, setFormLocationCityId] = useState('');
+
+  useEffect(() => {
+    void fetchAllPaginatedItems((params) => fetchEmployeesPageApi(params), 100)
+      .then(setEmployees)
+      .catch(() => setEmployees([]));
+  }, []);
 
   const rootUnits = state.orgUnits.filter(o => o.parentId === null);
   const hasDirekcija = state.orgUnits.some((unit) => unit.type === 'direkcija');
@@ -211,7 +222,7 @@ export function OrganizationPage() {
   }, [formParentId, editingUnit, state.orgUnits]);
 
   const employeeOptions = useMemo((): SearchableOption[] =>
-    state.employees
+    employees
       .filter((emp) => !signerScopeOrgIds || signerScopeOrgIds.has(emp.orgUnitId))
       .map((emp) => {
         const orgUnit = state.orgUnits.find((unit) => unit.id === emp.orgUnitId);
@@ -223,7 +234,7 @@ export function OrganizationPage() {
           searchText: `${emp.email ?? ''} ${orgPath}`,
         };
       }),
-  [state.employees, state.orgUnits, signerScopeOrgIds]);
+  [employees, state.orgUnits, signerScopeOrgIds]);
 
   const cityOptions = useMemo((): SearchableOption[] =>
     state.cities.map((city) => ({
@@ -242,7 +253,7 @@ export function OrganizationPage() {
     const effectiveCityId = getEffectiveCityForOrgUnit(state.orgUnits, anchorId);
     const effectiveSigner = getEffectiveSignerForOrgUnit(
       state.orgUnits,
-      state.employees,
+      employees,
       anchorId,
     );
     const effectiveWarehouseId = resolveEffectiveWarehouseForOrgUnit(
@@ -264,7 +275,7 @@ export function OrganizationPage() {
         ? 'Efektivne vrijednosti ove jedinice (ako polja ostavite prazna, nasljeđuje se od nadređene).'
         : 'Vrijednosti koje nasljeđuje nova jedinica od odabrane nadređene (ako polja ostavite prazna).',
     };
-  }, [editingUnit, formParentId, state]);
+  }, [editingUnit, employees, formParentId, state]);
 
   const inheritAnchorId = editingUnit?.id ?? formParentId;
 
@@ -276,7 +287,7 @@ export function OrganizationPage() {
         subLabel: 'Odaberite nadređenu jedinicu da vidite tko se nasljeđuje',
       };
     }
-    const effective = getEffectiveSignerForOrgUnit(state.orgUnits, state.employees, inheritAnchorId);
+    const effective = getEffectiveSignerForOrgUnit(state.orgUnits, employees, inheritAnchorId);
     return {
       id: SIGNER_INHERIT_ID,
       label: '— Nasljeđuje od nadređene (podrazumijevano) —',
@@ -284,7 +295,7 @@ export function OrganizationPage() {
         ? `Nasljedeće: ${effective.firstName} ${effective.lastName}`
         : 'Nije postavljen u hijerarhiji nadređene',
     };
-  }, [inheritAnchorId, state.orgUnits, state.employees]);
+  }, [employees, inheritAnchorId, state.orgUnits]);
 
   const inheritCityOption = useMemo((): SearchableOption => {
     if (!inheritAnchorId) {
@@ -460,7 +471,7 @@ export function OrganizationPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         {rootUnits.map(unit => (
-          <OrgTreeNode key={unit.id} unit={unit} level={0} state={state} onEdit={openEdit} onDelete={handleDelete} onAdd={openAdd} />
+          <OrgTreeNode key={unit.id} unit={unit} level={0} state={state} employees={employees} onEdit={openEdit} onDelete={handleDelete} onAdd={openAdd} />
         ))}
         {rootUnits.length === 0 && (
           <p className="text-center text-gray-400 py-12">Nema organizacijskih jedinica. Dodajte prvu.</p>

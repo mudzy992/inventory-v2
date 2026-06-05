@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { useCallback } from 'react';
 import {
   createCatalogItemApi,
   deleteCatalogItemApi,
@@ -8,41 +7,37 @@ import {
 } from '../../api/equipment-catalog-api';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
+import { usePaginatedList } from '../../hooks/usePaginatedList';
 import { getAssetLeafCategories } from '../../helpers/warehouse-stock.util';
 import { useStore } from '../../useStore';
 import { Button } from '../ui/button';
 import { inputClass, labelClass, selectClass } from '../ui/form-styles';
+import { PaginationControls } from '../ui/pagination-controls';
+import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
 export const EquipmentCatalogPanel = () => {
   const [state] = useStore();
   const { toastError, toastSuccess } = useToast();
   const leafCategories = getAssetLeafCategories(state.categories);
-  const [filterCategoryId, setFilterCategoryId] = useState('');
-  const [items, setItems] = useState<EquipmentCatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const loadItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      const rows = await searchCatalogItemsApi({
-        categoryId: filterCategoryId || undefined,
-      });
-      setItems(rows);
-    } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška pri učitavanju šifrarnika');
-    } finally {
-      setLoading(false);
-    }
-  }, [filterCategoryId, toastError]);
+  const fetchPage = useCallback(
+    (params: { categoryId?: string; page?: number; pageSize?: number; search?: string }) =>
+      searchCatalogItemsApi(params),
+    [],
+  );
 
-  useEffect(() => {
-    void loadItems();
-  }, [loadItems]);
+  const list = usePaginatedList<EquipmentCatalogItem, { categoryId?: string }>({
+    fetchPage,
+    initialFilters: { categoryId: undefined },
+  });
+
+  const loadItems = list.refresh;
 
   const openDialog = () => {
     setCode('');
@@ -88,20 +83,34 @@ export const EquipmentCatalogPanel = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3 justify-between">
-        <div className="min-w-[200px]">
-          <label className={labelClass}>Filter kategorije</label>
-          <select
-            value={filterCategoryId}
-            onChange={(e) => setFilterCategoryId(e.target.value)}
-            className={selectClass}
-          >
-            <option value="">Sve kategorije</option>
-            {leafCategories.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap gap-3 flex-1">
+          <div className="min-w-[200px]">
+            <label className={labelClass}>Filter kategorije</label>
+            <select
+              value={list.filters.categoryId ?? ''}
+              onChange={(e) =>
+                list.setFilters({ categoryId: e.target.value || undefined })
+              }
+              className={selectClass}
+            >
+              <option value="">Sve kategorije</option>
+              {leafCategories.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[200px] flex-1">
+            <label className={labelClass}>Pretraga</label>
+            <input
+              type="text"
+              value={list.search}
+              onChange={(e) => list.setSearch(e.target.value)}
+              className={inputClass}
+              placeholder="Šifra ili naziv…"
+            />
+          </div>
         </div>
         <Button onClick={openDialog}>
           <Plus size={14} />
@@ -120,15 +129,15 @@ export const EquipmentCatalogPanel = () => {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {list.isLoading ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
                   Učitavanje…
                 </td>
               </tr>
             ) : null}
-            {!loading &&
-              items.map((item) => (
+            {!list.isLoading &&
+              list.items.map((item) => (
                 <tr key={item.id} className="border-t">
                   <td className="px-4 py-2 font-mono text-xs">{item.code}</td>
                   <td className="px-4 py-2">{item.name}</td>
@@ -145,7 +154,7 @@ export const EquipmentCatalogPanel = () => {
                   </td>
                 </tr>
               ))}
-            {!loading && items.length === 0 ? (
+            {!list.isLoading && list.items.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
                   Nema stavki u šifrarniku.
@@ -154,6 +163,16 @@ export const EquipmentCatalogPanel = () => {
             ) : null}
           </tbody>
         </table>
+        {list.meta ? (
+          <PaginationControls
+            page={list.meta.page}
+            pageSize={list.meta.pageSize}
+            total={list.meta.total}
+            totalPages={list.meta.totalPages}
+            onPageChange={list.setPage}
+            onPageSizeChange={list.setPageSize}
+          />
+        ) : null}
       </div>
 
       {showDialog ? (

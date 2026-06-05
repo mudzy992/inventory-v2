@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { UserRole } from '../../../generated/prisma/client';
@@ -13,6 +14,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { SearchCategoriesQueryDto } from './dto/search-categories-query.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CategoriesService } from './categories.service';
 
@@ -31,6 +33,12 @@ export class CategoriesController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
   findTree() {
     return this.categoriesService.findTree();
+  }
+
+  @Get('search')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
+  search(@Query() query: SearchCategoriesQueryDto) {
+    return this.categoriesService.search(query);
   }
 
   @Get(':id')

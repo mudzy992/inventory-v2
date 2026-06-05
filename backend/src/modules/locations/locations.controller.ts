@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { UserRole } from '../../../generated/prisma/client';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateCantonDto } from './dto/create-canton.dto';
+import { SearchLocationsQueryDto } from './dto/search-locations-query.dto';
 import { CreateCityDto } from './dto/create-city.dto';
 import { UpdateCantonDto } from './dto/update-canton.dto';
 import { UpdateCityDto } from './dto/update-city.dto';
@@ -20,10 +21,22 @@ export class LocationsController {
     return this.locationsService.findCantons();
   }
 
+  @Get('cantons/search')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  searchCantons(@Query() query: SearchLocationsQueryDto) {
+    return this.locationsService.searchCantons(query);
+  }
+
   @Get('cities')
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
   findCities() {
     return this.locationsService.findCities();
+  }
+
+  @Get('cities/search')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  searchCities(@Query() query: SearchLocationsQueryDto) {
+    return this.locationsService.searchCities(query);
   }
 
   @Post('cantons')

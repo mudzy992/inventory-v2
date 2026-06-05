@@ -5,7 +5,8 @@ import {
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { useIsPageEnabled } from '../hooks/use-is-page-enabled';
 import { cn } from '../utils/cn';
-import { getCurrentEmployee, isAdmin, isEvidenticar, getUserRole } from '../store';
+import { isAdmin, isEvidenticar, getUserRole } from '../store';
+import { useCurrentEmployee } from '../hooks/use-current-employee';
 import { useStore } from '../useStore';
 import { getOrgUnitPath } from '../helpers';
 import { NotificationsPanel } from './NotificationsPanel';
@@ -29,7 +30,7 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [state] = useStore();
 
-  const currentEmployee = getCurrentEmployee();
+  const currentEmployee = useCurrentEmployee();
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
   const role = getUserRole();
@@ -64,7 +65,7 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
           : 'bg-gray-500 text-gray-100';
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-[100dvh] bg-gray-50">
       <aside
         className={cn(
           'hidden lg:flex bg-slate-900 text-white flex-col transition-all duration-300 flex-shrink-0',
@@ -168,8 +169,8 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
 
         <InventoryFreezeBanner sessions={freezeSessions} onNavigate={onNavigate} />
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-4 sm:p-6 max-w-[1400px] mx-auto w-full">
+        <main className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
+          <div className="px-4 pt-4 pb-[max(2.5rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:pt-6 sm:pb-8 max-w-[1400px] mx-auto w-full">
             {children}
           </div>
         </main>

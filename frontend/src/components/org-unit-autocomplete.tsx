@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { searchOrgUnitsApi } from '../api/org-units-api';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
 import type { OrgUnit } from '../types';
 import { cn } from '../utils/cn';
@@ -25,6 +26,8 @@ export const OrgUnitAutocomplete = ({
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [remoteResults, setRemoteResults] = useState<OrgUnit[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (selected) {
@@ -34,21 +37,45 @@ export const OrgUnitAutocomplete = ({
     }
   }, [selected, value]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const term = query.trim();
+    if (term.length < 2) {
+      setRemoteResults([]);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      setLoading(true);
+      void searchOrgUnitsApi(term)
+        .then(setRemoteResults)
+        .catch(() => setRemoteResults([]))
+        .finally(() => setLoading(false));
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [open, query]);
+
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     const sorted = [...orgUnits].sort((a, b) => a.name.localeCompare(b.name));
-    if (!normalized) {
-      return sorted;
+    if (normalized.length >= 2) {
+      return remoteResults;
     }
-    return sorted.filter((unit) => {
-      const path = getOrgUnitPath(orgUnits, unit.id).toLowerCase();
-      return (
-        unit.name.toLowerCase().includes(normalized) ||
-        path.includes(normalized) ||
-        getOrgUnitTypeLabel(unit.type).toLowerCase().includes(normalized)
-      );
-    });
-  }, [orgUnits, query]);
+    if (!normalized) {
+      return sorted.slice(0, 20);
+    }
+    return sorted
+      .filter((unit) => {
+        const path = getOrgUnitPath(orgUnits, unit.id).toLowerCase();
+        return (
+          unit.name.toLowerCase().includes(normalized) ||
+          path.includes(normalized) ||
+          getOrgUnitTypeLabel(unit.type).toLowerCase().includes(normalized)
+        );
+      })
+      .slice(0, 20);
+  }, [orgUnits, query, remoteResults]);
 
   useEffect(() => {
     setHighlightIndex(0);
@@ -117,40 +144,44 @@ export const OrgUnitAutocomplete = ({
         aria-autocomplete="list"
         role="combobox"
       />
-      {open && filtered.length > 0 ? (
+      {open && (loading || filtered.length > 0) ? (
         <ul
           className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
           role="listbox"
         >
-          {filtered.map((unit, index) => {
-            const parentPath = (() => {
-              const full = getOrgUnitPath(orgUnits, unit.id);
-              if (full === unit.name) {
-                return getOrgUnitTypeLabel(unit.type);
-              }
-              const prefix = `${unit.name} → `;
-              return full.startsWith(prefix) ? full.slice(prefix.length) : full;
-            })();
-            return (
-              <li key={unit.id} role="option" aria-selected={index === highlightIndex}>
-                <button
-                  type="button"
-                  className={cn(
-                    'w-full px-3 py-2 text-left hover:bg-gray-50',
-                    index === highlightIndex && 'bg-blue-50',
-                  )}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => handleSelect(unit)}
-                >
-                  <span className="block text-sm font-medium text-gray-800">{unit.name}</span>
-                  <span className="block text-xs text-gray-500 truncate">{parentPath}</span>
-                </button>
-              </li>
-            );
-          })}
+          {loading ? (
+            <li className="px-3 py-2 text-xs text-gray-400">Učitavanje…</li>
+          ) : null}
+          {!loading &&
+            filtered.map((unit, index) => {
+              const parentPath = (() => {
+                const full = getOrgUnitPath(orgUnits, unit.id);
+                if (full === unit.name) {
+                  return getOrgUnitTypeLabel(unit.type);
+                }
+                const prefix = `${unit.name} → `;
+                return full.startsWith(prefix) ? full.slice(prefix.length) : full;
+              })();
+              return (
+                <li key={unit.id} role="option" aria-selected={index === highlightIndex}>
+                  <button
+                    type="button"
+                    className={cn(
+                      'w-full px-3 py-2 text-left hover:bg-gray-50',
+                      index === highlightIndex && 'bg-blue-50',
+                    )}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => handleSelect(unit)}
+                  >
+                    <span className="block text-sm font-medium text-gray-800">{unit.name}</span>
+                    <span className="block text-xs text-gray-500 truncate">{parentPath}</span>
+                  </button>
+                </li>
+              );
+            })}
         </ul>
       ) : null}
-      {open && query.trim() && filtered.length === 0 ? (
+      {open && query.trim().length >= 2 && !loading && filtered.length === 0 ? (
         <p className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 shadow-lg">
           Nema rezultata.
         </p>

@@ -18,6 +18,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { CheckInventoryNumberQueryDto } from './dto/check-inventory-number-query.dto';
 import { CheckSpecificationValueQueryDto } from './dto/check-specification-value-query.dto';
 import { CreateEquipmentDto } from './dto/create-equipment.dto';
+import { EquipmentSummaryQueryDto } from './dto/equipment-summary-query.dto';
 import { ListEquipmentQueryDto } from './dto/list-equipment-query.dto';
 import { UpdateEquipmentDto } from './dto/update-equipment.dto';
 import { EquipmentService } from './equipment.service';
@@ -31,6 +32,12 @@ export class EquipmentController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListEquipmentQueryDto) {
     return this.equipmentService.findAll(user, query);
+  }
+
+  @Get('summary')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  getSummary(@CurrentUser() user: AuthenticatedUser, @Query() query: EquipmentSummaryQueryDto) {
+    return this.equipmentService.getSummary(user, query.categoryId);
   }
 
   @Get('check/inventory-number')

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { searchEmployeesApi } from '../api/employees-api';
 import type { Employee } from '../types';
 import { cn } from '../utils/cn';
 import {
@@ -7,7 +8,7 @@ import {
 } from './employee-title-suggestions';
 
 interface EmployeeTitleAutocompleteProps {
-  employees: Employee[];
+  employees?: Employee[];
   value: string;
   onChange: (title: string) => void;
   placeholder?: string;
@@ -15,7 +16,7 @@ interface EmployeeTitleAutocompleteProps {
 }
 
 export const EmployeeTitleAutocomplete = ({
-  employees,
+  employees = [],
   value,
   onChange,
   placeholder = 'Npr. Stručni saradnik',
@@ -25,14 +26,31 @@ export const EmployeeTitleAutocomplete = ({
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [remoteEmployees, setRemoteEmployees] = useState<Employee[]>([]);
 
   useEffect(() => {
     setQuery(value);
   }, [value]);
 
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) {
+      setRemoteEmployees([]);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      void searchEmployeesApi(term)
+        .then(setRemoteEmployees)
+        .catch(() => setRemoteEmployees([]));
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
+  const titleSource = remoteEmployees.length > 0 ? remoteEmployees : employees;
+
   const suggestions = useMemo(
-    () => searchEmployeeTitles(employees, query),
-    [employees, query],
+    () => searchEmployeeTitles(titleSource, query),
+    [titleSource, query],
   );
 
   useEffect(() => {
@@ -56,7 +74,7 @@ export const EmployeeTitleAutocomplete = ({
   };
 
   const handleBlur = () => {
-    const canonical = resolveCanonicalEmployeeTitle(employees, query);
+    const canonical = resolveCanonicalEmployeeTitle(titleSource, query);
     onChange(canonical);
     setQuery(canonical);
     setOpen(false);

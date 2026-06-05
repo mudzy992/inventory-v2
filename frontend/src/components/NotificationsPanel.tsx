@@ -24,7 +24,15 @@ const formatRelativeTime = (iso: string): string => {
 };
 
 export const NotificationsPanel = () => {
-  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    hasMoreNotifications,
+    isLoadingMore,
+    markRead,
+    markAllRead,
+    loadMoreNotifications,
+  } = useNotifications();
   const { getBoolean } = usePublicSettings();
   const [open, setOpen] = useState(false);
   const notificationsEnabled = getBoolean('notifications.enabled', true);
@@ -110,6 +118,18 @@ export const NotificationsPanel = () => {
                 })
               )}
             </div>
+            {hasMoreNotifications ? (
+              <div className="border-t border-gray-100 px-4 py-2">
+                <button
+                  type="button"
+                  disabled={isLoadingMore}
+                  onClick={() => void loadMoreNotifications()}
+                  className="w-full text-xs text-blue-600 hover:text-blue-700 disabled:text-gray-400 py-1"
+                >
+                  {isLoadingMore ? 'Učitavanje…' : 'Učitaj više'}
+                </button>
+              </div>
+            ) : null}
           </div>
         </>
       )}

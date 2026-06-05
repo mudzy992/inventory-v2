@@ -17,6 +17,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
+import { SearchEmployeesQueryDto } from './dto/search-employees-query.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeesService } from './employees.service';
 
@@ -29,6 +30,12 @@ export class EmployeesController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListEmployeesQueryDto) {
     return this.employeesService.findAll(user, query);
+  }
+
+  @Get('search')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  search(@Query() query: SearchEmployeesQueryDto) {
+    return this.employeesService.search(query);
   }
 
   @Get(':id')

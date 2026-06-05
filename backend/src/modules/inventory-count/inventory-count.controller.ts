@@ -5,6 +5,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { InventoryCountService } from './inventory-count.service';
 
 @Controller('inventory-sessions')
@@ -27,11 +28,8 @@ export class InventoryCountController {
 
   @Get()
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
-  findAll(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query('orgUnitId') orgUnitId?: string,
-  ) {
-    return this.inventoryCountService.findSessionsForUser(user, orgUnitId);
+  findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListSessionsQueryDto) {
+    return this.inventoryCountService.findSessionsForUser(user, query);
   }
 
   @Get('freeze-banner')

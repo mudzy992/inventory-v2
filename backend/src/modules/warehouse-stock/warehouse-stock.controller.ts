@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { UserRole } from '../../../generated/prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { BulkCreateStockLotDto } from './dto/bulk-create-stock-lot.dto';
+import { ListStockLotsQueryDto } from './dto/list-stock-lots-query.dto';
 import { CreateStockLotDto } from './dto/create-stock-lot.dto';
 import { IssueStockLotDto } from './dto/issue-stock-lot.dto';
 import { UpdateStockLotSpecDto } from './dto/update-stock-lot-spec.dto';
@@ -18,8 +19,8 @@ export class WarehouseStockController {
 
   @Get('warehouse-stock/assigned')
   @Roles(UserRole.admin, UserRole.evidenticar)
-  listAssigned(@CurrentUser() user: AuthenticatedUser) {
-    return this.warehouseStockService.listForRegistrar(user);
+  listAssigned(@CurrentUser() user: AuthenticatedUser, @Query() query: ListStockLotsQueryDto) {
+    return this.warehouseStockService.listForRegistrar(user, query);
   }
 
   @Get('warehouses/:warehouseId/stock-lots')
@@ -27,8 +28,9 @@ export class WarehouseStockController {
   listByWarehouse(
     @CurrentUser() user: AuthenticatedUser,
     @Param('warehouseId') warehouseId: string,
+    @Query() query: ListStockLotsQueryDto,
   ) {
-    return this.warehouseStockService.listForWarehouse(user, warehouseId);
+    return this.warehouseStockService.listForWarehouse(user, warehouseId, query);
   }
 
   @Post('warehouses/:warehouseId/stock-lots')

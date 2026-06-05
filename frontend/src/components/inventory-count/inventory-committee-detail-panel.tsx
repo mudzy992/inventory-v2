@@ -18,6 +18,7 @@ interface InventoryCommitteeDetailPanelProps {
   committeeId: string;
   printScope: InventoryPrintScopeDto | null;
   scopeEquipment: Equipment[];
+  scopeReady?: boolean;
   lines: InventoryLineDto[];
   canCloseCommittee: boolean;
   canManage?: boolean;
@@ -36,6 +37,7 @@ export const InventoryCommitteeDetailPanel = ({
   committeeId,
   printScope,
   scopeEquipment,
+  scopeReady = false,
   lines,
   canCloseCommittee,
   canManage = false,
@@ -108,7 +110,7 @@ export const InventoryCommitteeDetailPanel = ({
             Obriši komisiju
           </Button>
         ) : null}
-        <Button variant="secondary" onClick={onPrint} disabled={!printScope}>
+        <Button variant="secondary" onClick={onPrint} disabled={!scopeReady && !printScope}>
           <Printer size={14} />
           Štampaj popisnu listu
         </Button>
@@ -119,13 +121,13 @@ export const InventoryCommitteeDetailPanel = ({
           </Button>
         ) : null}
         {canCloseCommittee && onCloseCommittee ? (
-          <Button variant="danger" onClick={onCloseCommittee} disabled={!printScope}>
+          <Button variant="danger" onClick={onCloseCommittee} disabled={!scopeReady && !printScope}>
             <Square size={14} />
             Zaključi listu
           </Button>
         ) : null}
       </div>
-      {printScope ? (
+      {scopeReady || printScope ? (
         <>
           <p className="text-xs text-gray-500 mt-3">
             Oprema u opsegu: <strong>{scopeEquipment.length}</strong>

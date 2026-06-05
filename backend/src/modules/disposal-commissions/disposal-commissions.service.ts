@@ -4,12 +4,31 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Prisma } from '../../../generated/prisma/client';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import {
+  buildContainsSearchWhere,
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { OrgScopeService } from '../../common/services/org-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { ListDisposalCommissionsQueryDto } from './dto/list-disposal-commissions-query.dto';
+
+const COMMISSION_LIST_INCLUDE = {
+  city: { include: { canton: true } },
+  members: { include: { employee: true } },
+} satisfies Prisma.DisposalCommissionInclude;
+
+const COMMISSION_SORT_FIELDS: Record<string, string> = {
+  name: 'name',
+  createdAt: 'createdAt',
+};
 import type { DisposalCommissionMember, InventoryCommittee } from '../../../generated/prisma/client';
 import {
   evaluateEquipmentInCommitteeScope,
@@ -35,15 +54,32 @@ export class DisposalCommissionsService {
     await this.settingsService.assertFeatureEnabled('features.disposal_commissions');
   }
 
-  async findAll(cityId?: string) {
+  async findAll(query: ListDisposalCommissionsQueryDto) {
     await this.assertDisposalCommissionsEnabled();
-    return this.prisma.disposalCommission.findMany({
-      where: cityId ? { cityId, isActive: true } : { isActive: true },
-      include: {
-        city: { include: { canton: true } },
-        members: { include: { employee: true } },
-      },
-      orderBy: { name: 'asc' },
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const filters: Prisma.DisposalCommissionWhereInput[] = [{ isActive: true }];
+    if (query.cityId) {
+      filters.push({ cityId: query.cityId });
+    }
+    const searchWhere = buildContainsSearchWhere(query.search, ['name']);
+    if (searchWhere) {
+      filters.push(searchWhere);
+    }
+    const where: Prisma.DisposalCommissionWhereInput =
+      filters.length === 1 ? filters[0]! : { AND: filters };
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, COMMISSION_SORT_FIELDS, 'name');
+    return paginate({
+      findMany: (args) =>
+        this.prisma.disposalCommission.findMany({
+          ...args,
+          include: COMMISSION_LIST_INCLUDE,
+        }),
+      count: (args) => this.prisma.disposalCommission.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
     });
   }
 

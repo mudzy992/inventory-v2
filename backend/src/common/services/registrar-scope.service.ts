@@ -3,6 +3,7 @@ import type {
   Category,
   Employee,
   Equipment,
+  Prisma,
   TransferType,
   WarehouseStockLot,
 } from '../../../generated/prisma/client';
@@ -238,6 +239,185 @@ export class RegistrarScopeService {
 
   categoryMatchesScope(categoryId: string, categoryIds: Set<string>): boolean {
     return categoryIds.has(categoryId);
+  }
+
+  async buildEquipmentWhere(user: AuthenticatedUser): Promise<Prisma.EquipmentWhereInput> {
+    if (this.hasFullAccess(user)) {
+      return {};
+    }
+    if (user.role === 'user') {
+      return user.employeeId ? { currentHolderId: user.employeeId } : { id: { in: [] } };
+    }
+    if (user.role === 'skladistar') {
+      const keeperRows = await this.prisma.warehouseKeeper.findMany({
+        where: { userId: user.id },
+        select: { warehouseId: true },
+      });
+      const keeperIds = keeperRows.map((row) => row.warehouseId);
+      if (keeperIds.length === 0) {
+        return { id: { in: [] } };
+      }
+      return {
+        warehouseId: { in: keeperIds },
+        OR: [
+          { status: 'skladiste' },
+          {
+            status: 'rashodovano',
+            warehouseCondition: { in: ['spremno_za_unistenje', 'unisteno'] },
+          },
+        ],
+      };
+    }
+    if (user.role === 'evidenticar') {
+      if (user.registrarScopes.length === 0) {
+        return { id: { in: [] } };
+      }
+      const clauses: Prisma.EquipmentWhereInput[] = [];
+      for (const assignment of user.registrarScopes) {
+        clauses.push(await this.buildAssignmentEquipmentWhere(assignment));
+      }
+      return clauses.length === 1 ? clauses[0]! : { OR: clauses };
+    }
+    return { id: { in: [] } };
+  }
+
+  async buildEmployeeWhere(user: AuthenticatedUser): Promise<Prisma.EmployeeWhereInput> {
+    if (this.hasFullAccess(user)) {
+      return {};
+    }
+    if (user.role === 'user') {
+      return user.employeeId ? { id: user.employeeId } : { id: { in: [] } };
+    }
+    if (user.role === 'evidenticar') {
+      if (user.registrarScopes.length === 0) {
+        return { id: { in: [] } };
+      }
+      const clauses: Prisma.EmployeeWhereInput[] = [];
+      for (const assignment of user.registrarScopes) {
+        clauses.push(await this.buildAssignmentEmployeeWhere(assignment));
+      }
+      return clauses.length === 1 ? clauses[0]! : { OR: clauses };
+    }
+    return { id: { in: [] } };
+  }
+
+  async buildStockLotWhere(user: AuthenticatedUser): Promise<Prisma.WarehouseStockLotWhereInput> {
+    if (this.hasFullAccess(user)) {
+      return {};
+    }
+    if (user.role !== 'evidenticar') {
+      return { id: { in: [] } };
+    }
+    if (user.registrarScopes.length === 0) {
+      return { id: { in: [] } };
+    }
+    const clauses: Prisma.WarehouseStockLotWhereInput[] = [];
+    for (const assignment of user.registrarScopes) {
+      if (!isRegistrarModeA(assignment)) {
+        continue;
+      }
+      const categoryIds = [...(await this.expandCategoryIds([assignment.categoryId]))];
+      clauses.push({
+        warehouseId: assignment.warehouseId,
+        categoryId: { in: categoryIds },
+      });
+    }
+    if (clauses.length === 0) {
+      return { id: { in: [] } };
+    }
+    return clauses.length === 1 ? clauses[0]! : { OR: clauses };
+  }
+
+  async buildTransferWhere(user: AuthenticatedUser): Promise<Prisma.TransferWhereInput> {
+    if (this.hasFullAccess(user)) {
+      return {};
+    }
+    const equipmentWhere = await this.buildEquipmentWhere(user);
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { employeeId: true },
+    });
+    const orClauses: Prisma.TransferWhereInput[] = [{ equipment: equipmentWhere }];
+    if (actor?.employeeId) {
+      orClauses.push({
+        inventoryLine: {
+          committee: { members: { some: { employeeId: actor.employeeId } } },
+        },
+      });
+    }
+    return orClauses.length === 1 ? orClauses[0]! : { OR: orClauses };
+  }
+
+  private async buildAssignmentEquipmentWhere(
+    assignment: RegistrarScopeAssignment,
+  ): Promise<Prisma.EquipmentWhereInput> {
+    const categoryIds = [...(await this.expandCategoryIds([assignment.categoryId]))];
+    const categoryFilter: Prisma.EquipmentWhereInput = { categoryId: { in: categoryIds } };
+    if (isRegistrarModeA(assignment)) {
+      const warehouse = await this.prisma.warehouse.findUnique({
+        where: { id: assignment.warehouseId },
+        select: { orgUnitId: true },
+      });
+      const zaduzenoClause: Prisma.EquipmentWhereInput = warehouse?.orgUnitId
+        ? {
+            status: 'zaduzeno',
+            currentHolder: {
+              orgUnitId: {
+                in: [...(await this.orgScopeService.expandOrgUnitIds([warehouse.orgUnitId]))],
+              },
+            },
+          }
+        : { status: 'zaduzeno' };
+      return {
+        AND: [
+          categoryFilter,
+          {
+            OR: [
+              { status: 'skladiste', warehouseId: assignment.warehouseId },
+              zaduzenoClause,
+              { status: 'rashodovano', warehouseId: assignment.warehouseId },
+            ],
+          },
+        ],
+      };
+    }
+    const subtreeIds = [...(await this.orgScopeService.expandOrgUnitIds([assignment.orgUnitId!]))];
+    return {
+      AND: [
+        categoryFilter,
+        { status: { not: 'skladiste' } },
+        { currentHolder: { orgUnitId: { in: subtreeIds } } },
+      ],
+    };
+  }
+
+  private async buildAssignmentEmployeeWhere(
+    assignment: RegistrarScopeAssignment,
+  ): Promise<Prisma.EmployeeWhereInput> {
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: assignment.warehouseId },
+      select: { cityId: true, orgUnitId: true },
+    });
+    if (!warehouse) {
+      return { id: { in: [] } };
+    }
+    const cityFilter: Prisma.EmployeeWhereInput = {
+      orgUnit: {
+        OR: [
+          { effectiveLocationCityId: warehouse.cityId },
+          { locationCityId: warehouse.cityId },
+        ],
+      },
+    };
+    if (isRegistrarModeA(assignment)) {
+      if (!warehouse.orgUnitId) {
+        return cityFilter;
+      }
+      const coverageIds = [...(await this.orgScopeService.expandOrgUnitIds([warehouse.orgUnitId]))];
+      return { AND: [cityFilter, { orgUnitId: { in: coverageIds } }] };
+    }
+    const subtreeIds = [...(await this.orgScopeService.expandOrgUnitIds([assignment.orgUnitId!]))];
+    return { AND: [cityFilter, { orgUnitId: { in: subtreeIds } }] };
   }
 
   private async matchesAssignmentEquipment(

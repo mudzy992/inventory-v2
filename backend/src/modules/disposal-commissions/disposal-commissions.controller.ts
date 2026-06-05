@@ -5,6 +5,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { ListDisposalCommissionsQueryDto } from './dto/list-disposal-commissions-query.dto';
 import { DisposalCommissionsService } from './disposal-commissions.service';
 
 @Controller('disposal-commissions')
@@ -14,8 +15,8 @@ export class DisposalCommissionsController {
 
   @Get()
   @Roles(UserRole.admin, UserRole.evidenticar)
-  findAll(@Query('cityId') cityId?: string) {
-    return this.disposalCommissionsService.findAll(cityId);
+  findAll(@Query() query: ListDisposalCommissionsQueryDto) {
+    return this.disposalCommissionsService.findAll(query);
   }
 
   @Get('resolve')

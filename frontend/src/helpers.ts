@@ -69,18 +69,40 @@ export function getEmployeeFullName(emp: Pick<Employee, 'firstName' | 'lastName'
   return `${emp.firstName} ${emp.lastName}`;
 }
 
-export function getSignerForEmployee(state: AppState, employeeId: string): Employee | undefined {
-  const emp = state.employees.find(e => e.id === employeeId);
-  if (!emp) return undefined;
-  
-  let current = state.orgUnits.find(o => o.id === emp.orgUnitId);
+export function getSignerIdForOrgUnit(orgUnits: OrgUnit[], unitId: string): string | undefined {
+  let current = orgUnits.find((unit) => unit.id === unitId);
   while (current) {
-    if (current.signerId) {
-      return state.employees.find(e => e.id === current!.signerId);
+    if (current.effectiveSignerId) {
+      return current.effectiveSignerId;
     }
-    current = state.orgUnits.find(o => o.id === current!.parentId);
+    if (current.signerId) {
+      return current.signerId;
+    }
+    current = orgUnits.find((unit) => unit.id === current!.parentId);
   }
   return undefined;
+}
+
+/** Resolve signer employee when a local employees list is available (e.g. search results). */
+export function resolveSignerEmployee(
+  orgUnits: OrgUnit[],
+  employees: Employee[],
+  employeeOrgUnitId: string,
+): Employee | undefined {
+  const signerId = getSignerIdForOrgUnit(orgUnits, employeeOrgUnitId);
+  if (!signerId) {
+    return undefined;
+  }
+  return employees.find((employee) => employee.id === signerId);
+}
+
+/** @deprecated Use getSignerIdForOrgUnit / resolveSignerEmployee — store employees list is empty after bootstrap. */
+export function getSignerForEmployee(state: AppState, employeeId: string): Employee | undefined {
+  const emp = state.employees.find((e) => e.id === employeeId);
+  if (!emp) {
+    return undefined;
+  }
+  return resolveSignerEmployee(state.orgUnits, state.employees, emp.orgUnitId);
 }
 
 export function getOrgUnitTypeLabel(type: string): string {

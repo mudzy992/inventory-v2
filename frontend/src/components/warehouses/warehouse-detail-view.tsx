@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Package, ArrowLeftRight, Trash2, Building2, Wrench } from 'lucide-react';
 import { usePublicSettings } from '../../contexts/public-settings-context';
-import { filterTransfersForWarehouse, isCentralWarehouse } from '../../helpers/org-warehouse.util';
+import { isCentralWarehouse } from '../../helpers/org-warehouse.util';
+import { fetchTransfersPageApi } from '../../api/transfers-api';
 import { WarehouseStockBrowsePanel } from './warehouse-stock-browse-panel';
 import { WarehouseStockReceivePage } from './warehouse-stock-receive-page';
 import { WarehouseMaintenanceStockPanel } from './warehouse-maintenance-stock-panel';
@@ -9,6 +10,7 @@ import { isSkladistar, isAdmin } from '../../store';
 import { getCityLabel, formatDate } from '../../helpers';
 import { useStore } from '../../useStore';
 import type { PageId } from '../Layout';
+import type { TransferRecord } from '../../types';
 import { WarehouseDestructionPanel } from './warehouse-destruction-panel';
 import { WarehouseContextPanel } from './warehouse-context-panel';
 import { Badge } from '../ui/badge';
@@ -43,14 +45,47 @@ export const WarehouseDetailView = ({
   const [tab, setTab] = useState<WarehouseTab>('stock');
   const [stockSubview, setStockSubview] = useState<StockSubview>('browse');
   const [stockRefreshKey, setStockRefreshKey] = useState(0);
+  const [transfers, setTransfers] = useState<TransferRecord[]>([]);
+  const [transfersLoading, setTransfersLoading] = useState(false);
   const warehouse = state.warehouses.find((row) => row.id === warehouseId);
   const orgUnit = warehouse?.orgUnitId
     ? state.orgUnits.find((row) => row.id === warehouse.orgUnitId)
     : null;
-  const transfers = useMemo(
-    () => (warehouse ? filterTransfersForWarehouse(warehouse.id, state) : []),
-    [state.transfers, warehouse],
-  );
+
+  useEffect(() => {
+    if (tab !== 'transfers' || !warehouse) {
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setTransfersLoading(true);
+      try {
+        const response = await fetchTransfersPageApi({
+          warehouseId: warehouse.id,
+          page: 1,
+          pageSize: 50,
+          sortBy: 'date',
+          sortDir: 'desc',
+        });
+        if (!cancelled) {
+          setTransfers(response.items);
+        }
+      } catch {
+        if (!cancelled) {
+          setTransfers([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setTransfersLoading(false);
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, warehouse]);
+
   if (!warehouse) {
     return (
       <p className="text-gray-500">Skladište nije pronađeno.</p>
@@ -149,19 +184,22 @@ export const WarehouseDetailView = ({
               </tr>
             </thead>
             <tbody>
-              {transfers.slice(0, 50).map((transfer) => {
-                const equipment = state.equipment.find((row) => row.id === transfer.equipmentId);
-                return (
-                  <tr key={transfer.id} className="border-t">
-                    <td className="px-4 py-2 font-mono text-xs">{transfer.documentNumber}</td>
-                    <td className="px-4 py-2">{transfer.type}</td>
-                    <td className="px-4 py-2">{equipment?.inventoryNumber ?? '—'}</td>
-                    <td className="px-4 py-2">{formatDate(transfer.date)}</td>
-                    <td className="px-4 py-2">{transfer.status}</td>
-                  </tr>
-                );
-              })}
-              {transfers.length === 0 ? (
+              {transfersLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                    Učitavam prenosnice…
+                  </td>
+                </tr>
+              ) : transfers.map((transfer) => (
+                <tr key={transfer.id} className="border-t">
+                  <td className="px-4 py-2 font-mono text-xs">{transfer.documentNumber}</td>
+                  <td className="px-4 py-2">{transfer.type}</td>
+                  <td className="px-4 py-2">{transfer.equipment?.inventoryNumber ?? '—'}</td>
+                  <td className="px-4 py-2">{formatDate(transfer.date)}</td>
+                  <td className="px-4 py-2">{transfer.status}</td>
+                </tr>
+              ))}
+              {!transfersLoading && transfers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
                     Nema povezanih prenosnica.

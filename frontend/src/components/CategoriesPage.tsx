@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore, useRefreshData } from '../useStore';
 import { createCategoryApi, deleteCategoryApi, updateCategoryApi } from '../api/data-api';
+import { fetchEquipmentPageApi, fetchEquipmentSummaryApi } from '../api/equipment-api';
 import {
   fetchCategoryMaintenanceLinksApi,
   setCategoryMaintenanceLinksApi,
@@ -12,7 +13,7 @@ import { useCategoryMaintenanceLinksMap } from '../hooks/use-category-maintenanc
 import {
   Plus, Edit2, Trash2, ChevronDown, ChevronRight, Settings, Folder, FolderOpen, Layers, Wrench,
 } from 'lucide-react';
-import { getParentCategories, getSubCategories, getEquipmentStats } from '../store';
+import { getParentCategories, getSubCategories } from '../store';
 import { v4 as uuidv4 } from 'uuid';
 import type { Category, CategoryField, CategoryKind } from '../types';
 import { CategoryFieldEditor } from './categories/category-field-editor';
@@ -51,12 +52,49 @@ export function CategoriesPage() {
     state.categories,
     activeTab === 'asset',
   );
-  const assetParentCategories = getParentCategories().filter(
-    (row) => (row.categoryKind ?? 'ASSET') === 'ASSET',
+  const assetParentCategories = useMemo(
+    () =>
+      getParentCategories().filter((row) => (row.categoryKind ?? 'ASSET') === 'ASSET'),
+    [state.categories],
   );
   const maintenanceParentCategories = state.categories.filter(
     (row) => row.categoryKind === 'MAINTENANCE' && !row.parentId,
   );
+  const [categoryStats, setCategoryStats] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (activeTab !== 'asset') {
+      return;
+    }
+    let active = true;
+    const loadStats = async () => {
+      const leafCategories = state.categories.filter(
+        (row) => (row.categoryKind ?? 'ASSET') === 'ASSET' && row.parentId,
+      );
+      const next: Record<string, number> = {};
+      await Promise.all(
+        leafCategories.map(async (category) => {
+          try {
+            const summary = await fetchEquipmentSummaryApi(category.id);
+            next[category.id] = summary.total;
+          } catch {
+            next[category.id] = 0;
+          }
+        }),
+      );
+      for (const parent of assetParentCategories) {
+        const subs = getSubCategories(parent.id);
+        next[parent.id] = subs.reduce((sum, sub) => sum + (next[sub.id] ?? 0), 0);
+      }
+      if (active) {
+        setCategoryStats(next);
+      }
+    };
+    void loadStats();
+    return () => {
+      active = false;
+    };
+  }, [activeTab, assetParentCategories, state.categories]);
   const formParentOptions = fCategoryKind === 'MAINTENANCE'
     ? maintenanceParentCategories
     : assetParentCategories;
@@ -164,8 +202,15 @@ export function CategoriesPage() {
     }
   };
   const handleDelete = async (id: string) => {
-    const hasEquipment = state.equipment.some((e) => e.categoryId === id);
     const hasSubCategories = state.categories.some((c) => c.parentId === id);
+    let hasEquipment = false;
+    try {
+      const check = await fetchEquipmentPageApi({ categoryId: id, page: 1, pageSize: 1 });
+      hasEquipment = check.meta.total > 0;
+    } catch {
+      toastError('Nije moguće provjeriti opremu u kategoriji.');
+      return;
+    }
     if (hasEquipment) {
       toastError('Nije moguće obrisati kategoriju koja sadrži opremu.');
       return;
@@ -226,7 +271,7 @@ export function CategoriesPage() {
           {assetParentCategories.map((parent) => {
             const subCategories = getSubCategories(parent.id);
             const isExpanded = expandedParentId === parent.id;
-            const stats = getEquipmentStats(parent.id);
+            const statsTotal = categoryStats[parent.id] ?? 0;
             return (
               <div key={parent.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div
@@ -240,7 +285,7 @@ export function CategoriesPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">{subCategories.length} podkategorija</span>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">{stats.total} stavki</span>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">{statsTotal} stavki</span>
                     <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                       <button type="button" onClick={() => openAddSub(parent.id)} className="text-green-500 hover:text-green-700 p-1" title="Dodaj podkategoriju">
                         <Plus size={14} />
@@ -256,7 +301,7 @@ export function CategoriesPage() {
                     {subCategories.length > 0 ? (
                       <div className="divide-y divide-gray-50">
                         {subCategories.map((sub) => {
-                          const subStats = getEquipmentStats(sub.id);
+                          const subStatsTotal = categoryStats[sub.id] ?? 0;
                           const subIsAssetLeaf = isAssetLeafCategory(sub, state.categories);
                           return (
                             <div key={sub.id} className="px-5 py-3 hover:bg-gray-50 transition-colors ml-6">
@@ -268,7 +313,7 @@ export function CategoriesPage() {
                                 </div>
                                 <div className="flex items-center gap-2 text-xs">
                                   <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{sub.fields.length + sub.optionalFields.length} polja</span>
-                                  <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded">{subStats.total} kom</span>
+                                  <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded">{subStatsTotal} kom</span>
                                 </div>
                                 <div className="flex gap-1">
                                   <button type="button" onClick={() => void openEdit(sub)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={14} /></button>

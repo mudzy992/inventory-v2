@@ -1,4 +1,6 @@
 import { apiRequest } from './client';
+import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
+import { buildListQueryString } from '../types/pagination';
 
 export interface DisposalCommissionMemberDto {
   employeeId: string;
@@ -32,9 +34,19 @@ export interface DisposalApprovalDto {
   votes: { userId: string; approved: boolean }[];
 }
 
-export const fetchDisposalCommissionsApi = (cityId?: string) => {
-  const query = cityId ? `?cityId=${cityId}` : '';
-  return apiRequest<DisposalCommissionDto[]>(`/disposal-commissions${query}`);
+export const fetchDisposalCommissionsPageApi = (
+  params: PaginatedListParams & { cityId?: string } = {},
+) => {
+  const query = buildListQueryString(params);
+  return apiRequest<PaginatedResponse<DisposalCommissionDto>>(
+    `/disposal-commissions${query ? `?${query}` : ''}`,
+  );
+};
+
+/** @deprecated Use fetchDisposalCommissionsPageApi */
+export const fetchDisposalCommissionsApi = async (cityId?: string) => {
+  const response = await fetchDisposalCommissionsPageApi({ cityId, page: 1, pageSize: 100 });
+  return response.items;
 };
 
 export const resolveDisposalCommissionApi = (equipmentId: string) =>

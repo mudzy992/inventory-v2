@@ -1,142 +1,92 @@
 import { apiRequest } from './client';
-import { fetchCantonsApi, fetchCitiesApi } from './locations-api';
+import { fetchCategoriesFlatApi } from './categories-api';
 import { fetchNotificationsApi } from './notifications-api';
-import { fetchWarehousesApi } from './warehouses-api';
+import { fetchOrgUnitsFlatApi } from './org-units-api';
+import { fetchCantonsApi, fetchCitiesApi } from './locations-api';
+import { fetchAllPaginatedItems } from './fetch-all-paginated';
+import { fetchWarehousesPageApi } from './warehouses-api';
 import type {
   AppState,
-  Category,
-  CategoryField,
-  Employee,
-  Equipment,
-  OrgUnit,
-  TransferRecord,
-  UserAccount,
   UserRole,
   Notification,
 } from '../types';
 
-interface UserListDto {
-  id: string;
-  username: string;
-  role: UserRole;
-  employeeId: string | null;
-  isActive: boolean;
-  registrarScopes: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
-  lastLoginAt: string | null;
-}
-
-const toDateOnly = (value: string | Date): string => {
-  const date = typeof value === 'string' ? new Date(value) : value;
-  return date.toISOString().slice(0, 10);
-};
-
-const mapCategory = (row: Category): Category => ({
-  ...row,
-  fields: row.fields as CategoryField[],
-  optionalFields: row.optionalFields as CategoryField[],
-});
-
-const mapEquipment = (row: Equipment & { entryDate: string }): Equipment => ({
-  ...row,
-  entryDate: toDateOnly(row.entryDate),
-  specifications:
-    typeof row.specifications === 'object' && row.specifications !== null
-      ? (row.specifications as Record<string, string>)
-      : {},
-});
-
-const mapTransfer = (row: TransferRecord & { date: string }): TransferRecord => ({
-  ...row,
-  date: toDateOnly(row.date),
-});
-
-const mapUser = (row: UserListDto): UserAccount => ({
-  id: row.id,
-  username: row.username,
-  role: row.role,
-  employeeId: row.employeeId ?? '',
-  password: '',
-  isActive: row.isActive,
-  registrarScopes: row.registrarScopes,
-  lastLogin: row.lastLoginAt ?? undefined,
-});
-
-export const fetchAppState = async (role: UserRole): Promise<AppState> => {
+/** Lightweight bootstrap: reference data + notifications; large lists load per-page. */
+export const fetchBootstrap = async (role: UserRole): Promise<AppState> => {
   const loadLocations = role === 'admin' || role === 'evidenticar' || role === 'skladistar';
-  const [orgUnits, employees, categories, equipment, transfers, notifications, cantons, cities, warehouses] =
-    await Promise.all([
-      apiRequest<OrgUnit[]>('/org-units'),
-      apiRequest<Employee[]>('/employees'),
-      apiRequest<Category[]>('/categories'),
-      apiRequest<Equipment[]>('/equipment'),
-      apiRequest<TransferRecord[]>('/transfers'),
-      fetchNotificationsApi().catch(() => [] as Notification[]),
-      loadLocations ? fetchCantonsApi().catch(() => []) : Promise.resolve([]),
-      loadLocations ? fetchCitiesApi().catch(() => []) : Promise.resolve([]),
-      loadLocations ? fetchWarehousesApi().catch(() => []) : Promise.resolve([]),
-    ]);
-  const users =
-    role === 'admin' ? (await apiRequest<UserListDto[]>('/users')).map(mapUser) : [];
+  const [orgUnits, categories, notifications, cantons, cities, warehouses] = await Promise.all([
+    fetchOrgUnitsFlatApi(),
+    fetchCategoriesFlatApi(),
+    fetchNotificationsApi().catch(() => [] as Notification[]),
+    loadLocations ? fetchCantonsApi().catch(() => []) : Promise.resolve([]),
+    loadLocations ? fetchCitiesApi().catch(() => []) : Promise.resolve([]),
+    loadLocations
+      ? fetchAllPaginatedItems((params) => fetchWarehousesPageApi(params)).catch(() => [])
+      : Promise.resolve([]),
+  ]);
   const normalizedCantons = cantons.map(({ cities: _nested, ...canton }) => canton);
   return {
     cantons: normalizedCantons,
     cities,
     warehouses,
     orgUnits,
-    employees,
-    categories: categories.map(mapCategory),
-    equipment: equipment.map(mapEquipment),
-    transfers: transfers.map(mapTransfer),
-    users,
+    employees: [],
+    categories,
+    equipment: [],
+    transfers: [],
+    users: [],
     notifications,
     savedFilters: [],
     currentUserId: null,
   };
 };
 
+/** @deprecated Use fetchBootstrap — kept as alias for compatibility */
+export const fetchAppState = fetchBootstrap;
+
 export const createOrgUnitApi = (body: Record<string, unknown>) =>
-  apiRequest<OrgUnit>('/org-units', { method: 'POST', body: JSON.stringify(body) });
+  apiRequest('/org-units', { method: 'POST', body: JSON.stringify(body) });
 
 export const updateOrgUnitApi = (id: string, body: Record<string, unknown>) =>
-  apiRequest<OrgUnit>(`/org-units/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  apiRequest(`/org-units/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 export const deleteOrgUnitApi = (id: string) =>
   apiRequest<void>(`/org-units/${id}`, { method: 'DELETE' });
 
 export const createEmployeeApi = (body: Record<string, unknown>) =>
-  apiRequest<Employee>('/employees', { method: 'POST', body: JSON.stringify(body) });
+  apiRequest('/employees', { method: 'POST', body: JSON.stringify(body) });
 
 export const updateEmployeeApi = (id: string, body: Record<string, unknown>) =>
-  apiRequest<Employee>(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  apiRequest(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 export const deleteEmployeeApi = (id: string) =>
   apiRequest<void>(`/employees/${id}`, { method: 'DELETE' });
 
 export const createCategoryApi = (body: Record<string, unknown>) =>
-  apiRequest<Category>('/categories', { method: 'POST', body: JSON.stringify(body) });
+  apiRequest('/categories', { method: 'POST', body: JSON.stringify(body) });
 
 export const updateCategoryApi = (id: string, body: Record<string, unknown>) =>
-  apiRequest<Category>(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  apiRequest(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 export const deleteCategoryApi = (id: string) =>
   apiRequest<void>(`/categories/${id}`, { method: 'DELETE' });
 
 export const createEquipmentApi = (body: Record<string, unknown>) =>
-  apiRequest<Equipment>('/equipment', { method: 'POST', body: JSON.stringify(body) });
+  apiRequest('/equipment', { method: 'POST', body: JSON.stringify(body) });
 
 export const updateEquipmentApi = (id: string, body: Record<string, unknown>) =>
-  apiRequest<Equipment>(`/equipment/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  apiRequest(`/equipment/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 export const deleteEquipmentApi = (id: string) =>
   apiRequest<void>(`/equipment/${id}`, { method: 'DELETE' });
 
 export const createTransferApi = (body: Record<string, unknown>) =>
-  apiRequest<TransferRecord>('/transfers', { method: 'POST', body: JSON.stringify(body) });
+  apiRequest('/transfers', { method: 'POST', body: JSON.stringify(body) });
 
-export const fetchTransferApi = (id: string) => apiRequest<TransferRecord>(`/transfers/${id}`);
+export const fetchTransferApi = (id: string) => apiRequest(`/transfers/${id}`);
 
 export const signTransferApi = (id: string, body: Record<string, unknown> = {}) =>
-  apiRequest<TransferRecord>(`/transfers/${id}/sign`, {
+  apiRequest(`/transfers/${id}/sign`, {
     method: 'PATCH',
     body: JSON.stringify(body),
   });
@@ -169,8 +119,7 @@ export interface UpdateUserPayload {
 }
 
 export const createUserApi = (body: CreateUserPayload) =>
-  apiRequest<UserListDto>('/users', { method: 'POST', body: JSON.stringify(body) });
+  apiRequest('/users', { method: 'POST', body: JSON.stringify(body) });
 
 export const updateUserApi = (id: string, body: UpdateUserPayload) =>
-  apiRequest<UserListDto>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
-
+  apiRequest(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });

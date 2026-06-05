@@ -9,13 +9,19 @@ import {
   deleteInventoryCommitteeApi,
   deleteInventorySessionApi,
   fetchInventoryCommitteeReportApi,
+  fetchInventoryCommitteesPageApi,
+  fetchInventoryEquipmentScopePageApi,
+  fetchInventoryLinesPageApi,
   fetchInventoryPrintScopeApi,
-  fetchInventorySessionsApi,
+  fetchInventorySessionsPageApi,
   type InventoryCommitteeDto,
+  type InventoryLineDto,
   type InventoryPrintScopeDto,
+  type PrintScopeEquipmentDto,
   type InventorySessionDto,
   type InventorySessionCloseJobDto,
 } from '../api/inventory-api';
+import { fetchAllPaginatedItems } from '../api/fetch-all-paginated';
 import { ApiError } from '../api/client';
 import { resolveRootDistributionOrgUnit } from '../helpers/resolve-root-distribution.util';
 import { isAdmin, getCurrentUser } from '../store';
@@ -40,8 +46,8 @@ import { Button } from './ui/button';
 import { FormCard } from './ui/form-card';
 import { PageHeaderRow } from './ui/page-header-row';
 
-const mapScopeToEquipment = (scope: InventoryPrintScopeDto): Equipment[] =>
-  scope.equipment.map((item) => ({
+const mapScopeItemsToEquipment = (items: PrintScopeEquipmentDto[]): Equipment[] =>
+  items.map((item) => ({
     id: item.id,
     categoryId: item.categoryId,
     inventoryNumber: item.inventoryNumber,
@@ -49,6 +55,15 @@ const mapScopeToEquipment = (scope: InventoryPrintScopeDto): Equipment[] =>
     status: item.status as Equipment['status'],
     entryDate: '',
     currentHolderId: item.currentHolder?.id,
+    currentHolder: item.currentHolder
+      ? {
+          id: item.currentHolder.id,
+          firstName: item.currentHolder.firstName,
+          lastName: item.currentHolder.lastName,
+          orgUnitId: item.currentHolder.orgUnitId,
+          title: item.currentHolder.title,
+        }
+      : undefined,
     warehouseId: item.warehouse?.id,
   }));
 
@@ -59,6 +74,13 @@ export const InventoryCountPage = () => {
   const userId = user?.id ?? null;
   const { toastError, toastSuccess } = useToast();
   const [sessions, setSessions] = useState<InventorySessionDto[]>([]);
+  const [committees, setCommittees] = useState<InventoryCommitteeDto[]>([]);
+  const [memberCommittees, setMemberCommittees] = useState<
+    { session: InventorySessionDto; committee: InventoryCommitteeDto }[]
+  >([]);
+  const [committeeLines, setCommitteeLines] = useState<InventoryLineDto[]>([]);
+  const [scopeEquipment, setScopeEquipment] = useState<Equipment[]>([]);
+  const [scopeReady, setScopeReady] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [committeeId, setCommitteeId] = useState('');
   const [editingCommitteeId, setEditingCommitteeId] = useState<string | null>(null);
@@ -80,20 +102,21 @@ export const InventoryCountPage = () => {
   );
   const orgUnitId = rootDistribution?.id ?? '';
   const selectedSession = sessions.find((session) => session.id === sessionId) ?? null;
-  const committees: InventoryCommitteeDto[] = selectedSession?.committees ?? [];
+  const selectedCommittee =
+    committees.find((row) => row.id === committeeId) ??
+    memberCommittees.find(({ committee }) => committee.id === committeeId)?.committee ??
+    null;
   const activeCommittees = useMemo(() => {
     if (admin) {
       return [];
     }
-    return sessions
-      .filter((session) => session.status === 'active')
-      .flatMap((session) =>
-        (session.committees ?? []).map((committee) => ({
-          session,
-          committee,
-          recordedCount: (committee.lines ?? []).length,
-        })),
-      )
+    return memberCommittees
+      .filter(({ session }) => session.status === 'active')
+      .map(({ session, committee }) => ({
+        session,
+        committee,
+        recordedCount: committee._count?.lines ?? committee.lines?.length ?? 0,
+      }))
       .sort((a, b) => {
         const aOrg = a.session.orgUnit?.name ?? '';
         const bOrg = b.session.orgUnit?.name ?? '';
@@ -105,25 +128,63 @@ export const InventoryCountPage = () => {
         const bLabel = getCommitteeDisplayLabel(b.committee);
         return aLabel.localeCompare(bLabel);
       });
-  }, [admin, sessions]);
-  const scopeEquipment = useMemo(() => {
-    if (!printScope) {
-      return [];
+  }, [admin, memberCommittees]);
+  const loadSessions = useCallback(async () => {
+    const response = await fetchInventorySessionsPageApi({
+      orgUnitId: orgUnitId || undefined,
+      page: 1,
+      pageSize: 100,
+    });
+    setSessions(response.items);
+    if (sessionId && !response.items.some((row) => row.id === sessionId)) {
+      setSessionId('');
+      setCommitteeId('');
+      setCommittees([]);
     }
-    return mapScopeToEquipment(printScope);
-  }, [printScope]);
+    return response.items;
+  }, [orgUnitId, sessionId]);
+  const loadCommittees = useCallback(async (targetSessionId: string) => {
+    const rows = await fetchAllPaginatedItems((params) =>
+      fetchInventoryCommitteesPageApi(targetSessionId, params),
+    );
+    setCommittees(rows);
+    if (committeeId && !rows.some((row) => row.id === committeeId)) {
+      setCommitteeId('');
+      setCommitteeLines([]);
+      setScopeEquipment([]);
+      setScopeReady(false);
+    }
+    return rows;
+  }, [committeeId]);
+  const loadCommitteeDetail = useCallback(async (targetCommitteeId: string) => {
+    setScopeReady(false);
+    const [lines, scopeItems] = await Promise.all([
+      fetchAllPaginatedItems((params) => fetchInventoryLinesPageApi(targetCommitteeId, params)),
+      fetchAllPaginatedItems((params) =>
+        fetchInventoryEquipmentScopePageApi(targetCommitteeId, params),
+      ),
+    ]);
+    setCommitteeLines(lines);
+    setScopeEquipment(mapScopeItemsToEquipment(scopeItems));
+    setScopeReady(true);
+  }, []);
+  const loadMemberCommittees = useCallback(async (sessionRows: InventorySessionDto[]) => {
+    const activeSessions = sessionRows.filter((session) => session.status === 'active');
+    const pairs = await Promise.all(
+      activeSessions.map(async (session) => {
+        const rows = await fetchAllPaginatedItems((params) =>
+          fetchInventoryCommitteesPageApi(session.id, params),
+        );
+        return rows.map((committee) => ({ session, committee }));
+      }),
+    );
+    setMemberCommittees(pairs.flat());
+  }, []);
   const loadPrintScope = useCallback(async (id: string) => {
     const scope = await fetchInventoryPrintScopeApi(id);
     setPrintScope(scope);
+    return scope;
   }, []);
-  const loadSessions = useCallback(async () => {
-    const rows = await fetchInventorySessionsApi(orgUnitId || undefined);
-    setSessions(rows);
-    if (sessionId && !rows.some((row) => row.id === sessionId)) {
-      setSessionId('');
-      setCommitteeId('');
-    }
-  }, [orgUnitId, sessionId]);
   const refreshCloseJob = useCallback(async (id: string) => {
     const latest = await fetchInventorySessionCloseJobApi(id);
     setCloseJob(latest);
@@ -143,13 +204,19 @@ export const InventoryCountPage = () => {
       }
       if (payload.status === 'done') {
         toastSuccess('Sesija popisa je zatvorena.');
-        await loadSessions();
+        const rows = await loadSessions();
+        if (!admin) {
+          await loadMemberCommittees(rows);
+        }
       } else if (payload.status === 'failed') {
         toastError(latest.lastError ?? 'Zatvaranje sesije nije uspjelo.');
-        await loadSessions();
+        const rows = await loadSessions();
+        if (!admin) {
+          await loadMemberCommittees(rows);
+        }
       }
     },
-    [loadSessions, refreshCloseJob, toastError, toastSuccess],
+    [admin, loadMemberCommittees, loadSessions, refreshCloseJob, toastError, toastSuccess],
   );
   useInventorySocketEvents({
     sessionId: sessionId || null,
@@ -158,14 +225,19 @@ export const InventoryCountPage = () => {
   const refreshAll = useCallback(async () => {
     setLoading(true);
     try {
-      await loadSessions();
+      const rows = await loadSessions();
+      if (!admin) {
+        await loadMemberCommittees(rows);
+      } else if (sessionId) {
+        await loadCommittees(sessionId);
+      }
       if (committeeId) {
-        await loadPrintScope(committeeId);
+        await loadCommitteeDetail(committeeId);
       }
     } finally {
       setLoading(false);
     }
-  }, [committeeId, loadPrintScope, loadSessions]);
+  }, [admin, committeeId, loadCommitteeDetail, loadCommittees, loadMemberCommittees, loadSessions, sessionId]);
   useEffect(() => {
     if (!admin) {
       if (!userId) {
@@ -176,6 +248,10 @@ export const InventoryCountPage = () => {
     }
     if (!orgUnitId) {
       setSessions([]);
+      setCommittees([]);
+      setCommitteeLines([]);
+      setScopeEquipment([]);
+      setScopeReady(false);
       setPrintScope(null);
       setSessionId('');
       setCommitteeId('');
@@ -184,12 +260,24 @@ export const InventoryCountPage = () => {
     void refreshAll();
   }, [admin, orgUnitId, refreshAll, userId]);
   useEffect(() => {
-    if (committeeId) {
-      void loadPrintScope(committeeId);
-    } else {
-      setPrintScope(null);
+    if (!sessionId || !admin) {
+      if (!sessionId) {
+        setCommittees([]);
+      }
+      return;
     }
-  }, [committeeId, loadPrintScope]);
+    void loadCommittees(sessionId);
+  }, [admin, loadCommittees, sessionId]);
+  useEffect(() => {
+    if (!committeeId) {
+      setCommitteeLines([]);
+      setScopeEquipment([]);
+      setScopeReady(false);
+      setPrintScope(null);
+      return;
+    }
+    void loadCommitteeDetail(committeeId);
+  }, [committeeId, loadCommitteeDetail]);
   const handleCreateSession = async () => {
     if (!admin || !orgUnitId || !sessionName.trim()) {
       return;
@@ -205,7 +293,7 @@ export const InventoryCountPage = () => {
   const handleActivate = async (id: string) => {
     try {
       await activateInventorySessionApi(id);
-      await loadSessions();
+      await refreshAll();
       toastSuccess('Sesija popisa je aktivirana.');
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška');
@@ -226,7 +314,7 @@ export const InventoryCountPage = () => {
               setCloseJob(latest);
               if (latest.status === 'done' || latest.status === 'failed') {
                 window.clearInterval(timer);
-                await loadSessions();
+                await refreshAll();
               }
             }
           } catch {
@@ -239,27 +327,30 @@ export const InventoryCountPage = () => {
     }
   };
   const handleSessionRefresh = async () => {
-    await loadSessions();
+    const rows = await loadSessions();
+    if (!admin) {
+      await loadMemberCommittees(rows);
+    } else if (sessionId) {
+      await loadCommittees(sessionId);
+    }
     if (committeeId) {
-      await loadPrintScope(committeeId);
+      await loadCommitteeDetail(committeeId);
     }
   };
   const sessionStats = useMemo(
-    () => computeInventorySessionStats(selectedSession),
-    [selectedSession],
+    () => computeInventorySessionStats(selectedSession, committees, committeeLines),
+    [committeeLines, committees, selectedSession],
   );
-  const selectedCommittee = committees.find((row) => row.id === committeeId) ?? null;
   const editingCommittee =
     committees.find((row) => row.id === editingCommitteeId) ??
     (editingCommitteeId && committeeId === editingCommitteeId ? selectedCommittee : null) ??
     null;
-  const committeeFromScope = printScope?.committee ?? null;
   const meOnCommittee = useMemo(() => {
-    if (!committeeFromScope || !user?.employeeId) {
+    if (!selectedCommittee || !user?.employeeId) {
       return null;
     }
-    return committeeFromScope.members.find((m) => m.employeeId === user.employeeId) ?? null;
-  }, [committeeFromScope, user?.employeeId]);
+    return selectedCommittee.members.find((m) => m.employeeId === user.employeeId) ?? null;
+  }, [selectedCommittee, user?.employeeId]);
   const handleDeleteSession = async (id: string) => {
     if (!confirm('Obrisati sesiju popisa? Ova radnja je nepovratna.')) {
       return;
@@ -270,8 +361,9 @@ export const InventoryCountPage = () => {
         setSessionId('');
         setCommitteeId('');
         setEditingCommitteeId(null);
+        setCommittees([]);
       }
-      await loadSessions();
+      await refreshAll();
       toastSuccess('Sesija popisa je obrisana.');
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška');
@@ -285,6 +377,9 @@ export const InventoryCountPage = () => {
       await deleteInventoryCommitteeApi(id);
       if (committeeId === id) {
         setCommitteeId('');
+        setCommitteeLines([]);
+        setScopeEquipment([]);
+        setScopeReady(false);
         setPrintScope(null);
       }
       if (editingCommitteeId === id) {
@@ -296,8 +391,19 @@ export const InventoryCountPage = () => {
       toastError(err instanceof ApiError ? err.message : 'Greška');
     }
   };
+  const handlePrint = async () => {
+    if (!committeeId) {
+      return;
+    }
+    try {
+      await loadPrintScope(committeeId);
+      setShowPrint(true);
+    } catch (err) {
+      toastError(err instanceof ApiError ? err.message : 'Greška pri učitavanju štampe');
+    }
+  };
   const canManageDraft = selectedSession?.status === 'draft';
-  const canCloseCommittee = Boolean(meOnCommittee?.role === 'predsjednik' && !committeeFromScope?.isClosed);
+  const canCloseCommittee = Boolean(meOnCommittee?.role === 'predsjednik' && !selectedCommittee?.isClosed);
   const distributionName = rootDistribution?.name;
 
   return (
@@ -340,8 +446,6 @@ export const InventoryCountPage = () => {
                           onClick={() => {
                             setSessionId(session.id);
                             setCommitteeId(committee.id);
-                            setPrintScope(null);
-                            void loadPrintScope(committee.id);
                           }}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -374,41 +478,42 @@ export const InventoryCountPage = () => {
               {selectedSession && committeeId ? (
                 <InventoryCommitteeDetailPanel
                   session={selectedSession}
-                committee={selectedCommittee}
-                committeeId={committeeId}
-                printScope={printScope}
-                scopeEquipment={scopeEquipment}
-                lines={selectedSession?.committees?.find((row) => row.id === committeeId)?.lines ?? []}
-                canCloseCommittee={canCloseCommittee}
-                onPrint={() => setShowPrint(true)}
-                onReport={async () => {
-                  if (!committeeId) {
-                    return;
-                  }
-                  try {
-                    const row = await fetchInventoryCommitteeReportApi(committeeId);
-                    setReport(row);
-                    setShowReport(true);
-                  } catch (err) {
-                    toastError(err instanceof ApiError ? err.message : 'Greška');
-                  }
-                }}
-                onCloseCommittee={async () => {
-                  if (!committeeId) {
-                    return;
-                  }
-                  if (!confirm('Zaključati popisnu listu za ovu komisiju? Nakon zaključavanja unos nije moguć.')) {
-                    return;
-                  }
-                  try {
-                    await closeInventoryCommitteeApi(committeeId);
-                    await refreshAll();
-                  } catch (err) {
-                    toastError(err instanceof ApiError ? err.message : 'Greška');
-                  }
-                }}
-                onLineSaved={handleSessionRefresh}
-              />
+                  committee={selectedCommittee}
+                  committeeId={committeeId}
+                  printScope={printScope}
+                  scopeEquipment={scopeEquipment}
+                  scopeReady={scopeReady}
+                  lines={committeeLines}
+                  canCloseCommittee={canCloseCommittee}
+                  onPrint={() => void handlePrint()}
+                  onReport={async () => {
+                    if (!committeeId) {
+                      return;
+                    }
+                    try {
+                      const row = await fetchInventoryCommitteeReportApi(committeeId);
+                      setReport(row);
+                      setShowReport(true);
+                    } catch (err) {
+                      toastError(err instanceof ApiError ? err.message : 'Greška');
+                    }
+                  }}
+                  onCloseCommittee={async () => {
+                    if (!committeeId) {
+                      return;
+                    }
+                    if (!confirm('Zaključati popisnu listu za ovu komisiju? Nakon zaključavanja unos nije moguć.')) {
+                      return;
+                    }
+                    try {
+                      await closeInventoryCommitteeApi(committeeId);
+                      await refreshAll();
+                    } catch (err) {
+                      toastError(err instanceof ApiError ? err.message : 'Greška');
+                    }
+                  }}
+                  onLineSaved={handleSessionRefresh}
+                />
               ) : (
                 <FormCard title="Evidencija komisije">
                   <AlertBanner tone="info">Odaberite komisiju sa lijeve strane.</AlertBanner>
@@ -559,11 +664,12 @@ export const InventoryCountPage = () => {
                             committeeId={committeeId}
                             printScope={printScope}
                             scopeEquipment={scopeEquipment}
-                            lines={selectedSession.committees?.find((row) => row.id === committeeId)?.lines ?? []}
+                            scopeReady={scopeReady}
+                            lines={committeeLines}
                             canCloseCommittee={false}
                             canManage={canManageDraft}
                             showAdminLines
-                            onPrint={() => setShowPrint(true)}
+                            onPrint={() => void handlePrint()}
                             onEdit={
                               canManageDraft && committeeId
                                 ? () => setEditingCommitteeId(committeeId)

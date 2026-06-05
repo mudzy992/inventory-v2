@@ -26,7 +26,7 @@ export const InventorySessionListPanel = ({
     ) : (
       <div className="divide-y divide-gray-100 rounded-lg border border-gray-100 overflow-hidden">
         {sessions.map((session) => {
-          const stats = computeInventorySessionStats(session);
+          const stats = computeInventorySessionStats(session, []);
           const period =
             session.startDate && session.endDate
               ? `${formatDate(session.startDate)} – ${formatDate(session.endDate)}`

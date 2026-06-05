@@ -5,10 +5,11 @@ import {
   Upload,
   Bell,
   LayoutGrid,
+  List,
 } from 'lucide-react';
 import type { SettingUiGroup } from './settings-ui-groups';
 
-export type SettingsTabId = 'general' | 'modules' | 'transfers' | 'uploads' | 'notifications';
+export type SettingsTabId = 'general' | 'lists' | 'modules' | 'transfers' | 'uploads' | 'notifications';
 
 export interface SettingsTabMeta {
   id: SettingsTabId;
@@ -19,6 +20,7 @@ export interface SettingsTabMeta {
 
 export const SETTINGS_TAB_ORDER: SettingsTabId[] = [
   'general',
+  'lists',
   'modules',
   'transfers',
   'uploads',
@@ -31,6 +33,12 @@ export const SETTINGS_TAB_META: Record<SettingsTabId, SettingsTabMeta> = {
     label: 'Opšte',
     icon: Building2,
     description: 'Brending aplikacije i podaci preduzeća za štampu.',
+  },
+  lists: {
+    id: 'lists',
+    label: 'Liste',
+    icon: List,
+    description: 'Podrazumijevana i maksimalna veličina stranice za paginirane API liste.',
   },
   modules: {
     id: 'modules',
@@ -61,6 +69,7 @@ export const SETTINGS_TAB_META: Record<SettingsTabId, SettingsTabMeta> = {
 const GROUP_TO_TAB: Record<SettingUiGroup, SettingsTabId> = {
   branding: 'general',
   company: 'general',
+  lists: 'lists',
   modules: 'modules',
   transfers: 'transfers',
   uploads: 'uploads',

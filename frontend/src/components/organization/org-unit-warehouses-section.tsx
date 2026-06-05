@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { fetchSkladistarUsersApi } from '../../api/users-api';
+import type { UserAccount } from '../../types';
 import { Plus, Warehouse } from 'lucide-react';
 import { createWarehouseApi } from '../../api/warehouses-api';
+import { fetchOrgUnitEquipmentSubtreeCountApi } from '../../api/org-units-api';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import {
-  countEquipmentInOrgSubtree,
   getDefaultCityIdForOrgUnit,
   getWarehousesForOrgUnit,
   resolveEffectiveWarehouseForOrgUnit,
@@ -28,12 +30,34 @@ export const OrgUnitWarehousesSection = ({
   const { toastError } = useToast();
   const refresh = useRefreshData();
   const warehouses = getWarehousesForOrgUnit(state.warehouses, orgUnit.id);
-  const subtreeCount = countEquipmentInOrgSubtree(state, orgUnit.id);
+  const [subtreeCount, setSubtreeCount] = useState<number | null>(null);
+  useEffect(() => {
+    let active = true;
+    void fetchOrgUnitEquipmentSubtreeCountApi(orgUnit.id)
+      .then((response) => {
+        if (active) {
+          setSubtreeCount(response.count);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSubtreeCount(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [orgUnit.id]);
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [quickName, setQuickName] = useState('');
   const [quickAddress, setQuickAddress] = useState('');
   const [quickKeeperIds, setQuickKeeperIds] = useState('');
-  const skladistarUsers = state.users.filter((user) => user.role === 'skladistar');
+  const [skladistarUsers, setSkladistarUsers] = useState<UserAccount[]>([]);
+  useEffect(() => {
+    void fetchSkladistarUsersApi()
+      .then(setSkladistarUsers)
+      .catch(() => setSkladistarUsers([]));
+  }, []);
   const selectedQuickKeeperIds = quickKeeperIds.split(',').filter(Boolean);
   const defaultCityId = getDefaultCityIdForOrgUnit(state.orgUnits, orgUnit.id);
   const effectiveWarehouseId = resolveEffectiveWarehouseForOrgUnit(
@@ -87,7 +111,8 @@ export const OrgUnitWarehousesSection = ({
         </Button>
       </div>
       <p className="text-xs text-gray-500">
-        Oprema u podstablu (zadužena + na skladištima org-a): <strong>{subtreeCount}</strong> stavki
+        Oprema u podstablu (zadužena + na skladištima org-a):{' '}
+        <strong>{subtreeCount ?? '…'}</strong> stavki
       </p>
       {showInherited && effectiveWarehouse ? (
         <p className="text-xs text-slate-600 rounded-md bg-white border border-slate-200 px-2 py-1.5">

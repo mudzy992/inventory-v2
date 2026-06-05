@@ -4,12 +4,25 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Prisma } from '../../../generated/prisma/client';
+import {
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CategoriesService } from '../categories/categories.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateCatalogItemDto } from './dto/create-catalog-item.dto';
 import { SearchCatalogQueryDto } from './dto/search-catalog-query.dto';
 import { UpdateCatalogItemDto } from './dto/update-catalog-item.dto';
+
+const CATALOG_SORT_FIELDS: Record<string, string> = {
+  name: 'name',
+  code: 'code',
+  createdAt: 'createdAt',
+};
 
 @Injectable()
 export class EquipmentCatalogService {
@@ -21,25 +34,31 @@ export class EquipmentCatalogService {
 
   async findAll(query: SearchCatalogQueryDto) {
     await this.settingsService.assertFeatureEnabled('features.equipment_catalog');
-    const term = query.q?.trim().toLowerCase();
-    const rows = await this.prisma.equipmentCatalogItem.findMany({
-      where: {
-        isActive: true,
-        ...(query.categoryId ? { categoryId: query.categoryId } : {}),
-        ...(term
-          ? {
-              OR: [
-                { code: { contains: term } },
-                { name: { contains: term } },
-              ],
-            }
-          : {}),
-      },
-      include: { category: { select: { id: true, name: true, parentId: true } } },
-      orderBy: [{ name: 'asc' }],
-      take: 50,
+    const searchTerm = (query.search ?? query.q)?.trim();
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, skip, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where: Prisma.EquipmentCatalogItemWhereInput = {
+      isActive: true,
+      ...(query.categoryId ? { categoryId: query.categoryId } : {}),
+      ...(searchTerm
+        ? {
+            OR: [{ code: { contains: searchTerm } }, { name: { contains: searchTerm } }],
+          }
+        : {}),
+    };
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, CATALOG_SORT_FIELDS, 'name');
+    return paginate({
+      findMany: (args) =>
+        this.prisma.equipmentCatalogItem.findMany({
+          ...args,
+          include: { category: { select: { id: true, name: true, parentId: true } } },
+        }),
+      count: (args) => this.prisma.equipmentCatalogItem.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
     });
-    return rows;
   }
 
   async findOne(id: string) {

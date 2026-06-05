@@ -13,6 +13,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { ListRelocationQueryDto } from './dto/list-relocation-query.dto';
 import { PreviewRelocationQueryDto } from './dto/preview-relocation-query.dto';
 import { ResolveDestDto } from './dto/resolve-dest.dto';
 import { ResolveSourceDto } from './dto/resolve-source.dto';
@@ -37,8 +38,8 @@ export class EmployeeRelocationController {
 
   @Get()
   @Roles(UserRole.admin, UserRole.evidenticar)
-  list(@CurrentUser() user: AuthenticatedUser) {
-    return this.relocationService.listForUser(user);
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: ListRelocationQueryDto) {
+    return this.relocationService.listForUser(user, query);
   }
 
   @Get('cases/:id')

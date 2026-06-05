@@ -11,6 +11,8 @@ import {
 import type { Socket } from 'socket.io-client';
 import {
   fetchNotificationsApi,
+  fetchNotificationsPageApi,
+  fetchUnreadNotificationsCountApi,
   markAllNotificationsReadApi,
   markNotificationReadApi,
 } from '../api/notifications-api';
@@ -24,7 +26,6 @@ import {
   applyNotificationCreated,
   applyNotificationRead,
   applyNotificationsLoaded,
-  getUnreadNotificationsCount,
 } from '../store';
 import type { Notification } from '../types';
 import { useAuth } from './AuthContext';
@@ -33,40 +34,106 @@ import { usePublicSettings } from './public-settings-context';
 interface SocketContextValue {
   notifications: Notification[];
   unreadCount: number;
+  hasMoreNotifications: boolean;
+  isLoadingMore: boolean;
   isConnected: boolean;
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
+  loadMoreNotifications: () => Promise<void>;
 }
 
 const SocketContext = createContext<SocketContextValue | null>(null);
+
+const NOTIFICATIONS_PAGE_SIZE = 50;
 
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const { user, isAuthenticated } = useAuth();
   const { patchLocal, getBoolean } = usePublicSettings();
   const isRealtimeEnabled = getBoolean('notifications.realtime', true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [hasMoreNotifications, setHasMoreNotifications] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [tokenRevision, setTokenRevision] = useState(0);
+  const pageRef = useRef(1);
   const socketRef = useRef<Socket | null>(null);
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => subscribeTokenChange(() => setTokenRevision((n) => n + 1)), []);
 
+  const syncUnreadCount = useCallback(async () => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+    try {
+      const count = await fetchUnreadNotificationsCountApi();
+      setUnreadCount(count);
+    } catch {
+      // keep badge count from last successful fetch
+    }
+  }, [user]);
+
   const refreshNotifications = useCallback(async () => {
     if (!user) {
+      pageRef.current = 1;
       setNotifications([]);
+      setHasMoreNotifications(false);
+      setUnreadCount(0);
       applyNotificationsLoaded([]);
       return;
     }
-    const rows = await fetchNotificationsApi();
-    setNotifications(rows);
-    applyNotificationsLoaded(rows);
-  }, [user]);
+    const response = await fetchNotificationsPageApi({
+      page: 1,
+      pageSize: NOTIFICATIONS_PAGE_SIZE,
+    });
+    pageRef.current = 1;
+    setNotifications(response.items);
+    setHasMoreNotifications(response.meta.page < response.meta.totalPages);
+    applyNotificationsLoaded(response.items);
+    await syncUnreadCount();
+  }, [syncUnreadCount, user]);
+
+  const loadMoreNotifications = useCallback(async () => {
+    if (!user || isLoadingMore || !hasMoreNotifications) {
+      return;
+    }
+    setIsLoadingMore(true);
+    try {
+      const nextPage = pageRef.current + 1;
+      const response = await fetchNotificationsPageApi({
+        page: nextPage,
+        pageSize: NOTIFICATIONS_PAGE_SIZE,
+      });
+      pageRef.current = nextPage;
+      setNotifications((prev) => {
+        const seen = new Set(prev.map((row) => row.id));
+        const merged = [...prev];
+        for (const row of response.items) {
+          if (!seen.has(row.id)) {
+            merged.push(row);
+          }
+        }
+        applyNotificationsLoaded(merged);
+        return merged;
+      });
+      setHasMoreNotifications(response.meta.page < response.meta.totalPages);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [hasMoreNotifications, isLoadingMore, user]);
 
   const markRead = useCallback(async (id: string) => {
     const updated = await markNotificationReadApi(id);
-    setNotifications((prev) => prev.map((row) => (row.id === id ? updated : row)));
+    setNotifications((prev) => {
+      const wasUnread = prev.some((row) => row.id === id && !row.read);
+      if (wasUnread && updated.read) {
+        setUnreadCount((count) => Math.max(0, count - 1));
+      }
+      return prev.map((row) => (row.id === id ? updated : row));
+    });
     applyNotificationRead(id);
   }, []);
 
@@ -77,12 +144,15 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       applyNotificationsLoaded(next);
       return next;
     });
+    setUnreadCount(0);
   }, []);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
       destroyNotificationsSocket();
       setNotifications([]);
+      setUnreadCount(0);
+      setHasMoreNotifications(false);
       applyNotificationsLoaded([]);
       setIsConnected(false);
       return;
@@ -94,6 +164,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       } catch {
         if (active) {
           setNotifications([]);
+          setUnreadCount(0);
         }
       }
     };
@@ -122,15 +193,19 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
         if (prev.some((row) => row.id === notification.id)) {
           return prev;
         }
+        applyNotificationCreated(notification);
         return [notification, ...prev];
       });
-      applyNotificationCreated(notification);
+      if (!notification.read) {
+        setUnreadCount((prev) => prev + 1);
+      }
     };
     const handleRead = (payload: { id: string }) => {
       setNotifications((prev) =>
         prev.map((row) => (row.id === payload.id ? { ...row, read: true } : row)),
       );
       applyNotificationRead(payload.id);
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     };
     const handleSettingsUpdated = (payload: { key: string; value: string | number | boolean }) => {
       patchLocal(payload.key, payload.value);
@@ -173,18 +248,29 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [isAuthenticated, user, isConnected, isRealtimeEnabled, refreshNotifications]);
 
-  const unreadCount = user ? getUnreadNotificationsCount(user.id) : 0;
-
   const value = useMemo(
     () => ({
       notifications,
       unreadCount,
+      hasMoreNotifications,
+      isLoadingMore,
       isConnected,
       markRead,
       markAllRead,
       refreshNotifications,
+      loadMoreNotifications,
     }),
-    [notifications, unreadCount, isConnected, markRead, markAllRead, refreshNotifications],
+    [
+      notifications,
+      unreadCount,
+      hasMoreNotifications,
+      isLoadingMore,
+      isConnected,
+      markRead,
+      markAllRead,
+      refreshNotifications,
+      loadMoreNotifications,
+    ],
   );
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;

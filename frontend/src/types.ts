@@ -138,6 +138,8 @@ export interface Equipment {
   contractNumber?: string;
   entryDate: string;
   currentHolderId?: string;
+  currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'>;
+  category?: Pick<Category, 'id' | 'name' | 'parentId'>;
   warehouseId?: string | null;
   warehouseCondition?: WarehouseCondition | null;
   notes?: string;
@@ -168,6 +170,13 @@ export interface TransferRecord {
     id: string;
     status: 'pending' | 'approved' | 'rejected';
   };
+  equipment?: Pick<Equipment, 'id' | 'inventoryNumber' | 'status' | 'warehouseId' | 'categoryId'> & {
+    currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'>;
+    warehouse?: Pick<Warehouse, 'id' | 'name' | 'cityId'>;
+  };
+  signer?: Pick<Employee, 'id' | 'firstName' | 'lastName'>;
+  fromPerson?: Pick<Employee, 'id' | 'firstName' | 'lastName'>;
+  toPerson?: Pick<Employee, 'id' | 'firstName' | 'lastName'>;
 }
 
 export interface Notification {

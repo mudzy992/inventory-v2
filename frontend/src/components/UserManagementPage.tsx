@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Edit2, Search } from 'lucide-react';
 import { useStore, useRefreshData } from '../useStore';
+import { fetchEmployeeApi } from '../api/employees-api';
+import { fetchUsersPageApi } from '../api/users-api';
+import { usePaginatedList } from '../hooks/usePaginatedList';
 import { getEmployeeFullName } from '../helpers';
 import { formatRegistrarAssignmentLabel } from '../helpers/org-warehouse.util';
 import { USER_ROLE_META } from './user-management/user-role-config';
@@ -8,23 +11,39 @@ import { UserFormModal, type UserFormMode } from './user-management/user-form-mo
 import type { UserAccount } from '../types';
 import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
+import { PaginationControls } from './ui/pagination-controls';
+import type { Employee } from '../types';
 
 export function UserManagementPage() {
   const [state] = useStore();
   const refresh = useRefreshData();
-  const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('');
   const [formMode, setFormMode] = useState<UserFormMode | null>(null);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
+  const [employeeCache, setEmployeeCache] = useState<Record<string, Employee>>({});
 
-  const employeesWithoutAccount = useMemo(
-    () => state.employees.filter((emp) => !state.users.some((user) => user.employeeId === emp.id)),
-    [state.employees, state.users],
-  );
+  const list = usePaginatedList<UserAccount, Record<string, never>>({
+    fetchPage: fetchUsersPageApi,
+  });
+
+  const search = list.search;
+  const setSearch = list.setSearch;
+
+  useEffect(() => {
+    for (const user of list.items) {
+      if (user.employeeId && !employeeCache[user.employeeId]) {
+        void fetchEmployeeApi(user.employeeId)
+          .then((employee) => {
+            setEmployeeCache((prev) => ({ ...prev, [employee.id]: employee }));
+          })
+          .catch(() => undefined);
+      }
+    }
+  }, [employeeCache, list.items]);
 
   const filteredUsers = useMemo(() => {
-    return state.users.filter((user) => {
-      const emp = state.employees.find((row) => row.id === user.employeeId);
+    return list.items.filter((user) => {
+      const emp = user.employeeId ? employeeCache[user.employeeId] : undefined;
       const label = emp
         ? `${emp.firstName} ${emp.lastName} ${user.username}`
         : user.username;
@@ -32,7 +51,16 @@ export function UserManagementPage() {
       const matchRole = filterRole === '' || user.role === filterRole;
       return matchSearch && matchRole;
     });
-  }, [state.users, state.employees, search, filterRole]);
+  }, [employeeCache, filterRole, list.items, search]);
+
+  const roleCounts = useMemo(
+    () => ({
+      admin: filteredUsers.filter((user) => user.role === 'admin').length,
+      evidenticar: filteredUsers.filter((user) => user.role === 'evidenticar').length,
+      user: filteredUsers.filter((user) => user.role === 'user').length,
+    }),
+    [filteredUsers],
+  );
 
   const openCreate = () => {
     setEditingUser(null);
@@ -58,19 +86,12 @@ export function UserManagementPage() {
           <button
             type="button"
             onClick={openCreate}
-            disabled={employeesWithoutAccount.length === 0}
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
           >
             <Plus size={16} /> Novi korisnik
           </button>
         }
       />
-
-      {employeesWithoutAccount.length > 0 && (
-        <p className="text-xs text-gray-500 mb-4">
-          {employeesWithoutAccount.length} radnik(a) bez korisničkog računa
-        </p>
-      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
         <div className="relative flex-1 min-w-0">
@@ -97,21 +118,21 @@ export function UserManagementPage() {
 
       <div className="flex gap-3 mb-4 text-xs flex-wrap">
         <span className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg text-amber-700">
-          Administratori: <strong>{state.users.filter((user) => user.role === 'admin').length}</strong>
+          Administratori: <strong>{roleCounts.admin}</strong>
         </span>
         <span className="bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-lg text-purple-700">
-          Evidentičari: <strong>{state.users.filter((user) => user.role === 'evidenticar').length}</strong>
+          Evidentičari: <strong>{roleCounts.evidenticar}</strong>
         </span>
         <span className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg text-gray-700">
-          Korisnici: <strong>{state.users.filter((user) => user.role === 'user').length}</strong>
+          Korisnici: <strong>{roleCounts.user}</strong>
         </span>
       </div>
 
       <ResponsiveTable
-        isEmpty={filteredUsers.length === 0}
-        emptyMessage="Nema rezultata"
+        isEmpty={!list.isLoading && filteredUsers.length === 0}
+        emptyMessage={list.isLoading ? 'Učitavanje…' : 'Nema rezultata'}
         mobile={filteredUsers.map((user) => {
-          const emp = state.employees.find((row) => row.id === user.employeeId);
+          const emp = user.employeeId ? employeeCache[user.employeeId] : undefined;
           const role = USER_ROLE_META[user.role];
           return (
             <div key={user.id} className="p-4 space-y-2">
@@ -147,7 +168,7 @@ export function UserManagementPage() {
             </thead>
             <tbody>
               {filteredUsers.map((user) => {
-                const emp = state.employees.find((row) => row.id === user.employeeId);
+                const emp = user.employeeId ? employeeCache[user.employeeId] : undefined;
                 const role = USER_ROLE_META[user.role];
                 const scopeLabels = user.role === 'evidenticar'
                   ? (user.registrarScopes ?? []).map((scope) => ({
@@ -230,18 +251,33 @@ export function UserManagementPage() {
         }
       />
 
+      {list.meta ? (
+        <PaginationControls
+          page={list.page}
+          pageSize={list.pageSize}
+          total={list.meta.total}
+          totalPages={list.meta.totalPages}
+          onPageChange={list.setPage}
+          onPageSizeChange={list.setPageSize}
+          className="rounded-b-xl border border-t-0 border-gray-100"
+        />
+      ) : null}
+
       {formMode && (
         <UserFormModal
           mode={formMode}
           user={editingUser}
-          employees={state.employees}
-          employeesWithoutAccount={employeesWithoutAccount}
+          employees={Object.values(employeeCache)}
+          employeesWithoutAccount={[]}
           cities={state.cities}
           categories={state.categories}
           warehouses={state.warehouses}
           orgUnits={state.orgUnits}
           onClose={closeForm}
-          onSaved={refresh}
+          onSaved={async () => {
+            await refresh();
+            await list.refresh();
+          }}
         />
       )}
     </div>

@@ -1,31 +1,39 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
 import { useStore, useRefreshData } from '../useStore';
-import { getSignerForEmployee, getEmployeeFullName, getStatusLabel, getStatusColor, formatDate, getOrgUnitPath } from '../helpers';
+import { getEmployeeFullName, getStatusLabel, getStatusColor, formatDate, getOrgUnitPath, resolveSignerEmployee } from '../helpers';
 import {
   isAdmin,
   isEvidenticar,
   getCurrentUser,
-  equipmentMatchesScope,
-  employeeMatchesScope,
-  transferMatchesScope,
   isCrossServiceTransfer,
 } from '../store';
-import { createTransferApi } from '../api/data-api';
+import { createTransferApi, fetchTransferApi } from '../api/data-api';
+import { fetchEquipmentPageApi } from '../api/equipment-api';
+import { searchEmployeesApi } from '../api/employees-api';
+import { fetchTransfersPageApi } from '../api/transfers-api';
+import {
+  getTransferEquipmentLabel,
+  getTransferFromPersonName,
+  getTransferSignerName,
+  getTransferToPersonName,
+} from '../helpers/transfer-display.util';
+import { usePaginatedList } from '../hooks/usePaginatedList';
 import { resolveDisposalCommissionApi, type DisposalResolveDto } from '../api/disposal-api';
 import { AlertBanner } from './ui/alert-banner';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { Search, Filter, ArrowRight, Package, Warehouse, UserX, Trash2, AlertTriangle } from 'lucide-react';
-import type { TransferType } from '../types';
+import { PageHeaderRow } from './ui/page-header-row';
+import { ResponsiveTable } from './ui/responsive-table';
+import { PaginationControls } from './ui/pagination-controls';
+import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
 import { buildTransferCreatePayload } from '../helpers/create-transfer-payload.util';
 import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
 import type { PageId } from './page-id';
-import { PageHeaderRow } from './ui/page-header-row';
-import { ResponsiveTable } from './ui/responsive-table';
 
 interface TransfersPageProps {
   onNavigate?: (page: PageId) => void;
@@ -34,10 +42,13 @@ interface TransfersPageProps {
 export function TransfersPage({ onNavigate }: TransfersPageProps) {
   const [state] = useStore();
   const refresh = useRefreshData();
-  const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
+  const [selectedTransfer, setSelectedTransfer] = useState<TransferRecord | null>(null);
+  const [availableEquipment, setAvailableEquipment] = useState<Equipment[]>([]);
+  const [availableEmployees, setAvailableEmployees] = useState<Employee[]>([]);
+  const [employeeSearch, setEmployeeSearch] = useState('');
 
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
@@ -54,61 +65,69 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
   const [fDate, setFDate] = useState(new Date().toISOString().slice(0, 10));
   const [fNotes, setFNotes] = useState('');
 
-  // Filter transfers based on role
-  const relevantTransfers = useMemo(() => {
-    if (admin) return state.transfers;
-    if (!evidenticar) return [];
-    return state.transfers.filter((row) => transferMatchesScope(row, state, user));
-  }, [state, admin, evidenticar, user]);
+  const list = usePaginatedList<TransferRecord, Record<string, never>>({
+    fetchPage: fetchTransfersPageApi,
+    initialSortBy: 'date',
+    initialSortDir: 'desc',
+  });
 
-  const filtered = useMemo(() => {
-    return [...relevantTransfers]
-      .sort((a, b) => b.date.localeCompare(a.date) || b.documentNumber.localeCompare(a.documentNumber))
-      .filter(t => {
-        const eq = state.equipment.find(e => e.id === t.equipmentId);
-        const from = t.fromPersonId ? state.employees.find(e => e.id === t.fromPersonId) : null;
-        const to = t.toPersonId ? state.employees.find(e => e.id === t.toPersonId) : null;
-        const searchStr = `${eq?.inventoryNumber || ''} ${from ? getEmployeeFullName(from) : ''} ${to ? getEmployeeFullName(to) : ''} ${t.documentNumber} ${t.reason || ''}`.toLowerCase();
-        const matchSearch = search === '' || searchStr.includes(search.toLowerCase());
-        const matchType = filterType === '' || t.type === filterType;
-        return matchSearch && matchType;
-      });
-  }, [relevantTransfers, state, search, filterType]);
+  const search = list.search;
+  const setSearch = list.setSearch;
+  const filtered = useMemo(
+    () => (filterType ? list.items.filter((row) => row.type === filterType) : list.items),
+    [filterType, list.items],
+  );
 
-  // Available equipment for the selected transfer type
-  const availableEquipment = useMemo(() => {
-    let equipment = state.equipment;
-    
-    // For evidenticar, filter equipment
-    if (evidenticar && !admin) {
-      equipment = equipment.filter((row) => equipmentMatchesScope(row, state, user));
+  useEffect(() => {
+    if (!selectedTransferId) {
+      setSelectedTransfer(null);
+      return;
     }
-    
-    if (fType === 'zaduzenje') {
-      return equipment.filter(e => e.status === 'skladiste');
-    } else if (fType === 'prenos') {
-      return equipment.filter(e => e.status === 'zaduzeno');
-    } else if (fType === 'razduzenje') {
-      return equipment.filter(e => e.status === 'zaduzeno');
-    } else if (fType === 'rashodovanje') {
-      return equipment.filter(e => e.status === 'skladiste' || e.status === 'zaduzeno');
+    const fromList = list.items.find((row) => row.id === selectedTransferId);
+    if (fromList) {
+      setSelectedTransfer(fromList);
+      return;
     }
-    return [];
-  }, [state, fType, admin, evidenticar, user]);
+    void fetchTransferApi(selectedTransferId)
+      .then((row) => setSelectedTransfer(row as TransferRecord))
+      .catch(() => setSelectedTransfer(null));
+  }, [list.items, selectedTransferId]);
 
-  // Available employees for transfer
-  const availableEmployees = useMemo(() => {
-    if (admin) return state.employees;
-    if (evidenticar) {
-      return state.employees.filter((row) => employeeMatchesScope(row, state, user));
+  useEffect(() => {
+    if (!showForm) {
+      return;
     }
-    return [];
-  }, [state.employees, admin, evidenticar, user, state]);
+    const status =
+      fType === 'zaduzenje'
+        ? 'skladiste'
+        : fType === 'prenos' || fType === 'razduzenje'
+          ? 'zaduzeno'
+          : undefined;
+    void fetchEquipmentPageApi({ page: 1, pageSize: 100, status: status as Equipment['status'] })
+      .then((response) => setAvailableEquipment(response.items))
+      .catch(() => setAvailableEquipment([]));
+  }, [showForm, fType]);
 
-  const selectedEquipment = state.equipment.find(e => e.id === fEquipmentId);
-  const selectedEquipHolder = selectedEquipment?.currentHolderId
-    ? state.employees.find(e => e.id === selectedEquipment.currentHolderId)
-    : null;
+  useEffect(() => {
+    if (!showForm) {
+      return;
+    }
+    const term = employeeSearch.trim();
+    if (term.length < 2) {
+      setAvailableEmployees([]);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      void searchEmployeesApi(term)
+        .then(setAvailableEmployees)
+        .catch(() => setAvailableEmployees([]));
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [employeeSearch, showForm]);
+
+  const selectedEquipment = availableEquipment.find((e) => e.id === fEquipmentId);
+  const selectedEquipHolder = selectedEquipment?.currentHolder ?? null;
+  const selectedToEmployee = availableEmployees.find((emp) => emp.id === fToPersonId);
 
   useEffect(() => {
     if (!showForm || fType !== 'rashodovanje' || !fEquipmentId) {
@@ -136,9 +155,11 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
 
   // Check if this would be a cross-service transfer
   const wouldBeCrossService = useMemo(() => {
-    if (fType !== 'prenos' || !selectedEquipment?.currentHolderId || !fToPersonId) return false;
-    return isCrossServiceTransfer(selectedEquipment.currentHolderId, fToPersonId);
-  }, [fType, selectedEquipment, fToPersonId]);
+    if (fType !== 'prenos' || !selectedEquipHolder?.orgUnitId || !selectedToEmployee?.orgUnitId) {
+      return false;
+    }
+    return isCrossServiceTransfer(selectedEquipHolder.orgUnitId, selectedToEmployee.orgUnitId);
+  }, [fType, selectedEquipHolder, selectedToEmployee]);
 
   function openForm(type: TransferType) {
     setFType(type);
@@ -155,7 +176,7 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
       toastError('Odaberite opremu.');
       return;
     }
-    const eq = state.equipment.find((e) => e.id === fEquipmentId);
+    const eq = selectedEquipment;
     if (!eq) return;
 
     const result = buildTransferCreatePayload({
@@ -164,6 +185,7 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
       equipment: eq,
       type: fType,
       toPersonId: fToPersonId,
+      toPersonOrgUnitId: selectedToEmployee?.orgUnitId,
       reason: fReason,
       date: fDate,
       notes: fNotes,
@@ -178,6 +200,7 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
     try {
       await createTransferApi(result.payload!);
       await refresh();
+      await list.refresh();
       setShowForm(false);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri kreiranju transfera';
@@ -254,10 +277,11 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
         isEmpty={filtered.length === 0}
         emptyMessage="Nema rezultata"
         mobile={filtered.map((t) => {
-          const eq = state.equipment.find(e => e.id === t.equipmentId);
-          const cat = eq ? state.categories.find(c => c.id === eq.categoryId) : null;
-          const from = t.fromPersonId ? state.employees.find(e => e.id === t.fromPersonId) : null;
-          const to = t.toPersonId ? state.employees.find(e => e.id === t.toPersonId) : null;
+          const cat = t.equipment?.categoryId
+            ? state.categories.find((c) => c.id === t.equipment!.categoryId)
+            : null;
+          const fromName = getTransferFromPersonName(t);
+          const toName = getTransferToPersonName(t);
           return (
             <button
               key={t.id}
@@ -277,12 +301,12 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
                 t.type === 'rashodovanje' ? 'text-red-600' :
                 'text-orange-600'
               }`}>{getStatusLabel(t.type)}</p>
-              <p className="text-xs text-gray-600">{eq?.inventoryNumber} · {cat?.name}</p>
+              <p className="text-xs text-gray-600">{getTransferEquipmentLabel(t)} · {cat?.name}</p>
               <p className="text-xs text-gray-500">{formatDate(t.date)}</p>
               <p className="text-xs text-gray-500 truncate">
-                {t.fromType === 'skladiste' ? 'Skladište' : from ? getEmployeeFullName(from) : '—'}
+                {t.fromType === 'skladiste' ? 'Skladište' : fromName || '—'}
                 {' → '}
-                {t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : to ? getEmployeeFullName(to) : '—'}
+                {t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : toName || '—'}
               </p>
             </button>
           );
@@ -304,11 +328,12 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
             </thead>
             <tbody>
               {filtered.map(t => {
-                const eq = state.equipment.find(e => e.id === t.equipmentId);
-                const cat = eq ? state.categories.find(c => c.id === eq.categoryId) : null;
-                const from = t.fromPersonId ? state.employees.find(e => e.id === t.fromPersonId) : null;
-                const to = t.toPersonId ? state.employees.find(e => e.id === t.toPersonId) : null;
-                const signer = state.employees.find(e => e.id === t.signerId);
+                const cat = t.equipment?.categoryId
+                  ? state.categories.find((c) => c.id === t.equipment!.categoryId)
+                  : null;
+                const fromName = getTransferFromPersonName(t);
+                const toName = getTransferToPersonName(t);
+                const signerName = getTransferSignerName(t);
 
                 return (
                   <tr
@@ -337,23 +362,23 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs text-gray-700">{eq?.inventoryNumber}</span>
+                      <span className="text-xs text-gray-700">{getTransferEquipmentLabel(t)}</span>
                       <p className="text-[10px] text-gray-400">{cat?.name}</p>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">
                       {t.fromType === 'skladiste' ? (
                         <span className="text-blue-600 flex items-center gap-1"><Warehouse size={12} /> Skladište</span>
-                      ) : from ? getEmployeeFullName(from) : '—'}
+                      ) : fromName || '—'}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">
                       {t.toType === 'skladiste' ? (
                         <span className="text-blue-600 flex items-center gap-1"><Warehouse size={12} /> Skladište</span>
                       ) : t.toType === 'rashod' ? (
                         <span className="text-red-600 flex items-center gap-1"><UserX size={12} /> RASHOD</span>
-                      ) : to ? getEmployeeFullName(to) : '—'}
+                      ) : toName || '—'}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">
-                      {signer ? getEmployeeFullName(signer) : '—'}
+                      {signerName || '—'}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{formatDate(t.date)}</td>
                     <td className="px-4 py-3">
@@ -377,21 +402,30 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
         }
       />
 
-      {selectedTransferId && (() => {
-        const selected = state.transfers.find((t) => t.id === selectedTransferId);
-        if (!selected) {
-          return null;
-        }
-        return (
-          <div className="mt-4">
-            <TransferDocumentPanel
-              transfer={selected}
-              allowSign={selected.status === 'raw'}
-              onSigned={() => void refresh()}
-            />
-          </div>
-        );
-      })()}
+      {list.meta ? (
+        <PaginationControls
+          page={list.page}
+          pageSize={list.pageSize}
+          total={list.meta.total}
+          totalPages={list.meta.totalPages}
+          onPageChange={list.setPage}
+          onPageSizeChange={list.setPageSize}
+          className="rounded-b-xl border border-t-0 border-gray-100 mb-4"
+        />
+      ) : null}
+
+      {selectedTransfer ? (
+        <div className="mt-4">
+          <TransferDocumentPanel
+            transfer={selectedTransfer}
+            allowSign={selectedTransfer.status === 'raw'}
+            onSigned={() => {
+              void refresh();
+              void list.refresh();
+            }}
+          />
+        </div>
+      ) : null}
 
       {/* New Transfer Modal */}
       {showForm && (
@@ -426,7 +460,7 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
                   <option value="">— Odaberi opremu —</option>
                   {availableEquipment.map(eq => {
                     const cat = state.categories.find(c => c.id === eq.categoryId);
-                    const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
+                    const holder = eq.currentHolder;
                     return (
                       <option key={eq.id} value={eq.id}>
                         {eq.inventoryNumber} — {cat?.name} {holder ? `[${getEmployeeFullName(holder)}]` : '[Skladište]'}
@@ -452,6 +486,13 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
               {(fType === 'zaduzenje' || fType === 'prenos') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Zadužiti na osobu *</label>
+                  <input
+                    type="text"
+                    value={employeeSearch}
+                    onChange={(e) => setEmployeeSearch(e.target.value)}
+                    placeholder="Pretraži radnika (min. 2 znaka)…"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
                   <select value={fToPersonId} onChange={e => setFToPersonId(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                     <option value="">— Odaberi osobu —</option>
@@ -466,11 +507,9 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
                         );
                       })}
                   </select>
-                  {evidenticar && !admin && availableEmployees.length < state.employees.length && (
-                    <p className="text-xs text-purple-500 mt-1">
-                      Prikazani su samo radnici u gradovima iz vaših dodjela.
-                    </p>
-                  )}
+                  {employeeSearch.trim().length >= 2 && availableEmployees.length === 0 ? (
+                    <p className="text-xs text-gray-500 mt-1">Nema rezultata pretrage.</p>
+                  ) : null}
                 </div>
               )}
 
@@ -490,17 +529,23 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
               )}
 
               {/* Signer info */}
-              {fToPersonId && (
+              {fToPersonId && selectedToEmployee ? (
                 <div className="bg-green-50 rounded-lg p-3 text-sm">
                   <span className="text-green-700 font-medium">Potpisnik (ovlaštena osoba):</span>{' '}
                   {(() => {
-                    const signer = getSignerForEmployee(state, fToPersonId);
+                    const signer = resolveSignerEmployee(
+                      state.orgUnits,
+                      availableEmployees,
+                      selectedToEmployee.orgUnitId,
+                    );
                     return signer ? (
                       <span>{getEmployeeFullName(signer)} — {signer.title}</span>
-                    ) : <span className="text-gray-400">Nije definisan</span>;
+                    ) : (
+                      <span className="text-gray-400">Nije definisan</span>
+                    );
                   })()}
                 </div>
-              )}
+              ) : null}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Datum</label>

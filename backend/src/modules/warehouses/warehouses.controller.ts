@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
+import { ListWarehousesQueryDto } from './dto/list-warehouses-query.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { WarehouseTransferTemplateService } from './warehouse-transfer-template.service';
 import { WarehousesService } from './warehouses.service';
@@ -33,8 +34,8 @@ export class WarehousesController {
 
   @Get()
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
-  findAll(@CurrentUser() user: AuthenticatedUser) {
-    return this.warehousesService.findAll(user);
+  findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListWarehousesQueryDto) {
+    return this.warehousesService.findAll(user, query);
   }
 
   @Get('resolve/effective')

@@ -21,21 +21,6 @@ export const getWarehousesForOrgUnit = (warehouses: Warehouse[], orgUnitId: stri
 
 export const isCentralWarehouse = (warehouse: Warehouse): boolean => !warehouse.orgUnitId;
 
-export const countEquipmentInOrgSubtree = (state: AppState, orgUnitId: string): number => {
-  const subtree = getOrgSubtreeIds(state.orgUnits, orgUnitId);
-  return state.equipment.filter((item) => {
-    if (item.status === 'zaduzeno' && item.currentHolderId) {
-      const holder = state.employees.find((employee) => employee.id === item.currentHolderId);
-      return holder ? subtree.has(holder.orgUnitId) : false;
-    }
-    if (item.warehouseId) {
-      const warehouse = state.warehouses.find((row) => row.id === item.warehouseId);
-      return warehouse?.orgUnitId ? subtree.has(warehouse.orgUnitId) : false;
-    }
-    return false;
-  }).length;
-};
-
 export const formatRegistrarAssignmentLabel = (
   assignment: RegistrarScopeAssignment,
   state: AppState,
@@ -107,18 +92,6 @@ export const getUserWarehouseIds = (
   }
   return new Set();
 };
-
-export const filterTransfersForWarehouse = (
-  warehouseId: string,
-  state: AppState,
-): typeof state.transfers =>
-  state.transfers.filter((transfer) => {
-    if (transfer.fromWarehouseId === warehouseId || transfer.toWarehouseId === warehouseId) {
-      return true;
-    }
-    const equipment = state.equipment.find((row) => row.id === transfer.equipmentId);
-    return equipment?.warehouseId === warehouseId;
-  });
 
 export const filterEquipmentOnWarehouse = (warehouseId: string, equipment: Equipment[]): Equipment[] =>
   equipment.filter((row) => row.warehouseId === warehouseId && row.status === 'skladiste');

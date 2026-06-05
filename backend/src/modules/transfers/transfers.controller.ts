@@ -19,6 +19,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { ListTransfersQueryDto } from './dto/list-transfers-query.dto';
+import { RecentTransfersQueryDto } from './dto/recent-transfers-query.dto';
 import { SignTransferDto } from './dto/sign-transfer.dto';
 import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { TransfersService } from './transfers.service';
@@ -35,6 +36,12 @@ export class TransfersController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListTransfersQueryDto) {
     return this.transfersService.findAll(user, query);
+  }
+
+  @Get('recent')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  findRecent(@CurrentUser() user: AuthenticatedUser, @Query() query: RecentTransfersQueryDto) {
+    return this.transfersService.findRecent(user, query);
   }
 
   @Get(':id')

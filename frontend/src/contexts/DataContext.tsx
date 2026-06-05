@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { fetchAppState } from '../api/data-api';
+import { fetchBootstrap } from '../api/data-api';
 import { setAuthUser, syncAppState } from '../store';
 import type { AppState } from '../types';
 import { useAuth } from './AuthContext';
@@ -53,7 +53,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     try {
       setAuthUser(user);
-      const loaded = await fetchAppState(user.role);
+      const loaded = await fetchBootstrap(user.role);
       loaded.currentUserId = user.id;
       setState(loaded);
       syncAppState(loaded);

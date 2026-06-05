@@ -1,4 +1,6 @@
 import { apiRequest } from './client';
+import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
+import { buildListQueryString } from '../types/pagination';
 
 export interface EquipmentCatalogItem {
   id: string;
@@ -9,16 +11,12 @@ export interface EquipmentCatalogItem {
   category?: { id: string; name: string; parentId?: string | null };
 }
 
-export const searchCatalogItemsApi = (params: { categoryId?: string; q?: string }) => {
-  const search = new URLSearchParams();
-  if (params.categoryId) {
-    search.set('categoryId', params.categoryId);
-  }
-  if (params.q) {
-    search.set('q', params.q);
-  }
-  const query = search.toString();
-  return apiRequest<EquipmentCatalogItem[]>(
+export const searchCatalogItemsApi = (params: PaginatedListParams & { categoryId?: string; q?: string }) => {
+  const query = buildListQueryString({
+    ...params,
+    search: params.search ?? params.q,
+  });
+  return apiRequest<PaginatedResponse<EquipmentCatalogItem>>(
     `/equipment-catalog${query ? `?${query}` : ''}`,
   );
 };

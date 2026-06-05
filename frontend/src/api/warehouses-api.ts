@@ -1,6 +1,14 @@
 import { apiRequest } from './client';
+import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
+import { buildListQueryString } from '../types/pagination';
 import type { Warehouse } from '../types';
 
+export const fetchWarehousesPageApi = (params: PaginatedListParams = {}) => {
+  const query = buildListQueryString(params);
+  return apiRequest<PaginatedResponse<Warehouse>>(`/warehouses${query ? `?${query}` : ''}`);
+};
+
+/** @deprecated Use fetchWarehousesPageApi or fetchAllPaginatedItems for full lists */
 export const fetchWarehousesApi = () => apiRequest<Warehouse[]>('/warehouses');
 
 export const resolveEffectiveWarehouseApi = (orgUnitId: string, cityId?: string) => {

@@ -1,8 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useStore, useRefreshData } from '../useStore';
-import { getCurrentUser, isAdmin, isEvidenticar, employeeMatchesScope } from '../store';
+import { getCurrentUser, isAdmin, isEvidenticar } from '../store';
 import { createTransferApi } from '../api/data-api';
+import { fetchEquipmentApi } from '../api/equipment-api';
+import { fetchEmployeesPageApi } from '../api/employees-api';
+import { fetchTransfersPageApi } from '../api/transfers-api';
 import { resolveDisposalCommissionApi, type DisposalResolveDto } from '../api/disposal-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
@@ -14,7 +17,7 @@ import {
 } from '../helpers/equipment-display.util';
 import { buildTransferCreatePayload, canSignDisposalTransfer } from '../helpers/create-transfer-payload.util';
 import { X, Package, QrCode, History, ArrowRight, Download, Printer, User, Building2, FileText, AlertTriangle, CheckCircle, Warehouse, Trash2 } from 'lucide-react';
-import type { TransferType } from '../types';
+import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
 import { AlertBanner } from './ui/alert-banner';
 import { ModalRoot } from './ui/modal-root';
@@ -38,32 +41,18 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const [reason, setReason] = useState('');
   const [expandedTransferId, setExpandedTransferId] = useState<string | null>(null);
   const [disposalResolve, setDisposalResolve] = useState<DisposalResolveDto | null>(null);
+  const [eq, setEq] = useState<Equipment | null>(null);
+  const [transfers, setTransfers] = useState<TransferRecord[]>([]);
+  const [availableEmployees, setAvailableEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const currentUser = getCurrentUser();
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
 
-  const equipment = state.equipment.find((e) => e.id === equipmentId);
-  const eq = equipment;
   const cat = eq ? state.categories.find((c) => c.id === eq.categoryId) : undefined;
-  const holder = eq?.currentHolderId ? state.employees.find((e) => e.id === eq.currentHolderId) : null;
-  const holderOrg = holder ? state.orgUnits.find((o) => o.id === holder.orgUnitId) : null;
-  const transfers = eq
-    ? state.transfers.filter((t) => t.equipmentId === equipmentId).sort((a, b) => b.date.localeCompare(a.date))
-    : [];
-
-  const availableEmployees = useMemo(() => {
-    if (!eq) return [];
-    if (admin) {
-      return state.employees.filter((row) => row.id !== eq.currentHolderId);
-    }
-    if (evidenticar) {
-      return state.employees.filter(
-        (row) => row.id !== eq.currentHolderId && employeeMatchesScope(row, state, currentUser),
-      );
-    }
-    return [];
-  }, [admin, currentUser, eq, evidenticar, state]);
+  const holder = eq?.currentHolder ?? null;
 
   const warehousePreview = useMemo(() => {
     if (!eq || transferType !== 'razduzenje') {
@@ -83,9 +72,60 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     return state.warehouses.find((row) => row.id === result.targetWarehouseId);
   }, [admin, currentUser, eq, evidenticar, state, transferType]);
 
+  const loadEquipment = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [equipment, transferPage] = await Promise.all([
+        fetchEquipmentApi(equipmentId),
+        fetchTransfersPageApi({
+          equipmentId,
+          page: 1,
+          pageSize: 100,
+          sortBy: 'date',
+          sortDir: 'desc',
+        }),
+      ]);
+      setEq(equipment);
+      setTransfers(transferPage.items);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri učitavanju opreme';
+      setLoadError(message);
+      setEq(null);
+      setTransfers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [equipmentId]);
+
+  const loadEmployees = useCallback(async () => {
+    if (!eq) return;
+    try {
+      const response = await fetchEmployeesPageApi({ page: 1, pageSize: 100 });
+      setAvailableEmployees(
+        response.items.filter((row) => row.id !== eq.currentHolderId),
+      );
+    } catch {
+      setAvailableEmployees([]);
+    }
+  }, [eq]);
+
+  useEffect(() => {
+    void loadEquipment();
+  }, [loadEquipment]);
+
   useEffect(() => {
     setShowQR(initialShowQR);
   }, [equipmentId, initialShowQR]);
+
+  useEffect(() => {
+    if (!showTransferModal || !eq) {
+      return;
+    }
+    if (transferType === 'zaduzenje' || transferType === 'prenos') {
+      void loadEmployees();
+    }
+  }, [eq, loadEmployees, showTransferModal, transferType]);
 
   useEffect(() => {
     if (!eq || !showTransferModal || transferType !== 'rashodovanje') {
@@ -111,7 +151,38 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     };
   }, [eq, showTransferModal, transferType]);
 
-  if (!equipment || !eq) return null;
+  const holderOrg = holder?.orgUnitId
+    ? state.orgUnits.find((o) => o.id === holder.orgUnitId)
+    : null;
+
+  if (loading) {
+    return (
+      <ModalRoot open onClose={onClose} zIndex={50} size="xl" panelClassName="max-w-3xl">
+        <div className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full p-8 text-center text-gray-500">
+          Učitavam opremu…
+        </div>
+      </ModalRoot>
+    );
+  }
+
+  if (loadError || !eq) {
+    return (
+      <ModalRoot open onClose={onClose} zIndex={50} size="md">
+        <div className="bg-white rounded-xl shadow-2xl w-full p-6">
+          <AlertBanner tone="danger">{loadError ?? 'Oprema nije pronađena.'}</AlertBanner>
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Zatvori
+            </button>
+          </div>
+        </div>
+      </ModalRoot>
+    );
+  }
 
   const qrData = buildEquipmentQrUrl(eq);
   const displayName = buildEquipmentDisplayName(cat, eq.specifications);
@@ -194,13 +265,15 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   };
 
   const handleTransfer = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !eq) return;
+    const toEmployee = availableEmployees.find((row) => row.id === toPersonId);
     const result = buildTransferCreatePayload({
       state,
       user: currentUser,
       equipment: eq,
       type: transferType,
       toPersonId,
+      toPersonOrgUnitId: toEmployee?.orgUnitId,
       reason,
       admin,
       evidenticar,
@@ -213,6 +286,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     try {
       await createTransferApi(result.payload!);
       await refresh();
+      await loadEquipment();
       handleCloseTransferModal();
       toastSuccess(
         transferType === 'rashodovanje'
@@ -273,7 +347,9 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                     <User size={12} /> Trenutno zadužen na
                   </h3>
                   <p className="text-green-900 font-medium">{getEmployeeFullName(holder)}</p>
-                  <p className="text-green-700 text-sm">{holder.title}</p>
+                  {holder.title ? (
+                    <p className="text-green-700 text-sm">{holder.title}</p>
+                  ) : null}
                   {holderOrg && (
                     <p className="text-green-600 text-xs mt-1 flex items-center gap-1">
                       <Building2 size={10} /> {getOrgUnitPath(state.orgUnits, holderOrg.id)}
@@ -384,8 +460,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                 {transfers.length > 0 ? (
                   <div className="space-y-2 max-h-[200px] overflow-y-auto">
                     {transfers.map((t) => {
-                      const from = t.fromPersonId ? state.employees.find((e) => e.id === t.fromPersonId) : null;
-                      const to = t.toPersonId ? state.employees.find((e) => e.id === t.toPersonId) : null;
+                      const from = t.fromPerson;
+                      const to = t.toPerson;
                       return (
                         <div key={t.id} className="bg-gray-50 rounded-lg p-3">
                           <button
@@ -421,7 +497,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                               <TransferDocumentPanel
                                 transfer={t}
                                 allowSign={canManage && canSignDisposalTransfer(t)}
-                                onSigned={() => void refresh()}
+                                onSigned={() => void refresh().then(() => loadEquipment())}
                               />
                             </div>
                           )}

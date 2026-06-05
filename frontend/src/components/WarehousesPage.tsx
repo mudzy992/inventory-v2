@@ -1,6 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchSkladistarUsersApi } from '../api/users-api';
+import type { UserAccount } from '../types';
 import { Plus, List, Warehouse as WarehouseIcon } from 'lucide-react';
-import { createWarehouseApi } from '../api/warehouses-api';
+import { createWarehouseApi, fetchWarehousesPageApi } from '../api/warehouses-api';
+import { usePaginatedList } from '../hooks/usePaginatedList';
+import { PaginationControls } from './ui/pagination-controls';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -50,11 +54,29 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
     () => getUserWarehouseIds(user?.role, user?.id, user?.registrarScopes ?? [], state.warehouses),
     [state.warehouses, user?.id, user?.registrarScopes, user?.role],
   );
-  const visibleWarehouses = useMemo(
-    () => state.warehouses.filter((row) => visibleWarehouseIds.has(row.id)),
-    [state.warehouses, visibleWarehouseIds],
+  const fetchPage = useCallback(
+    (params: Parameters<typeof fetchWarehousesPageApi>[0]) => fetchWarehousesPageApi(params),
+    [],
   );
-  const skladistarUsers = state.users.filter((u) => u.role === 'skladistar');
+  const warehousesList = usePaginatedList({
+    fetchPage,
+    enabled: tab === 'list',
+  });
+  const visibleWarehouses = useMemo(() => {
+    if (admin || skladistar) {
+      return warehousesList.items;
+    }
+    return warehousesList.items.filter((row) => visibleWarehouseIds.has(row.id));
+  }, [admin, skladistar, visibleWarehouseIds, warehousesList.items]);
+  const [skladistarUsers, setSkladistarUsers] = useState<UserAccount[]>([]);
+  useEffect(() => {
+    if (!admin) {
+      return;
+    }
+    void fetchSkladistarUsersApi()
+      .then(setSkladistarUsers)
+      .catch(() => setSkladistarUsers([]));
+  }, [admin]);
   const selectedKeeperIds = keeperIds.split(',').filter(Boolean);
   const isCreateFormValid =
     Boolean(name.trim()) &&
@@ -101,6 +123,7 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
       setKeeperIds('');
       setCityId('');
       await refresh();
+      await warehousesList.refresh();
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška');
     }
@@ -231,6 +254,7 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
         </FormCard>
       ) : null}
       {tab === 'list' ? (
+      <>
       <ResponsiveTable
         isEmpty={visibleWarehouses.length === 0}
         emptyMessage="Nema skladišta u vašem opsegu."
@@ -296,6 +320,17 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
         </table>
         }
       />
+      {warehousesList.meta ? (
+        <PaginationControls
+          page={warehousesList.meta.page}
+          pageSize={warehousesList.meta.pageSize}
+          total={warehousesList.meta.total}
+          totalPages={warehousesList.meta.totalPages}
+          onPageChange={warehousesList.setPage}
+          onPageSizeChange={warehousesList.setPageSize}
+        />
+      ) : null}
+      </>
       ) : null}
     </div>
   );

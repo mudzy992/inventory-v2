@@ -1,10 +1,19 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import type { User, UserRole } from '../../../generated/prisma/client';
+import type { Prisma, User, UserRole } from '../../../generated/prisma/client';
+import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { RegistrarScopeAssignment } from '../../common/types/registrar-scope.type';
+import {
+  buildContainsSearchWhere,
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { assertUserAccessRules, normalizeRegistrarScopes } from './users-validation.util';
 
@@ -18,6 +27,12 @@ export interface UserListItem {
   lastLoginAt: string | null;
 }
 
+const USER_SORT_FIELDS: Record<string, string> = {
+  username: 'username',
+  role: 'role',
+  createdAt: 'createdAt',
+};
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -25,12 +40,36 @@ export class UsersService {
     private readonly settingsService: SettingsService,
   ) {}
 
-  async findAll(): Promise<UserListItem[]> {
-    const users = await this.prisma.user.findMany({
-      include: { registrarAssignments: true },
-      orderBy: { username: 'asc' },
+  async findAll(query: ListUsersQueryDto): Promise<PaginatedResponse<UserListItem>> {
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = this.buildListWhere(query);
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, USER_SORT_FIELDS, 'username');
+    type UserWithAssignments = User & {
+      registrarAssignments: {
+        warehouseId: string;
+        categoryId: string;
+        orgUnitId: string | null;
+      }[];
+    };
+    const result = await paginate<UserWithAssignments, Prisma.UserWhereInput>({
+      findMany: async (args) => {
+        const rows = await this.prisma.user.findMany({
+          ...args,
+          include: { registrarAssignments: true },
+        });
+        return rows as UserWithAssignments[];
+      },
+      count: (args) => this.prisma.user.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
     });
-    return users.map((user) => this.toListItem(user));
+    return {
+      items: result.items.map((user) => this.toListItem(user)),
+      meta: result.meta,
+    };
   }
 
   async findOne(id: string): Promise<UserListItem> {
@@ -131,6 +170,11 @@ export class UsersService {
       include: { registrarAssignments: true },
     });
     return this.toListItem(user);
+  }
+
+  private buildListWhere(query: ListUsersQueryDto): Prisma.UserWhereInput {
+    const searchWhere = buildContainsSearchWhere(query.search, ['username']);
+    return searchWhere ?? {};
   }
 
   private toListItem(

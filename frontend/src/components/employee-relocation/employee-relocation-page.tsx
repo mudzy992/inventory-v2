@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeftRight, Check, X } from 'lucide-react';
 import {
-  fetchRelocationWorkApi,
+  fetchRelocationWorkPageApi,
   resolveRelocationDestApi,
   resolveRelocationSourceApi,
   type RelocationLine,
 } from '../../api/employee-relocation-api';
+import { PaginationControls } from '../ui/pagination-controls';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { useRefreshData } from '../../useStore';
@@ -126,20 +127,26 @@ export const EmployeeRelocationPage = () => {
   const frozen = useInventoryFreezeActive();
   const [sourceLines, setSourceLines] = useState<RelocationLine[]>([]);
   const [destLines, setDestLines] = useState<RelocationLine[]>([]);
+  const [sourceMeta, setSourceMeta] = useState<{ page: number; pageSize: number; total: number; totalPages: number } | null>(null);
+  const [destMeta, setDestMeta] = useState<{ page: number; pageSize: number; total: number; totalPages: number } | null>(null);
+  const [sourcePage, setSourcePage] = useState(1);
+  const [destPage, setDestPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchRelocationWorkApi();
-      setSourceLines(data.sourceLines ?? []);
-      setDestLines(data.destLines ?? []);
+      const data = await fetchRelocationWorkPageApi({ page: sourcePage, pageSize: 25 });
+      setSourceLines(data.sourceLines.items ?? []);
+      setDestLines(data.destLines.items ?? []);
+      setSourceMeta(data.sourceLines.meta);
+      setDestMeta(data.destLines.meta);
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška pri učitavanju');
     } finally {
       setLoading(false);
     }
-  }, [toastError]);
+  }, [sourcePage, toastError]);
 
   useEffect(() => {
     void load();
@@ -201,6 +208,15 @@ export const EmployeeRelocationPage = () => {
             }
           />
         )}
+        {sourceMeta ? (
+          <PaginationControls
+            page={sourceMeta.page}
+            pageSize={sourceMeta.pageSize}
+            total={sourceMeta.total}
+            totalPages={sourceMeta.totalPages}
+            onPageChange={setSourcePage}
+          />
+        ) : null}
       </section>
 
       <section>
@@ -246,6 +262,15 @@ export const EmployeeRelocationPage = () => {
             }
           />
         )}
+        {destMeta ? (
+          <PaginationControls
+            page={destMeta.page}
+            pageSize={destMeta.pageSize}
+            total={destMeta.total}
+            totalPages={destMeta.totalPages}
+            onPageChange={setDestPage}
+          />
+        ) : null}
       </section>
     </div>
   );

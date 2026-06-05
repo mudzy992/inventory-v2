@@ -14,7 +14,15 @@ import {
   validateLotSpecifications,
 } from '../../common/utils/category-fields.util';
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
+import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import {
+  buildContainsSearchWhere,
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CategoriesService } from '../categories/categories.service';
 import { EquipmentCatalogService } from '../equipment-catalog/equipment-catalog.service';
@@ -24,7 +32,15 @@ import { WarehousesService } from '../warehouses/warehouses.service';
 import { BulkCreateStockLotDto } from './dto/bulk-create-stock-lot.dto';
 import { CreateStockLotDto } from './dto/create-stock-lot.dto';
 import { IssueStockLotDto } from './dto/issue-stock-lot.dto';
+import { ListStockLotsQueryDto } from './dto/list-stock-lots-query.dto';
 import { UpdateStockLotSpecDto } from './dto/update-stock-lot-spec.dto';
+
+const STOCK_LOT_SORT_FIELDS: Record<string, string> = {
+  entryDate: 'entryDate',
+  createdAt: 'createdAt',
+  productName: 'productName',
+  status: 'status',
+};
 import { TransferDocumentGenerationService } from '../transfers/transfer-document-generation.service';
 import { assertTransferCreationAllowed } from '../transfers/utils/transfer-generation-policy.util';
 import { executeStockLotIssueInTx } from './utils/finalize-stock-lot-issue.util';
@@ -62,37 +78,84 @@ export class WarehouseStockService {
     private readonly transferDocumentGeneration: TransferDocumentGenerationService,
   ) {}
 
-  async listForWarehouse(user: AuthenticatedUser, warehouseId: string) {
+  async listForWarehouse(
+    user: AuthenticatedUser,
+    warehouseId: string,
+    query: ListStockLotsQueryDto,
+  ): Promise<PaginatedResponse<ReturnType<typeof this.mapLotForUser>>> {
     await this.assertCanAccessWarehouse(user, warehouseId);
-    const lots = await this.prisma.warehouseStockLot.findMany({
-      where: { warehouseId, lotKind: 'ISSUABLE' },
-      include: { category: true },
-      orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const filters: Prisma.WarehouseStockLotWhereInput[] = [
+      { warehouseId, lotKind: 'ISSUABLE' },
+    ];
+    const searchWhere = buildContainsSearchWhere(query.search, ['productName']);
+    if (searchWhere) {
+      filters.push(searchWhere);
+    }
+    const where: Prisma.WarehouseStockLotWhereInput =
+      filters.length === 1 ? filters[0]! : { AND: filters };
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, STOCK_LOT_SORT_FIELDS, 'entryDate');
+    const result = await paginate({
+      findMany: (args) =>
+        this.prisma.warehouseStockLot.findMany({
+          ...args,
+          include: { category: true },
+        }),
+      count: (args) => this.prisma.warehouseStockLot.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
     });
-    return lots.map((lot) => this.mapLotForUser(user, lot));
+    return {
+      items: result.items.map((lot) => this.mapLotForUser(user, lot)),
+      meta: result.meta,
+    };
   }
 
-  async listForRegistrar(user: AuthenticatedUser) {
+  async listForRegistrar(
+    user: AuthenticatedUser,
+    query: ListStockLotsQueryDto,
+  ): Promise<PaginatedResponse<ReturnType<typeof this.mapLotForUser>>> {
     if (user.role !== 'evidenticar' && user.role !== 'admin') {
       throw new ForbiddenException('Only registrar or admin can list assigned stock');
     }
-    const assignments = user.role === 'admin' ? null : user.registrarScopes;
-    const lots = await this.prisma.warehouseStockLot.findMany({
-      where: {
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const filters: Prisma.WarehouseStockLotWhereInput[] = [
+      {
         lotKind: 'ISSUABLE',
         status: { in: ['ceka_specifikaciju', 'spremno_za_izdavanje'] },
         quantityOnHand: { gt: 0 },
       },
-      include: { category: true, warehouse: true },
-      orderBy: [{ status: 'asc' }, { entryDate: 'desc' }],
-    });
-    const filtered = [];
-    for (const lot of lots) {
-      if (user.role === 'admin' || (await this.registrarScope.canAccessStockLot(user, lot, assignments ?? undefined))) {
-        filtered.push(this.mapLotForUser(user, lot, true));
-      }
+    ];
+    if (user.role === 'evidenticar') {
+      const scopeWhere = await this.registrarScope.buildStockLotWhere(user);
+      filters.push(scopeWhere);
     }
-    return filtered;
+    const searchWhere = buildContainsSearchWhere(query.search, ['productName']);
+    if (searchWhere) {
+      filters.push(searchWhere);
+    }
+    const where: Prisma.WarehouseStockLotWhereInput = { AND: filters };
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, STOCK_LOT_SORT_FIELDS, 'status');
+    const result = await paginate({
+      findMany: (args) =>
+        this.prisma.warehouseStockLot.findMany({
+          ...args,
+          include: { category: true, warehouse: true },
+        }),
+      count: (args) => this.prisma.warehouseStockLot.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
+    });
+    return {
+      items: result.items.map((lot) => this.mapLotForUser(user, lot, true)),
+      meta: result.meta,
+    };
   }
 
   async findOne(user: AuthenticatedUser, lotId: string) {

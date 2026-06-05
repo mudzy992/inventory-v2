@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '../../../generated/prisma/client';
+import type { Prisma, Transfer } from '../../../generated/prisma/client';
 import { detectCrossServiceTransfer } from '../../common/utils/transfer-cross-service.util';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
@@ -13,7 +13,14 @@ import { RegistrarScopeService } from '../../common/services/registrar-scope.ser
 import { SignerResolutionService } from '../../common/services/signer-resolution.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { assertRazduzenjeWarehouseCoverage } from '../../common/utils/warehouse-coverage.util';
+import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import {
+  buildOrderBy,
+  paginate,
+  parsePagination,
+  resolveListPageSize,
+} from '../../common/utils/pagination.util';
 import {
   assertCanReadEquipment,
   assertCanWriteEquipment,
@@ -25,6 +32,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { ListTransfersQueryDto } from './dto/list-transfers-query.dto';
+import { RecentTransfersQueryDto } from './dto/recent-transfers-query.dto';
+import { TRANSFER_LIST_INCLUDE } from './transfer-list.include';
 import { SignTransferDto } from './dto/sign-transfer.dto';
 import {
   buildEquipmentUpdateOnFinalize,
@@ -45,6 +54,13 @@ const transferInclude = {
   toPerson: true,
   disposalApproval: true,
 } satisfies Prisma.TransferInclude;
+
+const TRANSFER_SORT_FIELDS: Record<string, string> = {
+  createdAt: 'createdAt',
+  date: 'date',
+  documentNumber: 'documentNumber',
+  status: 'status',
+};
 
 @Injectable()
 export class TransfersService {
@@ -79,22 +95,79 @@ export class TransfersService {
     }
   }
 
-  async findAll(user: AuthenticatedUser, query: ListTransfersQueryDto) {
-    const transfers = await this.prisma.transfer.findMany({
-      where: {
-        equipmentId: query.equipmentId,
-        status: query.status,
-      },
-      include: transferInclude,
-      orderBy: { createdAt: 'desc' },
+  async findAll(
+    user: AuthenticatedUser,
+    query: ListTransfersQueryDto,
+  ): Promise<PaginatedResponse<Transfer>> {
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = await this.buildListWhere(user, query);
+    const orderBy = buildOrderBy(query.sortBy, query.sortDir, TRANSFER_SORT_FIELDS, 'createdAt');
+    return paginate({
+      findMany: (args) =>
+        this.prisma.transfer.findMany({
+          ...args,
+          include: TRANSFER_LIST_INCLUDE,
+        }),
+      count: (args) => this.prisma.transfer.count(args),
+      where,
+      orderBy,
+      page,
+      pageSize: take,
     });
-    const filtered = [];
-    for (const transfer of transfers) {
-      if (await this.canAccessTransfer(user, transfer)) {
-        filtered.push(transfer);
-      }
+  }
+
+  async findRecent(user: AuthenticatedUser, query: RecentTransfersQueryDto) {
+    const limit = query.limit ?? 5;
+    const where = await this.buildListWhere(user, {});
+    return this.prisma.transfer.findMany({
+      where,
+      include: TRANSFER_LIST_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  private async buildListWhere(
+    user: AuthenticatedUser,
+    query: Pick<ListTransfersQueryDto, 'equipmentId' | 'status' | 'search' | 'personId' | 'warehouseId'>,
+  ): Promise<Prisma.TransferWhereInput> {
+    const scopeWhere = await this.registrarScope.buildTransferWhere(user);
+    const filters: Prisma.TransferWhereInput[] = [scopeWhere];
+    if (query.equipmentId) {
+      filters.push({ equipmentId: query.equipmentId });
     }
-    return filtered;
+    if (query.personId) {
+      filters.push({
+        OR: [{ fromPersonId: query.personId }, { toPersonId: query.personId }],
+      });
+    }
+    if (query.status) {
+      filters.push({ status: query.status });
+    }
+    if (query.warehouseId) {
+      filters.push({
+        OR: [
+          { fromWarehouseId: query.warehouseId },
+          { toWarehouseId: query.warehouseId },
+          { equipment: { warehouseId: query.warehouseId } },
+        ],
+      });
+    }
+    const searchTerm = query.search?.trim();
+    if (searchTerm) {
+      filters.push({
+        OR: [
+          { documentNumber: { contains: searchTerm } },
+          { equipment: { inventoryNumber: { contains: searchTerm } } },
+          { fromPerson: { firstName: { contains: searchTerm } } },
+          { fromPerson: { lastName: { contains: searchTerm } } },
+          { toPerson: { firstName: { contains: searchTerm } } },
+          { toPerson: { lastName: { contains: searchTerm } } },
+        ],
+      });
+    }
+    return filters.length === 1 ? filters[0]! : { AND: filters };
   }
 
   async findOne(user: AuthenticatedUser, id: string) {

@@ -8,11 +8,13 @@ import {
   type InventorySessionDto,
 } from '../../api/inventory-api';
 import { fetchTransferApi } from '../../api/data-api';
+import { fetchEmployeesPageApi } from '../../api/employees-api';
+import { fetchAllPaginatedItems } from '../../api/fetch-all-paginated';
 import { ApiError } from '../../api/client';
 import { getEmployeeFullName, getOrgUnitPath } from '../../helpers';
 import { useToast } from '../../contexts/toast-context';
 import { useStore } from '../../useStore';
-import type { Equipment, TransferRecord } from '../../types';
+import type { Employee, Equipment, TransferRecord } from '../../types';
 import { AlertBanner } from '../ui/alert-banner';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -64,6 +66,20 @@ export const SessionLinesPanel = ({
 }: SessionLinesPanelProps) => {
   const [state] = useStore();
   const { toastError } = useToast();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  useEffect(() => {
+    void fetchAllPaginatedItems((params) => fetchEmployeesPageApi(params), 100)
+      .then(setEmployees)
+      .catch(() => setEmployees([]));
+  }, []);
+  const resolveHolder = useCallback(
+    (item: Equipment) =>
+      item.currentHolder ??
+      (item.currentHolderId
+        ? employees.find((employee) => employee.id === item.currentHolderId)
+        : undefined),
+    [employees],
+  );
   const [search, setSearch] = useState('');
   const [lineFilter, setLineFilter] = useState<LineFilter>('all');
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -97,9 +113,7 @@ export const SessionLinesPanel = ({
       return equipment;
     }
     return equipment.filter((item) => {
-      const holder = item.currentHolderId
-        ? state.employees.find((employee) => employee.id === item.currentHolderId)
-        : undefined;
+      const holder = resolveHolder(item);
       const category = state.categories.find((row) => row.id === item.categoryId);
       const haystack = [
         item.inventoryNumber,
@@ -111,7 +125,7 @@ export const SessionLinesPanel = ({
         .toLowerCase();
       return haystack.includes(term);
     });
-  }, [equipment, search, state.categories, state.employees, state.orgUnits]);
+  }, [equipment, resolveHolder, search, state.categories, state.orgUnits]);
   const filtered = useMemo(() => {
     return searched.filter((item) => {
       const savedLine = lineByEquipment.get(item.id);
@@ -205,9 +219,7 @@ export const SessionLinesPanel = ({
     }
   };
   const renderLineFields = (item: Equipment) => {
-    const holder = item.currentHolderId
-      ? state.employees.find((employee) => employee.id === item.currentHolderId)
-      : undefined;
+    const holder = resolveHolder(item);
     const category = state.categories.find((row) => row.id === item.categoryId);
     const savedLine = lineByEquipment.get(item.id);
     const draft = drafts[item.id] ?? buildDraftFromLine(savedLine);
@@ -316,7 +328,7 @@ export const SessionLinesPanel = ({
                   className={selectClass}
                 >
                   <option value="">Osoba</option>
-                  {state.employees
+                  {employees
                     .filter((employee) => employee.id !== item.currentHolderId)
                     .map((employee) => (
                       <option key={employee.id} value={employee.id}>
@@ -460,9 +472,7 @@ export const SessionLinesPanel = ({
           </thead>
           <tbody>
             {filtered.map((item) => {
-              const holder = item.currentHolderId
-                ? state.employees.find((employee) => employee.id === item.currentHolderId)
-                : undefined;
+              const holder = resolveHolder(item);
               const category = state.categories.find((row) => row.id === item.categoryId);
               const savedLine = lineByEquipment.get(item.id);
               const draft = drafts[item.id] ?? buildDraftFromLine(savedLine);
@@ -544,7 +554,7 @@ export const SessionLinesPanel = ({
                             className={selectClass}
                           >
                             <option value="">Osoba</option>
-                            {state.employees
+                            {employees
                               .filter((employee) => employee.id !== item.currentHolderId)
                               .map((employee) => (
                                 <option key={employee.id} value={employee.id}>

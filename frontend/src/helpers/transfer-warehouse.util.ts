@@ -46,9 +46,11 @@ const resolveRazduzenjeWarehouseId = (
 ): string | undefined => {
   const assignmentWarehouse =
     user?.role === 'evidenticar' ? pickAssignmentWarehouse(equipment, user, state) : undefined;
-  const holder = equipment.currentHolderId
-    ? state.employees.find((row) => row.id === equipment.currentHolderId)
-    : undefined;
+  const holder =
+    equipment.currentHolder ??
+    (equipment.currentHolderId
+      ? state.employees.find((row) => row.id === equipment.currentHolderId)
+      : undefined);
   const effectiveOrgWarehouse = holder
     ? resolveEffectiveWarehouseForOrgUnit(
         state.orgUnits,

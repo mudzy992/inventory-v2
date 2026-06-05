@@ -3,6 +3,7 @@ import type { SettingScope, SettingValueType } from '../../../generated/prisma/c
 export type SettingGroup =
   | 'branding'
   | 'company'
+  | 'lists'
   | 'modules'
   | 'system'
   | 'transfers'
@@ -460,6 +461,24 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     description: 'Postavlja se automatski nakon setup wizarda.',
     group: 'modules',
     adminEditable: false,
+  }),
+  def({
+    key: 'lists.default_page_size',
+    scope: 'private',
+    valueType: 'number',
+    defaultValue: 25,
+    label: 'Veličina stranice (liste)',
+    description: 'Podrazumijevani broj redova po stranici u tabelarnim prikazima.',
+    group: 'lists',
+  }),
+  def({
+    key: 'lists.max_page_size',
+    scope: 'private',
+    valueType: 'number',
+    defaultValue: 100,
+    label: 'Maks. veličina stranice',
+    description: 'Gornja granica pageSize parametra na list API-jima.',
+    group: 'lists',
   }),
 ] as const;
 

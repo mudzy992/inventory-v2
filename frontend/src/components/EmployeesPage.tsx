@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore, useRefreshData } from '../useStore';
 import { createEmployeeApi, deleteEmployeeApi, updateEmployeeApi } from '../api/data-api';
+import { fetchEmployeesPageApi } from '../api/employees-api';
+import { usePaginatedList } from '../hooks/usePaginatedList';
 import { previewRelocationApi, type RelocationPreview } from '../api/employee-relocation-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
@@ -13,6 +15,7 @@ import { OrgUnitAutocomplete } from './org-unit-autocomplete';
 import type { Employee } from '../types';
 import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
+import { PaginationControls } from './ui/pagination-controls';
 
 export function EmployeesPage() {
   const [state] = useStore();
@@ -21,7 +24,6 @@ export function EmployeesPage() {
   const evidenticar = isEvidenticar();
   const user = getCurrentUser();
   const { toastError } = useToast();
-  const [search, setSearch] = useState('');
   const [filterOrgUnit, setFilterOrgUnit] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
@@ -35,31 +37,20 @@ export function EmployeesPage() {
   const [relocationPreview, setRelocationPreview] = useState<RelocationPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const filtered = useMemo(() => {
-    return state.employees.filter(emp => {
-      if (evidenticar && !admin && !employeeMatchesScope(emp, state, user)) {
-        return false;
-      }
-      const matchSearch = search === '' ||
-        `${emp.firstName} ${emp.lastName} ${emp.title} ${emp.email || ''}`.toLowerCase().includes(search.toLowerCase());
-      const matchOrg = filterOrgUnit === '' || emp.orgUnitId === filterOrgUnit;
-      return matchSearch && matchOrg;
-    });
-  }, [state, admin, evidenticar, user, search, filterOrgUnit]);
+  const list = usePaginatedList<Employee, { orgUnitId?: string }>({
+    fetchPage: fetchEmployeesPageApi,
+    initialFilters: { orgUnitId: undefined },
+  });
 
-  const scopedOrgUnits = useMemo(() => {
-    if (admin) {
-      return state.orgUnits;
-    }
-    if (evidenticar) {
-      return state.orgUnits.filter((org) =>
-        state.employees.some(
-          (emp) => emp.orgUnitId === org.id && employeeMatchesScope(emp, state, user),
-        ),
-      );
-    }
-    return state.orgUnits;
-  }, [admin, evidenticar, state.employees, state.orgUnits, user]);
+  useEffect(() => {
+    list.setFilters({ orgUnitId: filterOrgUnit || undefined });
+  }, [filterOrgUnit, list.setFilters]);
+
+  const filtered = list.items;
+  const search = list.search;
+  const setSearch = list.setSearch;
+
+  const scopedOrgUnits = useMemo(() => state.orgUnits, [state.orgUnits]);
 
   function openAdd() {
     setEditing(null);
@@ -87,7 +78,7 @@ export function EmployeesPage() {
     const payload = {
       firstName: fFirstName.trim(),
       lastName: fLastName.trim(),
-      title: resolveCanonicalEmployeeTitle(state.employees, fTitle).trim(),
+      title: resolveCanonicalEmployeeTitle([], fTitle).trim(),
       orgUnitId: fOrgUnit,
       email: fEmail || undefined,
       phone: fPhone || undefined,
@@ -98,6 +89,7 @@ export function EmployeesPage() {
       await createEmployeeApi(payload);
     }
     await refresh();
+    await list.refresh();
     setShowForm(false);
     setRelocationPreview(null);
   };
@@ -137,23 +129,19 @@ export function EmployeesPage() {
 
   const handleDelete = async (id: string) => {
     if (!admin) return;
-    const hasEquipment = state.equipment.some((e) => e.currentHolderId === id);
-    if (hasEquipment) {
-      toastError('Nije moguće obrisati radnika koji ima zaduženu opremu. Prvo razdužite opremu.');
-      return;
-    }
     if (!confirm('Da li ste sigurni?')) return;
     try {
       await deleteEmployeeApi(id);
       await refresh();
+    await list.refresh();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri brisanju';
       toastError(message);
     }
   };
 
-  function getEquipmentCount(empId: string): number {
-    return state.equipment.filter(e => e.currentHolderId === empId && e.status === 'zaduzeno').length;
+  function getEquipmentCount(_empId: string): number {
+    return 0;
   }
 
   return (
@@ -286,6 +274,18 @@ export function EmployeesPage() {
         }
       />
 
+      {list.meta ? (
+        <PaginationControls
+          page={list.page}
+          pageSize={list.pageSize}
+          total={list.meta.total}
+          totalPages={list.meta.totalPages}
+          onPageChange={list.setPage}
+          onPageSizeChange={list.setPageSize}
+          className="rounded-b-xl border border-t-0 border-gray-100"
+        />
+      ) : null}
+
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={() => setShowForm(false)}>
           <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -308,7 +308,6 @@ export function EmployeesPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Pozicija / Titula</label>
                 <EmployeeTitleAutocomplete
-                  employees={state.employees}
                   value={fTitle}
                   onChange={setFTitle}
                 />

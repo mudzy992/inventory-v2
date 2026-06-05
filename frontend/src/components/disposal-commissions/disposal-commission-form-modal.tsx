@@ -9,7 +9,6 @@ import { inputClass, labelClass } from '../ui/form-styles';
 
 interface DisposalCommissionFormModalProps {
   cities: City[];
-  employees: Employee[];
   employeesWithUser: Employee[];
   orgUnits: OrgUnit[];
   citiesWithActiveCommission: ReadonlySet<string>;
@@ -19,7 +18,6 @@ interface DisposalCommissionFormModalProps {
 
 export const DisposalCommissionFormModal = ({
   cities,
-  employees,
   employeesWithUser,
   orgUnits,
   citiesWithActiveCommission,
@@ -159,7 +157,6 @@ export const DisposalCommissionFormModal = ({
           <div>
             <label className={labelClass}>Članovi (min. 2) *</label>
             <EmployeeMultiAutocomplete
-              employees={employees}
               orgUnits={orgUnits}
               value={memberIds}
               onChange={setMemberIds}

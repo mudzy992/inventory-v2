@@ -3,9 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateCantonDto } from './dto/create-canton.dto';
+import { SearchLocationsQueryDto } from './dto/search-locations-query.dto';
 import { CreateCityDto } from './dto/create-city.dto';
 import { UpdateCantonDto } from './dto/update-canton.dto';
 import { UpdateCityDto } from './dto/update-city.dto';
@@ -21,6 +23,31 @@ export class LocationsService {
     return this.prisma.canton.findMany({
       include: { cities: { orderBy: { name: 'asc' } } },
       orderBy: { name: 'asc' },
+    });
+  }
+
+  async searchCantons(query: SearchLocationsQueryDto) {
+    const term = query.q.trim();
+    const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
+    return this.prisma.canton.findMany({
+      where: {
+        OR: [{ name: { contains: term } }, { code: { contains: term } }],
+      },
+      orderBy: { name: 'asc' },
+      take: limit,
+    });
+  }
+
+  async searchCities(query: SearchLocationsQueryDto) {
+    const term = query.q.trim();
+    const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
+    return this.prisma.city.findMany({
+      where: {
+        OR: [{ name: { contains: term } }, { canton: { name: { contains: term } } }],
+      },
+      include: { canton: true },
+      orderBy: [{ canton: { name: 'asc' } }, { name: 'asc' }],
+      take: limit,
     });
   }
 

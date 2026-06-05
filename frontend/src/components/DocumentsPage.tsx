@@ -1,6 +1,14 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useStore, useRefreshData } from '../useStore';
-import { signTransferApi, uploadTransferDocumentApi } from '../api/data-api';
+import { signTransferApi, uploadTransferDocumentApi, fetchTransferApi } from '../api/data-api';
+import { fetchTransfersPageApi } from '../api/transfers-api';
+import {
+  getTransferEquipmentLabel,
+  getTransferFromPersonName,
+  getTransferSignerName,
+  getTransferToPersonName,
+} from '../helpers/transfer-display.util';
+import { usePaginatedList } from '../hooks/usePaginatedList';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { getEmployeeFullName, getStatusLabel, formatDate, getOrgUnitPath, getStatusColor } from '../helpers';
@@ -12,6 +20,8 @@ import {
 import { Search, Filter, FileText, Printer, Upload, CheckCircle, Eye } from 'lucide-react';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
 import { PageHeaderRow } from './ui/page-header-row';
+import { PaginationControls } from './ui/pagination-controls';
+import type { TransferRecord } from '../types';
 
 export function DocumentsPage() {
   const [state] = useStore();
@@ -19,25 +29,45 @@ export function DocumentsPage() {
   const { toastError } = useToast();
   const { settings } = usePublicSettings();
   const companyHeader = companyHeaderFromSettings(settings);
-  const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [viewDoc, setViewDoc] = useState<string | null>(null);
+  const [viewTransfer, setViewTransfer] = useState<TransferRecord | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
 
-  const transfers = useMemo(() => {
-    return [...state.transfers]
-      .sort((a, b) => b.date.localeCompare(a.date) || b.documentNumber.localeCompare(a.documentNumber))
-      .filter(t => {
-        const eq = state.equipment.find(e => e.id === t.equipmentId);
-        const searchStr = `${t.documentNumber} ${eq?.inventoryNumber || ''}`.toLowerCase();
-        const matchSearch = search === '' || searchStr.includes(search.toLowerCase());
-        const matchStatus = filterStatus === '' || t.status === filterStatus;
-        return matchSearch && matchStatus;
-      });
-  }, [state, search, filterStatus]);
+  const fetchPage = useCallback(
+    (params: Parameters<typeof fetchTransfersPageApi>[0]) =>
+      fetchTransfersPageApi({
+        ...params,
+        ...(filterStatus ? { status: filterStatus as TransferRecord['status'] } : {}),
+      }),
+    [filterStatus],
+  );
 
-  const viewTransfer = viewDoc ? state.transfers.find(t => t.id === viewDoc) : null;
+  const list = usePaginatedList<TransferRecord, Record<string, never>>({
+    fetchPage,
+    initialSortBy: 'date',
+    initialSortDir: 'desc',
+  });
+
+  const search = list.search;
+  const setSearch = list.setSearch;
+  const transfers = list.items;
+
+  useEffect(() => {
+    if (!viewDoc) {
+      setViewTransfer(null);
+      return;
+    }
+    const fromList = transfers.find((row) => row.id === viewDoc);
+    if (fromList) {
+      setViewTransfer(fromList);
+      return;
+    }
+    void fetchTransferApi(viewDoc)
+      .then((row) => setViewTransfer(row as TransferRecord))
+      .catch(() => setViewTransfer(null));
+  }, [transfers, viewDoc]);
 
   function handleSignDoc(transferId: string) {
     setUploadingId(transferId);
@@ -51,6 +81,7 @@ export function DocumentsPage() {
       await uploadTransferDocumentApi(uploadingId, file);
       await signTransferApi(uploadingId, {});
       await refresh();
+      await list.refresh();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri uploadu';
       toastError(message);
@@ -66,29 +97,27 @@ export function DocumentsPage() {
     try {
       await signTransferApi(transferId, {});
       await refresh();
+      await list.refresh();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri potpisivanju';
       toastError(message);
     }
   };
 
-  function printPrenosnica(transferId: string) {
-    const t = state.transfers.find(tr => tr.id === transferId);
-    if (!t) return;
-    const eq = state.equipment.find(e => e.id === t.equipmentId);
-    const cat = eq ? state.categories.find(c => c.id === eq.categoryId) : null;
-    const from = t.fromPersonId ? state.employees.find(e => e.id === t.fromPersonId) : null;
-    const to = t.toPersonId ? state.employees.find(e => e.id === t.toPersonId) : null;
-    const signer = state.employees.find(e => e.id === t.signerId);
-    const fromOrg = from ? getOrgUnitPath(state.orgUnits, from.orgUnitId) : '';
-    const toOrg = to ? getOrgUnitPath(state.orgUnits, to.orgUnitId) : '';
+  async function printPrenosnica(transferId: string) {
+    const t =
+      transfers.find((row) => row.id === transferId) ??
+      ((await fetchTransferApi(transferId)) as TransferRecord);
+    const cat = t.equipment?.categoryId
+      ? state.categories.find((c) => c.id === t.equipment!.categoryId)
+      : null;
+    const from = t.fromPerson;
+    const to = t.toPerson;
+    const signer = t.signer;
+    const fromOrg = from?.orgUnitId ? getOrgUnitPath(state.orgUnits, from.orgUnitId) : '';
+    const toOrg = to?.orgUnitId ? getOrgUnitPath(state.orgUnits, to.orgUnitId) : '';
 
-    const specs = cat
-      ? [...cat.fields, ...cat.optionalFields]
-          .filter(f => eq?.specifications[f.id])
-          .map(f => `<tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:500;">${f.name}</td><td style="padding:4px 8px;border:1px solid #ccc;">${eq!.specifications[f.id]}</td></tr>`)
-          .join('')
-      : '';
+    const specs = '';
 
     const html = `
       <!DOCTYPE html>
@@ -122,9 +151,9 @@ export function DocumentsPage() {
         <div class="section-title">Podaci o opremi</div>
         <table>
           <tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:500;width:40%;">Kategorija</td><td style="padding:4px 8px;border:1px solid #ccc;">${cat?.name || '—'}</td></tr>
-          <tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:500;">Inventurni broj</td><td style="padding:4px 8px;border:1px solid #ccc;">${eq?.inventoryNumber || '—'}</td></tr>
+          <tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:500;">Inventurni broj</td><td style="padding:4px 8px;border:1px solid #ccc;">${getTransferEquipmentLabel(t)}</td></tr>
           ${specs}
-          <tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:500;">Broj ugovora</td><td style="padding:4px 8px;border:1px solid #ccc;">${eq?.contractNumber || '—'}</td></tr>
+          <tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:500;">Broj ugovora</td><td style="padding:4px 8px;border:1px solid #ccc;">—</td></tr>
         </table>
       </div>
 
@@ -180,10 +209,10 @@ export function DocumentsPage() {
         actions={
           <div className="flex flex-wrap gap-2 text-sm">
             <span className="bg-yellow-50 border border-yellow-200 px-3 py-1.5 rounded-lg text-yellow-700 font-medium">
-              RAW: {state.transfers.filter(t => t.status === 'raw').length}
+              RAW na stranici: {transfers.filter(t => t.status === 'raw').length}
             </span>
             <span className="bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg text-green-700 font-medium">
-              Potpisano: {state.transfers.filter(t => t.status === 'potpisan').length}
+              Potpisano na stranici: {transfers.filter(t => t.status === 'potpisan').length}
             </span>
           </div>
         }
@@ -212,11 +241,12 @@ export function DocumentsPage() {
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {transfers.map(t => {
-          const eq = state.equipment.find(e => e.id === t.equipmentId);
-          const cat = eq ? state.categories.find(c => c.id === eq.categoryId) : null;
-          const from = t.fromPersonId ? state.employees.find(e => e.id === t.fromPersonId) : null;
-          const to = t.toPersonId ? state.employees.find(e => e.id === t.toPersonId) : null;
-          const signer = state.employees.find(e => e.id === t.signerId);
+          const cat = t.equipment?.categoryId
+            ? state.categories.find((c) => c.id === t.equipment!.categoryId)
+            : null;
+          const fromName = getTransferFromPersonName(t);
+          const toName = getTransferToPersonName(t);
+          const signerName = getTransferSignerName(t);
 
           return (
             <div key={t.id} className={`bg-white rounded-xl shadow-sm border ${t.status === 'raw' ? 'border-yellow-200' : 'border-gray-100'} overflow-hidden`}>
@@ -240,19 +270,19 @@ export function DocumentsPage() {
                   </div>
                   <div className="flex gap-2">
                     <span className="text-gray-400 w-16">Oprema:</span>
-                    <span>{eq?.inventoryNumber} — {cat?.name}</span>
+                    <span>{getTransferEquipmentLabel(t)} — {cat?.name}</span>
                   </div>
                   <div className="flex gap-2">
                     <span className="text-gray-400 w-16">Od:</span>
-                    <span>{t.fromType === 'skladiste' ? 'Skladište' : from ? getEmployeeFullName(from) : '—'}</span>
+                    <span>{t.fromType === 'skladiste' ? 'Skladište' : fromName || '—'}</span>
                   </div>
                   <div className="flex gap-2">
                     <span className="text-gray-400 w-16">Ka:</span>
-                    <span>{t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : to ? getEmployeeFullName(to) : '—'}</span>
+                    <span>{t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : toName || '—'}</span>
                   </div>
                   <div className="flex gap-2">
                     <span className="text-gray-400 w-16">Potpisnik:</span>
-                    <span>{signer ? `${getEmployeeFullName(signer)} (${signer.title})` : '—'}</span>
+                    <span>{signerName || '—'}</span>
                   </div>
                   <div className="flex gap-2">
                     <span className="text-gray-400 w-16">Datum:</span>
@@ -300,17 +330,30 @@ export function DocumentsPage() {
         )}
       </div>
 
+      {list.meta ? (
+        <PaginationControls
+          page={list.page}
+          pageSize={list.pageSize}
+          total={list.meta.total}
+          totalPages={list.meta.totalPages}
+          onPageChange={list.setPage}
+          onPageSizeChange={list.setPageSize}
+          className="mt-4 rounded-xl border border-gray-100"
+        />
+      ) : null}
+
       {/* Preview modal */}
       {viewTransfer && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setViewDoc(null)}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             {(() => {
               const t = viewTransfer;
-              const eq = state.equipment.find(e => e.id === t.equipmentId);
-              const cat = eq ? state.categories.find(c => c.id === eq.categoryId) : null;
-              const from = t.fromPersonId ? state.employees.find(e => e.id === t.fromPersonId) : null;
-              const to = t.toPersonId ? state.employees.find(e => e.id === t.toPersonId) : null;
-              const signer = state.employees.find(e => e.id === t.signerId);
+              const cat = t.equipment?.categoryId
+                ? state.categories.find((c) => c.id === t.equipment!.categoryId)
+                : null;
+              const fromName = getTransferFromPersonName(t);
+              const toName = getTransferToPersonName(t);
+              const signerName = getTransferSignerName(t);
               return (
                 <div className="p-8">
                   {/* Document Header */}
@@ -346,17 +389,8 @@ export function DocumentsPage() {
                     <h3 className="font-semibold text-sm text-gray-700 mb-2 border-b border-gray-200 pb-1">Podaci o opremi</h3>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="bg-gray-50 p-2 rounded"><span className="text-gray-500">Kategorija:</span> <span className="font-medium">{cat?.name}</span></div>
-                      <div className="bg-gray-50 p-2 rounded"><span className="text-gray-500">Inv. broj:</span> <span className="font-medium font-mono">{eq?.inventoryNumber}</span></div>
-                      {cat && [...cat.fields, ...cat.optionalFields].map(f => {
-                        const val = eq?.specifications[f.id];
-                        if (!val) return null;
-                        return (
-                          <div key={f.id} className="bg-gray-50 p-2 rounded">
-                            <span className="text-gray-500">{f.name}:</span> <span className="font-medium">{val}</span>
-                          </div>
-                        );
-                      })}
-                      <div className="bg-gray-50 p-2 rounded"><span className="text-gray-500">Ugovor:</span> <span className="font-medium">{eq?.contractNumber || '—'}</span></div>
+                      <div className="bg-gray-50 p-2 rounded"><span className="text-gray-500">Inv. broj:</span> <span className="font-medium font-mono">{getTransferEquipmentLabel(t)}</span></div>
+                      <div className="bg-gray-50 p-2 rounded"><span className="text-gray-500">Ugovor:</span> <span className="font-medium">—</span></div>
                     </div>
                   </div>
 
@@ -366,12 +400,8 @@ export function DocumentsPage() {
                     <div className="text-sm">
                       {t.fromType === 'skladiste' ? (
                         <p className="text-blue-600 font-medium">SKLADIŠTE</p>
-                      ) : from ? (
-                        <>
-                          <p className="font-medium">{getEmployeeFullName(from)}</p>
-                          <p className="text-gray-500">{from.title}</p>
-                          <p className="text-xs text-gray-400">{getOrgUnitPath(state.orgUnits, from.orgUnitId)}</p>
-                        </>
+                      ) : fromName ? (
+                        <p className="font-medium">{fromName}</p>
                       ) : <p>—</p>}
                     </div>
                   </div>
@@ -384,12 +414,8 @@ export function DocumentsPage() {
                         <p className="text-blue-600 font-medium">SKLADIŠTE</p>
                       ) : t.toType === 'rashod' ? (
                         <p className="text-red-600 font-medium">RASHOD / OTPIS</p>
-                      ) : to ? (
-                        <>
-                          <p className="font-medium">{getEmployeeFullName(to)}</p>
-                          <p className="text-gray-500">{to.title}</p>
-                          <p className="text-xs text-gray-400">{getOrgUnitPath(state.orgUnits, to.orgUnitId)}</p>
-                        </>
+                      ) : toName ? (
+                        <p className="font-medium">{toName}</p>
                       ) : <p>—</p>}
                     </div>
                   </div>
@@ -407,22 +433,21 @@ export function DocumentsPage() {
                       <div className="border-t border-gray-400 pt-2 mt-16">
                         <p className="text-xs text-gray-500">PREDAO/LA</p>
                         <p className="text-sm font-medium">
-                          {t.fromType === 'skladiste' ? 'Skladištar' : from ? getEmployeeFullName(from) : '________'}
+                          {t.fromType === 'skladiste' ? 'Skladištar' : fromName || '________'}
                         </p>
                       </div>
                     </div>
                     <div className="text-center">
                       <div className="border-t border-gray-400 pt-2 mt-16">
                         <p className="text-xs text-gray-500">OVLAŠTENA OSOBA</p>
-                        <p className="text-sm font-medium">{signer ? getEmployeeFullName(signer) : '________'}</p>
-                        <p className="text-[10px] text-gray-400">{signer?.title || ''}</p>
+                        <p className="text-sm font-medium">{signerName || '________'}</p>
                       </div>
                     </div>
                     <div className="text-center">
                       <div className="border-t border-gray-400 pt-2 mt-16">
                         <p className="text-xs text-gray-500">PREUZEO/LA</p>
                         <p className="text-sm font-medium">
-                          {t.toType === 'skladiste' ? 'Skladištar' : t.toType === 'rashod' ? '—' : to ? getEmployeeFullName(to) : '________'}
+                          {t.toType === 'skladiste' ? 'Skladištar' : t.toType === 'rashod' ? '—' : toName || '________'}
                         </p>
                       </div>
                     </div>
@@ -432,7 +457,10 @@ export function DocumentsPage() {
                     <TransferDocumentPanel
                       transfer={t}
                       allowSign={t.status === 'raw'}
-                      onSigned={() => void refresh()}
+                      onSigned={() => {
+                        void refresh();
+                        void list.refresh();
+                      }}
                     />
                   </div>
                 </div>

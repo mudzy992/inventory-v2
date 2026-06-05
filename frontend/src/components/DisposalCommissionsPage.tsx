@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Plus, X, Users, FileWarning } from 'lucide-react';
 import {
-  fetchDisposalCommissionsApi,
+  fetchDisposalCommissionsPageApi,
   fetchPendingDisposalApprovalsApi,
   voteDisposalApprovalApi,
   type DisposalApprovalDto,
   type DisposalCommissionDto,
 } from '../api/disposal-api';
+import { fetchEmployeeApi } from '../api/employees-api';
+import { fetchUsersPageApi } from '../api/users-api';
+import { fetchAllPaginatedItems } from '../api/fetch-all-paginated';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { Badge } from './ui/badge';
@@ -17,6 +20,9 @@ import { ResponsiveTable } from './ui/responsive-table';
 import { Button } from './ui/button';
 import { EmptyState } from './ui/empty-state';
 import { PageTabs } from './ui/page-tabs';
+import { PaginationControls } from './ui/pagination-controls';
+import { usePaginatedList } from '../hooks/usePaginatedList';
+import type { Employee } from '../types';
 import { DisposalCommissionFormModal } from './disposal-commissions/disposal-commission-form-modal';
 
 type DisposalTab = 'commissions' | 'legacy';
@@ -27,36 +33,60 @@ export const DisposalCommissionsPage = () => {
   const admin = isAdmin();
   const { toastError, toastSuccess } = useToast();
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [commissions, setCommissions] = useState<DisposalCommissionDto[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<DisposalApprovalDto[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [employeesWithUser, setEmployeesWithUser] = useState<Employee[]>([]);
+  const [loadingApprovals, setLoadingApprovals] = useState(false);
   const [tab, setTab] = useState<DisposalTab>('commissions');
-  const employeesWithUser = useMemo(() => {
-    const linked = new Set(
-      state.users.filter((user) => user.isActive && user.employeeId).map((user) => user.employeeId!),
-    );
-    return state.employees.filter((employee) => linked.has(employee.id));
-  }, [state.users, state.employees]);
+
+  const commissionsList = usePaginatedList<DisposalCommissionDto>({
+    fetchPage: fetchDisposalCommissionsPageApi,
+  });
+  const commissions = commissionsList.items;
+  const loading = commissionsList.isLoading;
+
+  useEffect(() => {
+    if (!admin) {
+      return;
+    }
+    void fetchAllPaginatedItems((params) => fetchUsersPageApi(params), 100)
+      .then(async (users) => {
+        const linkedIds = [
+          ...new Set(
+            users.filter((user) => user.isActive && user.employeeId).map((user) => user.employeeId),
+          ),
+        ];
+        const employees = await Promise.all(
+          linkedIds.map((id) => fetchEmployeeApi(id).catch(() => null)),
+        );
+        setEmployeesWithUser(employees.filter(Boolean) as Employee[]);
+      })
+      .catch(() => setEmployeesWithUser([]));
+  }, [admin]);
+
   const citiesWithActiveCommission = useMemo(
     () => new Set(commissions.map((commission) => commission.cityId)),
     [commissions],
   );
-  const loadData = useCallback(async () => {
-    setLoading(true);
+
+  const loadApprovals = useCallback(async () => {
+    setLoadingApprovals(true);
     try {
-      const [rows, approvals] = await Promise.all([
-        fetchDisposalCommissionsApi(),
-        fetchPendingDisposalApprovalsApi().catch(() => [] as DisposalApprovalDto[]),
-      ]);
-      setCommissions(rows);
+      const approvals = await fetchPendingDisposalApprovalsApi().catch(
+        () => [] as DisposalApprovalDto[],
+      );
       setPendingApprovals(approvals);
     } finally {
-      setLoading(false);
+      setLoadingApprovals(false);
     }
   }, []);
+
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    void loadApprovals();
+  }, [loadApprovals]);
+
+  const loadData = useCallback(async () => {
+    await Promise.all([commissionsList.refresh(), loadApprovals()]);
+  }, [commissionsList, loadApprovals]);
   const handleCreated = async () => {
     await refresh();
     await loadData();
@@ -152,6 +182,16 @@ export const DisposalCommissionsPage = () => {
             </table>
             }
           />
+          {commissionsList.meta ? (
+            <PaginationControls
+              page={commissionsList.meta.page}
+              pageSize={commissionsList.meta.pageSize}
+              total={commissionsList.meta.total}
+              totalPages={commissionsList.meta.totalPages}
+              onPageChange={commissionsList.setPage}
+              onPageSizeChange={commissionsList.setPageSize}
+            />
+          ) : null}
         </div>
       ) : null}
       {tab === 'legacy' ? (
@@ -221,7 +261,6 @@ export const DisposalCommissionsPage = () => {
       {showCreateModal ? (
         <DisposalCommissionFormModal
           cities={state.cities}
-          employees={state.employees}
           employeesWithUser={employeesWithUser}
           orgUnits={state.orgUnits}
           citiesWithActiveCommission={citiesWithActiveCommission}

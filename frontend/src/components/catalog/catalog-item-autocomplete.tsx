@@ -33,8 +33,8 @@ export const CatalogItemAutocomplete = ({
     const term = query.includes('—') ? query.split('—')[0]?.trim() ?? query : query;
     const handle = window.setTimeout(() => {
       setLoading(true);
-      void searchCatalogItemsApi({ categoryId, q: term.trim() || undefined })
-        .then(setItems)
+      void searchCatalogItemsApi({ categoryId, q: term.trim() || undefined, pageSize: 20 })
+        .then((res) => setItems(res.items))
         .finally(() => setLoading(false));
     }, 200);
     return () => window.clearTimeout(handle);

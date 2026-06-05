@@ -4,9 +4,11 @@ import {
   parseCategoryFields,
   type CategoryFieldDefinition,
 } from '../../common/utils/category-fields.util';
+import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { SearchCategoriesQueryDto } from './dto/search-categories-query.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
 export interface CategoryTreeNode {
@@ -29,6 +31,18 @@ export class CategoriesService {
 
   async findFlat(): Promise<Category[]> {
     return this.prisma.category.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  async search(query: SearchCategoriesQueryDto): Promise<Category[]> {
+    const term = query.q.trim();
+    const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
+    return this.prisma.category.findMany({
+      where: {
+        OR: [{ name: { contains: term } }, { description: { contains: term } }],
+      },
+      orderBy: { name: 'asc' },
+      take: limit,
+    });
   }
 
   async findTree(): Promise<CategoryTreeNode[]> {

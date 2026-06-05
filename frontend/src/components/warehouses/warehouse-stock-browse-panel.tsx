@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Package, Plus, Search } from 'lucide-react';
-import { fetchWarehouseStockLotsApi } from '../../api/warehouse-stock-api';
+import { fetchWarehouseStockLotsPageApi } from '../../api/warehouse-stock-api';
+import { fetchAllPaginatedItems } from '../../api/fetch-all-paginated';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { formatDate } from '../../helpers';
@@ -43,9 +44,12 @@ export const WarehouseStockBrowsePanel = ({
   const loadLots = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await fetchWarehouseStockLotsApi(warehouseId);
+      const rows = await fetchAllPaginatedItems((params) =>
+        fetchWarehouseStockLotsPageApi(warehouseId, params),
+      );
       setLots(rows);
     } catch (err) {
+      setLots([]);
       toastError(err instanceof ApiError ? err.message : 'Greška pri učitavanju');
     } finally {
       setLoading(false);

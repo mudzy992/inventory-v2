@@ -9,7 +9,8 @@ import { useAdminSettings } from '../contexts/admin-settings-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { isNavPageEnabled } from '../utils/settings-feature.util';
 import { cn } from '../utils/cn';
-import { getCurrentEmployee, isAdmin, isEvidenticar, isSkladistar, getUserRole } from '../store';
+import { isAdmin, isEvidenticar, isSkladistar, getUserRole } from '../store';
+import { useCurrentEmployee } from '../hooks/use-current-employee';
 import { SidebarNavButton } from './sidebar-nav-button';
 import type { PageId } from './page-id';
 
@@ -65,7 +66,7 @@ export const AppSidebarNav = ({
   appSubtitle = 'Upravljanje opremom',
 }: AppSidebarNavProps) => {
   const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(true);
-  const currentEmployee = getCurrentEmployee();
+  const currentEmployee = useCurrentEmployee();
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
   const skladistar = isSkladistar();

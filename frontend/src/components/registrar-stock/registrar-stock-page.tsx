@@ -14,10 +14,10 @@ import {
   type AvailabilityStatus,
 } from '../../hooks/use-equipment-availability';
 import { getStockLotStatusLabel } from '../../helpers/warehouse-stock.util';
-import { employeeMatchesScope } from '../../helpers/registrar-scope';
+import { fetchEmployeesPageApi } from '../../api/employees-api';
+import { fetchAllPaginatedItems } from '../../api/fetch-all-paginated';
 import { useStore, useRefreshData } from '../../useStore';
-import { getCurrentUser } from '../../store';
-import type { Category, WarehouseStockLot, WarehouseStockLotStatus } from '../../types';
+import type { Category, Employee, WarehouseStockLot, WarehouseStockLotStatus } from '../../types';
 import { PageHeaderRow } from '../ui/page-header-row';
 import { Button } from '../ui/button';
 import { cardClass, inputClass, labelClass } from '../ui/form-styles';
@@ -82,8 +82,8 @@ const isValueAvailabilityValid = (value: string, status: AvailabilityStatus): bo
 export const RegistrarStockPage = () => {
   const [state] = useStore();
   const refresh = useRefreshData();
-  const user = getCurrentUser();
   const { toastError, toastSuccess } = useToast();
+  const [scopedEmployees, setScopedEmployees] = useState<Employee[]>([]);
   const isFrozen = useInventoryFreezeActive();
   const [lots, setLots] = useState<WarehouseStockLot[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -107,16 +107,17 @@ export const RegistrarStockPage = () => {
   useEffect(() => {
     void loadLots();
   }, [loadLots]);
+  useEffect(() => {
+    void fetchAllPaginatedItems((params) => fetchEmployeesPageApi(params), 100)
+      .then(setScopedEmployees)
+      .catch(() => setScopedEmployees([]));
+  }, []);
   const category = useMemo(
     () => (detail ? state.categories.find((row) => row.id === detail.categoryId) : undefined),
     [detail, state.categories],
   );
   const lotFields = useMemo(() => buildSpecFields(category, false), [category]);
   const issueFields = useMemo(() => buildSpecFields(category, true), [category]);
-  const scopedEmployees = useMemo(
-    () => state.employees.filter((emp) => employeeMatchesScope(emp, state, user)),
-    [state, user],
-  );
   const employeeSearchOptions = useMemo((): SearchableOption[] => {
     return scopedEmployees.map((employee) => {
       const orgUnit = state.orgUnits.find((unit) => unit.id === employee.orgUnitId);

@@ -1,19 +1,20 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useStore } from '../useStore';
+import { fetchEquipmentApi, fetchEquipmentPageApi, fetchEquipmentSummaryApi } from '../api/equipment-api';
+import { usePaginatedList } from '../hooks/usePaginatedList';
+import { PaginationControls } from './ui/pagination-controls';
 import {
   getParentCategories,
   getSubCategories,
-  getEquipmentStats,
   isAdmin,
   isEvidenticar,
   getCurrentUser,
-  equipmentMatchesScope,
 } from '../store';
 import { ChevronRight, Folder, Layers, Search, Filter, Download, X, Eye, QrCode, Printer } from 'lucide-react';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName } from '../helpers';
 import { EquipmentCard } from './EquipmentCard';
-import type { FilterCondition } from '../types';
+import type { Equipment, FilterCondition } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { ModalRoot } from './ui/modal-root';
 
@@ -25,6 +26,8 @@ export function EquipmentByCategoryPage() {
   const [viewShowQR, setViewShowQR] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showLabels, setShowLabels] = useState(false);
+  const [labelItems, setLabelItems] = useState<Equipment[]>([]);
+  const [loadingLabels, setLoadingLabels] = useState(false);
   
   // Dynamic filters
   const [activeFilters, setActiveFilters] = useState<FilterCondition[]>([]);
@@ -41,46 +44,58 @@ export function EquipmentByCategoryPage() {
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
   const user = getCurrentUser();
-  const useScope = evidenticar && !admin;
+  const [categoryStats, setCategoryStats] = useState<
+    Record<string, { total: number; skladiste: number; zaduzeno: number; rashodovano: number }>
+  >({});
+
+  useEffect(() => {
+    if (!selectedParentId) {
+      return;
+    }
+    const subs = getSubCategories(selectedParentId);
+    void Promise.all(
+      subs.map(async (sub) => {
+        const summary = await fetchEquipmentSummaryApi(sub.id);
+        return [
+          sub.id,
+          {
+            total: summary.total,
+            skladiste: summary.byStatus.skladiste,
+            zaduzeno: summary.byStatus.zaduzeno,
+            rashodovano: summary.byStatus.rashodovano,
+          },
+        ] as const;
+      }),
+    ).then((entries) => setCategoryStats(Object.fromEntries(entries)));
+  }, [selectedParentId]);
 
   const parentCategories = getParentCategories();
   const selectedParent = parentCategories.find(p => p.id === selectedParentId);
   const subCategories = selectedParentId ? getSubCategories(selectedParentId) : [];
   const selectedSub = subCategories.find(s => s.id === selectedSubId);
 
-  // Get equipment for selected category
-  const categoryEquipment = useMemo(() => {
-    if (!selectedSubId) return [];
-    
-    let items = state.equipment.filter(e => e.categoryId === selectedSubId);
-    
-    // Filter by managed org units for evidenticar
-    if (evidenticar && !admin) {
-      items = items.filter((e) => equipmentMatchesScope(e, state, user));
-    }
-    
-    return items;
-  }, [state.equipment, selectedSubId, evidenticar, admin, user, state]);
+  const fetchPage = useCallback(
+    (params: { page?: number; pageSize?: number; search?: string }) =>
+      fetchEquipmentPageApi({ ...params, categoryId: selectedSubId! }),
+    [selectedSubId],
+  );
 
-  // Apply dynamic filters
+  const equipmentList = usePaginatedList({
+    fetchPage,
+    enabled: Boolean(selectedSubId),
+  });
+
+  const categoryEquipment = equipmentList.items;
+
+  useEffect(() => {
+    equipmentList.setSearch(searchQuery);
+  }, [searchQuery]);
+
   const filteredEquipment = useMemo(() => {
     let items = categoryEquipment;
-    
-    // Apply search
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      items = items.filter(e => {
-        const holder = e.currentHolderId ? state.employees.find(emp => emp.id === e.currentHolderId) : null;
-        const searchStr = `${e.inventoryNumber} ${Object.values(e.specifications).join(' ')} ${holder ? `${holder.firstName} ${holder.lastName}` : ''}`.toLowerCase();
-        return searchStr.includes(query);
-      });
-    }
-    
-    // Apply active filters
     for (const filter of activeFilters) {
-      items = items.filter(e => {
+      items = items.filter((e) => {
         let value: string;
-        
         if (filter.fieldId === 'status') {
           value = e.status;
         } else if (filter.fieldId === 'inventoryNumber') {
@@ -88,30 +103,35 @@ export function EquipmentByCategoryPage() {
         } else if (filter.fieldId === 'contractNumber') {
           value = e.contractNumber || '';
         } else if (filter.fieldId === 'currentHolder') {
-          const holder = e.currentHolderId ? state.employees.find(emp => emp.id === e.currentHolderId) : null;
+          const holder = e.currentHolder;
           value = holder ? `${holder.firstName} ${holder.lastName}` : '';
         } else {
           value = e.specifications[filter.fieldId] || '';
         }
-        
         const filterVal = filter.value.toLowerCase();
         const itemVal = value.toLowerCase();
-        
         switch (filter.operator) {
-          case 'equals': return itemVal === filterVal;
-          case 'contains': return itemVal.includes(filterVal);
-          case 'startsWith': return itemVal.startsWith(filterVal);
-          case 'gt': return parseFloat(value) > parseFloat(filter.value);
-          case 'lt': return parseFloat(value) < parseFloat(filter.value);
-          case 'gte': return parseFloat(value) >= parseFloat(filter.value);
-          case 'lte': return parseFloat(value) <= parseFloat(filter.value);
-          default: return true;
+          case 'equals':
+            return itemVal === filterVal;
+          case 'contains':
+            return itemVal.includes(filterVal);
+          case 'startsWith':
+            return itemVal.startsWith(filterVal);
+          case 'gt':
+            return parseFloat(value) > parseFloat(filter.value);
+          case 'lt':
+            return parseFloat(value) < parseFloat(filter.value);
+          case 'gte':
+            return parseFloat(value) >= parseFloat(filter.value);
+          case 'lte':
+            return parseFloat(value) <= parseFloat(filter.value);
+          default:
+            return true;
         }
       });
     }
-    
     return items;
-  }, [categoryEquipment, searchQuery, activeFilters, state.employees]);
+  }, [categoryEquipment, activeFilters]);
 
   // Get available fields for filtering
   const availableFilterFields = useMemo(() => {
@@ -160,8 +180,6 @@ export function EquipmentByCategoryPage() {
 
   function saveFilter() {
     if (!filterName.trim()) return;
-    
-    const user = state.users.find(u => u.id === state.currentUserId);
     if (!user) return;
     
     const savedFilter = {
@@ -181,6 +199,28 @@ export function EquipmentByCategoryPage() {
     setShowSaveFilter(false);
   }
 
+  async function openLabelPrint() {
+    if (selectedIds.size === 0) {
+      return;
+    }
+    setLoadingLabels(true);
+    try {
+      const fromPage = categoryEquipment.filter((eq) => selectedIds.has(eq.id));
+      const loadedIds = new Set(fromPage.map((eq) => eq.id));
+      const missing = [...selectedIds].filter((id) => !loadedIds.has(id));
+      const fetched = await Promise.all(
+        missing.map((id) => fetchEquipmentApi(id).catch(() => null)),
+      );
+      setLabelItems([
+        ...fromPage,
+        ...fetched.filter((eq): eq is Equipment => eq !== null),
+      ]);
+      setShowLabels(true);
+    } finally {
+      setLoadingLabels(false);
+    }
+  }
+
   function exportToCSV() {
     if (!selectedSub || filteredEquipment.length === 0) return;
     
@@ -189,7 +229,7 @@ export function EquipmentByCategoryPage() {
     selectedSub.optionalFields.forEach(f => headers.push(f.name));
     
     const rows = filteredEquipment.map(e => {
-      const holder = e.currentHolderId ? state.employees.find(emp => emp.id === e.currentHolderId) : null;
+      const holder = e.currentHolder ?? null;
       const row = [
         e.inventoryNumber,
         getStatusLabel(e.status),
@@ -211,7 +251,7 @@ export function EquipmentByCategoryPage() {
   }
 
   // Stats for selected category
-  const stats = selectedSubId ? getEquipmentStats(selectedSubId, useScope) : null;
+  const stats = selectedSubId ? categoryStats[selectedSubId] ?? null : null;
 
   useEffect(() => {
     setViewItemId(null);
@@ -269,7 +309,21 @@ export function EquipmentByCategoryPage() {
             // Show parent categories
             parentCategories.map(parent => {
               const subs = getSubCategories(parent.id);
-              const parentStats = getEquipmentStats(parent.id, useScope);
+              const parentStats = subCategories.reduce(
+                (acc, sub) => {
+                  const row = categoryStats[sub.id];
+                  if (!row) {
+                    return acc;
+                  }
+                  return {
+                    total: acc.total + row.total,
+                    zaduzeno: acc.zaduzeno + row.zaduzeno,
+                    skladiste: acc.skladiste + row.skladiste,
+                    rashodovano: acc.rashodovano + row.rashodovano,
+                  };
+                },
+                { total: 0, zaduzeno: 0, skladiste: 0, rashodovano: 0 },
+              );
               return (
                 <button
                   key={parent.id}
@@ -296,7 +350,12 @@ export function EquipmentByCategoryPage() {
           ) : (
             // Show sub-categories
             subCategories.map(sub => {
-              const subStats = getEquipmentStats(sub.id, useScope);
+              const subStats = categoryStats[sub.id] ?? {
+                total: 0,
+                zaduzeno: 0,
+                skladiste: 0,
+                rashodovano: 0,
+              };
               return (
                 <button
                   key={sub.id}
@@ -314,9 +373,9 @@ export function EquipmentByCategoryPage() {
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{subStats.total} ukupno</span>
                         <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded">{subStats.zaduzeno} zaduž.</span>
                         <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded">{subStats.skladiste} sklad.</span>
-                        {subStats.rawTransfers > 0 && (
-                          <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded">{subStats.rawTransfers} na potpisu</span>
-                        )}
+                        {subStats.rashodovano > 0 ? (
+                          <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded">{subStats.rashodovano} rashod</span>
+                        ) : null}
                       </div>
                     </div>
                     <ChevronRight size={20} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
@@ -338,7 +397,6 @@ export function EquipmentByCategoryPage() {
               <span className="bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg text-xs text-green-700">Zaduženo: <strong>{stats.zaduzeno}</strong></span>
               <span className="bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs text-blue-700">Skladište: <strong>{stats.skladiste}</strong></span>
               <span className="bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-xs text-red-700">Rashod: <strong>{stats.rashodovano}</strong></span>
-              <span className="bg-yellow-50 border border-yellow-200 px-3 py-1.5 rounded-lg text-xs text-yellow-700">Na potpisu: <strong>{stats.rawTransfers}</strong></span>
             </div>
           )}
 
@@ -409,14 +467,15 @@ export function EquipmentByCategoryPage() {
 
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-gray-500">
-              Prikazano: {filteredEquipment.length}{' '}
-              {filteredEquipment.length !== categoryEquipment.length && `od ${categoryEquipment.length}`} stavki
+              Prikazano: {filteredEquipment.length}
+              {equipmentList.meta ? ` od ${equipmentList.meta.total}` : ''} stavki
             </p>
             {selectedIds.size > 0 && (
               <button
                 type="button"
-                onClick={() => setShowLabels(true)}
-                className="flex items-center gap-1 text-xs border px-2 py-1 rounded-lg hover:bg-gray-50"
+                onClick={() => void openLabelPrint()}
+                disabled={loadingLabels || selectedIds.size === 0}
+                className="flex items-center gap-1 text-xs border px-2 py-1 rounded-lg hover:bg-gray-50 disabled:opacity-50"
               >
                 <Printer size={12} /> Štampaj ({selectedIds.size})
               </button>
@@ -457,7 +516,7 @@ export function EquipmentByCategoryPage() {
                 </thead>
                 <tbody>
                   {filteredEquipment.map(eq => {
-                    const holder = eq.currentHolderId ? state.employees.find(e => e.id === eq.currentHolderId) : null;
+                    const holder = eq.currentHolder ?? null;
                     return (
                       <tr key={eq.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3">
@@ -527,6 +586,16 @@ export function EquipmentByCategoryPage() {
                 </tbody>
               </table>
             </div>
+            {equipmentList.meta ? (
+              <PaginationControls
+                page={equipmentList.meta.page}
+                pageSize={equipmentList.meta.pageSize}
+                total={equipmentList.meta.total}
+                totalPages={equipmentList.meta.totalPages}
+                onPageChange={equipmentList.setPage}
+                onPageSizeChange={equipmentList.setPageSize}
+              />
+            ) : null}
           </div>
         </>
       )}
@@ -613,13 +682,16 @@ export function EquipmentByCategoryPage() {
       </ModalRoot>
 
       {/* Equipment Card Modal */}
-      {showLabels && (
+      {showLabels && labelItems.length > 0 ? (
         <LabelPrintSheet
-          items={state.equipment.filter((eq) => selectedIds.has(eq.id))}
+          items={labelItems}
           categories={state.categories}
-          onClose={() => setShowLabels(false)}
+          onClose={() => {
+            setShowLabels(false);
+            setLabelItems([]);
+          }}
         />
-      )}
+      ) : null}
 
       {viewItemId && (
         <EquipmentCard
