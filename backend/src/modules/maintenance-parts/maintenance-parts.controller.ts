@@ -75,7 +75,7 @@ export class MaintenancePartsController {
   }
 
   @Get('equipment/:equipmentId/parts')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
   listInstalledParts(
     @CurrentUser() user: AuthenticatedUser,
     @Param('equipmentId') equipmentId: string,

@@ -26,12 +26,14 @@ export interface InventoryCommitteeMemberDto {
 export interface InventoryCommitteeDto {
   id: string;
   sessionId: string;
+  warehouseId?: string | null;
   categoryId: string;
   name?: string | null;
   disposalCommissionId?: string | null;
   isClosed?: boolean;
   closedAt?: string | null;
   closedByUserId?: string | null;
+  warehouse?: { id: string; name: string };
   category?: { id: string; name: string };
   session?: {
     id: string;
@@ -126,9 +128,49 @@ export interface InventoryPrintScopeDto {
 export const fetchInventoryCommitteesApi = (sessionId: string) =>
   apiRequest<InventoryCommitteeDto[]>(`/inventory-sessions/${sessionId}/committees`);
 
+export interface InventorySessionWarehouseDto {
+  id: string;
+  name: string;
+}
+
+export interface CommitteeSetupOptionsDto {
+  warehouse: { id: string; name: string };
+  categories: {
+    id: string;
+    name: string;
+    equipmentCount: number;
+    alreadyAssigned: boolean;
+  }[];
+  eligibleEmployees: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    title: string;
+    hasUserAccount: boolean;
+  }[];
+}
+
+export const fetchSessionWarehousesApi = (sessionId: string) =>
+  apiRequest<InventorySessionWarehouseDto[]>(`/inventory-sessions/${sessionId}/session-warehouses`);
+
+export const fetchCommitteeSetupOptionsApi = (
+  sessionId: string,
+  warehouseId: string,
+  excludeCommitteeId?: string,
+) => {
+  const params = new URLSearchParams({ warehouseId });
+  if (excludeCommitteeId) {
+    params.set('excludeCommitteeId', excludeCommitteeId);
+  }
+  return apiRequest<CommitteeSetupOptionsDto>(
+    `/inventory-sessions/${sessionId}/committees/setup-options?${params.toString()}`,
+  );
+};
+
 export const createInventoryCommitteeApi = (
   sessionId: string,
   body: {
+    warehouseId: string;
     categoryId: string;
     name?: string;
     inventoryMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
@@ -196,6 +238,27 @@ export const fetchInventoryCommitteeReportApi = (committeeId: string) =>
 
 export const closeInventorySessionApi = (id: string) =>
   apiRequest<InventorySessionCloseJobDto>(`/inventory-sessions/${id}/close`, { method: 'PATCH' });
+
+export const deleteInventorySessionApi = (id: string) =>
+  apiRequest<{ ok: boolean }>(`/inventory-sessions/${id}`, { method: 'DELETE' });
+
+export const updateInventoryCommitteeApi = (
+  committeeId: string,
+  body: {
+    warehouseId: string;
+    categoryId: string;
+    name?: string;
+    inventoryMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
+    disposalMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
+  },
+) =>
+  apiRequest<InventoryCommitteeDto>(`/inventory-sessions/committees/${committeeId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+
+export const deleteInventoryCommitteeApi = (committeeId: string) =>
+  apiRequest<{ ok: boolean }>(`/inventory-sessions/committees/${committeeId}`, { method: 'DELETE' });
 
 export const fetchInventorySessionCloseJobApi = (id: string) =>
   apiRequest<InventorySessionCloseJobDto | null>(`/inventory-sessions/${id}/close-job`);

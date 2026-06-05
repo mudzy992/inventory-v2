@@ -93,6 +93,7 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
   const companyLine = buildCompanyAddressLine(company);
   const { committee, equipment } = scope;
   const categoryLabels = committee.category?.name ?? '';
+  const warehouseLabel = committee.warehouse?.name ?? '';
   const year = committee.session?.year ?? new Date().getFullYear();
   const cityLabel =
     committee.session?.orgUnit?.effectiveLocationCity?.name ??
@@ -167,10 +168,11 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
                     {companyLine ? <p className="text-xs text-gray-500">{companyLine}</p> : null}
                   </div>
                 ) : null}
-                <h1 className="text-lg font-bold">{committee.name}</h1>
+                <h1 className="text-lg font-bold">{committee.name ?? `Popis — ${warehouseLabel || categoryLabels}`}</h1>
                 <p className="text-gray-600 mt-1">
                   Grad: {cityLabel} · Godina: {year}
                 </p>
+                {warehouseLabel ? <p className="text-gray-600">Skladište: {warehouseLabel}</p> : null}
                 <p className="text-gray-600">Popisuje se: {categoryLabels || '—'}</p>
               </header>
               {page.blocks.map((block, blockIndex) => (

@@ -77,7 +77,7 @@ export const EquipmentInstalledPartsPanel = ({
     void loadParts();
   }, [loadParts]);
   useEffect(() => {
-    if (!maintenanceEnabled) {
+    if (!maintenanceEnabled || !canManage) {
       setHostCategoryId(null);
       setLinkedCategories([]);
       return;
@@ -101,7 +101,7 @@ export const EquipmentInstalledPartsPanel = ({
       }
     };
     void loadCatalog();
-  }, [categories, equipmentCategoryId, maintenanceEnabled, toastError]);
+  }, [canManage, categories, equipmentCategoryId, maintenanceEnabled, toastError]);
   useEffect(() => {
     if (!installCategoryId || !canManage) {
       setAvailableLots([]);
@@ -254,7 +254,10 @@ export const EquipmentInstalledPartsPanel = ({
   if (!maintenanceEnabled) {
     return null;
   }
-  if (!hostCategoryId || linkedCategories.length === 0) {
+  if (!canManage && !loading && parts.length === 0) {
+    return null;
+  }
+  if (canManage && (!hostCategoryId || linkedCategories.length === 0) && !loading && parts.length === 0) {
     return null;
   }
   return (

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -135,6 +136,47 @@ export class EquipmentService {
       throw new ForbiddenException('Only admin can delete equipment');
     }
     await this.prisma.equipment.delete({ where: { id } });
+  }
+
+  async checkInventoryNumberAvailable(value: string): Promise<{ available: boolean }> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return { available: false };
+    }
+    const existing = await this.prisma.equipment.findUnique({
+      where: { inventoryNumber: trimmed },
+      select: { id: true },
+    });
+    return { available: !existing };
+  }
+
+  async checkUniqueSpecificationValue(
+    categoryId: string,
+    fieldId: string,
+    value: string,
+  ): Promise<{ available: boolean }> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return { available: false };
+    }
+    const category = await this.categoriesService.assertLeafCategory(categoryId);
+    const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
+    const uniqueFields = [...fields, ...optionalFields].filter((field) => field.unique);
+    const field = uniqueFields.find((row) => row.id === fieldId);
+    if (!field) {
+      throw new BadRequestException('Invalid unique specification field');
+    }
+    const rows = await this.prisma.equipment.findMany({
+      where: { categoryId },
+      select: { specifications: true },
+    });
+    const taken = rows.some((row) => {
+      const specifications = row.specifications as Record<string, string>;
+      return specifications[fieldId]?.trim() === trimmed;
+    });
+    return { available: !taken };
   }
 
   async getQrPayload(user: AuthenticatedUser, id: string): Promise<{

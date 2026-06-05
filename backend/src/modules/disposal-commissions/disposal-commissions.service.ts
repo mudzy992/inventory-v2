@@ -6,9 +6,15 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
+import { OrgScopeService } from '../../common/services/org-scope.service';
+import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import type { DisposalCommissionMember, InventoryCommittee } from '../../../generated/prisma/client';
+import {
+  evaluateEquipmentInCommitteeScope,
+  type WarehouseScopeEquipment,
+} from '../inventory-count/utils/resolve-warehouse-committee-scope.util';
 
 interface MemberInput {
   employeeId: string;
@@ -20,6 +26,8 @@ export class DisposalCommissionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly locationResolutionService: LocationResolutionService,
+    private readonly registrarScope: RegistrarScopeService,
+    private readonly orgScopeService: OrgScopeService,
     private readonly settingsService: SettingsService,
   ) {}
 
@@ -279,14 +287,14 @@ export class DisposalCommissionsService {
   }
 
   private async isEquipmentInCommitteeScope(
-    committee: Pick<InventoryCommittee, 'id' | 'categoryId' | 'sessionId'>,
+    committee: Pick<InventoryCommittee, 'id' | 'categoryId' | 'warehouseId' | 'sessionId'>,
     equipmentId: string,
   ): Promise<boolean> {
     const equipment = await this.prisma.equipment.findUnique({
       where: { id: equipmentId },
-      include: { currentHolder: true, warehouse: true },
+      include: { currentHolder: true, warehouse: true, category: true },
     });
-    if (!equipment || equipment.status === 'rashodovano') {
+    if (!equipment) {
       return false;
     }
     const session = await this.prisma.inventorySession.findUnique({
@@ -296,30 +304,61 @@ export class DisposalCommissionsService {
     if (!session) {
       return false;
     }
-    const categoryRows = await this.prisma.category.findMany({ select: { id: true, parentId: true } });
-    const childrenByParent = new Map<string | null, string[]>();
-    for (const row of categoryRows) {
-      const siblings = childrenByParent.get(row.parentId) ?? [];
-      siblings.push(row.id);
-      childrenByParent.set(row.parentId, siblings);
+    if (!committee.warehouseId) {
+      return this.isEquipmentInLegacyCommitteeScope(committee.categoryId, session.orgUnitId, equipment);
     }
-    const expanded = new Set<string>();
-    const visit = (categoryId: string): void => {
-      if (expanded.has(categoryId)) {
-        return;
-      }
-      expanded.add(categoryId);
-      for (const childId of childrenByParent.get(categoryId) ?? []) {
-        visit(childId);
-      }
-    };
-    visit(committee.categoryId);
+    return evaluateEquipmentInCommitteeScope(
+      {
+        expandCategoryIds: (categoryIds) => this.registrarScope.expandCategoryIds(categoryIds),
+        resolveEquipmentCityId: (row) => this.resolveCityIdForEquipment(row),
+        getEffectiveLocationForOrgUnit: (orgUnitId) =>
+          this.locationResolutionService.getEffectiveLocationForOrgUnit(orgUnitId),
+        getWarehouseCityId: async (warehouseId) => {
+          const row = await this.prisma.warehouse.findUnique({
+            where: { id: warehouseId },
+            select: { cityId: true },
+          });
+          return row?.cityId ?? null;
+        },
+        expandOrgUnitIds: (rootIds) => this.orgScopeService.expandOrgUnitIds(rootIds),
+        getWarehouseOrgUnitId: async (warehouseId) => {
+          const row = await this.prisma.warehouse.findUnique({
+            where: { id: warehouseId },
+            select: { orgUnitId: true },
+          });
+          return row?.orgUnitId ?? null;
+        },
+      },
+      {
+        categoryId: committee.categoryId,
+        warehouseId: committee.warehouseId,
+        sessionOrgUnitId: session.orgUnitId,
+      },
+      equipment as WarehouseScopeEquipment,
+    );
+  }
+
+  private async isEquipmentInLegacyCommitteeScope(
+    categoryId: string,
+    sessionOrgUnitId: string,
+    equipment: {
+      categoryId: string;
+      status: string;
+      currentHolder: { orgUnitId: string } | null;
+      warehouse?: { cityId: string } | null;
+      warehouseId?: string | null;
+    },
+  ): Promise<boolean> {
+    if (equipment.status === 'rashodovano') {
+      return false;
+    }
+    const expanded = await this.registrarScope.expandCategoryIds([categoryId]);
     if (!expanded.has(equipment.categoryId)) {
       return false;
     }
     const cityId = await this.resolveCityIdForEquipment(equipment);
     const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
-      session.orgUnitId,
+      sessionOrgUnitId,
     );
     return Boolean(cityId && sessionCityId && cityId === sessionCityId);
   }

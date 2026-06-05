@@ -1,22 +1,40 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { createInventoryCommitteeApi } from '../../api/inventory-api';
+import {
+  createInventoryCommitteeApi,
+  fetchCommitteeSetupOptionsApi,
+  fetchSessionWarehousesApi,
+  updateInventoryCommitteeApi,
+  type CommitteeSetupOptionsDto,
+  type InventoryCommitteeDto,
+  type InventorySessionWarehouseDto,
+} from '../../api/inventory-api';
 import { ApiError } from '../../api/client';
-import { getParentCategories } from '../../store';
-import type { AppState } from '../../types';
 import { AlertBanner } from '../ui/alert-banner';
 import { Button } from '../ui/button';
 import { FormCard } from '../ui/form-card';
 import { inputClass, labelClass, selectClass } from '../ui/form-styles';
 
 interface InventoryCommitteeWizardProps {
-  state: AppState;
   sessionId: string;
+  editCommittee?: InventoryCommitteeDto | null;
   onCreated: (committeeId: string) => void;
+  onUpdated?: (committeeId: string) => void;
+  onCancelEdit?: () => void;
 }
 
-export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: InventoryCommitteeWizardProps) => {
+export const InventoryCommitteeWizard = ({
+  sessionId,
+  editCommittee,
+  onCreated,
+  onUpdated,
+  onCancelEdit,
+}: InventoryCommitteeWizardProps) => {
+  const isEdit = Boolean(editCommittee);
   const [step, setStep] = useState(1);
+  const [warehouses, setWarehouses] = useState<InventorySessionWarehouseDto[]>([]);
+  const [setupOptions, setSetupOptions] = useState<CommitteeSetupOptionsDto | null>(null);
+  const [warehouseId, setWarehouseId] = useState('');
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [inventoryPresidentId, setInventoryPresidentId] = useState('');
@@ -24,15 +42,125 @@ export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: Invent
   const [disposalPresidentId, setDisposalPresidentId] = useState('');
   const [disposalMemberIds, setDisposalMemberIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const parentCategories = getParentCategories();
-  const employeesWithUser = useMemo(() => {
-    const linked = new Set(
-      state.users.filter((user) => user.isActive && user.employeeId).map((user) => user.employeeId!),
+  const eligibleEmployees = setupOptions?.eligibleEmployees ?? [];
+  const employeesWithUser = useMemo(
+    () => eligibleEmployees.filter((employee) => employee.hasUserAccount),
+    [eligibleEmployees],
+  );
+  const availableCategories = useMemo(
+    () =>
+      (setupOptions?.categories ?? []).filter(
+        (row) => !row.alreadyAssigned || row.id === editCommittee?.categoryId,
+      ),
+    [editCommittee?.categoryId, setupOptions],
+  );
+  const selectedWarehouse = warehouses.find((row) => row.id === warehouseId) ?? setupOptions?.warehouse ?? null;
+  const selectedCategory = setupOptions?.categories.find((row) => row.id === categoryId) ?? null;
+
+  useEffect(() => {
+    if (!editCommittee) {
+      return;
+    }
+    setWarehouseId(editCommittee.warehouseId ?? '');
+    setCategoryId(editCommittee.categoryId);
+    setName(editCommittee.name ?? '');
+    const inventoryPresident = editCommittee.members.find((row) => row.role === 'predsjednik');
+    const inventoryClerks = editCommittee.members.filter((row) => row.role === 'clan');
+    setInventoryPresidentId(inventoryPresident?.employeeId ?? '');
+    setInventoryMemberIds(inventoryClerks.map((row) => row.employeeId));
+    const disposalPresident = editCommittee.disposalCommission?.members.find(
+      (row) => row.role === 'predsjednik',
     );
-    return state.employees.filter((employee) => linked.has(employee.id));
-  }, [state.users, state.employees]);
-  const allEmployees = state.employees;
+    const disposalClerks = editCommittee.disposalCommission?.members.filter((row) => row.role === 'clan') ?? [];
+    setDisposalPresidentId(disposalPresident?.employeeId ?? '');
+    setDisposalMemberIds(disposalClerks.map((row) => row.employeeId));
+    setStep(1);
+    setError(null);
+  }, [editCommittee]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      try {
+        const rows = await fetchSessionWarehousesApi(sessionId);
+        if (!cancelled) {
+          setWarehouses(rows);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof ApiError ? err.message : 'Greška pri učitavanju skladišta');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!warehouseId) {
+      setSetupOptions(null);
+      if (!isEdit) {
+        setCategoryId('');
+      }
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      try {
+        const options = await fetchCommitteeSetupOptionsApi(
+          sessionId,
+          warehouseId,
+          editCommittee?.id,
+        );
+        if (!cancelled) {
+          setSetupOptions(options);
+          if (!isEdit) {
+            setCategoryId('');
+            setInventoryPresidentId('');
+            setInventoryMemberIds([]);
+            setDisposalPresidentId('');
+            setDisposalMemberIds([]);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof ApiError ? err.message : 'Greška pri učitavanju opcija');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editCommittee?.id, isEdit, sessionId, warehouseId]);
+
+  const resetWizard = (keepWarehouse = false) => {
+    setStep(1);
+    if (!keepWarehouse) {
+      setWarehouseId('');
+      setSetupOptions(null);
+    }
+    setName('');
+    setCategoryId('');
+    setInventoryPresidentId('');
+    setInventoryMemberIds([]);
+    setDisposalPresidentId('');
+    setDisposalMemberIds([]);
+    setError(null);
+  };
+
   const handleToggleInventoryMember = (employeeId: string) => {
     if (employeeId === inventoryPresidentId) {
       return;
@@ -41,6 +169,7 @@ export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: Invent
       prev.includes(employeeId) ? prev.filter((id) => id !== employeeId) : [...prev, employeeId],
     );
   };
+
   const handleToggleDisposalMember = (employeeId: string) => {
     if (employeeId === disposalPresidentId) {
       return;
@@ -49,61 +178,115 @@ export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: Invent
       prev.includes(employeeId) ? prev.filter((id) => id !== employeeId) : [...prev, employeeId],
     );
   };
+
   const canNext = (): boolean => {
     if (step === 1) {
-      return Boolean(categoryId);
+      return Boolean(warehouseId);
     }
     if (step === 2) {
-      return Boolean(inventoryPresidentId) && inventoryMemberIds.length >= 2;
+      return Boolean(categoryId);
     }
     if (step === 3) {
+      return Boolean(inventoryPresidentId) && inventoryMemberIds.length >= 2;
+    }
+    if (step === 4) {
       return Boolean(disposalPresidentId) && disposalMemberIds.length >= 2;
     }
     return true;
   };
-  const handleCreate = async () => {
+
+  const buildPayload = () => {
+    const inventoryMembers = [
+      { employeeId: inventoryPresidentId, role: 'predsjednik' as const },
+      ...inventoryMemberIds.map((employeeId) => ({ employeeId, role: 'clan' as const })),
+    ];
+    const disposalMembers = [
+      { employeeId: disposalPresidentId, role: 'predsjednik' as const },
+      ...disposalMemberIds.map((employeeId) => ({ employeeId, role: 'clan' as const })),
+    ];
+    return {
+      warehouseId,
+      categoryId,
+      name: name.trim() || undefined,
+      inventoryMembers,
+      disposalMembers,
+    };
+  };
+
+  const handleSave = async () => {
+    if (!warehouseId || !categoryId) {
+      return;
+    }
     setError(null);
     setSaving(true);
     try {
-      const inventoryMembers = [
-        { employeeId: inventoryPresidentId, role: 'predsjednik' as const },
-        ...inventoryMemberIds.map((employeeId) => ({ employeeId, role: 'clan' as const })),
-      ];
-      const disposalMembers = [
-        { employeeId: disposalPresidentId, role: 'predsjednik' as const },
-        ...disposalMemberIds.map((employeeId) => ({ employeeId, role: 'clan' as const })),
-      ];
-      const created = await createInventoryCommitteeApi(sessionId, {
-        categoryId,
-        name: name.trim() || undefined,
-        inventoryMembers,
-        disposalMembers,
-      });
-      onCreated(created.id);
+      const payload = buildPayload();
+      if (isEdit && editCommittee) {
+        const updated = await updateInventoryCommitteeApi(editCommittee.id, payload);
+        onUpdated?.(updated.id);
+        onCancelEdit?.();
+      } else {
+        const created = await createInventoryCommitteeApi(sessionId, payload);
+        onCreated(created.id);
+        resetWizard(true);
+        setStep(2);
+      }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Greška pri kreiranju');
+      setError(err instanceof ApiError ? err.message : 'Greška pri snimanju');
     } finally {
       setSaving(false);
     }
   };
+
   return (
-    <FormCard title="Dodaj komisiju u sesiju popisa">
+    <FormCard title={isEdit ? 'Uredi popisnu komisiju' : 'Dodaj popisnu komisiju'}>
       <p className="text-xs text-gray-500 mb-4">
-        Korak {step} / 4 — popisna komisija (unos) i komisija rashoda (glasanje) su odvojene.
+        Korak {step} / 5 — komisija je vezana za skladište i jednu kategoriju opreme.
       </p>
+      {loading ? <p className="text-xs text-gray-500 mb-3">Učitavam…</p> : null}
       {step === 1 ? (
         <div className="space-y-3">
           <div>
-            <label className={labelClass}>Kategorija (jedna)</label>
+            <label className={labelClass}>Skladište</label>
+            <select
+              value={warehouseId}
+              onChange={(event) => setWarehouseId(event.target.value)}
+              className={selectClass}
+              disabled={loading}
+            >
+              <option value="">— Odaberite —</option>
+              {warehouses.map((warehouse) => (
+                <option key={warehouse.id} value={warehouse.id}>
+                  {warehouse.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {!loading && warehouses.length === 0 ? (
+            <AlertBanner tone="warning">
+              Nema aktivnih skladišta u opsegu distribucije. Provjerite da su skladišta vezana za
+              org-jedinice pod distribucijom sesije.
+            </AlertBanner>
+          ) : null}
+          <AlertBanner tone="info">
+            Za svaku kategoriju opreme na skladištu kreirajte zasebnu popisnu komisiju.
+          </AlertBanner>
+        </div>
+      ) : null}
+      {step === 2 ? (
+        <div className="space-y-3">
+          <div>
+            <label className={labelClass}>Kategorija opreme</label>
             <select
               value={categoryId}
               onChange={(event) => setCategoryId(event.target.value)}
               className={selectClass}
             >
               <option value="">— Odaberite —</option>
-              {parentCategories.map((category) => (
+              {availableCategories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
+                  {category.equipmentCount > 0 ? ` (${category.equipmentCount} komada)` : ''}
                 </option>
               ))}
             </select>
@@ -113,16 +296,27 @@ export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: Invent
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="npr. Komisija — Računarska oprema"
+              placeholder={
+                selectedWarehouse && selectedCategory
+                  ? `${selectedWarehouse.name} — ${selectedCategory.name}`
+                  : 'npr. Skladište — Računarska oprema'
+              }
               className={inputClass}
             />
           </div>
-          <AlertBanner tone="info">
-            Predsjednik mora imati korisnički račun; članovi mogu biti samo zaposlenici (bez računa).
-          </AlertBanner>
+          {availableCategories.length === 0 ? (
+            <AlertBanner tone="info">
+              Nema dostupnih kategorija za ovo skladište ili su sve već dodijeljene.
+            </AlertBanner>
+          ) : availableCategories.every((row) => row.equipmentCount === 0) ? (
+            <AlertBanner tone="warning">
+              Nema evidentirane opreme u opsegu skladišta — možete ipak kreirati komisiju; popisna
+              lista će biti prazna dok se oprema ne doda.
+            </AlertBanner>
+          ) : null}
         </div>
       ) : null}
-      {step === 2 ? (
+      {step === 3 ? (
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Popisna komisija — predsjednik</label>
@@ -142,7 +336,7 @@ export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: Invent
           <div>
             <label className={labelClass}>Popisna komisija — članovi (min. 2)</label>
             <div className="border border-gray-200 rounded-lg divide-y max-h-48 overflow-y-auto">
-              {allEmployees
+              {eligibleEmployees
                 .filter((employee) => employee.id !== inventoryPresidentId)
                 .map((employee) => (
                   <label
@@ -161,7 +355,7 @@ export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: Invent
           </div>
         </div>
       ) : null}
-      {step === 3 ? (
+      {step === 4 ? (
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Komisija rashoda — predsjednik</label>
@@ -181,7 +375,7 @@ export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: Invent
           <div>
             <label className={labelClass}>Komisija rashoda — članovi (min. 2)</label>
             <div className="border border-gray-200 rounded-lg divide-y max-h-48 overflow-y-auto">
-              {allEmployees
+              {eligibleEmployees
                 .filter((employee) => employee.id !== disposalPresidentId)
                 .map((employee) => (
                   <label
@@ -200,11 +394,13 @@ export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: Invent
           </div>
         </div>
       ) : null}
-      {step === 4 ? (
+      {step === 5 ? (
         <div className="text-sm text-gray-700 space-y-2">
           <p>
-            <strong>Kategorija:</strong>{' '}
-            {parentCategories.find((row) => row.id === categoryId)?.name ?? '—'}
+            <strong>Skladište:</strong> {selectedWarehouse?.name ?? '—'}
+          </p>
+          <p>
+            <strong>Kategorija:</strong> {selectedCategory?.name ?? '—'}
           </p>
           <p>
             <strong>Naziv:</strong> {name.trim() || '—'}
@@ -215,29 +411,33 @@ export const InventoryCommitteeWizard = ({ state, sessionId, onCreated }: Invent
           <p>
             <strong>Rashod:</strong> 1 predsjednik + {disposalMemberIds.length} člana
           </p>
-          <AlertBanner tone="info">
-            Nakon kreiranja, unos linija popisa je moguć samo članovima popisne komisije (administrator ne unosi).
-          </AlertBanner>
         </div>
       ) : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-red-600 mt-2">{error}</p> : null}
       <div className="flex justify-between gap-2 pt-2">
-        <Button
-          variant="secondary"
-          onClick={() => setStep((value) => Math.max(1, value - 1))}
-          disabled={step === 1 || saving}
-        >
-          <ChevronLeft size={14} />
-          Nazad
-        </Button>
-        {step < 4 ? (
-          <Button onClick={() => setStep((value) => value + 1)} disabled={!canNext()}>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setStep((value) => Math.max(1, value - 1))}
+            disabled={step === 1 || saving}
+          >
+            <ChevronLeft size={14} />
+            Nazad
+          </Button>
+          {isEdit && onCancelEdit ? (
+            <Button variant="secondary" onClick={onCancelEdit} disabled={saving}>
+              Odustani
+            </Button>
+          ) : null}
+        </div>
+        {step < 5 ? (
+          <Button onClick={() => setStep((value) => value + 1)} disabled={!canNext() || loading}>
             Dalje
             <ChevronRight size={14} />
           </Button>
         ) : (
-          <Button onClick={() => void handleCreate()} disabled={saving || !canNext()}>
-            {saving ? 'Kreiranje...' : 'Kreiraj popis'}
+          <Button onClick={() => void handleSave()} disabled={saving || !canNext()}>
+            {saving ? 'Snimanje...' : isEdit ? 'Sačuvaj izmjene' : 'Kreiraj komisiju'}
           </Button>
         )}
       </div>

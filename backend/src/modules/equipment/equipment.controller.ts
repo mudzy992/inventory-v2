@@ -15,6 +15,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { CheckInventoryNumberQueryDto } from './dto/check-inventory-number-query.dto';
+import { CheckSpecificationValueQueryDto } from './dto/check-specification-value-query.dto';
 import { CreateEquipmentDto } from './dto/create-equipment.dto';
 import { ListEquipmentQueryDto } from './dto/list-equipment-query.dto';
 import { UpdateEquipmentDto } from './dto/update-equipment.dto';
@@ -29,6 +31,22 @@ export class EquipmentController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListEquipmentQueryDto) {
     return this.equipmentService.findAll(user, query);
+  }
+
+  @Get('check/inventory-number')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  checkInventoryNumber(@Query() query: CheckInventoryNumberQueryDto) {
+    return this.equipmentService.checkInventoryNumberAvailable(query.value);
+  }
+
+  @Get('check/specification-value')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  checkSpecificationValue(@Query() query: CheckSpecificationValueQueryDto) {
+    return this.equipmentService.checkUniqueSpecificationValue(
+      query.categoryId,
+      query.fieldId,
+      query.value,
+    );
   }
 
   @Get(':id/qr')

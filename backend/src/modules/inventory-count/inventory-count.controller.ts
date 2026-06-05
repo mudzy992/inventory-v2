@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { UserRole } from '../../../generated/prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -40,6 +40,26 @@ export class InventoryCountController {
     return this.inventoryCountService.getFreezeBannerForUser(user);
   }
 
+  @Get(':id/committees/setup-options')
+  @Roles(UserRole.admin)
+  getCommitteeSetupOptions(
+    @Param('id') sessionId: string,
+    @Query('warehouseId') warehouseId: string,
+    @Query('excludeCommitteeId') excludeCommitteeId?: string,
+  ) {
+    return this.inventoryCountService.getCommitteeSetupOptions(
+      sessionId,
+      warehouseId,
+      excludeCommitteeId,
+    );
+  }
+
+  @Get(':id/session-warehouses')
+  @Roles(UserRole.admin)
+  getSessionWarehouses(@Param('id') sessionId: string) {
+    return this.inventoryCountService.getSessionWarehouses(sessionId);
+  }
+
   @Get(':id/committees')
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
   findCommittees(@Param('id') sessionId: string) {
@@ -58,6 +78,7 @@ export class InventoryCountController {
     @Param('id') sessionId: string,
     @Body()
     body: {
+      warehouseId: string;
       categoryId: string;
       name?: string;
       inventoryMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
@@ -66,11 +87,40 @@ export class InventoryCountController {
   ) {
     return this.inventoryCountService.createCommittee({
       sessionId,
+      warehouseId: body.warehouseId,
       categoryId: body.categoryId,
       name: body.name,
       inventoryMembers: body.inventoryMembers,
       disposalMembers: body.disposalMembers,
     });
+  }
+
+  @Patch('committees/:id')
+  @Roles(UserRole.admin)
+  updateCommittee(
+    @Param('id') committeeId: string,
+    @Body()
+    body: {
+      warehouseId: string;
+      categoryId: string;
+      name?: string;
+      inventoryMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
+      disposalMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
+    },
+  ) {
+    return this.inventoryCountService.updateCommittee(committeeId, body);
+  }
+
+  @Delete('committees/:id')
+  @Roles(UserRole.admin)
+  deleteCommittee(@Param('id') committeeId: string) {
+    return this.inventoryCountService.deleteCommittee(committeeId);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.admin)
+  deleteSession(@Param('id') id: string) {
+    return this.inventoryCountService.deleteSession(id);
   }
 
   @Patch(':id/activate')

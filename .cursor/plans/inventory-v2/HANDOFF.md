@@ -1,5 +1,7 @@
 # HANDOFF — Inventory v2
 
+> **Popis po skladištu (2026-06-05):** komisije = skladište + kategorija, admin CRUD draft — nastavak u [`.cursor/plans/popis-po-skladistu/HANDOFF.md`](../popis-po-skladistu/HANDOFF.md).
+
 > **Full Effect (faze 13–18):** nastavak u novoj sesiji → [`.cursor/plans/full-effect/HANDOFF.md`](../full-effect/HANDOFF.md) (2026-06-03). Faze 13–15 gotove; sljedeća **16**. Evidentičar više nije samo grad+kategorija — vidi `RegistrarAssignment`.
 
 **Datum:** 2026-06-02 (ažurirano sesija 2026-06-02)  

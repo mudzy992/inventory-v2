@@ -1,5 +1,10 @@
 # Maintenance parts — CHANGELOG
 
+## 2026-06-05
+
+- `GET /maintenance-parts/equipment/:id/parts`: uloga `user` može čitati ugrađene dijelove samo na vlastitoj zaduženoj opremi (`assertCanReadEquipment`).
+- Frontend: panel ugrađenih dijelova read-only za korisnika; prikaz samo kad postoje dijelovi (bez install API poziva).
+
 ## 2026-06-04 (kategorije UI)
 
 - Katalog dijelova (CategoryMaintenanceLink) premješten u dijalog uređivanja ASSET leaf podkategorije; na listi samo badge prikaz odabranog kataloga.

@@ -11,6 +11,7 @@ import type {
 } from '../../../generated/prisma/client';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import { assertCanReadEquipment } from '../equipment/equipment-access.util';
 import { validateLotSpecifications } from '../../common/utils/category-fields.util';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -223,7 +224,7 @@ export class MaintenancePartsService {
     const holder = equipment.currentHolderId
       ? await this.prisma.employee.findUnique({ where: { id: equipment.currentHolderId } })
       : null;
-    await this.registrarScope.assertCanAccessEquipment(user, equipment, holder);
+    await assertCanReadEquipment(user, equipment, holder, this.registrarScope, this.prisma);
     return this.prisma.equipmentInstalledPart.findMany({
       where: { hostEquipmentId: equipmentId },
       include: partInclude,

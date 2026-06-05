@@ -369,6 +369,7 @@ model Warehouse {
   equipmentEvents       EquipmentEvent[]
   stockLots             WarehouseStockLot[]
   inventoryWarehouseCommittees InventoryWarehouseCommittee[]
+  inventoryCommittees   InventoryCommittee[]
   transferTemplates     WarehouseTransferTemplate[]
   transferDocumentSequences TransferDocumentSequence[]
   documentTransfers     Transfer[] @relation("TransferDocumentWarehouse")
@@ -729,6 +730,7 @@ model DisposalApprovalVote {
 model InventoryCommittee {
   id                   String   @id @default(uuid())
   sessionId            String
+  warehouseId          String?
   categoryId           String
   name                 String?  @db.VarChar(255)
   disposalCommissionId String?  @unique
@@ -739,6 +741,7 @@ model InventoryCommittee {
   updatedAt            DateTime @updatedAt
 
   session            InventorySession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  warehouse          Warehouse?                 @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
   category           Category                   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   disposalCommission DisposalCommission?        @relation(fields: [disposalCommissionId], references: [id], onDelete: SetNull)
   closedByUser       User?                      @relation("InventoryCommitteeClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
@@ -747,7 +750,9 @@ model InventoryCommittee {
   lineEvents         InventoryLineEvent[]
   pendingActions     InventoryPendingAction[]
 
+  @@unique([sessionId, warehouseId, categoryId])
   @@index([sessionId])
+  @@index([warehouseId])
   @@index([categoryId])
   @@map("inventory_committees")
 }

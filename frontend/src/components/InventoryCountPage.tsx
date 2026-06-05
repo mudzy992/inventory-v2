@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Printer, RefreshCw, Square } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import {
   activateInventorySessionApi,
   fetchInventorySessionCloseJobApi,
   closeInventorySessionApi,
   closeInventoryCommitteeApi,
   createInventorySessionApi,
+  deleteInventoryCommitteeApi,
+  deleteInventorySessionApi,
   fetchInventoryCommitteeReportApi,
   fetchInventoryPrintScopeApi,
   fetchInventorySessionsApi,
@@ -15,7 +17,7 @@ import {
   type InventorySessionCloseJobDto,
 } from '../api/inventory-api';
 import { ApiError } from '../api/client';
-import { formatDate } from '../helpers';
+import { resolveRootDistributionOrgUnit } from '../helpers/resolve-root-distribution.util';
 import { isAdmin, getCurrentUser } from '../store';
 import { useStore } from '../useStore';
 import { useToast } from '../contexts/toast-context';
@@ -23,22 +25,20 @@ import { useInventorySocketEvents } from '../hooks/use-inventory-socket-events';
 import type { Equipment } from '../types';
 import { InventoryCommitteeWizard } from './inventory-count/inventory-committee-wizard';
 import { InventoryPrintSheet } from './inventory-count/inventory-print-sheet';
+import { getCommitteeDisplayLabel } from './inventory-count/inventory-committee-label.util';
 import {
-  getInventorySessionStatusLabel,
-  getInventorySessionStatusTone,
-} from './inventory-count/inventory-labels';
+  InventoryCommitteeListPanel,
+  InventorySessionListPanel,
+} from './inventory-count/inventory-committee-list-panel';
+import { InventoryCommitteeDetailPanel } from './inventory-count/inventory-committee-detail-panel';
+import { InventorySessionEmptyState } from './inventory-count/inventory-session-empty-state';
 import { SessionDisposalTab } from './inventory-count/session-disposal-tab';
-import { SessionLinesPanel } from './inventory-count/session-lines-panel';
 import { SessionCommandCenter } from './inventory-count/session-command-center';
 import { computeInventorySessionStats } from './inventory-count/inventory-session-stats.util';
 import { AlertBanner } from './ui/alert-banner';
-import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { FormCard } from './ui/form-card';
 import { PageHeader } from './ui/page-header';
-import { DataTable } from './ui/data-table';
-import { EmptyState } from './ui/empty-state';
-import { inputClass, labelClass, selectClass } from './ui/form-styles';
 
 const mapScopeToEquipment = (scope: InventoryPrintScopeDto): Equipment[] =>
   scope.equipment.map((item) => ({
@@ -59,22 +59,26 @@ export const InventoryCountPage = () => {
   const userId = user?.id ?? null;
   const { toastError, toastSuccess } = useToast();
   const [sessions, setSessions] = useState<InventorySessionDto[]>([]);
-  const [orgUnitId, setOrgUnitId] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [committeeId, setCommitteeId] = useState('');
+  const [editingCommitteeId, setEditingCommitteeId] = useState<string | null>(null);
   const [printScope, setPrintScope] = useState<InventoryPrintScopeDto | null>(null);
   const [showPrint, setShowPrint] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [sessionTab, setSessionTab] = useState<'committees' | 'disposal'>('committees');
-  const [report, setReport] = useState<{ committee: InventoryCommitteeDto; groups: { key: string; label: string; items: any[] }[] } | null>(null);
+  const [report, setReport] = useState<{
+    committee: InventoryCommitteeDto;
+    groups: { key: string; label: string; items: any[] }[];
+  } | null>(null);
   const [closeJob, setCloseJob] = useState<InventorySessionCloseJobDto | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
   const [sessionName, setSessionName] = useState(`POPIS ${new Date().getFullYear()}`);
   const [loading, setLoading] = useState(false);
-  const distributionOptions = useMemo(
-    () => state.orgUnits.filter((ou) => ou.type === 'distribucija'),
+  const rootDistribution = useMemo(
+    () => resolveRootDistributionOrgUnit(state.orgUnits),
     [state.orgUnits],
   );
+  const orgUnitId = rootDistribution?.id ?? '';
   const selectedSession = sessions.find((session) => session.id === sessionId) ?? null;
   const committees: InventoryCommitteeDto[] = selectedSession?.committees ?? [];
   const activeCommittees = useMemo(() => {
@@ -97,9 +101,9 @@ export const InventoryCountPage = () => {
         if (orgCmp !== 0) {
           return orgCmp;
         }
-        const aCat = a.committee.category?.name ?? '';
-        const bCat = b.committee.category?.name ?? '';
-        return aCat.localeCompare(bCat);
+        const aLabel = getCommitteeDisplayLabel(a.committee);
+        const bLabel = getCommitteeDisplayLabel(b.committee);
+        return aLabel.localeCompare(bLabel);
       });
   }, [admin, sessions]);
   const scopeEquipment = useMemo(() => {
@@ -117,6 +121,7 @@ export const InventoryCountPage = () => {
     setSessions(rows);
     if (sessionId && !rows.some((row) => row.id === sessionId)) {
       setSessionId('');
+      setCommitteeId('');
     }
   }, [orgUnitId, sessionId]);
   const refreshCloseJob = useCallback(async (id: string) => {
@@ -244,6 +249,10 @@ export const InventoryCountPage = () => {
     [selectedSession],
   );
   const selectedCommittee = committees.find((row) => row.id === committeeId) ?? null;
+  const editingCommittee =
+    committees.find((row) => row.id === editingCommitteeId) ??
+    (editingCommitteeId && committeeId === editingCommitteeId ? selectedCommittee : null) ??
+    null;
   const committeeFromScope = printScope?.committee ?? null;
   const meOnCommittee = useMemo(() => {
     if (!committeeFromScope || !user?.employeeId) {
@@ -251,17 +260,58 @@ export const InventoryCountPage = () => {
     }
     return committeeFromScope.members.find((m) => m.employeeId === user.employeeId) ?? null;
   }, [committeeFromScope, user?.employeeId]);
+  const handleDeleteSession = async (id: string) => {
+    if (!confirm('Obrisati sesiju popisa? Ova radnja je nepovratna.')) {
+      return;
+    }
+    try {
+      await deleteInventorySessionApi(id);
+      if (sessionId === id) {
+        setSessionId('');
+        setCommitteeId('');
+        setEditingCommitteeId(null);
+      }
+      await loadSessions();
+      toastSuccess('Sesija popisa je obrisana.');
+    } catch (err) {
+      toastError(err instanceof ApiError ? err.message : 'Greška');
+    }
+  };
+  const handleDeleteCommittee = async (id: string) => {
+    if (!confirm('Obrisati popisnu komisiju? Povezana komisija rashoda će također biti uklonjena.')) {
+      return;
+    }
+    try {
+      await deleteInventoryCommitteeApi(id);
+      if (committeeId === id) {
+        setCommitteeId('');
+        setPrintScope(null);
+      }
+      if (editingCommitteeId === id) {
+        setEditingCommitteeId(null);
+      }
+      await handleSessionRefresh();
+      toastSuccess('Popisna komisija je obrisana.');
+    } catch (err) {
+      toastError(err instanceof ApiError ? err.message : 'Greška');
+    }
+  };
+  const canManageDraft = selectedSession?.status === 'draft';
   const canCloseCommittee = Boolean(meOnCommittee?.role === 'predsjednik' && !committeeFromScope?.isClosed);
+  const distributionName = rootDistribution?.name;
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Godišnji popis"
-        description="Sesija popisa po distribuciji i godini; komisije po kategoriji; unos samo članovi komisije."
+        description="Sesija popisa po distribuciji; komisije po skladištu i kategoriji; unos samo članovi komisije."
       />
       {!admin ? (
         <>
           {activeCommittees.length === 0 ? (
-            <EmptyState message="Niste član niti jedne aktivne komisije popisa za tekuću godinu. Kad administrator aktivira sesiju, komisija će se pojaviti ovdje." />
+            <AlertBanner tone="info">
+              Niste član niti jedne aktivne komisije popisa. Kad administrator aktivira sesiju, komisija će se pojaviti ovdje.
+            </AlertBanner>
           ) : (
             <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
               <FormCard title="Moje komisije">
@@ -297,7 +347,7 @@ export const InventoryCountPage = () => {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="text-sm font-medium text-gray-900 truncate">
-                                {committee.category?.name ?? committee.categoryId}
+                                {getCommitteeDisplayLabel(committee)}
                               </div>
                               <div className="text-xs text-gray-500 mt-0.5 truncate">
                                 {session.orgUnit?.name ?? session.orgUnitId} · {session.name} · {session.year}
@@ -321,337 +371,219 @@ export const InventoryCountPage = () => {
                   </Button>
                 </div>
               </FormCard>
-              <div>
-                {selectedSession && committeeId ? (
-                  <FormCard title="Evidencija komisije">
-                    <div className="flex flex-col gap-1">
-                      <p className="text-sm text-gray-900 font-medium">
-                        {selectedCommittee?.category?.name ?? selectedCommittee?.categoryId ?? '—'}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {selectedSession.orgUnit?.name ?? selectedSession.orgUnitId} · {selectedSession.name} ·{' '}
-                        {selectedSession.year}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <Button
-                        variant="secondary"
-                        onClick={() => setShowPrint(true)}
-                        disabled={!committeeId || !printScope}
-                      >
-                        <Printer size={14} />
-                        Štampaj popisnu listu
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={async () => {
-                          if (!committeeId) {
-                            return;
-                          }
-                          try {
-                            const row = await fetchInventoryCommitteeReportApi(committeeId);
-                            setReport(row);
-                            setShowReport(true);
-                          } catch (err) {
-                            toastError(err instanceof ApiError ? err.message : 'Greška');
-                          }
-                        }}
-                        disabled={!committeeId}
-                      >
-                        <Printer size={14} />
-                        Zapisnik
-                      </Button>
-                      {canCloseCommittee ? (
-                        <Button
-                          variant="danger"
-                          onClick={async () => {
-                            if (!committeeId) {
-                              return;
-                            }
-                            if (!confirm('Zaključati popisnu listu za ovu komisiju? Nakon zaključavanja unos nije moguć.')) {
-                              return;
-                            }
-                            try {
-                              await closeInventoryCommitteeApi(committeeId);
-                              await refreshAll();
-                            } catch (err) {
-                              toastError(err instanceof ApiError ? err.message : 'Greška');
-                            }
-                          }}
-                          disabled={!committeeId || !printScope}
-                        >
-                          <Square size={14} />
-                          Zaključi listu
-                        </Button>
-                      ) : null}
-                    </div>
-                    {printScope ? (
-                      <>
-                        <p className="text-xs text-gray-500 mt-3">
-                          Oprema u opsegu: <strong>{scopeEquipment.length}</strong>
-                        </p>
-                        <SessionLinesPanel
-                          key={`${committeeId}-${(selectedSession.committees ?? []).length}`}
-                          committeeId={committeeId}
-                          isCommitteeClosed={Boolean(committeeFromScope?.isClosed)}
-                          session={selectedSession}
-                          lines={selectedSession.committees?.find((row) => row.id === committeeId)?.lines ?? []}
-                          equipment={scopeEquipment}
-                          onLineSaved={handleSessionRefresh}
-                        />
-                      </>
-                    ) : (
-                      <AlertBanner tone="info" className="mt-3">
-                        Učitavam opseg za štampu/evidenciju…
-                      </AlertBanner>
-                    )}
-                  </FormCard>
-                ) : (
-                  <FormCard title="Evidencija komisije">
-                    <AlertBanner tone="info">Odaberite komisiju sa lijeve strane.</AlertBanner>
-                  </FormCard>
-                )}
-              </div>
+              {selectedSession && committeeId ? (
+                <InventoryCommitteeDetailPanel
+                  session={selectedSession}
+                committee={selectedCommittee}
+                committeeId={committeeId}
+                printScope={printScope}
+                scopeEquipment={scopeEquipment}
+                lines={selectedSession?.committees?.find((row) => row.id === committeeId)?.lines ?? []}
+                canCloseCommittee={canCloseCommittee}
+                onPrint={() => setShowPrint(true)}
+                onReport={async () => {
+                  if (!committeeId) {
+                    return;
+                  }
+                  try {
+                    const row = await fetchInventoryCommitteeReportApi(committeeId);
+                    setReport(row);
+                    setShowReport(true);
+                  } catch (err) {
+                    toastError(err instanceof ApiError ? err.message : 'Greška');
+                  }
+                }}
+                onCloseCommittee={async () => {
+                  if (!committeeId) {
+                    return;
+                  }
+                  if (!confirm('Zaključati popisnu listu za ovu komisiju? Nakon zaključavanja unos nije moguć.')) {
+                    return;
+                  }
+                  try {
+                    await closeInventoryCommitteeApi(committeeId);
+                    await refreshAll();
+                  } catch (err) {
+                    toastError(err instanceof ApiError ? err.message : 'Greška');
+                  }
+                }}
+                onLineSaved={handleSessionRefresh}
+              />
+              ) : (
+                <FormCard title="Evidencija komisije">
+                  <AlertBanner tone="info">Odaberite komisiju sa lijeve strane.</AlertBanner>
+                </FormCard>
+              )}
             </div>
           )}
         </>
       ) : null}
       {admin ? (
-        <FormCard title="Distribucija i sesija" className="max-w-xl">
-          <label className={labelClass}>Distribucija</label>
-          <select
-            value={orgUnitId}
-            onChange={(event) => {
-              setOrgUnitId(event.target.value);
-              setSessionId('');
-              setCommitteeId('');
-            }}
-            className={selectClass}
-          >
-            <option value="">— Odaberite —</option>
-            {distributionOptions.map((ou) => (
-              <option key={ou.id} value={ou.id}>
-                {ou.name}
-              </option>
-            ))}
-          </select>
-          {!orgUnitId ? <AlertBanner>Odaberite distribuciju.</AlertBanner> : null}
-        </FormCard>
-      ) : null}
-      {admin && orgUnitId ? (
         <>
-          <div className="grid lg:grid-cols-2 gap-4">
-            <FormCard title="Nova sesija">
-              {admin ? (
+          {!rootDistribution ? (
+            <AlertBanner tone="warning">
+              Krovna distribucija nije definisana u organizaciji. U modulu Organizacija dodajte jednu
+              distribuciju (direktno pod direkcijom) prije kreiranja sesije popisa.
+            </AlertBanner>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600">
+                Distribucija: <strong>{rootDistribution.name}</strong>
+              </p>
+              {sessions.length === 0 ? (
+                <InventorySessionEmptyState
+                  distributionName={distributionName}
+                  sessionName={sessionName}
+                  year={year}
+                  onSessionNameChange={setSessionName}
+                  onYearChange={setYear}
+                  onCreate={() => void handleCreateSession()}
+                />
+              ) : (
                 <>
-                  <label className={labelClass}>Naziv</label>
-                  <input
-                    value={sessionName}
-                    onChange={(event) => setSessionName(event.target.value)}
-                    className={inputClass}
-                    placeholder="POPIS 2026"
-                  />
-                  <label className={labelClass}>Godina</label>
-                  <input
-                    type="number"
-                    value={year}
-                    onChange={(event) => setYear(Number(event.target.value))}
-                    className={inputClass}
-                    min={2000}
-                    max={2100}
-                  />
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={() => void handleCreateSession()}>
-                      <Plus size={14} />
-                      Kreiraj sesiju
-                    </Button>
                     <Button variant="secondary" onClick={() => void refreshAll()} disabled={loading}>
                       <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
                       Osvježi
                     </Button>
-                  </div>
-                </>
-              ) : (
-                <Button variant="secondary" onClick={() => void refreshAll()} disabled={loading}>
-                  <RefreshCw size={14} />
-                  Osvježi
-                </Button>
-              )}
-            </FormCard>
-            {selectedSession ? (
-              <SessionCommandCenter
-                session={selectedSession}
-                stats={sessionStats}
-                scopeTotal={scopeEquipment.length > 0 ? scopeEquipment.length : undefined}
-                closeJob={closeJob}
-                loading={loading}
-                onActivate={(id) => void handleActivate(id)}
-                onClose={(id) => void handleClose(id)}
-                onRefresh={() => void refreshAll()}
-              />
-            ) : (
-              <FormCard title="Odabrana sesija">
-                <AlertBanner tone="info">Odaberite sesiju iz tabele ispod.</AlertBanner>
-              </FormCard>
-            )}
-          </div>
-          <DataTable>
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="text-left px-4 py-2 font-medium">Naziv / period</th>
-                  <th className="text-left px-4 py-2 font-medium">Godina</th>
-                  <th className="text-left px-4 py-2 font-medium">Progres</th>
-                  <th className="text-left px-4 py-2 font-medium">Komisije</th>
-                  <th className="text-left px-4 py-2 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((row) => {
-                  const isSelected = row.id === sessionId;
-                  const period = row.startDate && row.endDate ? `${formatDate(row.startDate)} – ${formatDate(row.endDate)}` : '—';
-                  const rowStats = computeInventorySessionStats(row);
-                  const rowLines = row.committees?.flatMap((committee) => committee.lines ?? []) ?? [];
-                  return (
-                    <tr
-                      key={row.id}
-                      className={`border-t cursor-pointer ${isSelected ? 'bg-blue-50/80' : 'hover:bg-gray-50'}`}
-                      onClick={() => {
-                        setSessionId(row.id);
-                        setCommitteeId('');
-                      }}
+                    <Button
+                      variant="secondary"
+                      onClick={() => void handleCreateSession()}
+                      disabled={!sessionName.trim()}
                     >
-                      <td className="px-4 py-3 font-medium">
-                        <div className="flex flex-col">
-                          <span>{row.name}</span>
-                          <span className="text-xs text-gray-400">{period}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">{row.year}</td>
-                      <td className="px-4 py-3 text-xs text-gray-600">
-                        {rowLines.length} linija
-                        {rowStats.transferPendingCount > 0
-                          ? ` · ${rowStats.transferPendingCount} pren.`
-                          : ''}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {rowStats.closedCommittees}/{rowStats.totalCommittees}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge tone={getInventorySessionStatusTone(row.status)}>
-                          {getInventorySessionStatusLabel(row.status)}
-                        </Badge>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {sessions.length === 0 ? (
-                  <tr>
-                    <td colSpan={5}>
-                      <EmptyState
-                        message={
-                          admin
-                            ? `Nema sesija popisa za ${distributionOptions.find((ou) => ou.id === orgUnitId)?.name ?? 'odabranu distribuciju'}. Kreirajte novu sesiju iznad.`
-                            : 'Nema komisija dodijeljenih vašem korisniku.'
-                        }
+                      <Plus size={14} />
+                      Nova sesija
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+                    <InventorySessionListPanel
+                      sessions={sessions}
+                      selectedSessionId={sessionId}
+                      onSelect={(id) => {
+                        setSessionId(id);
+                        setCommitteeId('');
+                        setEditingCommitteeId(null);
+                      }}
+                    />
+                    {selectedSession ? (
+                      <SessionCommandCenter
+                        session={selectedSession}
+                        stats={sessionStats}
+                        scopeTotal={scopeEquipment.length > 0 ? scopeEquipment.length : undefined}
+                        closeJob={closeJob}
+                        loading={loading}
+                        onActivate={(id) => void handleActivate(id)}
+                        onClose={(id) => void handleClose(id)}
+                        onDelete={(id) => void handleDeleteSession(id)}
+                        onRefresh={() => void refreshAll()}
                       />
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </DataTable>
-          {selectedSession ? (
-            <>
-              <div className="flex gap-1 border-b border-gray-200">
-                <button
-                  type="button"
-                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                    sessionTab === 'committees'
-                      ? 'border-blue-600 text-blue-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                  onClick={() => setSessionTab('committees')}
-                >
-                  Komisije i unos
-                </button>
-                <button
-                  type="button"
-                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                    sessionTab === 'disposal'
-                      ? 'border-blue-600 text-blue-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                  onClick={() => setSessionTab('disposal')}
-                >
-                  Rashod
-                </button>
-              </div>
-              {sessionTab === 'disposal' ? (
-                <FormCard title="Rashod — sesija popisa">
-                  <SessionDisposalTab sessionId={selectedSession.id} sessionStatus={selectedSession.status} />
-                </FormCard>
-              ) : (
-            <FormCard title="Komisije (po kategoriji)">
-              {admin && selectedSession.status === 'draft' ? (
-                <div className="mb-4">
-                  <InventoryCommitteeWizard
-                    state={state}
-                    sessionId={selectedSession.id}
-                    onCreated={async () => {
-                      await handleSessionRefresh();
-                    }}
-                  />
-                </div>
-              ) : null}
-              <label className={labelClass}>Komisija</label>
-              <select
-                value={committeeId}
-                onChange={(event) => setCommitteeId(event.target.value)}
-                className={selectClass}
-              >
-                <option value="">— Odaberite —</option>
-                {committees.map((committee) => (
-                  <option key={committee.id} value={committee.id}>
-                    {committee.category?.name ?? committee.categoryId}
-                  </option>
-                ))}
-              </select>
-              {committeeId ? (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setShowPrint(true)}
-                    disabled={!printScope}
-                  >
-                    <Printer size={14} />
-                    Štampaj popisnu listu
-                  </Button>
-                </div>
-              ) : null}
-              {committeeId && printScope ? (
-                <>
-                  <p className="text-xs text-gray-500 mt-3">
-                    Oprema u opsegu: <strong>{scopeEquipment.length}</strong>
-                  </p>
-                  <SessionLinesPanel
-                    key={`${committeeId}-${(selectedSession.committees ?? []).length}`}
-                    committeeId={committeeId}
-                    session={selectedSession}
-                    lines={selectedSession.committees?.find((row) => row.id === committeeId)?.lines ?? []}
-                    equipment={scopeEquipment}
-                    onLineSaved={handleSessionRefresh}
-                  />
+                    ) : (
+                      <FormCard title="Command center">
+                        <AlertBanner tone="info">Odaberite sesiju popisa sa lijeve strane.</AlertBanner>
+                      </FormCard>
+                    )}
+                  </div>
+                  {selectedSession ? (
+                    <>
+                      <div className="flex gap-1 border-b border-gray-200">
+                        <button
+                          type="button"
+                          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            sessionTab === 'committees'
+                              ? 'border-blue-600 text-blue-700'
+                              : 'border-transparent text-gray-500 hover:text-gray-700'
+                          }`}
+                          onClick={() => setSessionTab('committees')}
+                        >
+                          Komisije
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            sessionTab === 'disposal'
+                              ? 'border-blue-600 text-blue-700'
+                              : 'border-transparent text-gray-500 hover:text-gray-700'
+                          }`}
+                          onClick={() => setSessionTab('disposal')}
+                        >
+                          Rashod
+                        </button>
+                      </div>
+                      {sessionTab === 'disposal' ? (
+                        <FormCard title="Rashod — sesija popisa">
+                          <SessionDisposalTab sessionId={selectedSession.id} sessionStatus={selectedSession.status} />
+                        </FormCard>
+                      ) : (
+                        <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
+                          <div className="space-y-4">
+                            {canManageDraft && !editingCommitteeId ? (
+                              <InventoryCommitteeWizard
+                                sessionId={selectedSession.id}
+                                onCreated={async (createdId) => {
+                                  await handleSessionRefresh();
+                                  setCommitteeId(createdId);
+                                }}
+                              />
+                            ) : null}
+                            {canManageDraft && editingCommitteeId && editingCommittee ? (
+                              <InventoryCommitteeWizard
+                                sessionId={selectedSession.id}
+                                editCommittee={editingCommittee}
+                                onCreated={() => undefined}
+                                onUpdated={async (updatedId) => {
+                                  await handleSessionRefresh();
+                                  setCommitteeId(updatedId);
+                                  setEditingCommitteeId(null);
+                                }}
+                                onCancelEdit={() => setEditingCommitteeId(null)}
+                              />
+                            ) : null}
+                            <InventoryCommitteeListPanel
+                              committees={committees}
+                              selectedCommitteeId={committeeId}
+                              sessionStatus={selectedSession.status}
+                              onSelect={(id) => {
+                                setCommitteeId(id);
+                                setEditingCommitteeId(null);
+                              }}
+                              onEdit={(id) => {
+                                setCommitteeId(id);
+                                setEditingCommitteeId(id);
+                              }}
+                              onDelete={(id) => void handleDeleteCommittee(id)}
+                            />
+                          </div>
+                          <InventoryCommitteeDetailPanel
+                            session={selectedSession}
+                            committee={selectedCommittee}
+                            committeeId={committeeId}
+                            printScope={printScope}
+                            scopeEquipment={scopeEquipment}
+                            lines={selectedSession.committees?.find((row) => row.id === committeeId)?.lines ?? []}
+                            canCloseCommittee={false}
+                            canManage={canManageDraft}
+                            showAdminLines
+                            onPrint={() => setShowPrint(true)}
+                            onEdit={
+                              canManageDraft && committeeId
+                                ? () => setEditingCommitteeId(committeeId)
+                                : undefined
+                            }
+                            onDelete={
+                              canManageDraft && committeeId
+                                ? () => void handleDeleteCommittee(committeeId)
+                                : undefined
+                            }
+                            onLineSaved={handleSessionRefresh}
+                          />
+                        </div>
+                      )}
+                    </>
+                  ) : null}
                 </>
-              ) : (
-                <AlertBanner tone="info" className="mt-3">
-                  Odaberite komisiju za unos linija.
-                </AlertBanner>
-              )}
-            </FormCard>
               )}
             </>
-          ) : null}
+          )}
         </>
       ) : null}
       {showPrint && printScope ? (
@@ -662,9 +594,12 @@ export const InventoryCountPage = () => {
           <div className="bg-white rounded-xl shadow-xl max-w-4xl mx-auto p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Zapisnik — {report.committee.category?.name ?? report.committee.categoryId}</h2>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Zapisnik — {getCommitteeDisplayLabel(report.committee)}
+                </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {report.committee.session?.orgUnit?.name ?? report.committee.session?.orgUnitId ?? ''} · {report.committee.session?.name ?? ''} · {report.committee.session?.year ?? ''}
+                  {report.committee.session?.orgUnit?.name ?? report.committee.session?.orgUnitId ?? ''} ·{' '}
+                  {report.committee.session?.name ?? ''} · {report.committee.session?.year ?? ''}
                 </p>
               </div>
               <Button variant="secondary" onClick={() => setShowReport(false)}>

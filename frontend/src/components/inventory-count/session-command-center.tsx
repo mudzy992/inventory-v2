@@ -1,4 +1,4 @@
-import { Play, RefreshCw, Square } from 'lucide-react';
+import { Play, RefreshCw, Square, Trash2 } from 'lucide-react';
 import type { InventorySessionCloseJobDto, InventorySessionDto } from '../../api/inventory-api';
 import { formatDate } from '../../helpers';
 import { Button } from '../ui/button';
@@ -18,6 +18,7 @@ interface SessionCommandCenterProps {
   loading: boolean;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
+  onDelete?: (id: string) => void;
   onRefresh: () => void;
 }
 
@@ -29,8 +30,10 @@ export const SessionCommandCenter = ({
   loading,
   onActivate,
   onClose,
+  onDelete,
   onRefresh,
 }: SessionCommandCenterProps) => {
+  const canDeleteSession = session.status === 'draft' && stats.totalCommittees === 0;
   const period =
     session.startDate && session.endDate
       ? `${formatDate(session.startDate)} – ${formatDate(session.endDate)}`
@@ -119,6 +122,21 @@ export const SessionCommandCenter = ({
             <Play size={14} />
             Aktiviraj sesiju
           </Button>
+        ) : null}
+        {canDeleteSession && onDelete ? (
+          <Button
+            variant="danger"
+            onClick={() => onDelete(session.id)}
+            disabled={loading}
+          >
+            <Trash2 size={14} />
+            Obriši sesiju
+          </Button>
+        ) : null}
+        {session.status === 'draft' && stats.totalCommittees > 0 ? (
+          <p className="text-xs text-gray-500 self-center">
+            Obrišite sve komisije prije brisanja sesije.
+          </p>
         ) : null}
         {session.status === 'active' ? (
           <Button variant="danger" onClick={() => onClose(session.id)}>
