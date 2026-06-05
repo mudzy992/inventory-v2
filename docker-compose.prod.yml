@@ -9,8 +9,9 @@ services:
       - .env
     environment:
       NODE_ENV: production
+    # Upload root na hostu; unutra aplikacija gradi prenosnice/, templates/, ...
     volumes:
-      - backend_uploads:/app/uploads
+      - /mnt/shared-app-files/inventory-v2:/app/uploads
     networks:
       - web
       - internal
@@ -49,6 +50,3 @@ networks:
     external: true
   internal:
     driver: bridge
-
-volumes:
-  backend_uploads:

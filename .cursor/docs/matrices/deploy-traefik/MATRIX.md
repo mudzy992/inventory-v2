@@ -9,6 +9,7 @@
 | Cert resolver | `le` |
 | Docker network | `web` (external) |
 | MySQL | eksterni server (`DATABASE_URL` u `.env`) |
+| Upload volume | bind mount `/mnt/shared-app-files/inventory-v2` → `/app/uploads` |
 
 ## URL
 
@@ -29,3 +30,10 @@ NestJS `setGlobalPrefix('backend')` — bez Traefik StripPrefix.
 
 - **Bez nginx** — statički `dist/` preko `serve` na portu `3000`.
 - Traefik labela: `loadbalancer.server.port=3000`.
+
+## Upload fajlovi (backend)
+
+- `UPLOAD_DIR=/app/uploads` u `.env` (putanja unutar kontejnera).
+- Host bind mount: `/mnt/shared-app-files/inventory-v2:/app/uploads` u `docker-compose.prod.yml`.
+- Struktura unutar root-a (aplikacija): `prenosnice/{warehouseId}/{godina}/...`, `templates/warehouses/{warehouseId}/...`.
+- Prije prvog `up`: `mkdir -p /mnt/shared-app-files/inventory-v2` i `chown` za user `app` u kontejneru (provjeri `docker compose run --rm backend id app`).
