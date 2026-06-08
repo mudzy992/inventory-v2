@@ -27,6 +27,7 @@ interface UserFormModalProps {
   user: UserAccount | null;
   employees: Employee[];
   employeesWithoutAccount: Employee[];
+  employeesLoading?: boolean;
   cities: City[];
   categories: Category[];
   warehouses: Warehouse[];
@@ -53,6 +54,7 @@ export const UserFormModal = ({
   user,
   employees,
   employeesWithoutAccount,
+  employeesLoading = false,
   cities,
   categories,
   warehouses,
@@ -178,7 +180,9 @@ export const UserFormModal = ({
     }
   };
 
-  const selectedEmployee = employees.find((row) => row.id === employeeId);
+  const selectedEmployee =
+    employeesWithoutAccount.find((row) => row.id === employeeId) ??
+    employees.find((row) => row.id === employeeId);
   const title = mode === 'create' ? 'Novi korisnik' : 'Uredi korisnika';
 
   return (
@@ -202,7 +206,9 @@ export const UserFormModal = ({
           )}
         </div>
         <div className="p-6 space-y-4">
-          {mode === 'create' && employeesWithoutAccount.length === 0 ? (
+          {mode === 'create' && employeesLoading ? (
+            <p className="text-sm text-gray-500">Učitavanje radnika…</p>
+          ) : mode === 'create' && employeesWithoutAccount.length === 0 ? (
             <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
               Svi radnici već imaju korisnički račun. Dodajte novog radnika u modulu Radnici.
             </p>
@@ -283,7 +289,7 @@ export const UserFormModal = ({
           >
             Odustani
           </button>
-          {(mode === 'edit' || employeesWithoutAccount.length > 0) && (
+          {(mode === 'edit' || (!employeesLoading && employeesWithoutAccount.length > 0)) && (
             <button
               type="button"
               onClick={() => void handleSubmit()}

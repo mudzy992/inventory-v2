@@ -121,6 +121,12 @@ export class EmployeesService {
     if (query.orgUnitId) {
       filters.push({ orgUnitId: query.orgUnitId });
     }
+    if (query.withoutUserAccount) {
+      if (user.role !== 'admin') {
+        throw new ForbiddenException('Only administrators can list employees without user accounts');
+      }
+      filters.push({ user: { is: null } });
+    }
     const searchWhere = buildContainsSearchWhere(query.search, ['firstName', 'lastName', 'email']);
     if (searchWhere) {
       filters.push(searchWhere);

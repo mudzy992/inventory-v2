@@ -5,6 +5,7 @@ import type { Employee } from '../types';
 
 export interface EmployeesListFilters extends PaginatedListParams {
   orgUnitId?: string;
+  withoutUserAccount?: boolean;
 }
 
 export const fetchEmployeesPageApi = (params: EmployeesListFilters = {}) => {

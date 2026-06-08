@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Edit2, Search } from 'lucide-react';
 import { useStore, useRefreshData } from '../useStore';
-import { fetchEmployeeApi } from '../api/employees-api';
+import { fetchEmployeeApi, fetchEmployeesPageApi } from '../api/employees-api';
+import { fetchAllPaginatedItems } from '../api/fetch-all-paginated';
 import { fetchUsersPageApi } from '../api/users-api';
 import { usePaginatedList } from '../hooks/usePaginatedList';
 import { getEmployeeFullName } from '../helpers';
@@ -21,6 +22,27 @@ export function UserManagementPage() {
   const [formMode, setFormMode] = useState<UserFormMode | null>(null);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
   const [employeeCache, setEmployeeCache] = useState<Record<string, Employee>>({});
+  const [employeesWithoutAccount, setEmployeesWithoutAccount] = useState<Employee[]>([]);
+  const [loadingFormEmployees, setLoadingFormEmployees] = useState(false);
+
+  const loadEmployeesWithoutAccount = useCallback(async () => {
+    setLoadingFormEmployees(true);
+    try {
+      const employees = await fetchAllPaginatedItems(
+        (params) => fetchEmployeesPageApi({ ...params, withoutUserAccount: true }),
+        100,
+      );
+      setEmployeesWithoutAccount(employees);
+    } catch {
+      setEmployeesWithoutAccount([]);
+    } finally {
+      setLoadingFormEmployees(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadEmployeesWithoutAccount();
+  }, [loadEmployeesWithoutAccount]);
 
   const list = usePaginatedList<UserAccount, Record<string, never>>({
     fetchPage: fetchUsersPageApi,
@@ -76,6 +98,17 @@ export function UserManagementPage() {
     setFormMode(null);
     setEditingUser(null);
   };
+
+  const formEmployees = useMemo(() => {
+    const byId = new Map<string, Employee>();
+    for (const employee of employeesWithoutAccount) {
+      byId.set(employee.id, employee);
+    }
+    for (const employee of Object.values(employeeCache)) {
+      byId.set(employee.id, employee);
+    }
+    return [...byId.values()];
+  }, [employeeCache, employeesWithoutAccount]);
 
   return (
     <div>
@@ -267,8 +300,9 @@ export function UserManagementPage() {
         <UserFormModal
           mode={formMode}
           user={editingUser}
-          employees={Object.values(employeeCache)}
-          employeesWithoutAccount={[]}
+          employees={formEmployees}
+          employeesWithoutAccount={employeesWithoutAccount}
+          employeesLoading={loadingFormEmployees}
           cities={state.cities}
           categories={state.categories}
           warehouses={state.warehouses}
@@ -277,6 +311,7 @@ export function UserManagementPage() {
           onSaved={async () => {
             await refresh();
             await list.refresh();
+            await loadEmployeesWithoutAccount();
           }}
         />
       )}
