@@ -14,6 +14,7 @@ import type { Equipment } from '../types';
 import { EquipmentCard } from './EquipmentCard';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
 import { getUserWarehouseIds } from '../helpers/org-warehouse.util';
+import { getScopedCategoryIds } from '../helpers/registrar-scope';
 import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
@@ -60,6 +61,15 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
     }
     return state.warehouses.filter((row) => myWarehouseIds.has(row.id));
   }, [admin, myWarehouseIds, state.warehouses]);
+
+  const scopedCategoryIds = useMemo(
+    () => getScopedCategoryIds(user, state.categories),
+    [user, state.categories],
+  );
+  const filterCategories = useMemo(
+    () => state.categories.filter((row) => scopedCategoryIds.has(row.id)),
+    [scopedCategoryIds, state.categories],
+  );
 
   // Form state
   const [fCategoryId, setFCategoryId] = useState('');
@@ -261,7 +271,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
           <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
             <option value="">Sve kategorije</option>
-            {state.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {filterCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
@@ -483,7 +493,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
                   <select value={fCategoryId} onChange={e => { setFCategoryId(e.target.value); setFSpecs({}); }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
                     <option value="">— Odaberi —</option>
-                    {state.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {filterCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div>

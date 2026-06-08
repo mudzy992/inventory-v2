@@ -4,12 +4,9 @@ import { fetchEquipmentApi, fetchEquipmentPageApi, fetchEquipmentSummaryApi } fr
 import { usePaginatedList } from '../hooks/usePaginatedList';
 import { PaginationControls } from './ui/pagination-controls';
 import {
-  getParentCategories,
-  getSubCategories,
-  isAdmin,
-  isEvidenticar,
-  getCurrentUser,
-} from '../store';
+  getScopedParentCategories,
+  getScopedSubCategories,
+} from '../helpers/registrar-scope';
 import { ChevronRight, Folder, Layers, Search, Filter, Download, X, Eye, QrCode, Printer } from 'lucide-react';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName } from '../helpers';
@@ -18,6 +15,7 @@ import { AlertBanner } from './ui/alert-banner';
 import type { Equipment, FilterCondition } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { ModalRoot } from './ui/modal-root';
+import { isAdmin, isEvidenticar, getCurrentUser } from '../store';
 
 export function EquipmentByCategoryPage() {
   const [state, setState] = useStore();
@@ -53,7 +51,7 @@ export function EquipmentByCategoryPage() {
     if (!selectedParentId) {
       return;
     }
-    const subs = getSubCategories(selectedParentId);
+    const subs = getScopedSubCategories(user, state.categories, selectedParentId);
     void Promise.all(
       subs.map(async (sub) => {
         const summary = await fetchEquipmentSummaryApi(sub.id);
@@ -68,11 +66,18 @@ export function EquipmentByCategoryPage() {
         ] as const;
       }),
     ).then((entries) => setCategoryStats(Object.fromEntries(entries)));
-  }, [selectedParentId]);
+  }, [selectedParentId, state.categories, user]);
 
-  const parentCategories = getParentCategories();
+  const parentCategories = useMemo(
+    () => getScopedParentCategories(user, state.categories),
+    [user, state.categories],
+  );
   const selectedParent = parentCategories.find(p => p.id === selectedParentId);
-  const subCategories = selectedParentId ? getSubCategories(selectedParentId) : [];
+  const subCategories = useMemo(
+    () =>
+      selectedParentId ? getScopedSubCategories(user, state.categories, selectedParentId) : [],
+    [selectedParentId, state.categories, user],
+  );
   const selectedSub = subCategories.find(s => s.id === selectedSubId);
 
   const fetchPage = useCallback(
@@ -309,8 +314,8 @@ export function EquipmentByCategoryPage() {
           {!selectedParentId ? (
             // Show parent categories
             parentCategories.map(parent => {
-              const subs = getSubCategories(parent.id);
-              const parentStats = subCategories.reduce(
+              const subs = getScopedSubCategories(user, state.categories, parent.id);
+              const parentStats = subs.reduce(
                 (acc, sub) => {
                   const row = categoryStats[sub.id];
                   if (!row) {

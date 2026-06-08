@@ -130,7 +130,6 @@ export class WarehouseStockService {
       {
         lotKind: 'ISSUABLE',
         status: { in: ['ceka_specifikaciju', 'spremno_za_izdavanje'] },
-        quantityOnHand: { gt: 0 },
       },
     ];
     if (user.role === 'evidenticar') {

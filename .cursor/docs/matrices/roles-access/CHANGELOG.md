@@ -1,5 +1,14 @@
 # Changelog — roles-access
 
+## 2026-06-05
+
+- **Efektivno skladište u scope-u**: evidentičar vidi zaduženu opremu/radnike prema `resolveEffectiveWarehouseId`, ne širokom org podstablu skladišta (ED Zenica pobjeđuje Centralno na Direkciji).
+- **`collectOrgUnitIdsForEffectiveWarehouse`**: util za list/WHERE filtere u `RegistrarScopeService`.
+- **Transferi**: `buildTransferWhere` uključuje `fromPerson`/`toPerson` u scope radnika.
+- **Skladišna roba**: registrar lista lotova bez filtera `quantityOnHand > 0` (prikaz `0/N`, „Nema više na stanju“).
+- **Frontend**: scoped kategorije na Dashboard / Po kategorijama / filter opreme; mirror effective-warehouse u `registrar-scope.ts`.
+- **Matrica**: zamijenjen zastarjeli grad+kategorija model s warehouse+kategorija+orgUnitId?.
+
 ## 2026-06-01
 
 - Evidentičar: `managedOrgUnitIds` zamijenjen s `UserRegistrarScope` (cityId + categoryId).

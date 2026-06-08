@@ -13,13 +13,15 @@ import {
 import { useStore } from '../useStore';
 import {
   getCurrentUser,
-  getParentCategories,
   getRegistrarScopes,
-  getSubCategories,
   isAdmin,
   isEvidenticar,
 } from '../store';
 import { formatRegistrarAssignmentLabel } from '../helpers/org-warehouse.util';
+import {
+  getScopedParentCategories,
+  getScopedSubCategories,
+} from '../helpers/registrar-scope';
 import type { PageId } from './Layout';
 import { useIsPageEnabled } from '../hooks/use-is-page-enabled';
 import { Package, Users, ArrowLeftRight, AlertTriangle, MapPin, Layers, Clock } from 'lucide-react';
@@ -41,6 +43,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [equipmentSummary, setEquipmentSummary] = useState<EquipmentSummary | null>(null);
   const [recentTransfers, setRecentTransfers] = useState<TransferRecord[]>([]);
   const [relocationAlerts, setRelocationAlerts] = useState<AdminRelocationAlerts | null>(null);
+  const [categoryStats, setCategoryStats] = useState<
+    {
+      parent: (typeof state.categories)[number];
+      stats: { total: number; skladiste: number; zaduzeno: number; rashodovano: number };
+      subCategories: {
+        category: (typeof state.categories)[number];
+        stats: { total: number; skladiste: number; zaduzeno: number; rashodovano: number };
+      }[];
+    }[]
+  >([]);
 
   useEffect(() => {
     void fetchEquipmentSummaryApi()
@@ -50,6 +62,41 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       .then(setRecentTransfers)
       .catch(() => setRecentTransfers([]));
   }, []);
+
+  useEffect(() => {
+    const parents = getScopedParentCategories(user, state.categories);
+    void Promise.all(
+      parents.map(async (parent) => {
+        const subs = getScopedSubCategories(user, state.categories, parent.id);
+        const subCategories = await Promise.all(
+          subs.map(async (sub) => {
+            const summary = await fetchEquipmentSummaryApi(sub.id);
+            return {
+              category: sub,
+              stats: {
+                total: summary.total,
+                skladiste: summary.byStatus.skladiste,
+                zaduzeno: summary.byStatus.zaduzeno,
+                rashodovano: summary.byStatus.rashodovano,
+              },
+            };
+          }),
+        );
+        const stats = subCategories.reduce(
+          (acc, row) => ({
+            total: acc.total + row.stats.total,
+            skladiste: acc.skladiste + row.stats.skladiste,
+            zaduzeno: acc.zaduzeno + row.stats.zaduzeno,
+            rashodovano: acc.rashodovano + row.stats.rashodovano,
+          }),
+          { total: 0, skladiste: 0, zaduzeno: 0, rashodovano: 0 },
+        );
+        return { parent, stats, subCategories };
+      }),
+    )
+      .then(setCategoryStats)
+      .catch(() => setCategoryStats([]));
+  }, [state.categories, user]);
 
   const totalEquipment = equipmentSummary?.total ?? 0;
   const inWarehouse = equipmentSummary?.byStatus.skladiste ?? 0;
@@ -82,19 +129,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     { label: 'Ukupno prenosa', value: totalTransfers, icon: <ArrowLeftRight size={24} />, color: 'bg-orange-500' },
     { label: 'Čeka potpis', value: rawTransfers, icon: <Clock size={24} />, color: rawTransfers > 0 ? 'bg-yellow-500' : 'bg-gray-400' },
   ];
-
-  const parentCategories = getParentCategories();
-  const categoryStats = parentCategories.map((parent) => {
-    const subCats = getSubCategories(parent.id);
-    return {
-      parent,
-      stats: { total: 0, skladiste: 0, zaduzeno: 0, rashodovano: 0 },
-      subCategories: subCats.map((sub) => ({
-        category: sub,
-        stats: { total: 0, skladiste: 0, zaduzeno: 0, rashodovano: 0 },
-      })),
-    };
-  });
 
   return (
     <div>

@@ -1,5 +1,18 @@
 import { getEffectiveCityForOrgUnit, getOrgUnitChildren } from '../helpers';
-import type { AppState, Employee, Equipment, OrgUnit, RegistrarScopeAssignment, UserAccount } from '../types';
+import type {
+  AppState,
+  Category,
+  Employee,
+  Equipment,
+  OrgUnit,
+  RegistrarScopeAssignment,
+  UserAccount,
+} from '../types';
+import {
+  collectOrgUnitIdsForEffectiveWarehouse,
+  toOrgUnitRows,
+  toWarehouseRows,
+} from './effective-warehouse.util';
 
 const expandCategoryIds = (categoryIds: string[], categories: AppState['categories']): Set<string> => {
   const result = new Set<string>();
@@ -41,18 +54,34 @@ const expandOrgSubtree = (orgUnits: OrgUnit[], rootId: string): Set<string> => {
 
 const isModeA = (assignment: RegistrarScopeAssignment): boolean => !assignment.orgUnitId;
 
-const isEmployeeInWarehouseCoverage = (
+const getOrgUnitIdsForWarehouse = (state: AppState, warehouseId: string): Set<string> =>
+  collectOrgUnitIdsForEffectiveWarehouse(
+    warehouseId,
+    toOrgUnitRows(state.orgUnits),
+    toWarehouseRows(state.warehouses),
+    state.orgUnits,
+  );
+
+const getEffectiveOrgIdsForModeB = (
+  state: AppState,
+  assignment: RegistrarScopeAssignment,
+): Set<string> => {
+  const warehouseOrgIds = getOrgUnitIdsForWarehouse(state, assignment.warehouseId);
+  const assignmentSubtree = expandOrgSubtree(state.orgUnits, assignment.orgUnitId!);
+  const result = new Set<string>();
+  for (const id of warehouseOrgIds) {
+    if (assignmentSubtree.has(id)) {
+      result.add(id);
+    }
+  }
+  return result;
+};
+
+const isOrgUnitInEffectiveWarehouseScope = (
   state: AppState,
   warehouseId: string,
-  employeeOrgUnitId: string,
-): boolean => {
-  const warehouse = state.warehouses.find((row) => row.id === warehouseId);
-  if (!warehouse?.orgUnitId) {
-    return true;
-  }
-  const subtree = expandOrgSubtree(state.orgUnits, warehouse.orgUnitId);
-  return subtree.has(employeeOrgUnitId);
-};
+  orgUnitId: string,
+): boolean => getOrgUnitIdsForWarehouse(state, warehouseId).has(orgUnitId);
 
 const matchesAssignmentEquipment = (
   assignment: RegistrarScopeAssignment,
@@ -69,7 +98,7 @@ const matchesAssignmentEquipment = (
       return equipment.warehouseId === assignment.warehouseId;
     }
     if (equipment.status === 'zaduzeno' && holder) {
-      return isEmployeeInWarehouseCoverage(state, assignment.warehouseId, holder.orgUnitId);
+      return isOrgUnitInEffectiveWarehouseScope(state, assignment.warehouseId, holder.orgUnitId);
     }
     if (equipment.status === 'rashodovano') {
       return equipment.warehouseId === assignment.warehouseId;
@@ -79,8 +108,7 @@ const matchesAssignmentEquipment = (
   if (equipment.status === 'skladiste' || !holder) {
     return false;
   }
-  const subtree = expandOrgSubtree(state.orgUnits, assignment.orgUnitId!);
-  return subtree.has(holder.orgUnitId);
+  return getEffectiveOrgIdsForModeB(state, assignment).has(holder.orgUnitId);
 };
 
 const matchesAssignmentEmployee = (
@@ -88,19 +116,10 @@ const matchesAssignmentEmployee = (
   employee: Employee,
   state: AppState,
 ): boolean => {
-  const warehouse = state.warehouses.find((row) => row.id === assignment.warehouseId);
-  if (!warehouse) {
-    return false;
-  }
-  const employeeCityId = getEffectiveCityForOrgUnit(state.orgUnits, employee.orgUnitId);
-  if (employeeCityId !== warehouse.cityId) {
-    return false;
-  }
   if (isModeA(assignment)) {
-    return isEmployeeInWarehouseCoverage(state, assignment.warehouseId, employee.orgUnitId);
+    return isOrgUnitInEffectiveWarehouseScope(state, assignment.warehouseId, employee.orgUnitId);
   }
-  const subtree = expandOrgSubtree(state.orgUnits, assignment.orgUnitId!);
-  return subtree.has(employee.orgUnitId);
+  return getEffectiveOrgIdsForModeB(state, assignment).has(employee.orgUnitId);
 };
 
 const resolveEquipmentHolder = (
@@ -114,6 +133,48 @@ const resolveEquipmentHolder = (
     return state.employees.find((row) => row.id === equipment.currentHolderId);
   }
   return undefined;
+};
+
+export const getScopedCategoryIds = (
+  user: UserAccount | null,
+  categories: Category[],
+): Set<string> => {
+  if (!user || user.role === 'admin') {
+    return new Set(categories.map((row) => row.id));
+  }
+  if (user.role !== 'evidenticar') {
+    return new Set();
+  }
+  const roots = (user.registrarScopes ?? []).map((row) => row.categoryId);
+  return expandCategoryIds(roots, categories);
+};
+
+export const getScopedParentCategories = (
+  user: UserAccount | null,
+  categories: Category[],
+): Category[] => {
+  if (!user || user.role === 'admin') {
+    return categories.filter((row) => row.parentId === null);
+  }
+  const scoped = getScopedCategoryIds(user, categories);
+  return categories.filter((row) => {
+    if (row.parentId !== null) {
+      return false;
+    }
+    if (scoped.has(row.id)) {
+      return true;
+    }
+    return categories.some((child) => child.parentId === row.id && scoped.has(child.id));
+  });
+};
+
+export const getScopedSubCategories = (
+  user: UserAccount | null,
+  categories: Category[],
+  parentId: string,
+): Category[] => {
+  const scoped = getScopedCategoryIds(user, categories);
+  return categories.filter((row) => row.parentId === parentId && scoped.has(row.id));
 };
 
 export const resolveEquipmentCityId = (state: AppState, equipment: Equipment): string | null => {

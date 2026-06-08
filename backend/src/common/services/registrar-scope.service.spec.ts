@@ -10,10 +10,53 @@ const categories = [
   { id: 'cat-child', parentId: 'cat-root' },
 ];
 
+const orgUnitRows = [
+  { id: 'ou-root', parentId: null },
+  { id: 'ou-child', parentId: 'ou-root' },
+  { id: 'ou-other', parentId: null },
+  { id: 'ed-zenica', parentId: 'ou-root' },
+  { id: 'sluzba-ed', parentId: 'ed-zenica' },
+  { id: 'sluzba-dir', parentId: 'ou-root' },
+];
+
 const orgUnits = [
   { id: 'ou-root', parentId: null, effectiveLocationCityId: 'city-a', locationCityId: null },
   { id: 'ou-child', parentId: 'ou-root', effectiveLocationCityId: 'city-a', locationCityId: null },
   { id: 'ou-other', parentId: null, effectiveLocationCityId: 'city-b', locationCityId: null },
+  { id: 'ed-zenica', parentId: 'ou-root', effectiveLocationCityId: 'city-zenica', locationCityId: null },
+  { id: 'sluzba-ed', parentId: 'ed-zenica', effectiveLocationCityId: 'city-zenica', locationCityId: null },
+  { id: 'sluzba-dir', parentId: 'ou-root', effectiveLocationCityId: 'city-a', locationCityId: null },
+];
+
+const warehouseRows = [
+  {
+    id: 'wh-a',
+    orgUnitId: 'ou-root',
+    cityId: 'city-a',
+    isActive: true,
+    createdAt: '2024-01-01',
+  },
+  {
+    id: 'wh-b',
+    orgUnitId: 'ou-other',
+    cityId: 'city-b',
+    isActive: true,
+    createdAt: '2024-01-01',
+  },
+  {
+    id: 'wh-central',
+    orgUnitId: 'ou-root',
+    cityId: 'city-a',
+    isActive: true,
+    createdAt: '2024-01-01',
+  },
+  {
+    id: 'wh-ed',
+    orgUnitId: 'ed-zenica',
+    cityId: 'city-zenica',
+    isActive: true,
+    createdAt: '2024-01-02',
+  },
 ];
 
 const warehouses: Record<
@@ -22,6 +65,8 @@ const warehouses: Record<
 > = {
   'wh-a': { id: 'wh-a', cityId: 'city-a', orgUnitId: 'ou-root' },
   'wh-b': { id: 'wh-b', cityId: 'city-b', orgUnitId: 'ou-other' },
+  'wh-central': { id: 'wh-central', cityId: 'city-a', orgUnitId: 'ou-root' },
+  'wh-ed': { id: 'wh-ed', cityId: 'city-zenica', orgUnitId: 'ed-zenica' },
 };
 
 const expandOrgSubtree = (rootId: string): string[] => {
@@ -31,7 +76,7 @@ const expandOrgSubtree = (rootId: string): string[] => {
       return;
     }
     result.add(id);
-    for (const unit of orgUnits.filter((row) => row.parentId === id)) {
+    for (const unit of orgUnitRows.filter((row) => row.parentId === id)) {
       visit(unit.id);
     }
   };
@@ -59,9 +104,13 @@ const createService = (options?: {
     category: {
       findMany: async () => categories,
     },
+    orgUnit: {
+      findMany: async () => orgUnitRows,
+    },
     warehouse: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         warehouses[where.id] ?? null,
+      findMany: async () => warehouseRows,
     },
     warehouseKeeper: {
       findMany: async ({ where }: { where: { userId: string } }) =>
@@ -192,14 +241,18 @@ describe('RegistrarScopeService', () => {
       assert.deepEqual(where, { id: 'emp-user' });
     });
 
-    it('evidenticar mode A filters by warehouse city coverage', async () => {
+    it('evidenticar mode A filters by effective warehouse org units', async () => {
       const service = createService();
       const where = await service.buildEmployeeWhere(
         authUser('evidenticar', {
           registrarScopes: [{ warehouseId: 'wh-a', categoryId: 'cat-root' }],
         }),
       );
-      assert.ok(where.AND);
+      assert.ok((where as { orgUnitId: { in: string[] } }).orgUnitId.in.includes('ou-child'));
+      assert.equal(
+        (where as { orgUnitId: { in: string[] } }).orgUnitId.in.includes('sluzba-ed'),
+        false,
+      );
     });
   });
 
@@ -350,9 +403,90 @@ describe('RegistrarScopeService', () => {
     it('user transfer scope follows equipment scope', async () => {
       const service = createService();
       const where = await service.buildTransferWhere(authUser('user'));
-      assert.deepEqual(where, {
-        equipment: { currentHolderId: 'emp-user' },
-      });
+      assert.ok(where.OR);
+      const orClauses = where.OR as Record<string, unknown>[];
+      assert.ok(orClauses.some((row) => 'equipment' in row));
+    });
+
+    it('central registrar excludes ED Zenica subtree holders', async () => {
+      const service = createService();
+      const holder: Employee = {
+        id: 'emp-ed',
+        firstName: 'E',
+        lastName: 'D',
+        title: 'Radnik',
+        orgUnitId: 'sluzba-ed',
+        email: null,
+        phone: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const allowed = await service.canAccessEquipment(
+        authUser('evidenticar'),
+        {
+          id: 'eq-ed',
+          inventoryNumber: 'INV-ED',
+          categoryId: 'cat-child',
+          status: 'zaduzeno',
+          warehouseId: null,
+          currentHolderId: holder.id,
+          entryDate: new Date(),
+          specifications: {},
+          warehouseCondition: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        holder,
+        [{ warehouseId: 'wh-central', categoryId: 'cat-root' }],
+      );
+      assert.equal(allowed, false);
+    });
+
+    it('ED registrar includes ED Zenica subtree holders', async () => {
+      const service = createService();
+      const holder: Employee = {
+        id: 'emp-ed',
+        firstName: 'E',
+        lastName: 'D',
+        title: 'Radnik',
+        orgUnitId: 'sluzba-ed',
+        email: null,
+        phone: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const allowed = await service.canAccessEquipment(
+        authUser('evidenticar'),
+        {
+          id: 'eq-ed',
+          inventoryNumber: 'INV-ED',
+          categoryId: 'cat-child',
+          status: 'zaduzeno',
+          warehouseId: null,
+          currentHolderId: holder.id,
+          entryDate: new Date(),
+          specifications: {},
+          warehouseCondition: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        holder,
+        [{ warehouseId: 'wh-ed', categoryId: 'cat-root' }],
+      );
+      assert.equal(allowed, true);
+    });
+
+    it('evidenticar transfer scope includes employee participants', async () => {
+      const service = createService();
+      const where = await service.buildTransferWhere(
+        authUser('evidenticar', {
+          registrarScopes: [{ warehouseId: 'wh-a', categoryId: 'cat-root' }],
+        }),
+      );
+      assert.ok(where.OR);
+      const orClauses = where.OR as Record<string, unknown>[];
+      assert.ok(orClauses.some((row) => 'fromPerson' in row));
+      assert.ok(orClauses.some((row) => 'toPerson' in row));
     });
   });
 });

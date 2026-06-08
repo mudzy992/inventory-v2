@@ -13,17 +13,17 @@ import {
   useInventoryNumberAvailability,
   type AvailabilityStatus,
 } from '../../hooks/use-equipment-availability';
-import { getStockLotStatusLabel } from '../../helpers/warehouse-stock.util';
+import { getStockLotListBadge } from '../../helpers/warehouse-stock.util';
 import { fetchEmployeesPageApi } from '../../api/employees-api';
 import { fetchAllPaginatedItems } from '../../api/fetch-all-paginated';
 import { usePaginatedList } from '../../hooks/usePaginatedList';
 import { useStore, useRefreshData } from '../../useStore';
-import type { Category, Employee, WarehouseStockLot, WarehouseStockLotStatus } from '../../types';
+import type { Category, Employee, WarehouseStockLot } from '../../types';
 import { PageHeaderRow } from '../ui/page-header-row';
 import { Button } from '../ui/button';
 import { PaginationControls } from '../ui/pagination-controls';
 import { cardClass, inputClass, labelClass } from '../ui/form-styles';
-import { Badge, type BadgeProps } from '../ui/badge';
+import { Badge } from '../ui/badge';
 import { SearchableAutocomplete, type SearchableOption } from '../searchable-autocomplete';
 import { AvailabilityHint } from './availability-hint';
 import { CategoryFieldControl } from './category-field-control';
@@ -38,16 +38,6 @@ const buildSpecFields = (category: Category | undefined, unique: boolean) => {
     return [];
   }
   return [...category.fields, ...category.optionalFields].filter((field) => field.unique === unique);
-};
-
-const getStatusTone = (status: WarehouseStockLotStatus): BadgeProps['tone'] => {
-  if (status === 'ceka_specifikaciju') {
-    return 'warning';
-  }
-  if (status === 'spremno_za_izdavanje') {
-    return 'success';
-  }
-  return 'neutral';
 };
 
 const LotSectionCard = ({
@@ -236,7 +226,9 @@ export const RegistrarStockPage = () => {
                   {detail.warehouseName ?? '—'} · {detail.categoryName ?? '—'}
                 </p>
               </div>
-              <Badge tone={getStatusTone(detail.status)}>{getStockLotStatusLabel(detail.status)}</Badge>
+              <Badge tone={getStockLotListBadge(detail.status, detail.quantityOnHand, detail.quantityReceived).tone}>
+                {getStockLotListBadge(detail.status, detail.quantityOnHand, detail.quantityReceived).label}
+              </Badge>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="inline-flex items-center rounded-full bg-white border border-gray-200 px-3 py-1 text-xs text-gray-600">
@@ -392,7 +384,9 @@ export const RegistrarStockPage = () => {
                 {lot.warehouseName} · {lot.quantityOnHand}/{lot.quantityReceived} na skladištu
               </p>
             </div>
-            <Badge tone={getStatusTone(lot.status)}>{getStockLotStatusLabel(lot.status)}</Badge>
+            <Badge tone={getStockLotListBadge(lot.status, lot.quantityOnHand, lot.quantityReceived).tone}>
+              {getStockLotListBadge(lot.status, lot.quantityOnHand, lot.quantityReceived).label}
+            </Badge>
             <ChevronRight size={16} className="text-gray-400 shrink-0" />
           </button>
         ))}

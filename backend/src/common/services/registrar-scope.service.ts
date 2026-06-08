@@ -12,6 +12,14 @@ import {
   isRegistrarModeA,
   type RegistrarScopeAssignment,
 } from '../types/registrar-scope.type';
+import {
+  collectOrgUnitIdsForEffectiveWarehouse,
+  intersectOrgUnitIdSets,
+} from '../utils/collect-org-units-for-warehouse.util';
+import type {
+  OrgUnitWarehouseRow,
+  WarehouseRow,
+} from '../utils/resolve-effective-warehouse.util';
 import { LocationResolutionService } from './location-resolution.service';
 import { OrgScopeService } from './org-scope.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -20,6 +28,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class RegistrarScopeService {
   private categoryChildrenByParent = new Map<string | null, string[]>();
   private categoryCacheLoaded = false;
+  private orgUnitsCache: OrgUnitWarehouseRow[] | null = null;
+  private warehousesCache: WarehouseRow[] | null = null;
+  private orgIdsByWarehouseCache = new Map<string, Set<string>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -333,11 +344,16 @@ export class RegistrarScopeService {
       return {};
     }
     const equipmentWhere = await this.buildEquipmentWhere(user);
+    const employeeWhere = await this.buildEmployeeWhere(user);
     const actor = await this.prisma.user.findUnique({
       where: { id: user.id },
       select: { employeeId: true },
     });
-    const orClauses: Prisma.TransferWhereInput[] = [{ equipment: equipmentWhere }];
+    const orClauses: Prisma.TransferWhereInput[] = [
+      { equipment: equipmentWhere },
+      { fromPerson: employeeWhere },
+      { toPerson: employeeWhere },
+    ];
     if (actor?.employeeId) {
       orClauses.push({
         inventoryLine: {
@@ -345,7 +361,7 @@ export class RegistrarScopeService {
         },
       });
     }
-    return orClauses.length === 1 ? orClauses[0]! : { OR: orClauses };
+    return { OR: orClauses };
   }
 
   private async buildAssignmentEquipmentWhere(
@@ -354,20 +370,14 @@ export class RegistrarScopeService {
     const categoryIds = [...(await this.expandCategoryIds([assignment.categoryId]))];
     const categoryFilter: Prisma.EquipmentWhereInput = { categoryId: { in: categoryIds } };
     if (isRegistrarModeA(assignment)) {
-      const warehouse = await this.prisma.warehouse.findUnique({
-        where: { id: assignment.warehouseId },
-        select: { orgUnitId: true },
-      });
-      const zaduzenoClause: Prisma.EquipmentWhereInput = warehouse?.orgUnitId
-        ? {
-            status: 'zaduzeno',
-            currentHolder: {
-              orgUnitId: {
-                in: [...(await this.orgScopeService.expandOrgUnitIds([warehouse.orgUnitId]))],
-              },
-            },
-          }
-        : { status: 'zaduzeno' };
+      const holderOrgIds = [...(await this.getOrgUnitIdsForWarehouse(assignment.warehouseId))];
+      const zaduzenoClause: Prisma.EquipmentWhereInput =
+        holderOrgIds.length > 0
+          ? {
+              status: 'zaduzeno',
+              currentHolder: { orgUnitId: { in: holderOrgIds } },
+            }
+          : { id: { in: [] } };
       return {
         AND: [
           categoryFilter,
@@ -381,12 +391,15 @@ export class RegistrarScopeService {
         ],
       };
     }
-    const subtreeIds = [...(await this.orgScopeService.expandOrgUnitIds([assignment.orgUnitId!]))];
+    const effectiveOrgIds = await this.getEffectiveOrgIdsForModeB(assignment);
+    if (effectiveOrgIds.length === 0) {
+      return { id: { in: [] } };
+    }
     return {
       AND: [
         categoryFilter,
         { status: { not: 'skladiste' } },
-        { currentHolder: { orgUnitId: { in: subtreeIds } } },
+        { currentHolder: { orgUnitId: { in: effectiveOrgIds } } },
       ],
     };
   }
@@ -396,28 +409,19 @@ export class RegistrarScopeService {
   ): Promise<Prisma.EmployeeWhereInput> {
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: assignment.warehouseId },
-      select: { cityId: true, orgUnitId: true },
+      select: { id: true },
     });
     if (!warehouse) {
       return { id: { in: [] } };
     }
-    const cityFilter: Prisma.EmployeeWhereInput = {
-      orgUnit: {
-        OR: [
-          { effectiveLocationCityId: warehouse.cityId },
-          { locationCityId: warehouse.cityId },
-        ],
-      },
-    };
     if (isRegistrarModeA(assignment)) {
-      if (!warehouse.orgUnitId) {
-        return cityFilter;
-      }
-      const coverageIds = [...(await this.orgScopeService.expandOrgUnitIds([warehouse.orgUnitId]))];
-      return { AND: [cityFilter, { orgUnitId: { in: coverageIds } }] };
+      const orgUnitIds = [...(await this.getOrgUnitIdsForWarehouse(assignment.warehouseId))];
+      return orgUnitIds.length > 0 ? { orgUnitId: { in: orgUnitIds } } : { id: { in: [] } };
     }
-    const subtreeIds = [...(await this.orgScopeService.expandOrgUnitIds([assignment.orgUnitId!]))];
-    return { AND: [cityFilter, { orgUnitId: { in: subtreeIds } }] };
+    const effectiveOrgIds = await this.getEffectiveOrgIdsForModeB(assignment);
+    return effectiveOrgIds.length > 0
+      ? { orgUnitId: { in: effectiveOrgIds } }
+      : { id: { in: [] } };
   }
 
   private async matchesAssignmentEquipment(
@@ -435,7 +439,7 @@ export class RegistrarScopeService {
         return equipment.warehouseId === assignment.warehouseId;
       }
       if (equipment.status === 'zaduzeno' && holder) {
-        return this.isEmployeeInWarehouseCoverage(assignment.warehouseId, holder.orgUnitId);
+        return this.isOrgUnitInEffectiveWarehouseScope(assignment.warehouseId, holder.orgUnitId);
       }
       if (equipment.status === 'rashodovano') {
         return equipment.warehouseId === assignment.warehouseId;
@@ -448,53 +452,79 @@ export class RegistrarScopeService {
     if (!holder) {
       return false;
     }
-    const subtreeIds = await this.orgScopeService.expandOrgUnitIds([assignment.orgUnitId!]);
-    return subtreeIds.includes(holder.orgUnitId);
+    const effectiveOrgIds = await this.getEffectiveOrgIdsForModeB(assignment);
+    return effectiveOrgIds.includes(holder.orgUnitId);
   }
 
   private async matchesAssignmentEmployee(
     assignment: RegistrarScopeAssignment,
     employee: Employee,
   ): Promise<boolean> {
-    const warehouse = await this.prisma.warehouse.findUnique({
-      where: { id: assignment.warehouseId },
-      select: { cityId: true, orgUnitId: true },
-    });
-    if (!warehouse) {
-      return false;
-    }
-    const employeeCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
-      employee.orgUnitId,
-    );
-    if (employeeCityId !== warehouse.cityId) {
-      return false;
-    }
     if (isRegistrarModeA(assignment)) {
-      if (!warehouse.orgUnitId) {
-        return true;
-      }
-      return this.isEmployeeInWarehouseCoverage(assignment.warehouseId, employee.orgUnitId);
+      return this.isOrgUnitInEffectiveWarehouseScope(
+        assignment.warehouseId,
+        employee.orgUnitId,
+      );
     }
-    const subtreeIds = await this.orgScopeService.expandOrgUnitIds([assignment.orgUnitId!]);
-    return subtreeIds.includes(employee.orgUnitId);
+    const effectiveOrgIds = await this.getEffectiveOrgIdsForModeB(assignment);
+    return effectiveOrgIds.includes(employee.orgUnitId);
   }
 
-  private async isEmployeeInWarehouseCoverage(
+  private async isOrgUnitInEffectiveWarehouseScope(
     warehouseId: string,
-    employeeOrgUnitId: string,
+    orgUnitId: string,
   ): Promise<boolean> {
-    const warehouse = await this.prisma.warehouse.findUnique({
-      where: { id: warehouseId },
-      select: { orgUnitId: true },
-    });
-    if (!warehouse) {
-      return false;
+    const orgIds = await this.getOrgUnitIdsForWarehouse(warehouseId);
+    return orgIds.has(orgUnitId);
+  }
+
+  private async getEffectiveOrgIdsForModeB(
+    assignment: RegistrarScopeAssignment,
+  ): Promise<string[]> {
+    const warehouseOrgIds = await this.getOrgUnitIdsForWarehouse(assignment.warehouseId);
+    const assignmentSubtree = new Set(
+      await this.orgScopeService.expandOrgUnitIds([assignment.orgUnitId!]),
+    );
+    return intersectOrgUnitIdSets(warehouseOrgIds, assignmentSubtree);
+  }
+
+  private async getOrgUnitIdsForWarehouse(warehouseId: string): Promise<Set<string>> {
+    const cached = this.orgIdsByWarehouseCache.get(warehouseId);
+    if (cached) {
+      return cached;
     }
-    if (!warehouse.orgUnitId) {
-      return true;
+    await this.ensureOrgWarehouseCache();
+    const orgUnits = this.orgUnitsCache ?? [];
+    const warehouses = this.warehousesCache ?? [];
+    const cityByOrgUnit = new Map<string, string | null>();
+    for (const unit of orgUnits) {
+      cityByOrgUnit.set(
+        unit.id,
+        await this.locationResolutionService.getEffectiveLocationForOrgUnit(unit.id),
+      );
     }
-    const subtreeIds = await this.orgScopeService.expandOrgUnitIds([warehouse.orgUnitId]);
-    return subtreeIds.includes(employeeOrgUnitId);
+    const orgIds = collectOrgUnitIdsForEffectiveWarehouse(
+      warehouseId,
+      orgUnits,
+      warehouses,
+      (orgUnitId) => cityByOrgUnit.get(orgUnitId) ?? null,
+    );
+    this.orgIdsByWarehouseCache.set(warehouseId, orgIds);
+    return orgIds;
+  }
+
+  private async ensureOrgWarehouseCache(): Promise<void> {
+    if (this.orgUnitsCache && this.warehousesCache) {
+      return;
+    }
+    const [orgUnits, warehouses] = await Promise.all([
+      this.prisma.orgUnit.findMany({ select: { id: true, parentId: true } }),
+      this.prisma.warehouse.findMany({
+        select: { id: true, orgUnitId: true, cityId: true, isActive: true, createdAt: true },
+      }),
+    ]);
+    this.orgUnitsCache = orgUnits;
+    this.warehousesCache = warehouses;
   }
 
   private async ensureCategoryCache(): Promise<void> {
