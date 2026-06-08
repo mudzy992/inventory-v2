@@ -140,10 +140,6 @@ export function EmployeesPage() {
     }
   };
 
-  function getEquipmentCount(_empId: string): number {
-    return 0;
-  }
-
   return (
     <div>
       <PageHeaderRow
@@ -188,7 +184,7 @@ export function EmployeesPage() {
         emptyMessage="Nema rezultata"
         mobile={filtered.map((emp) => {
           const orgUnit = state.orgUnits.find(o => o.id === emp.orgUnitId);
-          const eqCount = getEquipmentCount(emp.id);
+          const eqCount = emp.heldEquipmentCount ?? 0;
           return (
             <div key={emp.id} className="p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
@@ -234,7 +230,7 @@ export function EmployeesPage() {
             <tbody>
               {filtered.map(emp => {
                 const orgUnit = state.orgUnits.find(o => o.id === emp.orgUnitId);
-                const eqCount = getEquipmentCount(emp.id);
+                const eqCount = emp.heldEquipmentCount ?? 0;
                 return (
                   <tr key={emp.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">

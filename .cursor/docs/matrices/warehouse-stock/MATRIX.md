@@ -29,8 +29,17 @@
 
 ## Izdavanje
 
+**S prenosnicom** (`transfer.generation.on_stock_lot_issue=true`, default):
+
 1. Kreira `Equipment` (`skladiste` + `warehouseId`) u transakciji
 2. Kreira i finalizira transfer `zaduzenje` → `zaduzeno`, `warehouseId` null
+3. Generiše DOCX/PDF prenosnice (ako postoji template)
+4. `quantityOnHand -= 1`
+
+**Bez prenosnice** (`on_stock_lot_issue=false`, globalno uključeno):
+
+1. Kreira `Equipment` direktno kao `zaduzeno` s `currentHolderId`
+2. Nema `Transfer` zapisa ni generisanja dokumenta
 3. `quantityOnHand -= 1`
 
 ## Notifikacije

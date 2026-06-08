@@ -23,8 +23,8 @@
 
 | Ključ | Default | Efekat |
 |-------|---------|--------|
-| `transfer.generation.enabled` | true | Master: isključeno → blok `POST /transfers`, stock-lot issue transfer, draft na popisu |
-| `transfer.generation.on_stock_lot_issue` | true | Izdavanje prvog komada iz lota |
+| `transfer.generation.enabled` | true | Master: isključeno → blok `POST /transfers`, izdavanje iz lota i draft na popisu |
+| `transfer.generation.on_stock_lot_issue` | true | Izdavanje iz lota: uključeno = transfer + prenosnica; isključeno = direktno zaduženje bez transfera (init) |
 | `transfer.generation.on_zaduzenje` | true | Skladište → osoba |
 | `transfer.generation.on_prenos` | true | Osoba → osoba |
 | `transfer.generation.on_razduzenje` | true | Osoba → skladište |
@@ -32,7 +32,7 @@
 | `transfer.generate_print_pdf` | true | DOCX → PDF (LibreOffice `soffice` na serveru) |
 | `transfer.require_signed_pdf_upload` | true | Obavezan upload potpisanog PDF prije `sign` |
 
-Init / masovni uvoz: postaviti `transfer.generation.enabled=false`.
+Init / masovno zaduživanje iz lota bez prenosnica: `transfer.generation.enabled=true`, `transfer.generation.on_stock_lot_issue=false`. Potpuno blokiranje prenosa: `transfer.generation.enabled=false`.
 
 ## Word obrazac (po skladištu)
 

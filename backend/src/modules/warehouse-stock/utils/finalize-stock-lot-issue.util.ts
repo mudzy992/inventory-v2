@@ -2,28 +2,61 @@ import type { Prisma } from '../../../../generated/prisma/client';
 import { allocateTransferDocumentNumberInTx } from '../../transfers/utils/allocate-transfer-document-number.util';
 import { buildEquipmentUpdateOnFinalize } from '../../transfers/transfer-validation.util';
 
-interface FinalizeStockLotIssueInput {
-  lot: {
-    id: string;
-    warehouseId: string;
-    categoryId: string;
-    catalogItemId: string | null;
-    contractNumber: string | null;
-    entryDate: Date;
-    specifications: Prisma.JsonValue;
-  };
+interface StockLotIssueLotInput {
+  id: string;
+  warehouseId: string;
+  categoryId: string;
+  catalogItemId: string | null;
+  contractNumber: string | null;
+  entryDate: Date;
+  specifications: Prisma.JsonValue;
+}
+
+interface StockLotIssueBaseInput {
+  lot: StockLotIssueLotInput;
   employeeId: string;
   inventoryNumber: string;
   mergedSpecifications: Record<string, string>;
+}
+
+interface FinalizeStockLotIssueWithTransferInput extends StockLotIssueBaseInput {
   signerId: string;
   createdByUserId: string;
   transferDate: Date;
 }
 
-export const executeStockLotIssueInTx = async (
+export type StockLotIssueResult = {
+  equipmentId: string;
+  transferId: string | null;
+};
+
+export const executeStockLotIssueDirectInTx = async (
   tx: Prisma.TransactionClient,
-  input: FinalizeStockLotIssueInput,
-): Promise<{ equipmentId: string; transferId: string }> => {
+  input: StockLotIssueBaseInput,
+): Promise<StockLotIssueResult> => {
+  const assignment = buildEquipmentUpdateOnFinalize('zaduzenje', input.employeeId, null);
+  const equipment = await tx.equipment.create({
+    data: {
+      categoryId: input.lot.categoryId,
+      catalogItemId: input.lot.catalogItemId,
+      stockLotId: input.lot.id,
+      inventoryNumber: input.inventoryNumber,
+      specifications: input.mergedSpecifications,
+      contractNumber: input.lot.contractNumber,
+      entryDate: input.lot.entryDate,
+      status: assignment.status,
+      currentHolderId: assignment.currentHolderId,
+      warehouseId: assignment.warehouseId,
+      warehouseCondition: assignment.warehouseCondition,
+    },
+  });
+  return { equipmentId: equipment.id, transferId: null };
+};
+
+export const executeStockLotIssueWithTransferInTx = async (
+  tx: Prisma.TransactionClient,
+  input: FinalizeStockLotIssueWithTransferInput,
+): Promise<StockLotIssueResult> => {
   const equipment = await tx.equipment.create({
     data: {
       categoryId: input.lot.categoryId,
@@ -73,3 +106,6 @@ export const executeStockLotIssueInTx = async (
   });
   return { equipmentId: equipment.id, transferId: transfer.id };
 };
+
+/** @deprecated Use executeStockLotIssueWithTransferInTx */
+export const executeStockLotIssueInTx = executeStockLotIssueWithTransferInTx;

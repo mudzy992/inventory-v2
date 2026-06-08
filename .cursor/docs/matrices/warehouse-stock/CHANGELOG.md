@@ -1,5 +1,9 @@
 # Changelog — warehouse-stock
 
+## 2026-06-08
+
+- Dva toka izdavanja: s transferom/prenosnicom ili direktno zaduženje (`executeStockLotIssueDirectInTx`).
+
 ## 2026-06-03
 
 - Uveden `WarehouseStockLot` i tok prijem → spec → issue.

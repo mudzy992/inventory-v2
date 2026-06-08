@@ -24,6 +24,24 @@ export const resolveTransferGenerationSettingKey = (
   return TYPE_SETTING_KEY[type];
 };
 
+export const assertMasterTransferGenerationEnabled = async (
+  settings: TransferGenerationSettingsReader,
+): Promise<void> => {
+  const masterEnabled = await settings.getBooleanValue('transfer.generation.enabled', true);
+  if (!masterEnabled) {
+    throw new BadRequestException(
+      'Kreiranje prenosnica je isključeno (inicijalizacija / postavke).',
+    );
+  }
+};
+
+export const isStockLotTransferDocumentEnabled = async (
+  settings: TransferGenerationSettingsReader,
+): Promise<boolean> => {
+  await assertMasterTransferGenerationEnabled(settings);
+  return settings.getBooleanValue('transfer.generation.on_stock_lot_issue', true);
+};
+
 export const assertTransferCreationAllowed = async (
   settings: TransferGenerationSettingsReader,
   type: TransferType,

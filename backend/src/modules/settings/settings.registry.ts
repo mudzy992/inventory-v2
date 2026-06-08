@@ -345,7 +345,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     defaultValue: true,
     label: 'Kreiranje prenosnica (uključeno)',
     description:
-      'Isključite pri masovnom uvozu opreme bez prenosnica. Blokira API prenosa, izdavanje iz lota i draft prenose na popisu.',
+      'Master prekidač. Isključeno blokira API prenosa, izdavanje iz lota i draft prenose na popisu. Za inicijalno zaduživanje iz lota bez prenosnica ostavite uključeno i isključite samo „Prenosnica pri izdavanju iz lota“.',
     group: 'transfers',
   }),
   def({
@@ -353,8 +353,9 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     scope: 'private',
     valueType: 'boolean',
     defaultValue: true,
-    label: 'Prenosnica pri prvom izdavanju iz lota',
-    description: 'Automatski transfer kada evidentičar izda prvi komad sa skladišnog lota.',
+    label: 'Prenosnica pri izdavanju iz lota',
+    description:
+      'Uključeno: pri izdavanju iz lota kreira se transfer i prenosnica. Isključeno: oprema se direktno zadužuje radniku bez transfera i dokumenta (init / masovno punjenje). Zahtijeva uključeno globalno kreiranje prenosnica.',
     group: 'transfers',
   }),
   def({

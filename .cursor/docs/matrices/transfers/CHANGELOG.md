@@ -1,3 +1,8 @@
+## 2026-06-08 — Lot issue bez prenosnice (init)
+
+- `transfer.generation.on_stock_lot_issue=false`: izdavanje iz lota zadužuje opremu direktno bez `Transfer` zapisa i bez DOCX/PDF.
+- Master `transfer.generation.enabled=false` i dalje blokira izdavanje iz lota.
+
 ## 2026-06-04 — UI dopune
 
 - `TransferDocumentPanel`: iframe pregled generisanog PDF prije uploada potpisanog.

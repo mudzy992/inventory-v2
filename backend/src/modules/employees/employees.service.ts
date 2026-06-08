@@ -26,6 +26,12 @@ const EMPLOYEE_SORT_FIELDS: Record<string, string> = {
   createdAt: 'createdAt',
 };
 
+const HELD_EQUIPMENT_COUNT_SELECT = {
+  heldEquipment: { where: { status: 'zaduzeno' as const } },
+} as const;
+
+export type EmployeeListItem = Employee & { heldEquipmentCount: number };
+
 @Injectable()
 export class EmployeesService {
   constructor(
@@ -38,19 +44,28 @@ export class EmployeesService {
   async findAll(
     user: AuthenticatedUser,
     query: ListEmployeesQueryDto,
-  ): Promise<PaginatedResponse<Employee>> {
+  ): Promise<PaginatedResponse<EmployeeListItem>> {
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
     const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
     const where = await this.buildListWhere(user, query);
     const orderBy = buildOrderBy(query.sortBy, query.sortDir, EMPLOYEE_SORT_FIELDS, 'lastName');
-    return paginate({
-      findMany: (args) => this.prisma.employee.findMany({ ...args, orderBy: [orderBy, { firstName: 'asc' }] }),
+    const result = await paginate({
+      findMany: (args) =>
+        this.prisma.employee.findMany({
+          ...args,
+          orderBy: [orderBy, { firstName: 'asc' }],
+          include: { _count: { select: HELD_EQUIPMENT_COUNT_SELECT } },
+        }),
       count: (args) => this.prisma.employee.count(args),
       where,
       orderBy,
       page,
       pageSize: take,
     });
+    return {
+      items: result.items.map((row) => this.toListItem(row)),
+      meta: result.meta,
+    };
   }
 
   async search(query: SearchEmployeesQueryDto): Promise<Employee[]> {
@@ -165,5 +180,15 @@ export class EmployeesService {
     if (!unit) {
       throw new NotFoundException('Org unit not found');
     }
+  }
+
+  private toListItem(
+    row: Employee & { _count: { heldEquipment: number } },
+  ): EmployeeListItem {
+    const { _count, ...employee } = row;
+    return {
+      ...employee,
+      heldEquipmentCount: _count.heldEquipment,
+    };
   }
 }

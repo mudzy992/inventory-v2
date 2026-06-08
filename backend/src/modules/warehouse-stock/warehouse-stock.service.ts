@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma, WarehouseStockLot } from '../../../generated/prisma/client';
+import { Prisma, type WarehouseStockLot } from '../../../generated/prisma/client';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { SignerResolutionService } from '../../common/services/signer-resolution.service';
@@ -42,8 +42,11 @@ const STOCK_LOT_SORT_FIELDS: Record<string, string> = {
   status: 'status',
 };
 import { TransferDocumentGenerationService } from '../transfers/transfer-document-generation.service';
-import { assertTransferCreationAllowed } from '../transfers/utils/transfer-generation-policy.util';
-import { executeStockLotIssueInTx } from './utils/finalize-stock-lot-issue.util';
+import { isStockLotTransferDocumentEnabled } from '../transfers/utils/transfer-generation-policy.util';
+import {
+  executeStockLotIssueDirectInTx,
+  executeStockLotIssueWithTransferInTx,
+} from './utils/finalize-stock-lot-issue.util';
 import { resolveTransferSignerId } from '../transfers/utils/resolve-transfer-signer.util';
 
 const lotInclude = {
@@ -348,34 +351,50 @@ export class WarehouseStockService {
     }
     const lotSpecs = (lot.specifications ?? {}) as Record<string, string>;
     const mergedSpecifications = { ...lotSpecs, ...dto.uniqueSpecifications };
-    const signerResolved = dto.signerId
-      ? dto.signerId
-      : await resolveTransferSignerId(this.signerResolutionService, {
-          type: 'zaduzenje',
-          toPersonId: dto.employeeId,
-        });
-    const signerId = this.signerResolutionService.assertEffectiveSignerConfigured(signerResolved);
-    const transferDate = dto.date ? new Date(dto.date) : new Date();
-    await assertTransferCreationAllowed(this.settingsService, 'zaduzenje', 'stock_lot');
+    const transferDocumentEnabled = await isStockLotTransferDocumentEnabled(this.settingsService);
+    const lotInput = {
+      id: lot.id,
+      warehouseId: lot.warehouseId,
+      categoryId: lot.categoryId,
+      catalogItemId: lot.catalogItemId,
+      contractNumber: lot.contractNumber,
+      entryDate: lot.entryDate,
+      specifications: lot.specifications,
+    };
+    const issueBase = {
+      lot: lotInput,
+      employeeId: dto.employeeId,
+      inventoryNumber: dto.inventoryNumber.trim(),
+      mergedSpecifications,
+    };
+    let transferIssueInput:
+      | {
+          signerId: string;
+          createdByUserId: string;
+          transferDate: Date;
+        }
+      | undefined;
+    if (transferDocumentEnabled) {
+      const signerResolved = dto.signerId
+        ? dto.signerId
+        : await resolveTransferSignerId(this.signerResolutionService, {
+            type: 'zaduzenje',
+            toPersonId: dto.employeeId,
+          });
+      transferIssueInput = {
+        signerId: this.signerResolutionService.assertEffectiveSignerConfigured(signerResolved),
+        createdByUserId: user.id,
+        transferDate: dto.date ? new Date(dto.date) : new Date(),
+      };
+    }
     try {
       const result = await this.prisma.$transaction(async (tx) => {
-        const issued = await executeStockLotIssueInTx(tx, {
-          lot: {
-            id: lot.id,
-            warehouseId: lot.warehouseId,
-            categoryId: lot.categoryId,
-            catalogItemId: lot.catalogItemId,
-            contractNumber: lot.contractNumber,
-            entryDate: lot.entryDate,
-            specifications: lot.specifications,
-          },
-          employeeId: dto.employeeId,
-          inventoryNumber: dto.inventoryNumber.trim(),
-          mergedSpecifications,
-          signerId,
-          createdByUserId: user.id,
-          transferDate,
-        });
+        const issued = transferIssueInput
+          ? await executeStockLotIssueWithTransferInTx(tx, {
+              ...issueBase,
+              ...transferIssueInput,
+            })
+          : await executeStockLotIssueDirectInTx(tx, issueBase);
         const nextOnHand = lot.quantityOnHand - 1;
         await tx.warehouseStockLot.update({
           where: { id: lotId },
@@ -386,11 +405,18 @@ export class WarehouseStockService {
         });
         return issued;
       });
-      await this.transferDocumentGeneration.generateForTransfer(result.transferId).catch(() => undefined);
-      await this.notificationsService.notifyTransferSigned(result.transferId);
+      if (result.transferId) {
+        await this.transferDocumentGeneration
+          .generateForTransfer(result.transferId)
+          .catch(() => undefined);
+        await this.notificationsService.notifyTransferSigned(result.transferId);
+      }
       return this.findOne(user, lotId);
-    } catch {
-      throw new ConflictException('Inventory number already exists');
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('Inventory number already exists');
+      }
+      throw err;
     }
   }
 

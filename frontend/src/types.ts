@@ -74,6 +74,7 @@ export interface Employee {
   orgUnitId: string;
   email?: string;
   phone?: string;
+  heldEquipmentCount?: number;
 }
 
 export interface CategoryField {

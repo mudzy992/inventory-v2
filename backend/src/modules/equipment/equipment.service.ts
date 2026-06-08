@@ -12,6 +12,7 @@ import { RegistrarScopeService } from '../../common/services/registrar-scope.ser
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { validateSpecifications } from '../../common/utils/category-fields.util';
+import { buildSpecificationFieldFilter } from '../../common/utils/json-specification-filter.util';
 import {
   buildOrderBy,
   paginate,
@@ -230,10 +231,7 @@ export class EquipmentService {
     const existing = await this.prisma.equipment.findFirst({
       where: {
         categoryId,
-        specifications: {
-          path: fieldId,
-          equals: trimmed,
-        },
+        specifications: buildSpecificationFieldFilter(fieldId, trimmed),
       },
       select: { id: true },
     });
