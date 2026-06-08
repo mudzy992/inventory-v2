@@ -1,4 +1,4 @@
-import { FileText, Package, Bell, ClipboardList } from 'lucide-react';
+import { FileText, Package, Bell, ClipboardList, AlertTriangle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 const NOTIFICATION_TYPE_META: Record<string, { icon: LucideIcon; label: string }> = {
@@ -9,6 +9,9 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: LucideIcon; label: string }
   inventory_transfer_upload_pending: { icon: ClipboardList, label: 'Popis — upload' },
   inventory_session_closed: { icon: ClipboardList, label: 'Popis zatvoren' },
   warehouse_stock_received: { icon: Package, label: 'Skladište' },
+  employee_relocation_admin_alert: { icon: AlertTriangle, label: 'Org. promjena' },
+  employee_relocation_action_required: { icon: ClipboardList, label: 'Org. promjena' },
+  employee_relocation_incoming: { icon: Package, label: 'Org. promjena' },
 };
 
 export const getNotificationTypeMeta = (type: string) =>

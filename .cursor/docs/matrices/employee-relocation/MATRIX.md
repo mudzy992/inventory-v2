@@ -42,19 +42,28 @@ Admin mijenja `Employee.orgUnitId`. Ako efektivno skladište (`resolveEffectiveW
 
 | Akcija | Efekat |
 |--------|--------|
-| `accept` | `quantityOnHand += 1` na dest lotu; `Equipment.stockLotId` → dest lot |
+| `accept` | Izvorni lot: `quantityReceived -= 1`; dest lot: `quantityReceived += 1`; `Equipment.stockLotId` → dest lot |
 | `reject` | Linija `rejected`; notifikacija izvoru |
 
 ## Stock pravila
 
-- Izvorni lot `quantityOnHand` **ne mijenja** se (komad već izdan).
+- Izvorni lot na **prihvatu na cilju**: `quantityReceived -= 1`; `quantityOnHand` **ne mijenja** se (komad već izdat).
 - Dest pending lot: `quantityOnHand=0`, `incomingRelocation=true` do prihvata.
-- Na prihvat: `quantityOnHand=1`, lot `spremno_za_izdavanje` ili `ceka_specifikaciju`.
+- Dest prihvat (**zaduzeno**): `quantityReceived += 1`, `quantityOnHand` ostaje 0 (oprema kod radnika).
+- Dest prihvat (**skladiste**, edge): `quantityReceived += 1` i `quantityOnHand += 1`.
 
 ## Šifrarnik
 
-- Obavezan za cross-warehouse transfer (`catalogItemId` na lotu/opremi).
-- Legacy bez mapiranja → admin mora mapirati prije transfera.
+- Obavezan za cross-warehouse transfer (`catalogItemId` na opremi ili izvornom lotu).
+- Legacy bez mapiranja → admin mapira preko **Mapiraj tip** na stranici Org. promjena (`PATCH lines/:id/map-catalog`).
+- **Prebaci** disabled dok nema effective catalog; **Razduži** radi bez šifrarnika.
+- Preview pri promjeni org. jedinice vraća `unmappedEquipment`.
+
+## Lot na cilju (auto-kreiranje)
+
+- Transfer **ne zahtijeva** postojeći lot na ciljnom skladištu.
+- Pri uspješnom **Prebaci** backend kreira pending lot na B (`incomingRelocation=true`, `quantityOnHand=0`) ako ne postoji.
+- Admin **ne** kreira lot ručno — samo mapira šifrarnik ako legacy oprema nema `catalogItemId`.
 
 ## Notifikacije
 

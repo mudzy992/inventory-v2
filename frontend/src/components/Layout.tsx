@@ -113,7 +113,7 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
             )}
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <NotificationsPanel />
+            <NotificationsPanel onNavigate={onNavigate} />
 
             <div className="relative">
               <button

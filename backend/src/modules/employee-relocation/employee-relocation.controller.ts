@@ -17,6 +17,7 @@ import { ListRelocationQueryDto } from './dto/list-relocation-query.dto';
 import { PreviewRelocationQueryDto } from './dto/preview-relocation-query.dto';
 import { ResolveDestDto } from './dto/resolve-dest.dto';
 import { ResolveSourceDto } from './dto/resolve-source.dto';
+import { MapCatalogDto } from './dto/map-catalog.dto';
 import { EmployeeRelocationService } from './employee-relocation.service';
 
 @Controller('employee-relocation')
@@ -72,5 +73,15 @@ export class EmployeeRelocationController {
     @Body() body: ResolveDestDto,
   ) {
     return this.relocationService.resolveDest(user, id, body.action);
+  }
+
+  @Patch('lines/:id/map-catalog')
+  @Roles(UserRole.admin)
+  mapCatalog(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: MapCatalogDto,
+  ) {
+    return this.relocationService.mapLineCatalog(user, id, body);
   }
 }

@@ -22,10 +22,17 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CategoriesService } from '../categories/categories.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { ListRelocationQueryDto } from './dto/list-relocation-query.dto';
 import { PreviewRelocationQueryDto } from './dto/preview-relocation-query.dto';
+import { MapCatalogDto } from './dto/map-catalog.dto';
+import {
+  getEffectiveCatalogItemId,
+  isLineMissingCatalog,
+} from './utils/effective-catalog.util';
+import { applyDestAcceptLotUpdatesInTx } from './utils/relocation-lot-accounting.util';
 
 const RELOCATION_LINE_SORT_FIELDS: Record<string, string> = {
   createdAt: 'createdAt',
@@ -46,9 +53,11 @@ const lineInclude = {
     select: {
       id: true,
       inventoryNumber: true,
+      status: true,
       catalogItemId: true,
       stockLotId: true,
       stockLot: { select: { catalogItemId: true, productName: true } },
+      catalogItem: { select: { id: true, code: true, name: true } },
     },
   },
   case: {
@@ -68,6 +77,7 @@ export class EmployeeRelocationService {
     private readonly inventoryFreeze: InventoryFreezeService,
     private readonly notifications: NotificationsService,
     private readonly settingsService: SettingsService,
+    private readonly categoriesService: CategoriesService,
   ) {}
 
   async preview(query: PreviewRelocationQueryDto) {
@@ -81,7 +91,10 @@ export class EmployeeRelocationService {
     const sameWarehouse = fromWarehouseId === toWarehouseId && fromWarehouseId !== null;
     const held = await this.prisma.equipment.findMany({
       where: { currentHolderId: employee.id, status: 'zaduzeno' },
-      include: { category: { select: { id: true, name: true } } },
+      include: {
+        category: { select: { id: true, name: true } },
+        stockLot: { select: { catalogItemId: true } },
+      },
     });
     const byCategory = new Map<string, { categoryId: string; categoryName: string; count: number }>();
     for (const row of held) {
@@ -129,6 +142,19 @@ export class EmployeeRelocationService {
         }
       }
     }
+    const unmappedEquipment = held
+      .filter((row) => isLineMissingCatalog(row))
+      .map((row) => ({
+        equipmentId: row.id,
+        inventoryNumber: row.inventoryNumber,
+        categoryId: row.categoryId,
+        categoryName: row.category.name,
+      }));
+    if (!sameWarehouse && unmappedEquipment.length > 0) {
+      warnings.push(
+        `${unmappedEquipment.length} stavki nema mapiran tip u šifrarniku — transfer neće biti moguć dok admin ne mapira.`,
+      );
+    }
     return {
       employeeId: employee.id,
       fromOrgUnitId: employee.orgUnitId,
@@ -138,6 +164,7 @@ export class EmployeeRelocationService {
       sameWarehouse,
       assignedCount: held.length,
       byCategory: [...byCategory.values()],
+      unmappedEquipment,
       warnings,
       requiresAction: !sameWarehouse && held.length > 0,
     };
@@ -424,6 +451,41 @@ export class EmployeeRelocationService {
     return this.executeDestAccept(user, line);
   }
 
+  async mapLineCatalog(user: AuthenticatedUser, lineId: string, dto: MapCatalogDto) {
+    await this.settingsService.assertFeatureEnabled('features.employee_relocation');
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('Samo administrator može mapirati šifrarnik');
+    }
+    const line = await this.getLineOrThrow(lineId);
+    if (!['pending_source', 'rejected'].includes(line.status)) {
+      throw new BadRequestException('Šifrarnik se može mapirati samo za aktivne stavke na izvoru');
+    }
+    if (line.case.status !== 'open') {
+      throw new BadRequestException('Case nije aktivan');
+    }
+    const catalogItem = await this.prisma.equipmentCatalogItem.findUnique({
+      where: { id: dto.catalogItemId },
+    });
+    if (!catalogItem || !catalogItem.isActive) {
+      throw new NotFoundException('Stavka šifrarnika nije pronađena');
+    }
+    if (catalogItem.categoryId !== line.categoryId) {
+      throw new BadRequestException('Stavka šifrarnika mora biti iz iste kategorije kao oprema');
+    }
+    await this.categoriesService.assertLeafCategory(catalogItem.categoryId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.equipment.update({
+        where: { id: line.equipmentId },
+        data: { catalogItemId: dto.catalogItemId },
+      });
+      await this.recordEvent(tx, line.caseId, line.id, user.id, 'catalog_mapped', {
+        equipmentId: line.equipmentId,
+        catalogItemId: dto.catalogItemId,
+      });
+    });
+    return this.getLineOrThrow(lineId);
+  }
+
   async getAdminAlerts() {
     await this.settingsService.assertFeatureEnabled('features.employee_relocation');
     const warehouses = await this.prisma.warehouse.findMany({
@@ -463,7 +525,24 @@ export class EmployeeRelocationService {
     const pendingDest = await this.prisma.employeeRelocationLine.count({
       where: { status: 'pending_dest' },
     });
-    return { missingRegistrars, openCases, pendingDest };
+    const activeSourceLines = await this.prisma.employeeRelocationLine.findMany({
+      where: {
+        status: { in: ['pending_source', 'rejected'] },
+        case: { status: 'open' },
+      },
+      select: {
+        equipment: {
+          select: {
+            catalogItemId: true,
+            stockLot: { select: { catalogItemId: true } },
+          },
+        },
+      },
+    });
+    const unmappedCatalogLines = activeSourceLines.filter((row) =>
+      isLineMissingCatalog(row.equipment),
+    ).length;
+    return { missingRegistrars, openCases, pendingDest, unmappedCatalogLines };
   }
 
   private async executeDischarge(
@@ -504,8 +583,7 @@ export class EmployeeRelocationService {
   ) {
     const caseRow = line.case;
     const equipment = line.equipment;
-    const catalogItemId =
-      equipment.catalogItemId ?? equipment.stockLot?.catalogItemId ?? null;
+    const catalogItemId = getEffectiveCatalogItemId(equipment);
     if (!catalogItemId) {
       const admins = await findAdminUserIds(this.prisma);
       await this.notifications.notifyEmployeeRelocationAdminAlert({
@@ -634,23 +712,19 @@ export class EmployeeRelocationService {
       throw new BadRequestException('Destinacijski lot nije definisan');
     }
     await this.prisma.$transaction(async (tx) => {
-      const lot = await tx.warehouseStockLot.findUnique({ where: { id: line.destStockLotId! } });
-      if (!lot) {
-        throw new NotFoundException('Destinacijski lot nije pronađen');
-      }
-      await tx.warehouseStockLot.update({
-        where: { id: lot.id },
-        data: {
-          quantityReceived: { increment: 1 },
-          quantityOnHand: { increment: 1 },
-          incomingRelocation: false,
+      const lotUpdate = await applyDestAcceptLotUpdatesInTx(tx, {
+        equipment: {
+          status: line.equipment.status,
+          stockLotId: line.equipment.stockLotId,
         },
+        fromWarehouseId: caseRow.fromWarehouseId,
+        destStockLotId: line.destStockLotId!,
       });
       await tx.equipment.update({
         where: { id: line.equipmentId },
         data: {
-          stockLotId: lot.id,
-          catalogItemId: lot.catalogItemId,
+          stockLotId: lotUpdate.destStockLotId,
+          catalogItemId: lotUpdate.catalogItemId,
         },
       });
       await tx.employeeRelocationLine.update({
@@ -662,7 +736,9 @@ export class EmployeeRelocationService {
         },
       });
       await this.recordEvent(tx, caseRow.id, line.id, user.id, 'dest_accepted', {
-        destStockLotId: lot.id,
+        destStockLotId: lotUpdate.destStockLotId,
+        sourceStockLotId: lotUpdate.sourceStockLotId,
+        quantityReceivedDelta: lotUpdate.deltas.sourceReceivedDelta,
       });
       await this.tryResolveCase(tx, caseRow.id);
     });

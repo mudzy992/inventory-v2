@@ -106,7 +106,7 @@ export function EmployeesPage() {
         const preview = await previewRelocationApi(editing.id, fOrgUnit);
         setRelocationPreview(preview);
         setPreviewLoading(false);
-        if (preview.requiresAction || preview.warnings.length > 0) {
+        if (preview.requiresAction || preview.warnings.length > 0 || preview.unmappedEquipment.length > 0) {
           return;
         }
       }
@@ -357,6 +357,19 @@ export function EmployeesPage() {
                       {warning}
                     </p>
                   ))}
+                  {relocationPreview.unmappedEquipment.length > 0 ? (
+                    <div className="text-xs text-red-800 space-y-1">
+                      <p className="font-medium">Oprema bez šifrarnika (transfer blokiran):</p>
+                      <ul className="list-disc pl-4">
+                        {relocationPreview.unmappedEquipment.map((row) => (
+                          <li key={row.equipmentId}>
+                            {row.inventoryNumber} — {row.categoryName}
+                          </li>
+                        ))}
+                      </ul>
+                      <p>Administrator mora mapirati tip na stranici Org. promjena prije transfera.</p>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>

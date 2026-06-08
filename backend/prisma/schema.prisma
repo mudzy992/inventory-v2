@@ -113,6 +113,7 @@ enum EmployeeRelocationEventAction {
   case_resolved
   case_cancelled
   superseded
+  catalog_mapped
 }
 
 enum WarehouseStockLotStatus {

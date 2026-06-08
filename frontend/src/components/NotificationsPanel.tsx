@@ -4,6 +4,7 @@ import { cn } from '../utils/cn';
 import { useNotifications } from '../contexts/SocketContext';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { getNotificationTypeMeta } from '../helpers/notification-type.util';
+import type { PageId } from './page-id';
 import type { Notification } from '../types';
 
 const formatRelativeTime = (iso: string): string => {
@@ -23,7 +24,7 @@ const formatRelativeTime = (iso: string): string => {
   return date.toLocaleDateString('bs-BA');
 };
 
-export const NotificationsPanel = () => {
+export const NotificationsPanel = ({ onNavigate }: { onNavigate?: (page: PageId) => void }) => {
   const {
     notifications,
     unreadCount,
@@ -44,6 +45,19 @@ export const NotificationsPanel = () => {
   const handleMarkRead = (notification: Notification) => {
     if (!notification.read) {
       void markRead(notification.id);
+    }
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    handleMarkRead(notification);
+    if (
+      onNavigate &&
+      (notification.type === 'employee_relocation_admin_alert' ||
+        notification.type === 'employee_relocation_action_required' ||
+        notification.type === 'employee_relocation_incoming')
+    ) {
+      onNavigate('employee-relocation');
+      setOpen(false);
     }
   };
 
@@ -91,7 +105,7 @@ export const NotificationsPanel = () => {
                   <button
                     key={notification.id}
                     type="button"
-                    onClick={() => handleMarkRead(notification)}
+                    onClick={() => handleNotificationClick(notification)}
                     className={cn(
                       'w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors',
                       !notification.read && 'bg-blue-50/50',

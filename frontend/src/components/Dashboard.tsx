@@ -174,8 +174,15 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <p className="text-sm text-amber-800 mt-2">
               Otvorenih case-ova: <strong>{relocationAlerts.openCases}</strong> · Čeka prihvat na cilju:{' '}
               <strong>{relocationAlerts.pendingDest}</strong>
+              {relocationAlerts.unmappedCatalogLines > 0 ? (
+                <>
+                  {' '}
+                  · Bez šifrarnika: <strong>{relocationAlerts.unmappedCatalogLines}</strong>
+                </>
+              ) : null}
             </p>
-            {onNavigate && relocationAlerts.openCases > 0 ? (
+            {onNavigate &&
+            (relocationAlerts.openCases > 0 || relocationAlerts.unmappedCatalogLines > 0) ? (
               <button
                 type="button"
                 className="text-xs font-medium text-amber-900 underline mt-2"

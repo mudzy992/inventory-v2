@@ -11,6 +11,12 @@ export interface RelocationPreview {
   sameWarehouse: boolean;
   assignedCount: number;
   byCategory: Array<{ categoryId: string; categoryName: string; count: number }>;
+  unmappedEquipment: Array<{
+    equipmentId: string;
+    inventoryNumber: string;
+    categoryId: string;
+    categoryName: string;
+  }>;
   warnings: string[];
   requiresAction: boolean;
 }
@@ -26,6 +32,8 @@ export interface RelocationLine {
     id: string;
     inventoryNumber: string;
     catalogItemId?: string | null;
+    stockLot?: { catalogItemId?: string | null; productName?: string | null } | null;
+    catalogItem?: { id: string; code: string; name: string } | null;
   };
   case: {
     id: string;
@@ -44,6 +52,7 @@ export interface AdminRelocationAlerts {
   }>;
   openCases: number;
   pendingDest: number;
+  unmappedCatalogLines: number;
 }
 
 export const previewRelocationApi = (employeeId: string, newOrgUnitId: string) =>
@@ -91,4 +100,10 @@ export const resolveRelocationDestApi = (lineId: string, action: 'accept' | 'rej
   apiRequest(`/employee-relocation/lines/${lineId}/dest`, {
     method: 'PATCH',
     body: JSON.stringify({ action }),
+  });
+
+export const mapRelocationLineCatalogApi = (lineId: string, catalogItemId: string) =>
+  apiRequest<RelocationLine>(`/employee-relocation/lines/${lineId}/map-catalog`, {
+    method: 'PATCH',
+    body: JSON.stringify({ catalogItemId }),
   });
