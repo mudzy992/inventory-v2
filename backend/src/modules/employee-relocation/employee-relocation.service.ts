@@ -33,6 +33,9 @@ import {
   isLineMissingCatalog,
 } from './utils/effective-catalog.util';
 import { applyDestAcceptLotUpdatesInTx } from './utils/relocation-lot-accounting.util';
+import {
+  inheritDestLotSpecificationsInTx,
+} from './utils/inherit-dest-lot-specifications.util';
 
 const RELOCATION_LINE_SORT_FIELDS: Record<string, string> = {
   createdAt: 'createdAt',
@@ -56,7 +59,7 @@ const lineInclude = {
       status: true,
       catalogItemId: true,
       stockLotId: true,
-      stockLot: { select: { catalogItemId: true, productName: true } },
+      stockLot: { select: { catalogItemId: true, productName: true, specifications: true, status: true } },
       catalogItem: { select: { id: true, code: true, name: true } },
     },
   },
@@ -617,6 +620,8 @@ export class EmployeeRelocationService {
         relatedId: line.id,
       });
     }
+    const category = await this.categoriesService.assertLeafCategory(line.categoryId);
+    const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
     const destLot = await this.prisma.$transaction(async (tx) => {
       let lot = await tx.warehouseStockLot.findFirst({
         where: {
@@ -643,6 +648,16 @@ export class EmployeeRelocationService {
           },
         });
       }
+      const specResult = await inheritDestLotSpecificationsInTx(tx, {
+        destLotId: lot.id,
+        sourceStockLotId: equipment.stockLotId,
+        destWarehouseId: caseRow.toWarehouseId,
+        catalogItemId,
+        categoryId: line.categoryId,
+        fields,
+        optionalFields,
+        actorUserId: user.id,
+      });
       await tx.employeeRelocationLine.update({
         where: { id: line.id },
         data: {
@@ -655,6 +670,8 @@ export class EmployeeRelocationService {
       await this.recordEvent(tx, caseRow.id, line.id, user.id, 'source_transfer', {
         destStockLotId: lot.id,
         catalogItemId,
+        specsInherited: specResult.inherited,
+        specsInheritanceSource: specResult.source,
       });
       return lot;
     });
@@ -711,6 +728,8 @@ export class EmployeeRelocationService {
     if (!line.destStockLotId) {
       throw new BadRequestException('Destinacijski lot nije definisan');
     }
+    const category = await this.categoriesService.assertLeafCategory(line.categoryId);
+    const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
     await this.prisma.$transaction(async (tx) => {
       const lotUpdate = await applyDestAcceptLotUpdatesInTx(tx, {
         equipment: {
@@ -719,6 +738,16 @@ export class EmployeeRelocationService {
         },
         fromWarehouseId: caseRow.fromWarehouseId,
         destStockLotId: line.destStockLotId!,
+      });
+      const specResult = await inheritDestLotSpecificationsInTx(tx, {
+        destLotId: lotUpdate.destStockLotId,
+        sourceStockLotId: lotUpdate.sourceStockLotId,
+        destWarehouseId: caseRow.toWarehouseId,
+        catalogItemId: lotUpdate.catalogItemId,
+        categoryId: line.categoryId,
+        fields,
+        optionalFields,
+        actorUserId: user.id,
       });
       await tx.equipment.update({
         where: { id: line.equipmentId },
@@ -739,6 +768,8 @@ export class EmployeeRelocationService {
         destStockLotId: lotUpdate.destStockLotId,
         sourceStockLotId: lotUpdate.sourceStockLotId,
         quantityReceivedDelta: lotUpdate.deltas.sourceReceivedDelta,
+        specsInherited: specResult.inherited,
+        specsInheritanceSource: specResult.source,
       });
       await this.tryResolveCase(tx, caseRow.id);
     });

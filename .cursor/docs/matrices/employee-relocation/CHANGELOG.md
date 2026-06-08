@@ -1,5 +1,10 @@
 # CHANGELOG — employee-relocation
 
+## 2026-06-05 (spec inheritance)
+
+- Dest relocation lot nasljeđuje lot-specifikaciju sa izvornog lota ili postojećeg lota istog `catalogItemId` na cilju.
+- Idempotentno na Prebaci + Prihvati; dest prelazi u `spremno_za_izdavanje` kad spec postoji.
+
 ## 2026-06-05 (lot accounting)
 
 - Pri **prihvatu na cilju**: izvorni lot `quantityReceived -= 1`; dest lot `quantityReceived += 1`.

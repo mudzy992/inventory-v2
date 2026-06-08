@@ -65,6 +65,13 @@ Admin mijenja `Employee.orgUnitId`. Ako efektivno skladište (`resolveEffectiveW
 - Pri uspješnom **Prebaci** backend kreira pending lot na B (`incomingRelocation=true`, `quantityOnHand=0`) ako ne postoji.
 - Admin **ne** kreira lot ručno — samo mapira šifrarnik ako legacy oprema nema `catalogItemId`.
 
+## Spec nasljeđivanje
+
+- Idempotentno na **Prebaci** i **Prihvati** — samo ako dest lot još nema lot-spec.
+- Prioritet: izvorni lot opreme (`stockLotId`) → postojeći lot na ciljnom skladištu (isti `catalogItemId`, `spremno_za_izdavanje`).
+- Nakon nasljeđivanja dest lot prelazi u `spremno_za_izdavanje` bez ručne definicije od evidentičara na cilju.
+- Unique polja opreme (`Equipment.specifications`) se ne diraju — nasljeđuje se samo lot-spec (`WarehouseStockLot.specifications`).
+
 ## Notifikacije
 
 | Tip | Primatelj |
