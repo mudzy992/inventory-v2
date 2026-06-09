@@ -29,8 +29,11 @@ export const canReadEquipment = async (
     }
     return canKeeperReadEquipment(equipment, keeperWarehouseIds);
   }
+  if (user.employeeId && equipment.currentHolderId === user.employeeId) {
+    return true;
+  }
   if (user.role === 'user') {
-    return Boolean(user.employeeId && equipment.currentHolderId === user.employeeId);
+    return false;
   }
   if (user.role === 'evidenticar') {
     return registrarScope.canAccessEquipment(user, equipment, holder);

@@ -3,8 +3,9 @@ import {
   fetchAdminRelocationAlertsApi,
   type AdminRelocationAlerts,
 } from '../api/employee-relocation-api';
+import { fetchEmployeesPageApi } from '../api/employees-api';
 import { fetchEquipmentSummaryApi } from '../api/equipment-api';
-import { fetchRecentTransfersApi } from '../api/transfers-api';
+import { fetchRecentTransfersApi, fetchTransfersPageApi } from '../api/transfers-api';
 import {
   getTransferEquipmentLabel,
   getTransferFromPersonName,
@@ -42,6 +43,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const scopes = getRegistrarScopes();
   const [equipmentSummary, setEquipmentSummary] = useState<EquipmentSummary | null>(null);
   const [recentTransfers, setRecentTransfers] = useState<TransferRecord[]>([]);
+  const [totalEmployees, setTotalEmployees] = useState(0);
+  const [totalTransfers, setTotalTransfers] = useState(0);
+  const [rawTransfers, setRawTransfers] = useState(0);
   const [relocationAlerts, setRelocationAlerts] = useState<AdminRelocationAlerts | null>(null);
   const [categoryStats, setCategoryStats] = useState<
     {
@@ -61,6 +65,15 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     void fetchRecentTransfersApi(5)
       .then(setRecentTransfers)
       .catch(() => setRecentTransfers([]));
+    void fetchEmployeesPageApi({ page: 1, pageSize: 1 })
+      .then((response) => setTotalEmployees(response.meta.total))
+      .catch(() => setTotalEmployees(0));
+    void fetchTransfersPageApi({ page: 1, pageSize: 1 })
+      .then((response) => setTotalTransfers(response.meta.total))
+      .catch(() => setTotalTransfers(0));
+    void fetchTransfersPageApi({ page: 1, pageSize: 1, status: 'raw' })
+      .then((response) => setRawTransfers(response.meta.total))
+      .catch(() => setRawTransfers(0));
   }, []);
 
   useEffect(() => {
@@ -102,9 +115,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const inWarehouse = equipmentSummary?.byStatus.skladiste ?? 0;
   const assigned = equipmentSummary?.byStatus.zaduzeno ?? 0;
   const decommissioned = equipmentSummary?.byStatus.rashodovano ?? 0;
-  const totalEmployees = 0;
-  const totalTransfers = recentTransfers.length;
-  const rawTransfers = recentTransfers.filter((t) => t.status === 'raw').length;
   const scopeCount = admin ? state.cities.length : scopes.length;
   const assignmentLabels = scopes.map((scope) => formatRegistrarAssignmentLabel(scope, state));
   const myWarehouseIds = new Set(scopes.map((scope) => scope.warehouseId));

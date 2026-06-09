@@ -1,5 +1,9 @@
 # Changelog — roles-access
 
+## 2026-06-09
+
+- **Moj profil / Moja oprema**: svaki korisnik s `employeeId` može čitati vlastiti zapis radnika i svu opremu koju osobno drži (`currentHolderId`), bez obzira na registrar scope (npr. evidentičar u skladištu A, org jedinica u skladištu B).
+
 ## 2026-06-05
 
 - **Efektivno skladište u scope-u**: evidentičar vidi zaduženu opremu/radnike prema `resolveEffectiveWarehouseId`, ne širokom org podstablu skladišta (ED Zenica pobjeđuje Centralno na Direkciji).

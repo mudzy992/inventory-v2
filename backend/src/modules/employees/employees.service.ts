@@ -150,11 +150,11 @@ export class EmployeesService {
   }
 
   private async assertCanReadEmployee(user: AuthenticatedUser, employee: Employee): Promise<void> {
-    if (user.role === 'user') {
-      if (!user.employeeId || employee.id !== user.employeeId) {
-        throw new ForbiddenException('Users can only access their own employee record');
-      }
+    if (user.employeeId && employee.id === user.employeeId) {
       return;
+    }
+    if (user.role === 'user') {
+      throw new ForbiddenException('Users can only access their own employee record');
     }
     if (user.role === 'admin' || user.role === 'skladistar') {
       return;

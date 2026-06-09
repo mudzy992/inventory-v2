@@ -16,6 +16,7 @@ import type { Employee } from '../types';
 import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
 import { PaginationControls } from './ui/pagination-controls';
+import { ModalRoot } from './ui/modal-root';
 
 export function EmployeesPage() {
   const [state] = useStore();
@@ -282,9 +283,16 @@ export function EmployeesPage() {
         />
       ) : null}
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <ModalRoot
+        open={showForm}
+        onClose={() => {
+          setShowForm(false);
+          setRelocationPreview(null);
+        }}
+        closeOnBackdrop={false}
+        size="lg"
+        panelClassName="bg-white shadow-xl"
+      >
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold">{editing ? 'Uredi radnika' : 'Novi radnik'}</h2>
             </div>
@@ -400,9 +408,7 @@ export function EmployeesPage() {
                 </button>
               )}
             </div>
-          </div>
-        </div>
-      )}
+      </ModalRoot>
     </div>
   );
 }

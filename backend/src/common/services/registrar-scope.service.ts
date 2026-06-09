@@ -115,6 +115,9 @@ export class RegistrarScopeService {
     if (this.hasFullAccess(user)) {
       return true;
     }
+    if (user.employeeId && equipment.currentHolderId === user.employeeId) {
+      return true;
+    }
     if (user.role !== 'evidenticar') {
       return false;
     }
@@ -192,6 +195,9 @@ export class RegistrarScopeService {
     assignments?: RegistrarScopeAssignment[],
   ): Promise<boolean> {
     if (this.hasFullAccess(user)) {
+      return true;
+    }
+    if (user.employeeId && employee.id === user.employeeId) {
       return true;
     }
     if (user.role !== 'evidenticar') {
@@ -281,13 +287,19 @@ export class RegistrarScopeService {
     }
     if (user.role === 'evidenticar') {
       if (user.registrarScopes.length === 0) {
-        return { id: { in: [] } };
+        return user.employeeId
+          ? { currentHolderId: user.employeeId }
+          : { id: { in: [] } };
       }
       const clauses: Prisma.EquipmentWhereInput[] = [];
       for (const assignment of user.registrarScopes) {
         clauses.push(await this.buildAssignmentEquipmentWhere(assignment));
       }
-      return clauses.length === 1 ? clauses[0]! : { OR: clauses };
+      const scopeWhere = clauses.length === 1 ? clauses[0]! : { OR: clauses };
+      if (user.employeeId) {
+        return { OR: [scopeWhere, { currentHolderId: user.employeeId }] };
+      }
+      return scopeWhere;
     }
     return { id: { in: [] } };
   }
@@ -301,13 +313,17 @@ export class RegistrarScopeService {
     }
     if (user.role === 'evidenticar') {
       if (user.registrarScopes.length === 0) {
-        return { id: { in: [] } };
+        return user.employeeId ? { id: user.employeeId } : { id: { in: [] } };
       }
       const clauses: Prisma.EmployeeWhereInput[] = [];
       for (const assignment of user.registrarScopes) {
         clauses.push(await this.buildAssignmentEmployeeWhere(assignment));
       }
-      return clauses.length === 1 ? clauses[0]! : { OR: clauses };
+      const scopeWhere = clauses.length === 1 ? clauses[0]! : { OR: clauses };
+      if (user.employeeId) {
+        return { OR: [scopeWhere, { id: user.employeeId }] };
+      }
+      return scopeWhere;
     }
     return { id: { in: [] } };
   }

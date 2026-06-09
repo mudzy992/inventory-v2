@@ -488,5 +488,77 @@ describe('RegistrarScopeService', () => {
       assert.ok(orClauses.some((row) => 'fromPerson' in row));
       assert.ok(orClauses.some((row) => 'toPerson' in row));
     });
+
+    it('evidenticar can access own employee record outside registrar scope', async () => {
+      const service = createService();
+      const self: Employee = {
+        id: 'emp-self',
+        firstName: 'Self',
+        lastName: 'Registrar',
+        title: 'Evidentičar',
+        orgUnitId: 'sluzba-ed',
+        email: null,
+        phone: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const allowed = await service.canAccessEmployee(
+        authUser('evidenticar', {
+          employeeId: self.id,
+          registrarScopes: [{ warehouseId: 'wh-central', categoryId: 'cat-root' }],
+        }),
+        self,
+      );
+      assert.equal(allowed, true);
+    });
+
+    it('evidenticar can access own held equipment outside registrar scope', async () => {
+      const service = createService();
+      const selfId = 'emp-self';
+      const allowed = await service.canAccessEquipment(
+        authUser('evidenticar', {
+          employeeId: selfId,
+          registrarScopes: [{ warehouseId: 'wh-central', categoryId: 'cat-root' }],
+        }),
+        {
+          id: 'eq-self',
+          inventoryNumber: 'INV-SELF',
+          categoryId: 'cat-other',
+          status: 'zaduzeno',
+          warehouseId: null,
+          currentHolderId: selfId,
+          entryDate: new Date(),
+          specifications: {},
+          warehouseCondition: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: selfId,
+          firstName: 'Self',
+          lastName: 'Registrar',
+          title: 'Evidentičar',
+          orgUnitId: 'sluzba-ed',
+          email: null,
+          phone: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
+      assert.equal(allowed, true);
+    });
+
+    it('evidenticar equipment where includes own held items', async () => {
+      const service = createService();
+      const where = await service.buildEquipmentWhere(
+        authUser('evidenticar', {
+          employeeId: 'emp-self',
+          registrarScopes: [{ warehouseId: 'wh-central', categoryId: 'cat-root' }],
+        }),
+      );
+      assert.ok(where.OR);
+      const orClauses = where.OR as Record<string, unknown>[];
+      assert.ok(orClauses.some((row) => 'currentHolderId' in row));
+    });
   });
 });

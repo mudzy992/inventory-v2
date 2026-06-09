@@ -20,7 +20,24 @@ const emptyAppState = (): AppState => ({
 
 let _state: AppState = emptyAppState();
 let _authUser: AuthUserDto | null = null;
+let _cachedAuthUserView: UserAccount | null = null;
+let _cachedAuthUserKey: string | null = null;
 const _listeners: Set<() => void> = new Set();
+
+function invalidateAuthUserCache(): void {
+  _cachedAuthUserView = null;
+  _cachedAuthUserKey = null;
+}
+
+function buildAuthUserCacheKey(user: AuthUserDto): string {
+  return JSON.stringify({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    employeeId: user.employeeId ?? '',
+    registrarScopes: user.registrarScopes,
+  });
+}
 
 export function syncAppState(state: AppState): void {
   _state = state;
@@ -29,6 +46,7 @@ export function syncAppState(state: AppState): void {
 
 export function setAuthUser(user: AuthUserDto | null): void {
   _authUser = user;
+  invalidateAuthUserCache();
   _listeners.forEach((listener) => listener());
 }
 
@@ -57,7 +75,12 @@ export function getCurrentUser(): UserAccount | null {
   if (existing) {
     return existing;
   }
-  return {
+  const key = buildAuthUserCacheKey(_authUser);
+  if (_cachedAuthUserKey === key && _cachedAuthUserView) {
+    return _cachedAuthUserView;
+  }
+  _cachedAuthUserKey = key;
+  _cachedAuthUserView = {
     id: _authUser.id,
     username: _authUser.username,
     role: _authUser.role,
@@ -66,6 +89,7 @@ export function getCurrentUser(): UserAccount | null {
     isActive: true,
     registrarScopes: _authUser.registrarScopes,
   };
+  return _cachedAuthUserView;
 }
 
 export function isAdmin(): boolean {
