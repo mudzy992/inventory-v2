@@ -16,6 +16,7 @@ import {
   getUniqueFieldDisplay,
 } from '../helpers/equipment-display.util';
 import { buildTransferCreatePayload, canSignDisposalTransfer } from '../helpers/create-transfer-payload.util';
+import { canRegistrarCreateTransfer } from '../helpers/registrar-scope';
 import { X, Package, QrCode, History, ArrowRight, Download, Printer, User, Building2, FileText, AlertTriangle, CheckCircle, Warehouse, Trash2 } from 'lucide-react';
 import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
@@ -189,10 +190,13 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const uniqueField = getUniqueFieldDisplay(cat, eq.specifications);
 
   const canManage = admin || evidenticar;
+  const canRegistrarAct = (type: TransferType): boolean =>
+    admin || (evidenticar && currentUser ? canRegistrarCreateTransfer(eq, currentUser, state, type) : false);
   const canTransfer = canManage && eq.status !== 'rashodovano';
-  const canAssign = canManage && eq.status === 'skladiste';
-  const canReturn = canManage && eq.status === 'zaduzeno';
-  const canDecommission = canManage && eq.status !== 'rashodovano';
+  const canAssign = canManage && eq.status === 'skladiste' && canRegistrarAct('zaduzenje');
+  const canPrenos = canManage && eq.status === 'zaduzeno' && canRegistrarAct('prenos');
+  const canRazduzenje = canManage && eq.status === 'zaduzeno' && canRegistrarAct('razduzenje');
+  const canDecommission = canManage && eq.status !== 'rashodovano' && canRegistrarAct('rashodovanje');
 
   const handleDownloadQR = () => {
     const canvas = document.createElement('canvas');
@@ -529,22 +533,26 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   <User size={14} /> Zaduži
                 </button>
               )}
-              {canReturn && (
+              {(canPrenos || canRazduzenje) && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => { setTransferType('prenos'); setShowTransferModal(true); }}
-                    className="flex items-center gap-1.5 text-sm bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
-                  >
-                    <ArrowRight size={14} /> Prenesi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setTransferType('razduzenje'); setShowTransferModal(true); }}
-                    className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Warehouse size={14} /> Razduži
-                  </button>
+                  {canPrenos && (
+                    <button
+                      type="button"
+                      onClick={() => { setTransferType('prenos'); setShowTransferModal(true); }}
+                      className="flex items-center gap-1.5 text-sm bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
+                    >
+                      <ArrowRight size={14} /> Prenesi
+                    </button>
+                  )}
+                  {canRazduzenje && (
+                    <button
+                      type="button"
+                      onClick={() => { setTransferType('razduzenje'); setShowTransferModal(true); }}
+                      className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Warehouse size={14} /> Razduži
+                    </button>
+                  )}
                 </>
               )}
               {canDecommission && (

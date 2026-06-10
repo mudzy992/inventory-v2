@@ -11,6 +11,7 @@ interface OrgUnitAutocompleteProps {
   placeholder?: string;
   required?: boolean;
   className?: string;
+  allowedOrgUnitIds?: ReadonlySet<string>;
 }
 
 export const OrgUnitAutocomplete = ({
@@ -19,6 +20,7 @@ export const OrgUnitAutocomplete = ({
   placeholder = 'Pretraži org. jedinicu…',
   required = false,
   className,
+  allowedOrgUnitIds,
 }: OrgUnitAutocompleteProps) => {
   const [state] = useStore();
   const orgUnits = state.orgUnits;
@@ -59,26 +61,33 @@ export const OrgUnitAutocomplete = ({
 
   const orgUnitsById = useMemo(() => new Map(orgUnits.map((unit) => [unit.id, unit])), [orgUnits]);
 
+  const applyAllowedFilter = (units: OrgUnit[]): OrgUnit[] => {
+    if (!allowedOrgUnitIds) {
+      return units;
+    }
+    return units.filter((unit) => allowedOrgUnitIds.has(unit.id));
+  };
+
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     const sorted = [...orgUnits].sort((a, b) => a.name.localeCompare(b.name));
     if (normalized.length >= 2) {
-      return remoteResults;
+      return applyAllowedFilter(remoteResults);
     }
     if (!normalized) {
-      return sorted.slice(0, 20);
+      return applyAllowedFilter(sorted).slice(0, 20);
     }
-    return sorted
-      .filter((unit) => {
+    return applyAllowedFilter(
+      sorted.filter((unit) => {
         const path = getOrgUnitPath(orgUnits, unit.id).toLowerCase();
         return (
           unit.name.toLowerCase().includes(normalized) ||
           path.includes(normalized) ||
           getOrgUnitTypeLabel(unit.type).toLowerCase().includes(normalized)
         );
-      })
-      .slice(0, 20);
-  }, [orgUnits, query, remoteResults]);
+      }),
+    ).slice(0, 20);
+  }, [allowedOrgUnitIds, orgUnits, query, remoteResults]);
 
   useEffect(() => {
     setHighlightIndex(0);

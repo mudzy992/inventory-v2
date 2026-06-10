@@ -1,8 +1,23 @@
-import { Check, MapPin, Plus, Trash2, Warehouse, X } from 'lucide-react';
-import type { Category, OrgUnit, RegistrarScopeAssignment, UserRole, Warehouse as WarehouseType } from '../../types';
-import { getCityLabel, getOrgUnitTypeLabel } from '../../helpers';
+import { MapPin, Plus, Warehouse } from 'lucide-react';
+import type {
+  AppState,
+  Category,
+  Equipment,
+  OrgUnit,
+  RegistrarScopeAssignment,
+  UserRole,
+  Warehouse as WarehouseType,
+} from '../../types';
+import { formatRegistrarAssignmentLabel } from '../../helpers/org-warehouse.util';
+import {
+  getWarehouseCategoryIds,
+  normalizeScopeAfterWarehouseChange,
+  validateRegistrarScopes,
+  type RegistrarAssignmentValidationContext,
+} from '../../helpers/registrar-assignment-rules';
 import { USER_ROLE_META, USER_ROLE_OPTIONS } from './user-role-config';
-import { selectClass } from '../ui/form-styles';
+import { RegistrarScopeRow } from './registrar-scope-row';
+import { Check, X } from 'lucide-react';
 
 interface UserAccessFieldsProps {
   role: UserRole;
@@ -12,9 +27,11 @@ interface UserAccessFieldsProps {
   warehouses: WarehouseType[];
   categories: Category[];
   orgUnits: OrgUnit[];
+  equipment: Pick<Equipment, 'warehouseId' | 'categoryId'>[];
   cities: { id: string; name: string; canton?: { name: string } }[];
   isActive: boolean;
   onIsActiveChange: (active: boolean) => void;
+  scopeValidationErrors?: string[];
 }
 
 export const UserAccessFields = ({
@@ -25,28 +42,79 @@ export const UserAccessFields = ({
   warehouses,
   categories,
   orgUnits,
+  equipment,
   cities,
   isActive,
   onIsActiveChange,
+  scopeValidationErrors = [],
 }: UserAccessFieldsProps) => {
-  const parentCategories = categories.filter((row) => row.parentId === null);
+  const ctx: RegistrarAssignmentValidationContext = {
+    categories,
+    warehouses,
+    orgUnits,
+    equipment,
+  };
   const activeWarehouses = warehouses.filter((row) => row.isActive !== false);
+  const parentCategories = categories.filter((row) => row.parentId === null);
+
   const handleAddScope = () => {
     const warehouseId = activeWarehouses[0]?.id ?? '';
-    const categoryId = parentCategories[0]?.id ?? '';
+    const categoryIds = warehouseId ? getWarehouseCategoryIds(warehouseId, ctx) : [];
+    const categoryId = categoryIds[0] ?? parentCategories[0]?.id ?? '';
     if (!warehouseId || !categoryId) {
       return;
     }
     onRegistrarScopesChange([...registrarScopes, { warehouseId, categoryId, orgUnitId: null }]);
   };
+
   const handleUpdateScope = (index: number, patch: Partial<RegistrarScopeAssignment>) => {
     onRegistrarScopesChange(
-      registrarScopes.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)),
+      registrarScopes.map((row, rowIndex) => {
+        if (rowIndex !== index) {
+          return row;
+        }
+        let next = { ...row, ...patch };
+        if (patch.warehouseId !== undefined) {
+          next = normalizeScopeAfterWarehouseChange(next, ctx);
+        }
+        if (patch.categoryId !== undefined && !patch.orgUnitId) {
+          const mode = validateRegistrarScopes(
+            registrarScopes.map((scope, scopeIndex) =>
+              scopeIndex === index ? next : scope,
+            ),
+            ctx,
+          );
+          if (!mode.valid && next.orgUnitId) {
+            next = { ...next, orgUnitId: null };
+          }
+        }
+        return next;
+      }),
     );
   };
+
   const handleRemoveScope = (index: number) => {
     onRegistrarScopesChange(registrarScopes.filter((_, rowIndex) => rowIndex !== index));
   };
+
+  const inlineValidation = validateRegistrarScopes(registrarScopes, ctx);
+  const displayErrors = scopeValidationErrors.length > 0 ? scopeValidationErrors : inlineValidation.errors;
+
+  const summaryState = {
+    warehouses,
+    categories,
+    orgUnits,
+    cities,
+    employees: [],
+    equipment: [],
+    transfers: [],
+    users: [],
+    notifications: [],
+    savedFilters: [],
+    cantons: [],
+    currentUserId: null,
+  } as AppState;
+
   return (
     <div className="space-y-5">
       <div>
@@ -72,77 +140,28 @@ export const UserAccessFields = ({
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             <MapPin size={14} className="inline mr-1" />
-            Dodjele (skladište + kategorija + opcionalno org)
+            Dodjele evidentičara
           </label>
           <p className="text-xs text-gray-500 mb-3">
-            Režim A: bez org jedinice — vidi skladište i može zadužiti. Režim B: suženje na podstablo org
-            jedinice — bez zaduženja sa skladišta.
+            Režim A: skladište + kategorija (puna evidencija). Režim B: ista kombinacija + služba (samo
+            zadužena oprema i razduženje). Za isto skladište i kategoriju dozvoljen je samo jedan režim.
           </p>
           <div className="space-y-2">
-            {registrarScopes.map((scope, index) => {
-              const modeLabel = scope.orgUnitId ? 'B (org)' : 'A (skladište)';
-              return (
-                <div
-                  key={`${scope.warehouseId}-${scope.categoryId}-${scope.orgUnitId ?? 'a'}-${index}`}
-                  className="flex flex-col gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/80"
-                >
-                  <span className="text-[10px] font-medium text-purple-700 uppercase tracking-wide">
-                    Režim {modeLabel}
-                  </span>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <select
-                      value={scope.warehouseId}
-                      onChange={(event) => handleUpdateScope(index, { warehouseId: event.target.value })}
-                      className={`${selectClass} flex-1 min-w-[140px]`}
-                      aria-label="Skladište"
-                    >
-                      {activeWarehouses.map((warehouse) => (
-                        <option key={warehouse.id} value={warehouse.id}>
-                          {warehouse.name} ({getCityLabel(cities, warehouse.cityId)})
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={scope.categoryId}
-                      onChange={(event) => handleUpdateScope(index, { categoryId: event.target.value })}
-                      className={`${selectClass} flex-1 min-w-[140px]`}
-                      aria-label="Kategorija"
-                    >
-                      {parentCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={scope.orgUnitId ?? ''}
-                      onChange={(event) =>
-                        handleUpdateScope(index, {
-                          orgUnitId: event.target.value ? event.target.value : null,
-                        })
-                      }
-                      className={`${selectClass} flex-1 min-w-[160px]`}
-                      aria-label="Org jedinica (opcionalno)"
-                    >
-                      <option value="">— Režim A (cijelo skladište) —</option>
-                      {orgUnits.map((unit) => (
-                        <option key={unit.id} value={unit.id}>
-                          {unit.name} ({getOrgUnitTypeLabel(unit.type)})
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveScope(index)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                      aria-label="Ukloni dodjelu"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {registrarScopes.map((scope, index) => (
+              <RegistrarScopeRow
+                key={`${scope.warehouseId}-${scope.categoryId}-${scope.orgUnitId ?? 'a'}-${index}`}
+                scope={scope}
+                index={index}
+                scopes={registrarScopes}
+                warehouses={warehouses}
+                categories={categories}
+                orgUnits={orgUnits}
+                equipment={equipment}
+                cities={cities}
+                onChange={(patch) => handleUpdateScope(index, patch)}
+                onRemove={() => handleRemoveScope(index)}
+              />
+            ))}
             <button
               type="button"
               onClick={handleAddScope}
@@ -154,8 +173,29 @@ export const UserAccessFields = ({
               Dodaj dodjelu
             </button>
           </div>
+          {displayErrors.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {displayErrors.map((message) => (
+                <li
+                  key={message}
+                  className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-2 py-1.5"
+                >
+                  {message}
+                </li>
+              ))}
+            </ul>
+          )}
           {registrarScopes.length > 0 && (
-            <p className="text-xs text-purple-600 mt-2">Odabrano: {registrarScopes.length} dodjela</p>
+            <div className="mt-3 space-y-1">
+              <p className="text-xs font-medium text-purple-700">Sažetak ({registrarScopes.length})</p>
+              <ul className="text-xs text-gray-600 space-y-0.5">
+                {registrarScopes.map((scope, index) => (
+                  <li key={`summary-${index}`}>
+                    {formatRegistrarAssignmentLabel(scope, summaryState)}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}

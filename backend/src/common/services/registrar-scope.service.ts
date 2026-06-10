@@ -243,6 +243,72 @@ export class RegistrarScopeService {
     }
   }
 
+  async getMatchingAssignmentsForEquipment(
+    user: AuthenticatedUser,
+    equipment: Equipment,
+    holder: Employee | null,
+    assignments?: RegistrarScopeAssignment[],
+  ): Promise<RegistrarScopeAssignment[]> {
+    const scopes = assignments ?? user.registrarScopes;
+    const matches: RegistrarScopeAssignment[] = [];
+    for (const assignment of scopes) {
+      const expanded = await this.expandCategoryIds([assignment.categoryId]);
+      if (!expanded.has(equipment.categoryId)) {
+        continue;
+      }
+      if (await this.matchesAssignmentEquipment(assignment, equipment, holder)) {
+        matches.push(assignment);
+      }
+    }
+    return matches;
+  }
+
+  async canCreateTransferForEquipment(
+    user: AuthenticatedUser,
+    equipment: Equipment,
+    holder: Employee | null,
+    transferType: TransferType,
+    assignments?: RegistrarScopeAssignment[],
+  ): Promise<boolean> {
+    if (this.hasFullAccess(user)) {
+      return true;
+    }
+    if (user.role !== 'evidenticar') {
+      return false;
+    }
+    const matches = await this.getMatchingAssignmentsForEquipment(
+      user,
+      equipment,
+      holder,
+      assignments,
+    );
+    if (matches.length === 0) {
+      return false;
+    }
+    const hasModeA = matches.some((row) => isRegistrarModeA(row));
+    if (!hasModeA) {
+      return transferType === 'razduzenje';
+    }
+    return this.canCreateTransferType(user, transferType, matches);
+  }
+
+  async assertCanCreateTransferForEquipment(
+    user: AuthenticatedUser,
+    equipment: Equipment,
+    holder: Employee | null,
+    transferType: TransferType,
+  ): Promise<void> {
+    const allowed = await this.canCreateTransferForEquipment(
+      user,
+      equipment,
+      holder,
+      transferType,
+    );
+    if (!allowed) {
+      throw new ForbiddenException('Transfer type not allowed for this equipment in your scope');
+    }
+  }
+
   async getScopedCityIds(user: AuthenticatedUser): Promise<Set<string> | null> {
     if (this.hasFullAccess(user)) {
       return null;
@@ -414,7 +480,7 @@ export class RegistrarScopeService {
     return {
       AND: [
         categoryFilter,
-        { status: { not: 'skladiste' } },
+        { status: 'zaduzeno' },
         { currentHolder: { orgUnitId: { in: effectiveOrgIds } } },
       ],
     };
@@ -462,10 +528,7 @@ export class RegistrarScopeService {
       }
       return false;
     }
-    if (equipment.status === 'skladiste') {
-      return false;
-    }
-    if (!holder) {
+    if (equipment.status !== 'zaduzeno' || !holder) {
       return false;
     }
     const effectiveOrgIds = await this.getEffectiveOrgIdsForModeB(assignment);

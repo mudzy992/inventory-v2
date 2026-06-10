@@ -12,12 +12,14 @@ import type {
   Category,
   City,
   Employee,
+  Equipment,
   OrgUnit,
   RegistrarScopeAssignment,
   UserAccount,
   UserRole,
   Warehouse,
 } from '../../types';
+import { validateRegistrarScopes } from '../../helpers/registrar-assignment-rules';
 import { UserAccessFields } from './user-access-fields';
 
 export type UserFormMode = 'create' | 'edit';
@@ -32,6 +34,7 @@ interface UserFormModalProps {
   categories: Category[];
   warehouses: Warehouse[];
   orgUnits: OrgUnit[];
+  equipment: Pick<Equipment, 'warehouseId' | 'categoryId'>[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }
@@ -59,6 +62,7 @@ export const UserFormModal = ({
   categories,
   warehouses,
   orgUnits,
+  equipment,
   onClose,
   onSaved,
 }: UserFormModalProps) => {
@@ -145,6 +149,18 @@ export const UserFormModal = ({
     if (role === 'evidenticar' && registrarScopes.length === 0) {
       setError('Evidentičar mora imati barem jednu dodjelu (skladište + kategorija).');
       return;
+    }
+    if (role === 'evidenticar') {
+      const scopeValidation = validateRegistrarScopes(registrarScopes, {
+        categories,
+        warehouses,
+        orgUnits,
+        equipment,
+      });
+      if (!scopeValidation.valid) {
+        setError(scopeValidation.errors[0] ?? 'Neispravne dodjele evidentičara.');
+        return;
+      }
     }
     setIsSaving(true);
     try {
@@ -269,6 +285,7 @@ export const UserFormModal = ({
                 warehouses={warehouses}
                 categories={categories}
                 orgUnits={orgUnits}
+                equipment={equipment}
                 cities={cities}
                 isActive={isActive}
                 onIsActiveChange={setIsActive}

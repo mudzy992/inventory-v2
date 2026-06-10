@@ -1,42 +1,19 @@
 import { getEffectiveCityForOrgUnit } from '../helpers';
 import type { AppState, Equipment, TransferType, UserAccount } from '../types';
 import { resolveEffectiveWarehouseForOrgUnit } from './org-warehouse.util';
-
-const categoryMatchesAssignment = (
-  categoryId: string,
-  assignmentCategoryId: string,
-  categories: AppState['categories'],
-): boolean => {
-  const childrenByParent = new Map<string | null, string[]>();
-  for (const category of categories) {
-    const siblings = childrenByParent.get(category.parentId) ?? [];
-    siblings.push(category.id);
-    childrenByParent.set(category.parentId, siblings);
-  }
-  const expanded = new Set<string>();
-  const visit = (id: string): void => {
-    if (expanded.has(id)) {
-      return;
-    }
-    expanded.add(id);
-    for (const childId of childrenByParent.get(id) ?? []) {
-      visit(childId);
-    }
-  };
-  visit(assignmentCategoryId);
-  return expanded.has(categoryId);
-};
+import { getMatchingAssignmentsForEquipment } from './registrar-scope';
 
 const pickAssignmentWarehouse = (
   equipment: Equipment,
   user: UserAccount,
   state: AppState,
 ): string | undefined => {
-  const assignments = user.registrarScopes ?? [];
-  const match = assignments.find((assignment) =>
-    categoryMatchesAssignment(equipment.categoryId, assignment.categoryId, state.categories),
-  );
-  return match?.warehouseId;
+  const matches = getMatchingAssignmentsForEquipment(equipment, user, state);
+  const modeA = matches.find((row) => !row.orgUnitId);
+  if (modeA) {
+    return modeA.warehouseId;
+  }
+  return matches[0]?.warehouseId;
 };
 
 const resolveRazduzenjeWarehouseId = (
@@ -44,8 +21,12 @@ const resolveRazduzenjeWarehouseId = (
   user: UserAccount | null,
   state: AppState,
 ): string | undefined => {
-  const assignmentWarehouse =
-    user?.role === 'evidenticar' ? pickAssignmentWarehouse(equipment, user, state) : undefined;
+  if (user?.role === 'evidenticar') {
+    const assignmentWarehouse = pickAssignmentWarehouse(equipment, user, state);
+    if (assignmentWarehouse) {
+      return assignmentWarehouse;
+    }
+  }
   const holder =
     equipment.currentHolder ??
     (equipment.currentHolderId
@@ -59,7 +40,7 @@ const resolveRazduzenjeWarehouseId = (
         getEffectiveCityForOrgUnit(state.orgUnits, holder.orgUnitId),
       )
     : undefined;
-  return assignmentWarehouse ?? effectiveOrgWarehouse ?? equipment.warehouseId ?? undefined;
+  return effectiveOrgWarehouse ?? equipment.warehouseId ?? undefined;
 };
 
 export const resolveTransferWarehousePayload = (

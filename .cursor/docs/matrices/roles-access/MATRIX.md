@@ -15,7 +15,23 @@
 |-------|---------|
 | `warehouseId` | Skladište dodjele (obavezno) |
 | `categoryId` | Root kategorija; scope uključuje sve podkategorije |
-| `orgUnitId` | Opcionalno — režim B (suženje na org podstablo) |
+| `orgUnitId` | Opcionalno — **režim B** (ciljana služba u efektivnom skladištu) |
+
+Više dodjela po korisniku = **unija** (OR) scope-a.
+
+### Pravila dodjele (admin / API validacija)
+
+| Pravilo | Opis |
+|---------|------|
+| Ekskluzivnost A/B | Za isti par `(warehouseId, categoryId)` dozvoljen je **ili** jedan Režim A (`orgUnitId = null`) **ili** jedan ili više Režima B — nikad mix |
+| Više B istog W+C | Dozvoljeno s **različitim** `orgUnitId` (različite službe) |
+| Org ↔ skladište | Režim B: `resolveEffectiveWarehouse(orgUnitId) === warehouseId` na redu |
+| Kategorija ↔ skladište | Parent `ASSET` kategorije koje skladište ima (oprema ili lot); fallback sve ASSET parent ako nema podataka |
+| Duplikat | Isti `(warehouseId, categoryId, orgUnitId)` odbijen |
+
+Implementacija validacije: [`registrar-assignment-validation.util.ts`](../../../../backend/src/modules/users/registrar-assignment-validation.util.ts), UI: [`registrar-assignment-rules.ts`](../../../../frontend/src/helpers/registrar-assignment-rules.ts).
+
+**Primjer (3 reda):** A: W1+Cat1; B: W1+Cat2+Org1; B: W2+Cat1+Org2.
 
 ### Efektivno skladište (nearest-wins)
 
@@ -29,11 +45,12 @@ Za radnika/org jedinicu: `resolveEffectiveWarehouseId(orgUnitId)` — prvo sklad
 | Entitet | Režim A (`orgUnitId = null`) | Režim B |
 |---------|------------------------------|---------|
 | Oprema `skladiste` | `equipment.warehouseId = W` | ne vidi |
-| Oprema `zaduzeno` | holder u org jedinicama gdje efektivno skladište = W | + holder u `expand(orgUnitId)` dodjele |
-| Oprema `rashodovano` | `equipment.warehouseId = W` | holder u efektivnom W ∩ org podstablo |
+| Oprema `zaduzeno` | holder u org jedinicama gdje efektivno skladište = W | holder u `expand(orgUnitId) ∩ efektivno W` |
+| Oprema `rashodovano` | `equipment.warehouseId = W` | ne vidi |
 | Lot (Skladišna roba) | `lot.warehouseId = W`, kategorija ∈ expand(C); uključuje `0/N` | ne vidi lotove |
-| Radnik | efektivno skladište = W | + org ∈ expand(O) |
-| Transfer / prenosnica | oprema u scope **OR** `fromPerson`/`toPerson` u scope radnika | isto, suženo |
+| Radnik | efektivno skladište = W | org ∈ `expand(O) ∩ efektivno W` |
+| Transfer / prenosnica | oprema u scope **OR** `fromPerson`/`toPerson` u scope radnika | isto |
+| Akcije transfera | zaduženje, razduženje, prenos, rashod (prema opremi u A) | **samo razduženje** (`canCreateTransferForEquipment`) |
 
 Implementacija: [`registrar-scope.service.ts`](../../../../backend/src/common/services/registrar-scope.service.ts), [`collect-org-units-for-warehouse.util.ts`](../../../../backend/src/common/utils/collect-org-units-for-warehouse.util.ts).
 
@@ -72,7 +89,7 @@ Implementacija: [`registrar-scope.service.ts`](../../../../backend/src/common/se
 |---------|------|
 | Pristup | Samo `admin` (`/users` CRUD) |
 | Evidentičar | Obavezan `registrarScopes` (≥1 par skladište+kategorija) |
-| Režim A/B | `orgUnitId = null` → skladište + zaduženje; setovan → suženje bez skladišne opreme |
+| Režim A/B | `orgUnitId = null` → Režim A (puna evidencija); setovan → Režim B (samo zaduženo + razduženje). Validacija A/B ekskluzivnosti po W+C |
 
 ## CHANGELOG
 

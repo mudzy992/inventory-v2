@@ -6,6 +6,7 @@ import type {
   Equipment,
   OrgUnit,
   RegistrarScopeAssignment,
+  TransferType,
   UserAccount,
 } from '../types';
 import {
@@ -105,7 +106,7 @@ const matchesAssignmentEquipment = (
     }
     return false;
   }
-  if (equipment.status === 'skladiste' || !holder) {
+  if (equipment.status !== 'zaduzeno' || !holder) {
     return false;
   }
   return getEffectiveOrgIdsForModeB(state, assignment).has(holder.orgUnitId);
@@ -187,6 +188,47 @@ export const resolveEquipmentCityId = (state: AppState, equipment: Equipment): s
     return warehouse?.cityId ?? null;
   }
   return null;
+};
+
+export const getMatchingAssignmentsForEquipment = (
+  equipment: Equipment,
+  user: UserAccount | null,
+  state: AppState,
+): RegistrarScopeAssignment[] => {
+  if (!user || user.role !== 'evidenticar') {
+    return [];
+  }
+  const assignments = user.registrarScopes ?? [];
+  const holder = resolveEquipmentHolder(equipment, state);
+  return assignments.filter((assignment) =>
+    matchesAssignmentEquipment(assignment, equipment, holder as Employee | undefined, state),
+  );
+};
+
+export const canRegistrarCreateTransfer = (
+  equipment: Equipment,
+  user: UserAccount | null,
+  state: AppState,
+  transferType: TransferType,
+): boolean => {
+  if (!user || user.role === 'admin') {
+    return true;
+  }
+  if (user.role !== 'evidenticar') {
+    return false;
+  }
+  const matches = getMatchingAssignmentsForEquipment(equipment, user, state);
+  if (matches.length === 0) {
+    return false;
+  }
+  const hasModeA = matches.some((row) => isModeA(row));
+  if (!hasModeA) {
+    return transferType === 'razduzenje';
+  }
+  if (transferType === 'zaduzenje') {
+    return matches.some((row) => isModeA(row));
+  }
+  return true;
 };
 
 export const equipmentMatchesScope = (

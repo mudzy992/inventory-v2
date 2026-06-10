@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import type { UserRole } from '../../../generated/prisma/client';
 import type { RegistrarScopeAssignment } from '../../common/types/registrar-scope.type';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { assertRegistrarScopesValid } from './registrar-assignment-validation.util';
 
 interface ValidateUserAccessInput {
   role: UserRole;
@@ -73,5 +74,6 @@ export const assertUserAccessRules = async (
     ) {
       throw new BadRequestException('Jedno ili više skladišta/kategorija/org jedinica ne postoji');
     }
+    await assertRegistrarScopesValid(prisma, scopes);
   }
 };

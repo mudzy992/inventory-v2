@@ -307,6 +307,7 @@ export function UserManagementPage() {
           categories={state.categories}
           warehouses={state.warehouses}
           orgUnits={state.orgUnits}
+          equipment={state.equipment}
           onClose={closeForm}
           onSaved={async () => {
             await refresh();

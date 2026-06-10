@@ -217,8 +217,8 @@ describe('RegistrarScopeService', () => {
       );
       assert.ok(where.AND);
       const andClause = where.AND as Record<string, unknown>[];
-      const statusFilter = andClause[1] as { status: { not: string } };
-      assert.equal(statusFilter.status.not, 'skladiste');
+      const statusFilter = andClause[1] as { status: string };
+      assert.equal(statusFilter.status, 'zaduzeno');
     });
 
     it('evidenticar without scopes sees nothing', async () => {
@@ -388,6 +388,73 @@ describe('RegistrarScopeService', () => {
         await service.canCreateTransferType(authUser('evidenticar'), 'zaduzenje', [
           { warehouseId: 'wh-a', categoryId: 'cat-root' },
         ]),
+        true,
+      );
+    });
+  });
+
+  describe('canCreateTransferForEquipment', () => {
+    const zaduzenoEquipment: Equipment = {
+      id: 'eq-z',
+      inventoryNumber: 'INV-Z',
+      categoryId: 'cat-child',
+      status: 'zaduzeno',
+      warehouseId: null,
+      currentHolderId: 'emp-1',
+      entryDate: new Date(),
+      specifications: {},
+      warehouseCondition: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const holder: Employee = {
+      id: 'emp-1',
+      firstName: 'A',
+      lastName: 'B',
+      title: 'Radnik',
+      orgUnitId: 'ou-child',
+      email: null,
+      phone: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it('mode B only allows razduzenje', async () => {
+      const service = createService();
+      const scopes = [{ warehouseId: 'wh-a', categoryId: 'cat-root', orgUnitId: 'ou-root' }];
+      assert.equal(
+        await service.canCreateTransferForEquipment(
+          authUser('evidenticar'),
+          zaduzenoEquipment,
+          holder,
+          'razduzenje',
+          scopes,
+        ),
+        true,
+      );
+      assert.equal(
+        await service.canCreateTransferForEquipment(
+          authUser('evidenticar'),
+          zaduzenoEquipment,
+          holder,
+          'prenos',
+          scopes,
+        ),
+        false,
+      );
+    });
+
+    it('mode A allows prenos for in-scope equipment', async () => {
+      const service = createService();
+      const scopes = [{ warehouseId: 'wh-a', categoryId: 'cat-root' }];
+      assert.equal(
+        await service.canCreateTransferForEquipment(
+          authUser('evidenticar'),
+          zaduzenoEquipment,
+          holder,
+          'prenos',
+          scopes,
+        ),
         true,
       );
     });

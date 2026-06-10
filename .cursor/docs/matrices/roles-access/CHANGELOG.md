@@ -1,5 +1,11 @@
 # Changelog — roles-access
 
+## 2026-06-10
+
+- **Validacija dodjela**: ekskluzivnost Režim A vs B po `(skladište, kategorija)`; org mora imati efektivno skladište = dodjela; kategorije filtrirane po podacima skladišta; backend `assertRegistrarScopesValid` + admin UI filteri/autocomplete.
+- **Režim B scope**: samo oprema `zaduzeno` (ne rashodovano / skladište).
+- **Transferi po opremi**: `canCreateTransferForEquipment` — Režim B dozvoljava samo `razduzenje`; razduženje koristi matching dodjelu (ne samo kategoriju).
+
 ## 2026-06-09
 
 - **Moj profil / Moja oprema**: svaki korisnik s `employeeId` može čitati vlastiti zapis radnika i svu opremu koju osobno drži (`currentHolderId`), bez obzira na registrar scope (npr. evidentičar u skladištu A, org jedinica u skladištu B).

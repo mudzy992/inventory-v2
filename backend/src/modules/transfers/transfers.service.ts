@@ -201,7 +201,12 @@ export class TransfersService {
       this.prisma,
     );
     validateEquipmentForTransfer(equipment, dto);
-    await this.registrarScope.assertCanCreateTransferType(user, dto.type);
+    await this.registrarScope.assertCanCreateTransferForEquipment(
+      user,
+      equipment,
+      equipment.currentHolder,
+      dto.type,
+    );
     await this.inventoryFreeze.assertTransferCreateAllowed(
       dto.equipmentId,
       user,
