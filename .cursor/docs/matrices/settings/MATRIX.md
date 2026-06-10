@@ -55,6 +55,7 @@
 | `transfer.require_signed_pdf_upload` | boolean | private | true |
 | `transfer.allow_finalize_without_upload` | boolean | private | false |
 | `transfer.allow_evidenticar_cross_city` | boolean | private | false |
+| `transfer.allow_admin_cross_warehouse_issue` | boolean | private | false |
 | `transfer.require_upload_before_sign` | boolean | private | false (legacy, ne u UI) |
 | `transfer.template_placeholders_help` | string | public | placeholder lista (read-only) |
 

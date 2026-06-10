@@ -4,6 +4,26 @@ import type { PaginatedListParams, PaginatedResponse } from '../types/pagination
 import { buildListQueryString } from '../types/pagination';
 import type { WarehouseStockLot } from '../types';
 
+export interface StockLotProductGroup {
+  groupKey: string;
+  productName: string;
+  categoryId: string;
+  categoryName: string;
+  catalogItemId: string | null;
+  warehouseCount: number;
+  totalOnHand: number;
+  totalReceived: number;
+  awaitingSpecCount: number;
+  readyToIssueCount: number;
+}
+
+export interface AssignedStockLotsListParams extends PaginatedListParams {
+  warehouseId?: string;
+  categoryId?: string;
+  status?: string;
+  groupKey?: string;
+}
+
 export const fetchWarehouseStockLotsPageApi = (
   warehouseId: string,
   params: PaginatedListParams = {},
@@ -14,10 +34,17 @@ export const fetchWarehouseStockLotsPageApi = (
   );
 };
 
-export const fetchAssignedStockLotsPageApi = (params: PaginatedListParams = {}) => {
+export const fetchAssignedStockLotsPageApi = (params: AssignedStockLotsListParams = {}) => {
   const query = buildListQueryString(params);
   return apiRequest<PaginatedResponse<WarehouseStockLot>>(
     `/warehouse-stock/assigned${query ? `?${query}` : ''}`,
+  );
+};
+
+export const fetchAssignedStockLotGroupsPageApi = (params: AssignedStockLotsListParams = {}) => {
+  const query = buildListQueryString(params);
+  return apiRequest<PaginatedResponse<StockLotProductGroup>>(
+    `/warehouse-stock/assigned/groups${query ? `?${query}` : ''}`,
   );
 };
 

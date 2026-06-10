@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, Package, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Package, ChevronRight, ChevronDown, Search, Filter, Eye } from 'lucide-react';
 import {
+  fetchAssignedStockLotGroupsPageApi,
   fetchAssignedStockLotsPageApi,
   fetchStockLotApi,
   issueStockLotUnitApi,
   updateStockLotSpecApi,
+  type StockLotProductGroup,
 } from '../../api/warehouse-stock-api';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
-import { formatDate, getEmployeeFullName, getOrgUnitPath } from '../../helpers';
+import { formatDate, getEmployeeFullName, getOrgUnitPath, getStatusLabel } from '../../helpers';
 import {
   useInventoryNumberAvailability,
   type AvailabilityStatus,
@@ -18,6 +20,9 @@ import { fetchEmployeesPageApi } from '../../api/employees-api';
 import { fetchAllPaginatedItems } from '../../api/fetch-all-paginated';
 import { usePaginatedList } from '../../hooks/usePaginatedList';
 import { useStore, useRefreshData } from '../../useStore';
+import { isAdmin } from '../../store';
+import { useAdminSettings } from '../../contexts/admin-settings-context';
+import { resolveEffectiveWarehouseForOrgUnit } from '../../helpers/org-warehouse.util';
 import type { Category, Employee, WarehouseStockLot } from '../../types';
 import { PageHeaderRow } from '../ui/page-header-row';
 import { Button } from '../ui/button';
@@ -32,6 +37,7 @@ import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from '../inventory-count/inventory-freeze-action-hint';
+import { EquipmentCard } from '../EquipmentCard';
 
 const buildSpecFields = (category: Category | undefined, unique: boolean) => {
   if (!category) {
@@ -74,6 +80,9 @@ const isValueAvailabilityValid = (value: string, status: AvailabilityStatus): bo
 export const RegistrarStockPage = () => {
   const [state] = useStore();
   const refresh = useRefreshData();
+  const admin = isAdmin();
+  const { getBoolean } = useAdminSettings();
+  const crossWarehouseIssueEnabled = admin && getBoolean('transfer.allow_admin_cross_warehouse_issue', false);
   const { toastError, toastSuccess } = useToast();
   const [scopedEmployees, setScopedEmployees] = useState<Employee[]>([]);
   const isFrozen = useInventoryFreezeActive();
@@ -86,13 +95,34 @@ export const RegistrarStockPage = () => {
   const [uniqueSpecs, setUniqueSpecs] = useState<Record<string, string>>({});
   const [uniqueAvailability, setUniqueAvailability] = useState<Record<string, AvailabilityStatus>>({});
   const [saving, setSaving] = useState(false);
+  const [viewItemId, setViewItemId] = useState<string | null>(null);
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
+  const [groupLots, setGroupLots] = useState<Record<string, WarehouseStockLot[]>>({});
+  const [loadingGroupKeys, setLoadingGroupKeys] = useState<Set<string>>(new Set());
+  const [filterWarehouseId, setFilterWarehouseId] = useState('');
+  const [filterCategoryId, setFilterCategoryId] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const inventoryAvailability = useInventoryNumberAvailability(inventoryNumber);
-  const stockList = usePaginatedList<WarehouseStockLot>({
-    fetchPage: fetchAssignedStockLotsPageApi,
-    initialSortBy: 'status',
+  const groupList = usePaginatedList<
+    StockLotProductGroup,
+    { warehouseId?: string; categoryId?: string; status?: string }
+  >({
+    fetchPage: fetchAssignedStockLotGroupsPageApi,
+    initialSortBy: 'productName',
     initialSortDir: 'asc',
   });
-  const lots = stockList.items;
+  const groups = groupList.items;
+  useEffect(() => {
+    groupList.setFilters({
+      warehouseId: filterWarehouseId || undefined,
+      categoryId: filterCategoryId || undefined,
+      status: filterStatus || undefined,
+    });
+  }, [filterWarehouseId, filterCategoryId, filterStatus, groupList.setFilters]);
+  const leafCategories = useMemo(
+    () => state.categories.filter((row) => row.parentId),
+    [state.categories],
+  );
   useEffect(() => {
     void fetchAllPaginatedItems((params) => fetchEmployeesPageApi(params), 100)
       .then(setScopedEmployees)
@@ -104,6 +134,32 @@ export const RegistrarStockPage = () => {
   );
   const lotFields = useMemo(() => buildSpecFields(category, false), [category]);
   const issueFields = useMemo(() => buildSpecFields(category, true), [category]);
+  const crossWarehouseIssueHint = useMemo(() => {
+    if (!crossWarehouseIssueEnabled || !detail || !employeeId) {
+      return null;
+    }
+    const employee = scopedEmployees.find((row) => row.id === employeeId);
+    if (!employee) {
+      return null;
+    }
+    const destWarehouseId = resolveEffectiveWarehouseForOrgUnit(
+      state.orgUnits,
+      state.warehouses,
+      employee.orgUnitId,
+    );
+    if (!destWarehouseId || destWarehouseId === detail.warehouseId) {
+      return null;
+    }
+    const destWarehouse = state.warehouses.find((row) => row.id === destWarehouseId);
+    return destWarehouse?.name ?? 'ciljno skladište radnika';
+  }, [
+    crossWarehouseIssueEnabled,
+    detail,
+    employeeId,
+    scopedEmployees,
+    state.orgUnits,
+    state.warehouses,
+  ]);
   const employeeSearchOptions = useMemo((): SearchableOption[] => {
     return scopedEmployees.map((employee) => {
       const orgUnit = state.orgUnits.find((unit) => unit.id === employee.orgUnitId);
@@ -144,6 +200,41 @@ export const RegistrarStockPage = () => {
   const handleUniqueAvailabilityChange = useCallback((fieldId: string, status: AvailabilityStatus) => {
     setUniqueAvailability((prev) => ({ ...prev, [fieldId]: status }));
   }, []);
+  const loadGroupLots = useCallback(async (groupKey: string) => {
+    setLoadingGroupKeys((prev) => new Set(prev).add(groupKey));
+    try {
+      const response = await fetchAssignedStockLotsPageApi({
+        groupKey,
+        page: 1,
+        pageSize: 100,
+        sortBy: 'status',
+        sortDir: 'asc',
+      });
+      setGroupLots((prev) => ({ ...prev, [groupKey]: response.items }));
+    } catch (err) {
+      toastError(err instanceof ApiError ? err.message : 'Greška pri učitavanju lotova');
+    } finally {
+      setLoadingGroupKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(groupKey);
+        return next;
+      });
+    }
+  }, [toastError]);
+  const handleToggleGroup = useCallback((groupKey: string) => {
+    setExpandedGroupKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+        return next;
+      }
+      next.add(groupKey);
+      if (!groupLots[groupKey]) {
+        void loadGroupLots(groupKey);
+      }
+      return next;
+    });
+  }, [groupLots, loadGroupLots]);
   const openIssueForm = () => {
     setIssueOpen(true);
     setUniqueAvailability({});
@@ -171,7 +262,9 @@ export const RegistrarStockPage = () => {
       const updated = await updateStockLotSpecApi(detail.id, specs);
       setDetail(updated);
       toastSuccess('Specifikacija lota je sačuvana');
-      await stockList.refresh();
+      await groupList.refresh();
+      setGroupLots({});
+      setExpandedGroupKeys(new Set());
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška');
     } finally {
@@ -195,7 +288,9 @@ export const RegistrarStockPage = () => {
       setUniqueSpecs({});
       setEmployeeId('');
       toastSuccess('Komad je izdat i zadužen');
-      await stockList.refresh();
+      await groupList.refresh();
+      setGroupLots({});
+      setExpandedGroupKeys(new Set());
       await refresh();
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška pri izdavanju');
@@ -307,6 +402,12 @@ export const RegistrarStockPage = () => {
                   <p className="text-[11px] text-gray-400 mt-1">
                     Prikaz: ime · pozicija · org. putanja.
                   </p>
+                  {crossWarehouseIssueHint ? (
+                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      Radnik pripada drugom efektivnom skladištu ({crossWarehouseIssueHint}). Oprema će
+                      automatski preći na lot tog skladišta nakon izdavanja.
+                    </p>
+                  ) : null}
                 </div>
                 <div>
                   <label className={labelClass}>Inventurni broj *</label>
@@ -340,22 +441,64 @@ export const RegistrarStockPage = () => {
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">
                     <th className="px-3 py-2 font-medium">Inv. broj</th>
+                    <th className="px-3 py-2 font-medium">Zadužen na</th>
                     <th className="px-3 py-2 font-medium">Status</th>
                     <th className="px-3 py-2 font-medium">Datum</th>
+                    <th className="px-3 py-2 font-medium text-right">Detalji</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {detail.issuedUnits.map((unit) => (
-                    <tr key={unit.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/80">
-                      <td className="px-3 py-2.5 font-mono text-xs text-gray-800">{unit.inventoryNumber}</td>
-                      <td className="px-3 py-2.5 text-gray-600">{unit.status}</td>
-                      <td className="px-3 py-2.5 text-gray-600">{formatDate(unit.createdAt)}</td>
-                    </tr>
-                  ))}
+                  {detail.issuedUnits.map((unit) => {
+                    const holder = unit.currentHolder;
+                    const holderOrg = holder
+                      ? state.orgUnits.find((row) => row.id === holder.orgUnitId)
+                      : null;
+                    return (
+                      <tr key={unit.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/80">
+                        <td className="px-3 py-2.5">
+                          <button
+                            type="button"
+                            onClick={() => setViewItemId(unit.id)}
+                            className="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {unit.inventoryNumber}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-600">
+                          {holder ? (
+                            <div>
+                              <span className="text-xs text-gray-800">{getEmployeeFullName(holder)}</span>
+                              {holderOrg ? (
+                                <p className="text-[10px] text-gray-400">{holderOrg.name}</p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-600">{getStatusLabel(unit.status as 'skladiste' | 'zaduzeno' | 'rashodovano')}</td>
+                        <td className="px-3 py-2.5 text-gray-600">{formatDate(unit.createdAt)}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setViewItemId(unit.id)}
+                            className="inline-flex items-center justify-center p-1 text-gray-500 hover:text-blue-600"
+                            title="Pogledaj opremu"
+                            aria-label={`Pogledaj opremu ${unit.inventoryNumber}`}
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </LotSectionCard>
+        ) : null}
+        {viewItemId ? (
+          <EquipmentCard equipmentId={viewItemId} onClose={() => setViewItemId(null)} />
         ) : null}
       </div>
     );
@@ -367,41 +510,136 @@ export const RegistrarStockPage = () => {
         description="Definišite specifikaciju lotova i izdajte pojedinačne komade na radnike."
       />
       <InventoryFreezeActionHint />
+      <div className={`${cardClass} border-gray-200 shadow-sm p-4 mb-4`}>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <div className="relative flex-1 min-w-0">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={groupList.search}
+              onChange={(event) => groupList.setSearch(event.target.value)}
+              placeholder="Pretraži po nazivu proizvoda…"
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Filter size={14} className="text-gray-400 shrink-0" />
+            <select
+              value={filterWarehouseId}
+              onChange={(event) => setFilterWarehouseId(event.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="">Sva skladišta</option>
+              {state.warehouses.map((warehouse) => (
+                <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+              ))}
+            </select>
+            <select
+              value={filterCategoryId}
+              onChange={(event) => setFilterCategoryId(event.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="">Sve kategorije</option>
+              {leafCategories.map((category) => (
+                <option key={category.id} value={category.id}>{category.name}</option>
+              ))}
+            </select>
+            <select
+              value={filterStatus}
+              onChange={(event) => setFilterStatus(event.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="">Svi statusi</option>
+              <option value="ceka_specifikaciju">Čeka specifikaciju</option>
+              <option value="spremno_za_izdavanje">Spremno za izdavanje</option>
+            </select>
+          </div>
+        </div>
+      </div>
       <div className={`${cardClass} border-gray-200 shadow-sm divide-y divide-gray-100 overflow-hidden`}>
-        {lots.map((lot) => (
-          <button
-            key={lot.id}
-            type="button"
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50 transition-colors"
-            onClick={() => void openDetail(lot.id)}
-          >
-            <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-              <Package size={18} />
+        {groups.map((group) => {
+          const isExpanded = expandedGroupKeys.has(group.groupKey);
+          const lotsInGroup = groupLots[group.groupKey] ?? [];
+          const isLoadingLots = loadingGroupKeys.has(group.groupKey);
+          return (
+            <div key={group.groupKey}>
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50 transition-colors"
+                onClick={() => handleToggleGroup(group.groupKey)}
+                aria-expanded={isExpanded}
+              >
+                <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Package size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900 truncate">{group.productName}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {group.categoryName} · {group.warehouseCount} skladišt
+                    {group.warehouseCount === 1 ? 'e' : 'a'} · {group.totalOnHand}/{group.totalReceived} na skladištu
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {group.awaitingSpecCount > 0 ? (
+                    <Badge tone="warning">Čeka spec. ({group.awaitingSpecCount})</Badge>
+                  ) : null}
+                  {group.readyToIssueCount > 0 ? (
+                    <Badge tone="success">Spremno ({group.readyToIssueCount})</Badge>
+                  ) : null}
+                  {isExpanded ? (
+                    <ChevronDown size={16} className="text-gray-400" />
+                  ) : (
+                    <ChevronRight size={16} className="text-gray-400" />
+                  )}
+                </div>
+              </button>
+              {isExpanded ? (
+                <div className="bg-slate-50/60 border-t border-gray-100 px-4 py-2">
+                  {isLoadingLots ? (
+                    <p className="text-xs text-gray-400 py-3 text-center">Učitavanje…</p>
+                  ) : lotsInGroup.length === 0 ? (
+                    <p className="text-xs text-gray-400 py-3 text-center">Nema lotova u grupi.</p>
+                  ) : (
+                    <div className="divide-y divide-gray-100 rounded-lg border border-gray-100 bg-white overflow-hidden">
+                      {lotsInGroup.map((lot) => (
+                        <button
+                          key={lot.id}
+                          type="button"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50 transition-colors"
+                          onClick={() => void openDetail(lot.id)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">{lot.warehouseName ?? '—'}</p>
+                            <p className="text-xs text-gray-500">
+                              {lot.quantityOnHand}/{lot.quantityReceived} na skladištu
+                              {lot.contractNumber ? ` · Ugovor ${lot.contractNumber}` : ''}
+                            </p>
+                          </div>
+                          <Badge tone={getStockLotListBadge(lot.status, lot.quantityOnHand, lot.quantityReceived).tone}>
+                            {getStockLotListBadge(lot.status, lot.quantityOnHand, lot.quantityReceived).label}
+                          </Badge>
+                          <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-gray-900 truncate">{lot.productName}</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {lot.warehouseName} · {lot.quantityOnHand}/{lot.quantityReceived} na skladištu
-              </p>
-            </div>
-            <Badge tone={getStockLotListBadge(lot.status, lot.quantityOnHand, lot.quantityReceived).tone}>
-              {getStockLotListBadge(lot.status, lot.quantityOnHand, lot.quantityReceived).label}
-            </Badge>
-            <ChevronRight size={16} className="text-gray-400 shrink-0" />
-          </button>
-        ))}
-        {lots.length === 0 && !stockList.isLoading ? (
+          );
+        })}
+        {groups.length === 0 && !groupList.isLoading ? (
           <p className="px-4 py-12 text-center text-sm text-gray-400">Nema lotova u vašem opsegu.</p>
         ) : null}
       </div>
-      {stockList.meta ? (
+      {groupList.meta ? (
         <PaginationControls
-          page={stockList.meta.page}
-          pageSize={stockList.meta.pageSize}
-          total={stockList.meta.total}
-          totalPages={stockList.meta.totalPages}
-          onPageChange={stockList.setPage}
-          onPageSizeChange={stockList.setPageSize}
+          page={groupList.meta.page}
+          pageSize={groupList.meta.pageSize}
+          total={groupList.meta.total}
+          totalPages={groupList.meta.totalPages}
+          onPageChange={groupList.setPage}
+          onPageSizeChange={groupList.setPageSize}
         />
       ) : null}
     </div>

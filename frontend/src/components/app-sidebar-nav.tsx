@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Building2, Users, Package, ArrowLeftRight, FolderTree,
-  FileText, LayoutDashboard, ChevronLeft, ChevronRight,
+  LayoutDashboard, ChevronLeft, ChevronRight,
   LogOut, Briefcase, QrCode, List, Layers, ChevronDown, ClipboardList,
   MapPin, Warehouse, Trash2, ClipboardCheck, Settings,
 } from 'lucide-react';
@@ -11,6 +11,7 @@ import { isNavPageEnabled } from '../utils/settings-feature.util';
 import { cn } from '../utils/cn';
 import { isAdmin, isEvidenticar, isSkladistar, getUserRole } from '../store';
 import { useCurrentEmployee } from '../hooks/use-current-employee';
+import { useModuleBadges } from '../hooks/use-module-badges';
 import { SidebarNavButton } from './sidebar-nav-button';
 import type { PageId } from './page-id';
 
@@ -73,12 +74,13 @@ export const AppSidebarNav = ({
   const role = getUserRole();
   const { settings: publicSettings } = usePublicSettings();
   const { settings: adminSettings } = useAdminSettings();
+  const moduleBadges = useModuleBadges();
 
   const showNavPage = (pageId: PageId): boolean =>
     isNavPageEnabled(pageId, publicSettings, adminSettings);
   const showEquipmentSection =
     (admin || evidenticar) &&
-    (showNavPage('equipment') || showNavPage('transfers') || showNavPage('documents'));
+    (showNavPage('equipment') || showNavPage('transfers'));
   const showProcessSection =
     (admin && (showNavPage('inventory-count') || showNavPage('disposal-commissions'))) ||
     (evidenticar && !admin && showNavPage('inventory-count'));
@@ -215,6 +217,7 @@ export const AppSidebarNav = ({
                     visible={showNavPage('equipment')}
                     title="Sva oprema"
                     className="py-2 text-slate-400 hover:text-white"
+                    badge={moduleBadges.equipment}
                   />
                   <SidebarNavButton
                     pageId="equipment-by-category"
@@ -233,21 +236,13 @@ export const AppSidebarNav = ({
           ) : null}
           <SidebarNavButton
             pageId="transfers"
-            currentPage={currentPage}
+            currentPage={currentPage === 'documents' ? 'transfers' : currentPage}
             onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Zaduženja"
             icon={ArrowLeftRight}
             visible={showNavPage('transfers')}
-          />
-          <SidebarNavButton
-            pageId="documents"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
-            collapsed={collapsed}
-            label="Prenosnice"
-            icon={FileText}
-            visible={showNavPage('documents')}
+            badge={moduleBadges.transfers}
           />
         </NavSection>
 
@@ -260,6 +255,7 @@ export const AppSidebarNav = ({
             label="Popis"
             icon={ClipboardCheck}
             visible={showNavPage('inventory-count') && (admin || evidenticar)}
+            badge={moduleBadges['inventory-count']}
           />
           <SidebarNavButton
             pageId="disposal-commissions"
@@ -269,6 +265,7 @@ export const AppSidebarNav = ({
             label="Komisija rashod"
             icon={Trash2}
             visible={admin && showNavPage('disposal-commissions')}
+            badge={moduleBadges['disposal-commissions']}
           />
         </NavSection>
 
@@ -351,6 +348,7 @@ export const AppSidebarNav = ({
             label="Skladišna roba"
             icon={Package}
             visible={showNavPage('registrar-stock')}
+            badge={moduleBadges['registrar-stock']}
           />
           <SidebarNavButton
             pageId="employee-relocation"
@@ -360,6 +358,7 @@ export const AppSidebarNav = ({
             label="Org. promjena"
             icon={ArrowLeftRight}
             visible={showNavPage('employee-relocation')}
+            badge={moduleBadges['employee-relocation']}
           />
         </NavSection>
 
@@ -381,6 +380,7 @@ export const AppSidebarNav = ({
             label="Skladišna roba"
             icon={Package}
             visible={showNavPage('registrar-stock')}
+            badge={moduleBadges['registrar-stock']}
           />
           <SidebarNavButton
             pageId="employee-relocation"
@@ -390,6 +390,7 @@ export const AppSidebarNav = ({
             label="Org. promjena"
             icon={ArrowLeftRight}
             visible={showNavPage('employee-relocation')}
+            badge={moduleBadges['employee-relocation']}
           />
         </NavSection>
 

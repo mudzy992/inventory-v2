@@ -54,6 +54,23 @@ Za radnika/org jedinicu: `resolveEffectiveWarehouseId(orgUnitId)` — prvo sklad
 
 Implementacija: [`registrar-scope.service.ts`](../../../../backend/src/common/services/registrar-scope.service.ts), [`collect-org-units-for-warehouse.util.ts`](../../../../backend/src/common/utils/collect-org-units-for-warehouse.util.ts).
 
+### Cross-modul vidljivost (OR unija dodjela)
+
+Više redova dodjele = **unija** scope-a u svim modulima ispod. Primjer: A W1+Cat1 · B W1+Cat2+Org1 · B W2+Cat1+Org2.
+
+| Modul | API / servis | Režim A | Režim B |
+|-------|--------------|---------|---------|
+| Radnici | `employees.service` → `buildEmployeeWhere` | efektivno W | expand(O) ∩ efektivno W |
+| Oprema | `equipment.service` → `buildEquipmentWhere` | skladište + zaduženo + rashod | samo zaduženo |
+| Prenosnice / transferi | `transfers.service` → `buildTransferWhere` | oprema u scope **ILI** `fromPerson`/`toPerson` u scope radnika | isto, suženo |
+| Skladišna roba | `warehouse-stock` → `buildStockLotWhere` | lotovi W+Cat | **ne vidi** |
+| Kontrolna tabla | `GET /equipment/summary` (BE scoped) | scoped kategorije | scoped zaduženo |
+| Skladišta (lista) | `warehouses.service` | warehouseIds iz dodjela | isto |
+| Org. promjena | `employee-relocation` | samo Režim A redovi | B ne vidi relocation linije |
+| Akcije na opremi | `canCreateTransferForEquipment` | pun set transfera | **samo razduženje** → ciljno skladište iz matching dodjele |
+
+Frontend liste koriste paginirane API-je sa istim BE filterom; ne sužavaju OR uniju dodatnim client filterom.
+
 ## Pristup po modulu
 
 | Modul | admin | evidenticar | skladistar | user |

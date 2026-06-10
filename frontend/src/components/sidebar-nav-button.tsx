@@ -13,6 +13,7 @@ interface SidebarNavButtonProps {
   visible: boolean;
   title?: string;
   className?: string;
+  badge?: number;
   children?: ReactNode;
 }
 
@@ -26,6 +27,7 @@ export const SidebarNavButton = ({
   visible,
   title,
   className,
+  badge,
   children,
 }: SidebarNavButtonProps) => {
   if (!visible) {
@@ -42,8 +44,32 @@ export const SidebarNavButton = ({
         className,
       )}
     >
-      <Icon size={children ? 16 : 20} />
-      {!collapsed && (children ?? <span>{label}</span>)}
+      <span className="relative shrink-0">
+        <Icon size={children ? 16 : 20} />
+        {badge && badge > 0 ? (
+          <span
+            className={cn(
+              'absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-4 text-center',
+              collapsed ? 'block' : 'hidden',
+            )}
+            aria-hidden
+          >
+            {badge > 99 ? '99+' : badge}
+          </span>
+        ) : null}
+      </span>
+      {!collapsed && (
+        children ?? (
+          <span className="flex-1 flex items-center justify-between gap-2 min-w-0">
+            <span className="truncate">{label}</span>
+            {badge && badge > 0 ? (
+              <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-[18px] text-center">
+                {badge > 99 ? '99+' : badge}
+              </span>
+            ) : null}
+          </span>
+        )
+      )}
     </button>
   );
 };

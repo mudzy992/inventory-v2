@@ -19,6 +19,7 @@ import { CheckInventoryNumberQueryDto } from './dto/check-inventory-number-query
 import { CheckSpecificationValueQueryDto } from './dto/check-specification-value-query.dto';
 import { CreateEquipmentDto } from './dto/create-equipment.dto';
 import { EquipmentSummaryQueryDto } from './dto/equipment-summary-query.dto';
+import { EquipmentLotGroupsQueryDto } from './dto/equipment-lot-groups-query.dto';
 import { ListEquipmentQueryDto } from './dto/list-equipment-query.dto';
 import { UpdateEquipmentDto } from './dto/update-equipment.dto';
 import { EquipmentService } from './equipment.service';
@@ -38,6 +39,12 @@ export class EquipmentController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   getSummary(@CurrentUser() user: AuthenticatedUser, @Query() query: EquipmentSummaryQueryDto) {
     return this.equipmentService.getSummary(user, query.categoryId);
+  }
+
+  @Get('lot-groups')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  getLotGroups(@CurrentUser() user: AuthenticatedUser, @Query() query: EquipmentLotGroupsQueryDto) {
+    return this.equipmentService.getLotGroups(user, query.categoryId);
   }
 
   @Get('check/inventory-number')

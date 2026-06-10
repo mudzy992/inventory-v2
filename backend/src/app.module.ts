@@ -23,6 +23,7 @@ import { UsersModule } from './modules/users/users.module';
 import { MaintenancePartsModule } from './modules/maintenance-parts/maintenance-parts.module';
 import { EquipmentCatalogModule } from './modules/equipment-catalog/equipment-catalog.module';
 import { EmployeeRelocationModule } from './modules/employee-relocation/employee-relocation.module';
+import { NavModule } from './modules/nav/nav.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -51,6 +52,7 @@ import { PrismaModule } from './prisma/prisma.module';
     MaintenancePartsModule,
     EquipmentCatalogModule,
     EmployeeRelocationModule,
+    NavModule,
     TransfersModule,
     UploadsModule,
     NotificationsModule,

@@ -12,6 +12,14 @@ export interface EquipmentListFilters extends PaginatedListParams {
   status?: EquipmentStatus;
   categoryId?: string;
   currentHolderId?: string;
+  /** UUID lota ili `none` za opremu bez lota */
+  stockLotId?: string;
+}
+
+export interface EquipmentLotGroup {
+  stockLotId: string | null;
+  productName: string;
+  count: number;
 }
 
 const mapEquipmentRow = (row: Equipment & { entryDate: string }): Equipment => ({
@@ -38,6 +46,11 @@ export const fetchEquipmentSummaryApi = (categoryId?: string) => {
   const query = categoryId ? `?categoryId=${encodeURIComponent(categoryId)}` : '';
   return apiRequest<EquipmentSummary>(`/equipment/summary${query}`);
 };
+
+export const fetchEquipmentLotGroupsApi = (categoryId: string) =>
+  apiRequest<EquipmentLotGroup[]>(
+    `/equipment/lot-groups?categoryId=${encodeURIComponent(categoryId)}`,
+  );
 
 export const fetchEquipmentApi = async (id: string) => {
   const row = await apiRequest<Equipment & { entryDate: string }>(`/equipment/${id}`);

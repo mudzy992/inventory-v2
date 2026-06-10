@@ -1,3 +1,12 @@
+## 2026-06-10 — Modul Zaduženja: tabovi
+
+- UI: tabovi **Zaduženja** (historija prenosa), **Trenutna zaduženja** (equipment `status=zaduzeno`, bez obaveze prenosnice), **Prenosnice** (bivši DocumentsPage).
+- Sidebar: uklonjen zaseban unos Prenosnice; `/documents` → tab Prenosnice unutar Zaduženja.
+
+## 2026-06-10 — Cross-warehouse izdavanje (admin)
+
+- Postavka `transfer.allow_admin_cross_warehouse_issue`: admin može izdati iz lota W1 na radnika u efektivnom skladištu W2; lot računovodstvo kao relocation dest-accept.
+
 ## 2026-06-08 — Lot issue bez prenosnice (init)
 
 - `transfer.generation.on_stock_lot_issue=false`: izdavanje iz lota zadužuje opremu direktno bez `Transfer` zapisa i bez DOCX/PDF.

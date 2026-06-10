@@ -1,5 +1,9 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-10 (cross-warehouse issue)
+
+- Registry: `transfer.allow_admin_cross_warehouse_issue` — admin izdavanje iz lota na radnika u drugom efektivnom skladištu.
+
 ## 2026-06-04 (nav toggle fix)
 
 - Frontend: `Layout` / `useIsPageEnabled` / `LayoutNavGate` sada koriste i `adminSettings`; `isSettingFlagEnabled` parsira string `"true"`/`"false"`; `patchLocal` za sve `features.*` ključeve; `publicSettingsToMap` normalizuje boolean po `valueType`.

@@ -14,4 +14,8 @@ export class ListEquipmentQueryDto extends PaginatedQueryDto {
   @IsOptional()
   @IsUUID()
   currentHolderId?: string;
+
+  /** UUID lota ili literal `none` za opremu bez lota */
+  @IsOptional()
+  stockLotId?: string;
 }

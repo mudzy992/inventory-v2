@@ -427,15 +427,24 @@ export class RegistrarScopeService {
     }
     const equipmentWhere = await this.buildEquipmentWhere(user);
     const employeeWhere = await this.buildEmployeeWhere(user);
-    const actor = await this.prisma.user.findUnique({
-      where: { id: user.id },
-      select: { employeeId: true },
-    });
-    const orClauses: Prisma.TransferWhereInput[] = [
-      { equipment: equipmentWhere },
-      { fromPerson: employeeWhere },
-      { toPerson: employeeWhere },
-    ];
+    const [equipmentRows, employeeRows, actor] = await Promise.all([
+      this.prisma.equipment.findMany({ where: equipmentWhere, select: { id: true } }),
+      this.prisma.employee.findMany({ where: employeeWhere, select: { id: true } }),
+      this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { employeeId: true },
+      }),
+    ]);
+    const equipmentIds = equipmentRows.map((row) => row.id);
+    const employeeIds = employeeRows.map((row) => row.id);
+    const orClauses: Prisma.TransferWhereInput[] = [];
+    if (equipmentIds.length > 0) {
+      orClauses.push({ equipmentId: { in: equipmentIds } });
+    }
+    if (employeeIds.length > 0) {
+      orClauses.push({ fromPersonId: { in: employeeIds } });
+      orClauses.push({ toPersonId: { in: employeeIds } });
+    }
     if (actor?.employeeId) {
       orClauses.push({
         inventoryLine: {
@@ -443,7 +452,43 @@ export class RegistrarScopeService {
         },
       });
     }
+    if (orClauses.length === 0) {
+      return { id: { in: [] } };
+    }
     return { OR: orClauses };
+  }
+
+  async canAccessTransfer(
+    user: AuthenticatedUser,
+    transfer: {
+      fromPerson: Pick<Employee, 'id' | 'orgUnitId'> | null;
+      toPerson: Pick<Employee, 'id' | 'orgUnitId'> | null;
+      equipment: Equipment;
+      holder: Employee | null;
+    },
+  ): Promise<boolean> {
+    if (this.hasFullAccess(user)) {
+      return true;
+    }
+    if (user.role !== 'evidenticar') {
+      return false;
+    }
+    if (await this.canAccessEquipment(user, transfer.equipment, transfer.holder)) {
+      return true;
+    }
+    if (transfer.fromPerson) {
+      const fromEmployee = transfer.fromPerson as Employee;
+      if (await this.canAccessEmployee(user, fromEmployee)) {
+        return true;
+      }
+    }
+    if (transfer.toPerson) {
+      const toEmployee = transfer.toPerson as Employee;
+      if (await this.canAccessEmployee(user, toEmployee)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private async buildAssignmentEquipmentWhere(

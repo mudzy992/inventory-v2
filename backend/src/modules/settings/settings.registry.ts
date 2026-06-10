@@ -329,6 +329,16 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'transfers',
   }),
   def({
+    key: 'transfer.allow_admin_cross_warehouse_issue',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: false,
+    label: 'Cross-warehouse izdavanje (admin)',
+    description:
+      'Administrator može izdati komad iz lota jednog skladišta na radnika čije efektivno skladište je drugo; oprema automatski prelazi na lot ciljnog skladišta.',
+    group: 'transfers',
+  }),
+  def({
     key: 'transfer.require_upload_before_sign',
     scope: 'private',
     valueType: 'boolean',

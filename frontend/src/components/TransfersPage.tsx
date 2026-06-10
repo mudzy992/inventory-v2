@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from 'react';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
 import { useStore, useRefreshData } from '../useStore';
 import { getEmployeeFullName, getStatusLabel, getStatusColor, formatDate, getOrgUnitPath, resolveSignerEmployee } from '../helpers';
@@ -23,8 +23,13 @@ import { resolveDisposalCommissionApi, type DisposalResolveDto } from '../api/di
 import { AlertBanner } from './ui/alert-banner';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
-import { Search, Filter, ArrowRight, Package, Warehouse, UserX, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, Filter, ArrowRight, ArrowLeftRight, Package, Warehouse, UserX, Trash2, AlertTriangle, FileText, ClipboardList } from 'lucide-react';
 import { PageHeaderRow } from './ui/page-header-row';
+import { PageTabs } from './ui/page-tabs';
+import { usePublicSettings } from '../contexts/public-settings-context';
+import type { TransferModuleTab } from './transfers/transfer-module-tab';
+import { CurrentAssignmentsTab } from './transfers/current-assignments-tab';
+import { TransferDocumentsTab } from './transfers/transfer-documents-tab';
 import { ResponsiveTable } from './ui/responsive-table';
 import { PaginationControls } from './ui/pagination-controls';
 import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
@@ -37,9 +42,13 @@ import type { PageId } from './page-id';
 
 interface TransfersPageProps {
   onNavigate?: (page: PageId) => void;
+  initialTab?: TransferModuleTab;
 }
 
-export function TransfersPage({ onNavigate }: TransfersPageProps) {
+export function TransfersPage({ onNavigate, initialTab = 'history' }: TransfersPageProps) {
+  const { getBoolean } = usePublicSettings();
+  const documentsEnabled = getBoolean('features.documents', true);
+  const [activeTab, setActiveTab] = useState<TransferModuleTab>(initialTab);
   const [state] = useStore();
   const refresh = useRefreshData();
   const [filterType, setFilterType] = useState('');
@@ -56,6 +65,27 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
   const { toastError } = useToast();
   const isFrozen = useInventoryFreezeActive();
   const [disposalResolve, setDisposalResolve] = useState<DisposalResolveDto | null>(null);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (activeTab === 'documents' && !documentsEnabled) {
+      setActiveTab('history');
+    }
+  }, [activeTab, documentsEnabled]);
+
+  const tabItems = useMemo(() => {
+    const items: { id: TransferModuleTab; label: string; icon: typeof ArrowLeftRight }[] = [
+      { id: 'history', label: 'Zaduženja', icon: ArrowLeftRight },
+      { id: 'current', label: 'Trenutna zaduženja', icon: ClipboardList },
+    ];
+    if (documentsEnabled) {
+      items.push({ id: 'documents', label: 'Prenosnice', icon: FileText });
+    }
+    return items;
+  }, [documentsEnabled]);
 
   // Form
   const [fType, setFType] = useState<TransferType>('zaduzenje');
@@ -208,49 +238,48 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
     }
   };
 
-  return (
-    <div>
-      <PageHeaderRow
-        title="Zaduženja i prenosi"
-        description="Upravljanje kretanjem opreme — zaduženja, razduženja, rashod"
-        actions={
-          <>
-            <button
-              type="button"
-              onClick={() => openForm('zaduzenje')}
-              disabled={isFrozen}
-              className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
-            >
-              <Package size={16} /> Zaduži
-            </button>
-            <button
-              type="button"
-              onClick={() => openForm('prenos')}
-              disabled={isFrozen}
-              className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 text-sm font-medium disabled:opacity-50"
-            >
-              <ArrowRight size={16} /> Prenos
-            </button>
-            <button
-              type="button"
-              onClick={() => openForm('razduzenje')}
-              disabled={isFrozen}
-              className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
-            >
-              <Warehouse size={16} /> Razduži
-            </button>
-            <button
-              type="button"
-              onClick={() => openForm('rashodovanje')}
-              disabled={isFrozen}
-              className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
-            >
-              <Trash2 size={16} /> Rashod
-            </button>
-          </>
-        }
-      />
+  const historyActions =
+    activeTab === 'history' ? (
+      <>
+        <button
+          type="button"
+          onClick={() => openForm('zaduzenje')}
+          disabled={isFrozen}
+          className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
+        >
+          <Package size={16} /> Zaduži
+        </button>
+        <button
+          type="button"
+          onClick={() => openForm('prenos')}
+          disabled={isFrozen}
+          className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 text-sm font-medium disabled:opacity-50"
+        >
+          <ArrowRight size={16} /> Prenos
+        </button>
+        <button
+          type="button"
+          onClick={() => openForm('razduzenje')}
+          disabled={isFrozen}
+          className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+        >
+          <Warehouse size={16} /> Razduži
+        </button>
+        <button
+          type="button"
+          onClick={() => openForm('rashodovanje')}
+          disabled={isFrozen}
+          className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+        >
+          <Trash2 size={16} /> Rashod
+        </button>
+      </>
+    ) : null;
 
+  let tabContent: ReactNode = null;
+  if (activeTab === 'history') {
+    tabContent = (
+      <>
       <InventoryFreezeActionHint onOpenInventory={onNavigate} />
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
@@ -426,6 +455,25 @@ export function TransfersPage({ onNavigate }: TransfersPageProps) {
           />
         </div>
       ) : null}
+      </>
+    );
+  } else if (activeTab === 'current') {
+    tabContent = <CurrentAssignmentsTab />;
+  } else if (activeTab === 'documents') {
+    tabContent = <TransferDocumentsTab />;
+  }
+
+  return (
+    <div>
+      <PageHeaderRow
+        title="Zaduženja"
+        description="Prenosi opreme, trenutna zaduženja i prenosnice"
+        actions={historyActions}
+      />
+
+      <PageTabs tabs={tabItems} activeTab={activeTab} onChange={setActiveTab} className="mb-4" />
+
+      {tabContent}
 
       {/* New Transfer Modal */}
       {showForm && (

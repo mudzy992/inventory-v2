@@ -42,6 +42,26 @@
 2. Nema `Transfer` zapisa ni generisanja dokumenta
 3. `quantityOnHand -= 1`
 
+## Cross-warehouse izdavanje (admin)
+
+Postavka: `transfer.allow_admin_cross_warehouse_issue` (private, default `false`).
+
+Kad admin izda komad iz lota skladišta **W1** na radnika čije efektivno skladište je **W2 ≠ W1**:
+
+1. Standardni issue (`zaduzenje` prenosnica iz W1 ako je uključena generacija)
+2. Izvorni lot: `quantityOnHand -= 1`, `quantityReceived -= 1`
+3. Ciljni lot na W2: pronađi otvoreni lot po `catalogItemId` ili kreiraj `incomingRelocation` lot
+4. Ciljni lot: `quantityReceived += 1` (za `zaduzeno` bez `quantityOnHand` promjene → izdato +1)
+5. `equipment.stockLotId` prelazi na ciljni lot; spec nasljeđivanje kao kod relocation dest-accept
+
+**Ograničenja:**
+
+- Samo `admin`; evidentičar uvijek odbijen za cross-warehouse issue
+- Obavezan `catalogItemId` na izvornom lotu
+- Freeze provjera za grad izvornog i ciljnog skladišta
+
+Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/modules/warehouse-stock/utils/cross-warehouse-issue.util.ts).
+
 ## Notifikacije
 
 - `warehouse_stock_received` → evidentičari s `RegistrarAssignment` za `(warehouseId, categoryId)`
@@ -49,3 +69,23 @@
 ## Freeze
 
 - Tokom aktivnog popisa u gradu: blokiran `stock_lot_create` i `stock_lot_issue`
+
+## Lista dodijeljene robe (evidentičar / admin)
+
+| Endpoint | Opis |
+|----------|------|
+| `GET /warehouse-stock/assigned/groups` | Paginirani **grupni** prikaz po proizvodu (`catalogItemId` ili `categoryId` + `productName`) |
+| `GET /warehouse-stock/assigned` | Pojedinačni lotovi; filter `groupKey` za expand grupe |
+
+**Query filteri** (oba endpointa): `search`, `warehouseId`, `categoryId`, `status`, `groupKey` (samo flat lista).
+
+**Grupni ključ:**
+
+- `catalog:{uuid}` kad postoji `catalogItemId`
+- `product:{categoryId}::{normalizedProductName}` inače
+
+**UI:** accordion grupa → redovi po skladištu → detail lota (postojeći tok spec/issue).
+
+## Izdata oprema (detail lota)
+
+- `issuedUnits` uključuje `currentHolder` (ime, org jedinica) za prikaz zaduženja i link na detalj opreme.

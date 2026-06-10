@@ -1,5 +1,19 @@
 # Changelog — roles-access
 
+## 2026-06-10 (transfer scope ID-based filter)
+
+- `buildTransferWhere` sada koristi eksplicitne skupove `equipmentId` / `fromPersonId` / `toPersonId` iz `buildEquipmentWhere` + `buildEmployeeWhere` (1:1 parity s Opremom/Radnicima; izbjegava Prisma relation filter edge-case).
+- `TRANSFER_LIST_INCLUDE`: `fromPerson`/`toPerson` uključuju `orgUnitId` za pouzdan `canAccessTransfer` na detail akcijama.
+
+## 2026-06-10 (employee search scope)
+
+- `GET /employees/search` sada primjenjuje `buildEmployeeWhere` (isti scope kao lista radnika).
+- Transfer scope vraćen na isključivo oprema + from/to osoba u dodjeli (bez širokog warehouse filtera).
+
+## 2026-06-10 (cross-modul OR unija)
+
+- Matrica: eksplicitna tabela cross-modul vidljivosti za OR uniju dodjela (A + B); FE liste oslanjaju se na scoped API.
+
 ## 2026-06-10
 
 - **Validacija dodjela**: ekskluzivnost Režim A vs B po `(skladište, kategorija)`; org mora imati efektivno skladište = dodjela; kategorije filtrirane po podacima skladišta; backend `assertRegistrarScopesValid` + admin UI filteri/autocomplete.

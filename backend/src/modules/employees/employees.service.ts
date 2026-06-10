@@ -68,18 +68,21 @@ export class EmployeesService {
     };
   }
 
-  async search(query: SearchEmployeesQueryDto): Promise<Employee[]> {
+  async search(user: AuthenticatedUser, query: SearchEmployeesQueryDto): Promise<Employee[]> {
     const term = query.q.trim();
     const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
+    const scopeWhere = await this.registrarScope.buildEmployeeWhere(user);
+    const searchWhere = buildContainsSearchWhere(term, [
+      'firstName',
+      'lastName',
+      'email',
+      'title',
+    ]);
+    const where: Prisma.EmployeeWhereInput = searchWhere
+      ? { AND: [scopeWhere, searchWhere] }
+      : scopeWhere;
     return this.prisma.employee.findMany({
-      where: {
-        OR: [
-          { firstName: { contains: term } },
-          { lastName: { contains: term } },
-          { email: { contains: term } },
-          { title: { contains: term } },
-        ],
-      },
+      where,
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       take: limit,
     });

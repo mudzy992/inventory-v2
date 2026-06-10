@@ -9,12 +9,16 @@ import { Prisma, type WarehouseStockLot } from '../../../generated/prisma/client
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { SignerResolutionService } from '../../common/services/signer-resolution.service';
+import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import {
   validateIssueSpecifications,
   validateLotSpecifications,
 } from '../../common/utils/category-fields.util';
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
-import type { PaginatedResponse } from '../../common/types/paginated-response.type';
+import {
+  buildPaginatedResponse,
+  type PaginatedResponse,
+} from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import {
   buildContainsSearchWhere,
@@ -47,7 +51,24 @@ import {
   executeStockLotIssueDirectInTx,
   executeStockLotIssueWithTransferInTx,
 } from './utils/finalize-stock-lot-issue.util';
+import { applyCrossWarehouseIssueLotUpdatesInTx } from './utils/cross-warehouse-issue.util';
 import { resolveTransferSignerId } from '../transfers/utils/resolve-transfer-signer.util';
+import {
+  buildStockLotGroupKey,
+  buildStockLotGroupWhere,
+} from './utils/stock-lot-group-key.util';
+export interface StockLotProductGroup {
+  groupKey: string;
+  productName: string;
+  categoryId: string;
+  categoryName: string;
+  catalogItemId: string | null;
+  warehouseCount: number;
+  totalOnHand: number;
+  totalReceived: number;
+  awaitingSpecCount: number;
+  readyToIssueCount: number;
+}
 
 const lotInclude = {
   category: true,
@@ -61,6 +82,9 @@ const lotInclude = {
       status: true,
       currentHolderId: true,
       createdAt: true,
+      currentHolder: {
+        select: { id: true, firstName: true, lastName: true, orgUnitId: true },
+      },
     },
     orderBy: { createdAt: 'desc' as const },
   },
@@ -79,6 +103,7 @@ export class WarehouseStockService {
     private readonly signerResolutionService: SignerResolutionService,
     private readonly settingsService: SettingsService,
     private readonly transferDocumentGeneration: TransferDocumentGenerationService,
+    private readonly warehouseResolution: WarehouseResolutionService,
   ) {}
 
   async listForWarehouse(
@@ -126,21 +151,7 @@ export class WarehouseStockService {
     }
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
     const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
-    const filters: Prisma.WarehouseStockLotWhereInput[] = [
-      {
-        lotKind: 'ISSUABLE',
-        status: { in: ['ceka_specifikaciju', 'spremno_za_izdavanje'] },
-      },
-    ];
-    if (user.role === 'evidenticar') {
-      const scopeWhere = await this.registrarScope.buildStockLotWhere(user);
-      filters.push(scopeWhere);
-    }
-    const searchWhere = buildContainsSearchWhere(query.search, ['productName']);
-    if (searchWhere) {
-      filters.push(searchWhere);
-    }
-    const where: Prisma.WarehouseStockLotWhereInput = { AND: filters };
+    const where = await this.buildAssignedLotsWhere(user, query);
     const orderBy = buildOrderBy(query.sortBy, query.sortDir, STOCK_LOT_SORT_FIELDS, 'status');
     const result = await paginate({
       findMany: (args) =>
@@ -158,6 +169,105 @@ export class WarehouseStockService {
       items: result.items.map((lot) => this.mapLotForUser(user, lot, true)),
       meta: result.meta,
     };
+  }
+
+  async listAssignedGroups(
+    user: AuthenticatedUser,
+    query: ListStockLotsQueryDto,
+  ): Promise<PaginatedResponse<StockLotProductGroup>> {
+    if (user.role !== 'evidenticar' && user.role !== 'admin') {
+      throw new ForbiddenException('Only registrar or admin can list assigned stock groups');
+    }
+    const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
+    const { page, skip, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const where = await this.buildAssignedLotsWhere(user, query);
+    const lots = await this.prisma.warehouseStockLot.findMany({
+      where,
+      select: {
+        warehouseId: true,
+        catalogItemId: true,
+        categoryId: true,
+        productName: true,
+        quantityOnHand: true,
+        quantityReceived: true,
+        status: true,
+        category: { select: { name: true } },
+      },
+    });
+    const groupMap = new Map<string, StockLotProductGroup>();
+    const warehouseIdsByGroup = new Map<string, Set<string>>();
+    for (const lot of lots) {
+      const groupKey = buildStockLotGroupKey(lot);
+      const warehouseIds = warehouseIdsByGroup.get(groupKey) ?? new Set<string>();
+      warehouseIds.add(lot.warehouseId);
+      warehouseIdsByGroup.set(groupKey, warehouseIds);
+      const existing = groupMap.get(groupKey);
+      if (existing) {
+        existing.warehouseCount = warehouseIds.size;
+        existing.totalOnHand += lot.quantityOnHand;
+        existing.totalReceived += lot.quantityReceived;
+        if (lot.status === 'ceka_specifikaciju') {
+          existing.awaitingSpecCount += 1;
+        }
+        if (lot.status === 'spremno_za_izdavanje') {
+          existing.readyToIssueCount += 1;
+        }
+        continue;
+      }
+      groupMap.set(groupKey, {
+        groupKey,
+        productName: lot.productName,
+        categoryId: lot.categoryId,
+        categoryName: lot.category.name,
+        catalogItemId: lot.catalogItemId,
+        warehouseCount: warehouseIds.size,
+        totalOnHand: lot.quantityOnHand,
+        totalReceived: lot.quantityReceived,
+        awaitingSpecCount: lot.status === 'ceka_specifikaciju' ? 1 : 0,
+        readyToIssueCount: lot.status === 'spremno_za_izdavanje' ? 1 : 0,
+      });
+    }
+    const groups = [...groupMap.values()].sort((a, b) =>
+      a.productName.localeCompare(b.productName, 'bs'),
+    );
+    const items = groups.slice(skip, skip + take);
+    return buildPaginatedResponse(items, groups.length, page, take);
+  }
+
+  private async buildAssignedLotsWhere(
+    user: AuthenticatedUser,
+    query: ListStockLotsQueryDto,
+  ): Promise<Prisma.WarehouseStockLotWhereInput> {
+    const filters: Prisma.WarehouseStockLotWhereInput[] = [
+      {
+        lotKind: 'ISSUABLE',
+        ...(query.status
+          ? { status: query.status }
+          : { status: { in: ['ceka_specifikaciju', 'spremno_za_izdavanje'] } }),
+      },
+    ];
+    if (user.role === 'evidenticar') {
+      const scopeWhere = await this.registrarScope.buildStockLotWhere(user);
+      filters.push(scopeWhere);
+    }
+    if (query.warehouseId) {
+      filters.push({ warehouseId: query.warehouseId });
+    }
+    if (query.categoryId) {
+      filters.push({ categoryId: query.categoryId });
+    }
+    if (query.groupKey?.trim()) {
+      try {
+        filters.push(buildStockLotGroupWhere(query.groupKey.trim()));
+      } catch {
+        throw new BadRequestException('Invalid groupKey');
+      }
+    }
+    const searchWhere = buildContainsSearchWhere(query.search, ['productName']);
+    if (searchWhere) {
+      filters.push(searchWhere);
+    }
+    return { AND: filters };
   }
 
   async findOne(user: AuthenticatedUser, lotId: string) {
@@ -348,6 +458,39 @@ export class WarehouseStockService {
     if (!canHolder) {
       throw new ForbiddenException('Employee outside your scope');
     }
+    const destWarehouseId = await this.warehouseResolution.resolveForOrgUnit(holder.orgUnitId);
+    const isCrossWarehouse =
+      destWarehouseId !== null && destWarehouseId !== lot.warehouseId;
+    if (isCrossWarehouse) {
+      if (user.role !== 'admin') {
+        throw new ForbiddenException('Cross-warehouse issue is only available to administrator');
+      }
+      await this.settingsService.assertFeatureEnabled('transfer.allow_admin_cross_warehouse_issue');
+      if (!lot.catalogItemId) {
+        throw new BadRequestException('Source lot must have catalog item for cross-warehouse issue');
+      }
+      const destWarehouse = await this.prisma.warehouse.findUnique({
+        where: { id: destWarehouseId },
+        select: { cityId: true },
+      });
+      if (destWarehouse) {
+        await this.inventoryFreeze.assertNoMutationInCity(
+          destWarehouse.cityId,
+          user,
+          'stock_lot_issue',
+        );
+      }
+    }
+    let catalogItemName = lot.productName;
+    if (isCrossWarehouse && lot.catalogItemId) {
+      const catalogItem = await this.prisma.equipmentCatalogItem.findUnique({
+        where: { id: lot.catalogItemId },
+        select: { name: true },
+      });
+      if (catalogItem) {
+        catalogItemName = catalogItem.name;
+      }
+    }
     const lotSpecs = (lot.specifications ?? {}) as Record<string, string>;
     const mergedSpecifications = { ...lotSpecs, ...dto.uniqueSpecifications };
     const transferDocumentEnabled = await isStockLotTransferDocumentEnabled(this.settingsService);
@@ -402,6 +545,20 @@ export class WarehouseStockService {
             status: nextOnHand === 0 ? 'zatvoreno' : 'spremno_za_izdavanje',
           },
         });
+        if (isCrossWarehouse && destWarehouseId && lot.catalogItemId) {
+          await applyCrossWarehouseIssueLotUpdatesInTx(tx, {
+            equipmentId: issued.equipmentId,
+            sourceLotId: lot.id,
+            sourceWarehouseId: lot.warehouseId,
+            destWarehouseId,
+            categoryId: lot.categoryId,
+            catalogItemId: lot.catalogItemId,
+            catalogItemName,
+            actorUserId: user.id,
+            fields,
+            optionalFields,
+          });
+        }
         return issued;
       });
       if (result.transferId) {

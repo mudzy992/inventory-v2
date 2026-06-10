@@ -84,6 +84,17 @@ Init / masovno zaduživanje iz lota bez prenosnica: `transfer.generation.enabled
 - Zahtijeva setting `features.cross_service_transfer=true`
 - Evidentičar ne može kreirati/potpisati cross-service transfer
 
+## UI — modul Zaduženja (tabovi)
+
+| Tab | Izvor podataka | Svrha |
+|-----|----------------|-------|
+| Zaduženja | `GET /transfers` (scope) | Historija prenosa + akcije Zaduži/Prenos/Razduži/Rashod |
+| Trenutna zaduženja | `GET /equipment?status=zaduzeno` (isti registrar scope kao Oprema) | Pregled trenutno zadužene opreme, uključujući direktno izdavanje iz lota bez prenosnice |
+| Prenosnice | `GET /transfers` + dokument workflow | Štampa, upload i potpis prenosnica (`features.documents`) |
+
+- Navigacija: jedan sidebar unos **Zaduženja**; ruta `/documents` preusmjerava na tab Prenosnice (bookmark kompatibilnost).
+- Akcije zaduženja i `InventoryFreezeActionHint` samo na tabu Zaduženja.
+
 ## API
 
 | Metoda | Putanja | Uloga |

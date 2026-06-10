@@ -23,6 +23,12 @@ export class WarehouseStockController {
     return this.warehouseStockService.listForRegistrar(user, query);
   }
 
+  @Get('warehouse-stock/assigned/groups')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  listAssignedGroups(@CurrentUser() user: AuthenticatedUser, @Query() query: ListStockLotsQueryDto) {
+    return this.warehouseStockService.listAssignedGroups(user, query);
+  }
+
   @Get('warehouses/:warehouseId/stock-lots')
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
   listByWarehouse(

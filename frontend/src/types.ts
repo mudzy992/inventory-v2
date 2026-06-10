@@ -125,6 +125,7 @@ export interface WarehouseStockLot {
     inventoryNumber: string;
     status: string;
     currentHolderId?: string | null;
+    currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'> | null;
     createdAt: string;
   }[];
 }
@@ -144,6 +145,7 @@ export interface Equipment {
   warehouseId?: string | null;
   warehouseCondition?: WarehouseCondition | null;
   notes?: string;
+  stockLot?: { id: string; productName: string } | null;
 }
 
 export type TransferType = 'zaduzenje' | 'razduzenje' | 'rashodovanje' | 'prenos';

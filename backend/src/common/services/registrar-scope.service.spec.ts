@@ -99,6 +99,8 @@ const authUser = (
 const createService = (options?: {
   keeperWarehouseIds?: string[];
   actorEmployeeId?: string | null;
+  scopedEquipmentIds?: string[];
+  scopedEmployeeIds?: string[];
 }) => {
   const prisma = {
     category: {
@@ -118,6 +120,14 @@ const createService = (options?: {
           warehouseId,
           userId: where.userId,
         })),
+    },
+    equipment: {
+      findMany: async () =>
+        (options?.scopedEquipmentIds ?? []).map((id) => ({ id })),
+    },
+    employee: {
+      findMany: async () =>
+        (options?.scopedEmployeeIds ?? []).map((id) => ({ id })),
     },
     user: {
       findUnique: async () => ({ employeeId: options?.actorEmployeeId ?? null }),
@@ -467,12 +477,17 @@ describe('RegistrarScopeService', () => {
       assert.deepEqual(where, {});
     });
 
-    it('user transfer scope follows equipment scope', async () => {
-      const service = createService();
+    it('user transfer scope uses scoped equipment and employee ids', async () => {
+      const service = createService({
+        scopedEquipmentIds: ['eq-user'],
+        scopedEmployeeIds: ['emp-user'],
+      });
       const where = await service.buildTransferWhere(authUser('user'));
       assert.ok(where.OR);
       const orClauses = where.OR as Record<string, unknown>[];
-      assert.ok(orClauses.some((row) => 'equipment' in row));
+      assert.ok(orClauses.some((row) => 'equipmentId' in row));
+      assert.ok(orClauses.some((row) => 'fromPersonId' in row));
+      assert.ok(orClauses.some((row) => 'toPersonId' in row));
     });
 
     it('central registrar excludes ED Zenica subtree holders', async () => {
@@ -544,7 +559,10 @@ describe('RegistrarScopeService', () => {
     });
 
     it('evidenticar transfer scope includes employee participants', async () => {
-      const service = createService();
+      const service = createService({
+        scopedEquipmentIds: ['eq-a'],
+        scopedEmployeeIds: ['emp-a', 'emp-b'],
+      });
       const where = await service.buildTransferWhere(
         authUser('evidenticar', {
           registrarScopes: [{ warehouseId: 'wh-a', categoryId: 'cat-root' }],
@@ -552,8 +570,46 @@ describe('RegistrarScopeService', () => {
       );
       assert.ok(where.OR);
       const orClauses = where.OR as Record<string, unknown>[];
-      assert.ok(orClauses.some((row) => 'fromPerson' in row));
-      assert.ok(orClauses.some((row) => 'toPerson' in row));
+      assert.ok(orClauses.some((row) => 'fromPersonId' in row));
+      assert.ok(orClauses.some((row) => 'toPersonId' in row));
+      assert.ok(orClauses.some((row) => 'equipmentId' in row));
+    });
+
+    it('evidenticar multi-assignment A+B transfer scope unions equipment and employee ids', async () => {
+      const service = createService({
+        scopedEquipmentIds: ['eq-mode-a', 'eq-mode-b-w1', 'eq-mode-b-w2'],
+        scopedEmployeeIds: ['emp-a', 'emp-b1', 'emp-b2'],
+      });
+      const where = await service.buildTransferWhere(
+        authUser('evidenticar', {
+          registrarScopes: [
+            { warehouseId: 'wh-a', categoryId: 'cat-root' },
+            { warehouseId: 'wh-a', categoryId: 'cat-child', orgUnitId: 'ou-child' },
+            { warehouseId: 'wh-b', categoryId: 'cat-root', orgUnitId: 'ou-other' },
+          ],
+        }),
+      );
+      assert.ok(where.OR);
+      const orClauses = where.OR as Array<Record<string, unknown>>;
+      const equipmentClause = orClauses.find((row) => 'equipmentId' in row) as {
+        equipmentId: { in: string[] };
+      };
+      assert.ok(equipmentClause);
+      assert.deepEqual(equipmentClause.equipmentId.in, [
+        'eq-mode-a',
+        'eq-mode-b-w1',
+        'eq-mode-b-w2',
+      ]);
+      const fromClause = orClauses.find((row) => 'fromPersonId' in row) as {
+        fromPersonId: { in: string[] };
+      };
+      assert.ok(fromClause?.fromPersonId.in.includes('emp-b2'));
+    });
+
+    it('evidenticar without scoped ids returns empty transfer filter', async () => {
+      const service = createService();
+      const where = await service.buildTransferWhere(authUser('evidenticar'));
+      assert.deepEqual(where, { id: { in: [] } });
     });
 
     it('evidenticar can access own employee record outside registrar scope', async () => {
@@ -626,6 +682,66 @@ describe('RegistrarScopeService', () => {
       assert.ok(where.OR);
       const orClauses = where.OR as Record<string, unknown>[];
       assert.ok(orClauses.some((row) => 'currentHolderId' in row));
+    });
+
+  });
+
+  describe('canAccessTransfer', () => {
+    const zaduzenoEquipment: Equipment = {
+      id: 'eq-cross',
+      inventoryNumber: 'INV-CROSS',
+      categoryId: 'cat-child',
+      status: 'zaduzeno',
+      warehouseId: null,
+      currentHolderId: 'emp-b',
+      entryDate: new Date(),
+      specifications: {},
+      warehouseCondition: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const holderB: Employee = {
+      id: 'emp-b',
+      firstName: 'B',
+      lastName: 'Worker',
+      title: 'Radnik',
+      orgUnitId: 'ou-other',
+      email: null,
+      phone: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it('allows transfer when toPerson is in registrar employee scope', async () => {
+      const service = createService();
+      const allowed = await service.canAccessTransfer(
+        authUser('evidenticar', {
+          registrarScopes: [{ warehouseId: 'wh-b', categoryId: 'cat-root' }],
+        }),
+        {
+          fromPerson: null,
+          toPerson: holderB,
+          equipment: zaduzenoEquipment,
+          holder: holderB,
+        },
+      );
+      assert.equal(allowed, true);
+    });
+
+    it('denies transfer when toPerson is outside all assignment scopes', async () => {
+      const service = createService();
+      const allowed = await service.canAccessTransfer(
+        authUser('evidenticar', {
+          registrarScopes: [{ warehouseId: 'wh-a', categoryId: 'cat-root' }],
+        }),
+        {
+          fromPerson: null,
+          toPerson: holderB,
+          equipment: zaduzenoEquipment,
+          holder: holderB,
+        },
+      );
+      assert.equal(allowed, false);
     });
   });
 });

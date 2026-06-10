@@ -289,7 +289,7 @@ function AppMain() {
       )}
       {(admin || evidenticar) && currentPage === 'documents' && (
         <LayoutNavGate pageId="documents">
-          <DocumentsPage />
+          <DocumentsPage onNavigate={handleNavigate} />
         </LayoutNavGate>
       )}
       {currentPage === 'my-equipment' && (

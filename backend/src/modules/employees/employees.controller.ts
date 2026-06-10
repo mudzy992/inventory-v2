@@ -34,8 +34,8 @@ export class EmployeesController {
 
   @Get('search')
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
-  search(@Query() query: SearchEmployeesQueryDto) {
-    return this.employeesService.search(query);
+  search(@CurrentUser() user: AuthenticatedUser, @Query() query: SearchEmployeesQueryDto) {
+    return this.employeesService.search(user, query);
   }
 
   @Get(':id')

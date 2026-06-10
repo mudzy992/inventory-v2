@@ -9,7 +9,7 @@ import { usePublicSettings } from '../contexts/public-settings-context';
 import { Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon, Info } from 'lucide-react';
 import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser } from '../store';
 import { LabelPrintSheet } from './LabelPrintSheet';
-import { getStatusLabel, getStatusColor, formatDate, getEmployeeFullName } from '../helpers';
+import { getStatusLabel, getStatusColor, getEmployeeFullName } from '../helpers';
 import type { Equipment } from '../types';
 import { EquipmentCard } from './EquipmentCard';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
@@ -318,14 +318,19 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
             <div key={eq.id} className="p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</p>
-                  <p className="text-sm text-gray-600">{cat?.name || '—'}</p>
+                  <p className="text-sm font-medium text-gray-800">{eq.stockLot?.productName ?? '—'}</p>
+                  <p className="font-mono text-xs text-gray-500">{eq.inventoryNumber}</p>
+                  <p className="text-xs text-gray-500">
+                    {cat ? cat.fields.slice(0, 2).map(f => `${f.name}: ${eq.specifications[f.id] || '—'}`).join(' · ') : '—'}
+                  </p>
+                  <p className="text-xs text-gray-600">{cat?.name || '—'}</p>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${getStatusColor(eq.status)}`}>
                   {getStatusLabel(eq.status)}
                 </span>
               </div>
-              {holder ? <p className="text-xs text-gray-500">{getEmployeeFullName(holder)}</p> : null}
+              {holder ? <p className="text-xs text-gray-500">Zadužen: {getEmployeeFullName(holder)}</p> : null}
+              {eq.contractNumber ? <p className="text-xs text-gray-400">Ugovor: {eq.contractNumber}</p> : null}
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-blue-600 p-1" title="Detalji">
                   <Eye size={14} />
@@ -359,13 +364,13 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
                     />
                   </th>
                 ) : null}
+                <th className="px-4 py-3 font-medium text-gray-600">Lot</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Inv. broj</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Kategorija</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Ključne spec.</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Kategorija</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Zadužen na</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Ugovor</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Datum ulaza</th>
                 <th className="px-4 py-3 font-medium text-gray-600 text-right">Akcije</th>
               </tr>
             </thead>
@@ -399,13 +404,16 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
                       </td>
                     ) : null}
                     <td className="px-4 py-3">
+                      <span className="text-sm text-gray-800">{eq.stockLot?.productName ?? '—'}</span>
+                    </td>
+                    <td className="px-4 py-3">
                       <span className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-gray-700">{cat?.name || '—'}</span>
+                      <span className="text-xs text-gray-500">{specPreviews}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs text-gray-500">{specPreviews}</span>
+                      <span className="text-gray-700">{cat?.name || '—'}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(eq.status)}`}>
@@ -425,7 +433,6 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{eq.contractNumber || '—'}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{formatDate(eq.entryDate)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
                         <button type="button" onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-blue-600 p-1" title="Pogledaj detalje / QR">

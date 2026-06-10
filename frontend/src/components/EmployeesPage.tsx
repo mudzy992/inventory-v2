@@ -6,7 +6,7 @@ import { usePaginatedList } from '../hooks/usePaginatedList';
 import { previewRelocationApi, type RelocationPreview } from '../api/employee-relocation-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
-import { isAdmin, isEvidenticar, getCurrentUser, employeeMatchesScope } from '../store';
+import { isAdmin, isEvidenticar, getCurrentUser } from '../store';
 import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
 import { EmployeeTitleAutocomplete } from './employee-title-autocomplete';

@@ -1,13 +1,13 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useStore } from '../useStore';
-import { fetchEquipmentApi, fetchEquipmentPageApi, fetchEquipmentSummaryApi } from '../api/equipment-api';
+import { fetchEquipmentApi, fetchEquipmentLotGroupsApi, fetchEquipmentPageApi, fetchEquipmentSummaryApi, type EquipmentLotGroup } from '../api/equipment-api';
 import { usePaginatedList } from '../hooks/usePaginatedList';
 import { PaginationControls } from './ui/pagination-controls';
 import {
   getScopedParentCategories,
   getScopedSubCategories,
 } from '../helpers/registrar-scope';
-import { ChevronRight, Folder, Layers, Search, Filter, Download, X, Eye, QrCode, Printer } from 'lucide-react';
+import { ChevronRight, Folder, Layers, Search, Filter, Download, X, Eye, QrCode, Printer, Package } from 'lucide-react';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName } from '../helpers';
 import { EquipmentCard } from './EquipmentCard';
@@ -21,6 +21,7 @@ export function EquipmentByCategoryPage() {
   const [state, setState] = useStore();
   const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
   const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
+  const [selectedLotKey, setSelectedLotKey] = useState<string | null>(null);
   const [viewItemId, setViewItemId] = useState<string | null>(null);
   const [viewShowQR, setViewShowQR] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -35,6 +36,7 @@ export function EquipmentByCategoryPage() {
   const [newFilterOperator, setNewFilterOperator] = useState<FilterCondition['operator']>('contains');
   const [newFilterValue, setNewFilterValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAllStatuses, setShowAllStatuses] = useState(false);
   
   // Saved filter name
   const [filterName, setFilterName] = useState('');
@@ -46,6 +48,17 @@ export function EquipmentByCategoryPage() {
   const [categoryStats, setCategoryStats] = useState<
     Record<string, { total: number; skladiste: number; zaduzeno: number; rashodovano: number }>
   >({});
+  const [lotGroups, setLotGroups] = useState<EquipmentLotGroup[]>([]);
+
+  useEffect(() => {
+    if (!selectedSubId) {
+      setLotGroups([]);
+      return;
+    }
+    void fetchEquipmentLotGroupsApi(selectedSubId)
+      .then(setLotGroups)
+      .catch(() => setLotGroups([]));
+  }, [selectedSubId]);
 
   useEffect(() => {
     if (!selectedParentId) {
@@ -79,16 +92,25 @@ export function EquipmentByCategoryPage() {
     [selectedParentId, state.categories, user],
   );
   const selectedSub = subCategories.find(s => s.id === selectedSubId);
+  const selectedLotLabel =
+    selectedLotKey === 'none'
+      ? 'Bez lota'
+      : lotGroups.find((row) => row.stockLotId === selectedLotKey)?.productName ?? 'Lot';
 
   const fetchPage = useCallback(
     (params: { page?: number; pageSize?: number; search?: string }) =>
-      fetchEquipmentPageApi({ ...params, categoryId: selectedSubId! }),
-    [selectedSubId],
+      fetchEquipmentPageApi({
+        ...params,
+        categoryId: selectedSubId!,
+        stockLotId: selectedLotKey === 'none' ? 'none' : selectedLotKey ?? undefined,
+        status: showAllStatuses ? undefined : 'zaduzeno',
+      }),
+    [selectedSubId, selectedLotKey, showAllStatuses],
   );
 
   const equipmentList = usePaginatedList({
     fetchPage,
-    enabled: Boolean(selectedSubId),
+    enabled: Boolean(selectedSubId && selectedLotKey),
   });
 
   const categoryEquipment = equipmentList.items;
@@ -262,7 +284,11 @@ export function EquipmentByCategoryPage() {
   useEffect(() => {
     setViewItemId(null);
     setViewShowQR(false);
-  }, [selectedSubId]);
+  }, [selectedSubId, selectedLotKey]);
+
+  useEffect(() => {
+    setShowAllStatuses(false);
+  }, [selectedLotKey]);
 
   const handleOpenEquipment = (equipmentId: string, showQR = false) => {
     setViewItemId(equipmentId);
@@ -284,7 +310,7 @@ export function EquipmentByCategoryPage() {
       {/* Breadcrumb */}
       <div className="flex flex-wrap items-center gap-2 mb-4 text-sm">
         <button 
-          onClick={() => { setSelectedParentId(null); setSelectedSubId(null); handleCloseEquipment(); }}
+          onClick={() => { setSelectedParentId(null); setSelectedSubId(null); setSelectedLotKey(null); handleCloseEquipment(); }}
           className={`${!selectedParentId ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
         >
           Sve kategorije
@@ -293,7 +319,7 @@ export function EquipmentByCategoryPage() {
           <>
             <ChevronRight size={14} className="text-gray-400" />
             <button 
-              onClick={() => { setSelectedSubId(null); handleCloseEquipment(); }}
+              onClick={() => { setSelectedSubId(null); setSelectedLotKey(null); handleCloseEquipment(); }}
               className={`${!selectedSubId ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
             >
               {selectedParent.name}
@@ -303,7 +329,27 @@ export function EquipmentByCategoryPage() {
         {selectedSub && (
           <>
             <ChevronRight size={14} className="text-gray-400" />
-            <span className="text-blue-600 font-medium">{selectedSub.name}</span>
+            <button
+              type="button"
+              onClick={() => { setSelectedLotKey(null); handleCloseEquipment(); }}
+              className={`${!selectedLotKey ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {selectedSub.name}
+            </button>
+          </>
+        )}
+        {selectedSub && selectedLotKey && (
+          <>
+            <ChevronRight size={14} className="text-gray-400" />
+            <button
+              type="button"
+              onClick={() => { setSelectedLotKey(null); handleCloseEquipment(); }}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              {selectedLotLabel}
+            </button>
+            <ChevronRight size={14} className="text-gray-400" />
+            <span className="text-blue-600 font-medium">Zaduženja</span>
           </>
         )}
       </div>
@@ -365,7 +411,7 @@ export function EquipmentByCategoryPage() {
               return (
                 <button
                   key={sub.id}
-                  onClick={() => setSelectedSubId(sub.id)}
+                  onClick={() => { setSelectedSubId(sub.id); setSelectedLotKey(null); }}
                   className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 text-left hover:border-blue-200 hover:shadow-md transition-all group"
                 >
                   <div className="flex items-start gap-3">
@@ -393,9 +439,55 @@ export function EquipmentByCategoryPage() {
         </div>
       )}
 
-      {/* Equipment List for Selected Sub-Category */}
-      {selectedSubId && selectedSub && (
+      {selectedSubId && selectedSub && !selectedLotKey && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          {lotGroups.length === 0 ? (
+            <p className="text-sm text-gray-500 col-span-full">Nema lotova u ovoj kategoriji.</p>
+          ) : (
+            lotGroups.map((group) => {
+              const lotKey = group.stockLotId ?? 'none';
+              return (
+                <button
+                  key={lotKey}
+                  type="button"
+                  onClick={() => setSelectedLotKey(lotKey)}
+                  className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 text-left hover:border-blue-200 hover:shadow-md transition-all group"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                      <Package size={24} />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-800">{group.productName}</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">{selectedSub.name}</p>
+                      <span className="inline-block text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded mt-2">
+                        {group.count} kom.
+                      </span>
+                    </div>
+                    <ChevronRight size={20} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Equipment List for Selected Sub-Category + Lot */}
+      {selectedSubId && selectedSub && selectedLotKey && (
         <>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Zaduženja u lotu</h2>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showAllStatuses}
+                onChange={(event) => setShowAllStatuses(event.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Prikaži sve statuse
+            </label>
+          </div>
           {/* Stats Bar */}
           {stats && (
             <div className="flex gap-3 mb-4 flex-wrap">
@@ -521,6 +613,7 @@ export function EquipmentByCategoryPage() {
                     <th className="px-4 py-3 font-medium text-gray-600">Inv. broj</th>
                     <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                     <th className="px-4 py-3 font-medium text-gray-600">Zadužen na</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Ugovor</th>
                     {selectedSub.fields.slice(0, 3).map(f => (
                       <th key={f.id} className="px-4 py-3 font-medium text-gray-600">{f.name}</th>
                     ))}
@@ -561,6 +654,7 @@ export function EquipmentByCategoryPage() {
                         <td className="px-4 py-3 text-xs text-gray-600">
                           {holder ? getEmployeeFullName(holder) : '—'}
                         </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">{eq.contractNumber || '—'}</td>
                         {selectedSub.fields.slice(0, 3).map(f => (
                           <td key={f.id} className="px-4 py-3 text-xs text-gray-600">
                             {eq.specifications[f.id] || '—'}

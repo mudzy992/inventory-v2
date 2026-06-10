@@ -48,7 +48,13 @@ import { TransferDocumentGenerationService } from './transfer-document-generatio
 import { buildTransferRawDocumentHtml } from './utils/transfer-raw-document.util';
 
 const transferInclude = {
-  equipment: { include: { currentHolder: true, warehouse: true } },
+  equipment: {
+    include: {
+      currentHolder: true,
+      warehouse: true,
+      stockLot: { select: { warehouseId: true } },
+    },
+  },
   signer: true,
   fromPerson: true,
   toPerson: true,
@@ -565,16 +571,13 @@ export class TransfersService {
     user: AuthenticatedUser,
     transfer: Awaited<ReturnType<typeof this.getTransferOrThrow>>,
   ): Promise<boolean> {
-    const isEquipmentReadable = await assertCanReadEquipment(
-      user,
-      transfer.equipment,
-      transfer.equipment.currentHolder,
-      this.registrarScope,
-      this.prisma,
-    )
-      .then(() => true)
-      .catch(() => false);
-    if (isEquipmentReadable) {
+    const allowed = await this.registrarScope.canAccessTransfer(user, {
+      fromPerson: transfer.fromPerson,
+      toPerson: transfer.toPerson,
+      equipment: transfer.equipment,
+      holder: transfer.equipment.currentHolder,
+    });
+    if (allowed) {
       return true;
     }
     if (transfer.inventoryLineId) {

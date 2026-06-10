@@ -34,6 +34,7 @@ import { UpdateEquipmentDto } from './dto/update-equipment.dto';
 const EQUIPMENT_LIST_INCLUDE = {
   currentHolder: { select: { id: true, firstName: true, lastName: true, orgUnitId: true } },
   category: { select: { id: true, name: true, parentId: true } },
+  stockLot: { select: { id: true, productName: true } },
 } satisfies Prisma.EquipmentInclude;
 
 const EQUIPMENT_SORT_FIELDS: Record<string, string> = {
@@ -46,6 +47,12 @@ const EQUIPMENT_SORT_FIELDS: Record<string, string> = {
 export interface EquipmentSummary {
   total: number;
   byStatus: Record<EquipmentStatus, number>;
+}
+
+export interface EquipmentLotGroup {
+  stockLotId: string | null;
+  productName: string;
+  count: number;
 }
 
 @Injectable()
@@ -110,6 +117,37 @@ export class EquipmentService {
       total += row._count._all;
     }
     return { total, byStatus };
+  }
+
+  async getLotGroups(user: AuthenticatedUser, categoryId: string): Promise<EquipmentLotGroup[]> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
+    const scopeWhere = await this.registrarScope.buildEquipmentWhere(user);
+    const where: Prisma.EquipmentWhereInput = { AND: [scopeWhere, { categoryId }] };
+    const grouped = await this.prisma.equipment.groupBy({
+      by: ['stockLotId'],
+      where,
+      _count: { _all: true },
+    });
+    const lotIds = grouped
+      .map((row) => row.stockLotId)
+      .filter((id): id is string => id !== null);
+    const lots =
+      lotIds.length > 0
+        ? await this.prisma.warehouseStockLot.findMany({
+            where: { id: { in: lotIds } },
+            select: { id: true, productName: true },
+          })
+        : [];
+    const lotNameById = new Map(lots.map((row) => [row.id, row.productName]));
+    return grouped
+      .map((row) => ({
+        stockLotId: row.stockLotId,
+        productName: row.stockLotId
+          ? (lotNameById.get(row.stockLotId) ?? 'Nepoznat lot')
+          : 'Bez lota',
+        count: row._count._all,
+      }))
+      .sort((a, b) => a.productName.localeCompare(b.productName, 'bs'));
   }
 
   async findOne(user: AuthenticatedUser, id: string): Promise<Equipment> {
@@ -258,10 +296,17 @@ export class EquipmentService {
   ): Promise<Prisma.EquipmentWhereInput> {
     const scopeWhere = await this.registrarScope.buildEquipmentWhere(user);
     const searchTerm = query.search?.trim();
+    const stockLotFilter: Prisma.EquipmentWhereInput =
+      query.stockLotId === 'none'
+        ? { stockLotId: null }
+        : query.stockLotId
+          ? { stockLotId: query.stockLotId }
+          : {};
     const filters: Prisma.EquipmentWhereInput = {
       status: query.status,
       categoryId: query.categoryId,
       currentHolderId: query.currentHolderId,
+      ...stockLotFilter,
       ...(searchTerm
         ? {
             OR: [
