@@ -13,6 +13,7 @@ import { useStore } from '../../useStore';
 import { Button } from '../ui/button';
 import { inputClass, labelClass, selectClass } from '../ui/form-styles';
 import { PaginationControls } from '../ui/pagination-controls';
+import { ModalRoot } from '../ui/modal-root';
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -176,14 +177,8 @@ export const EquipmentCatalogPanel = () => {
       </div>
 
       {showDialog ? (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowDialog(false)}
-        >
-          <div
-            className="bg-white rounded-xl shadow-xl w-full max-w-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <ModalRoot open onClose={() => setShowDialog(false)} size="lg" panelClassName="bg-white shadow-xl max-w-lg">
+          <div className="bg-white rounded-xl w-full">
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-gray-900">Nova stavka šifrarnika</h2>
             </div>
@@ -231,7 +226,7 @@ export const EquipmentCatalogPanel = () => {
               </Button>
             </div>
           </div>
-        </div>
+        </ModalRoot>
       ) : null}
     </div>
   );

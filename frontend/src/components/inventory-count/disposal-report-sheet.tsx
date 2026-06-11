@@ -2,6 +2,7 @@ import { Printer, X } from 'lucide-react';
 import type { DisposalReportDto } from '../../api/inventory-api';
 import { formatDate } from '../../helpers';
 import { Button } from '../ui/button';
+import { ModalRoot } from '../ui/modal-root';
 
 interface DisposalReportSheetProps {
   report: DisposalReportDto;
@@ -84,8 +85,8 @@ export const DisposalReportSheet = ({ report, onClose }: DisposalReportSheetProp
     win.print();
   };
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 p-4 overflow-auto print:hidden">
-      <div className="bg-white rounded-xl shadow-xl max-w-4xl mx-auto p-4 sm:p-6">
+    <ModalRoot open onClose={onClose} size="full" panelClassName="max-w-4xl print:hidden">
+      <div className="bg-white rounded-xl shadow-xl w-full p-4 sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Zapisnik rashodovanja</h2>
@@ -149,6 +150,6 @@ export const DisposalReportSheet = ({ report, onClose }: DisposalReportSheetProp
           </div>
         )}
       </div>
-    </div>
+    </ModalRoot>
   );
 };

@@ -26,6 +26,7 @@ import type { OrgUnit, OrgUnitType } from '../types';
 import { OrgUnitWarehousesSection } from './organization/org-unit-warehouses-section';
 import { SearchableAutocomplete, type SearchableOption } from './searchable-autocomplete';
 import { PageHeaderRow } from './ui/page-header-row';
+import { ModalRoot } from './ui/modal-root';
 
 const PARENT_ROOT_ID = '__parent_root__';
 const SIGNER_INHERIT_ID = '__inherit_signer__';
@@ -479,8 +480,8 @@ export function OrganizationPage() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <ModalRoot open onClose={() => setShowForm(false)} size="lg" panelClassName="bg-white shadow-xl max-w-lg">
+          <div className="bg-white rounded-t-xl sm:rounded-xl w-full max-h-[90dvh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold">
                 {editingUnit ? 'Uredi organizacijsku jedinicu' : 'Nova organizacijska jedinica'}
@@ -605,7 +606,7 @@ export function OrganizationPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalRoot>
       )}
     </div>
   );

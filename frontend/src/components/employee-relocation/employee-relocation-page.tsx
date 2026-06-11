@@ -27,6 +27,7 @@ import {
   isRelocationLineMissingCatalog,
 } from '../../helpers/relocation-catalog.util';
 import { inputClass } from '../ui/form-styles';
+import { ModalRoot } from '../ui/modal-root';
 
 const lineStatusLabel: Record<string, string> = {
   pending_source: 'Čeka izvor',
@@ -121,14 +122,8 @@ const MapCatalogModal = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalRoot open onClose={onClose} size="md" panelClassName="bg-white shadow-xl max-w-md">
+      <div className="bg-white rounded-t-xl sm:rounded-xl w-full max-h-[90dvh] overflow-y-auto">
         <div className="p-5 border-b border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900">Mapiraj tip u šifrarniku</h3>
           <p className="text-sm text-gray-500 mt-1 font-mono">{line.equipment.inventoryNumber}</p>
@@ -190,7 +185,7 @@ const MapCatalogModal = ({
           </Button>
         </div>
       </div>
-    </div>
+    </ModalRoot>
   );
 };
 

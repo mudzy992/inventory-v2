@@ -24,6 +24,7 @@ import { PageTabs } from './ui/page-tabs';
 import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
 import { PaginationControls } from './ui/pagination-controls';
+import { ModalRoot } from './ui/modal-root';
 
 interface EquipmentPageProps {
   onNavigate?: (page: PageId) => void;
@@ -488,8 +489,16 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
 
       {/* Edit Form Modal */}
       {showForm && editing && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={() => { setShowForm(false); setEditing(null); }}>
-          <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <ModalRoot
+          open
+          onClose={() => {
+            setShowForm(false);
+            setEditing(null);
+          }}
+          size="xl"
+          panelClassName="bg-white shadow-xl max-w-2xl"
+        >
+          <div className="bg-white rounded-t-xl sm:rounded-xl w-full max-h-[90dvh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-semibold">Uredi opremu</h2>
             </div>
@@ -615,7 +624,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
               </button>
             </div>
           </div>
-        </div>
+        </ModalRoot>
       )}
     </div>
   );

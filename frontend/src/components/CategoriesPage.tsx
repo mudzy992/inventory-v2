@@ -25,6 +25,7 @@ import { EquipmentCatalogPanel } from './catalog/equipment-catalog-panel';
 import { PageTabs } from './ui/page-tabs';
 import { PageHeaderRow } from './ui/page-header-row';
 import { inputClass, labelClass } from './ui/form-styles';
+import { ModalRoot } from './ui/modal-root';
 
 type CategoriesTabId = 'asset' | 'maintenance' | 'catalog';
 
@@ -442,8 +443,8 @@ export function CategoriesPage() {
         />
       ) : null}
       {showForm && !isAssetSubcategoryForm ? (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <ModalRoot open onClose={() => setShowForm(false)} size="xl" panelClassName="bg-white shadow-xl max-w-2xl">
+          <div className="bg-white rounded-xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-semibold">{formTitle}</h2>
               <p className="text-xs text-gray-500 mt-1">
@@ -505,7 +506,7 @@ export function CategoriesPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalRoot>
       ) : null}
     </div>
   );

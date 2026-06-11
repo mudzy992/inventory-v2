@@ -20,6 +20,7 @@ import {
 import { Search, Filter, FileText, Printer, Upload, CheckCircle, Eye } from 'lucide-react';
 import { TransferDocumentPanel } from '../TransferDocumentPanel';
 import { PaginationControls } from '../ui/pagination-controls';
+import { ModalRoot } from '../ui/modal-root';
 import type { TransferRecord } from '../../types';
 
 export const TransferDocumentsTab = () => {
@@ -341,8 +342,8 @@ export const TransferDocumentsTab = () => {
 
       {/* Preview modal */}
       {viewTransfer && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setViewDoc(null)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <ModalRoot open onClose={() => setViewDoc(null)} size="xl" panelClassName="bg-white shadow-xl max-w-3xl">
+          <div className="bg-white rounded-xl w-full max-h-[90vh] overflow-y-auto">
             {(() => {
               const t = viewTransfer;
               const cat = t.equipment?.categoryId
@@ -473,7 +474,7 @@ export const TransferDocumentsTab = () => {
               <button onClick={() => setViewDoc(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50">Zatvori</button>
             </div>
           </div>
-        </div>
+        </ModalRoot>
       )}
     </div>
   );

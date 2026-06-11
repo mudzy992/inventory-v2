@@ -32,6 +32,7 @@ import { CurrentAssignmentsTab } from './transfers/current-assignments-tab';
 import { TransferDocumentsTab } from './transfers/transfer-documents-tab';
 import { ResponsiveTable } from './ui/responsive-table';
 import { PaginationControls } from './ui/pagination-controls';
+import { ModalRoot } from './ui/modal-root';
 import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
 import { buildTransferCreatePayload } from '../helpers/create-transfer-payload.util';
 import {
@@ -477,8 +478,8 @@ export function TransfersPage({ onNavigate, initialTab = 'history' }: TransfersP
 
       {/* New Transfer Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <ModalRoot open onClose={() => setShowForm(false)} size="lg" panelClassName="bg-white shadow-xl max-w-lg">
+          <div className="bg-white rounded-t-xl sm:rounded-xl w-full max-h-[90dvh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold">
                 {fType === 'zaduzenje' && '📦 Novo zaduženje — sa skladišta na osobu'}
@@ -656,7 +657,7 @@ export function TransfersPage({ onNavigate, initialTab = 'history' }: TransfersP
               </button>
             </div>
           </div>
-        </div>
+        </ModalRoot>
       )}
     </div>
   );

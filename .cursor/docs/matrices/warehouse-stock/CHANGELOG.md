@@ -1,5 +1,11 @@
 # Changelog — warehouse-stock
 
+## 2026-06-11
+
+- Frontend browse: Skladišna roba (`registrar-stock-page`) — parent → podkategorija → grupe proizvoda; shared category-browse komponente.
+- Frontend browse: Zalihe održavanja u skladištu — isti pattern za MAINTENANCE kategorije.
+- Dijalozi: `ModalRoot` default bez zatvaranja na backdrop/Escape; inline overlay-i migrirani na `ModalRoot`.
+
 ## 2026-06-10
 
 - Grupni prikaz skladišne robe: `GET /warehouse-stock/assigned/groups`, filteri `warehouseId` / `categoryId` / `status` / `groupKey` na assigned listi; util `stock-lot-group-key.util.ts`.

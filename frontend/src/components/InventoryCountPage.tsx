@@ -45,6 +45,7 @@ import { AlertBanner } from './ui/alert-banner';
 import { Button } from './ui/button';
 import { FormCard } from './ui/form-card';
 import { PageHeaderRow } from './ui/page-header-row';
+import { ModalRoot } from './ui/modal-root';
 
 const mapScopeItemsToEquipment = (items: PrintScopeEquipmentDto[]): Equipment[] =>
   items.map((item) => ({
@@ -696,8 +697,8 @@ export const InventoryCountPage = () => {
         <InventoryPrintSheet scope={printScope} state={state} onClose={() => setShowPrint(false)} />
       ) : null}
       {showReport && report ? (
-        <div className="fixed inset-0 z-50 bg-black/30 p-4 overflow-auto">
-          <div className="bg-white rounded-xl shadow-xl max-w-4xl mx-auto p-4 sm:p-6">
+        <ModalRoot open onClose={() => setShowReport(false)} size="full" panelClassName="max-w-4xl">
+          <div className="bg-white rounded-xl shadow-xl w-full p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
@@ -739,7 +740,7 @@ export const InventoryCountPage = () => {
               ))}
             </div>
           </div>
-        </div>
+        </ModalRoot>
       ) : null}
     </div>
   );

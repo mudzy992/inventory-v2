@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import {
   fetchMaintenanceStockLotsApi,
@@ -10,14 +10,24 @@ import { useToast } from '../../contexts/toast-context';
 import { usePublicSettings } from '../../contexts/public-settings-context';
 import { formatDate } from '../../helpers';
 import { buildLegacySpecsPayload } from '../../helpers/category-lot-spec-fields.util';
+import {
+  buildParentCategoryStats,
+  buildSubCategoryStats,
+} from '../../helpers/category-browse-stats.util';
 import { getLeafCategories } from '../../helpers/warehouse-stock.util';
+import { getParentCategories, getSubCategories } from '../../store';
 import { useStore } from '../../useStore';
 import type { Category } from '../../types';
 import { CategoryLotSpecFields } from '../maintenance-parts/category-lot-spec-fields';
 import { WarehouseMaintenanceConsumptionPanel } from '../maintenance-parts/warehouse-maintenance-consumption-panel';
+import { CategoryBrowseBreadcrumb } from '../shared/category-browse/category-browse-breadcrumb';
+import { CategoryParentGrid } from '../shared/category-browse/category-parent-grid';
+import { CategorySubGrid } from '../shared/category-browse/category-sub-grid';
 import { Button } from '../ui/button';
 import { inputClass, labelClass, selectClass } from '../ui/form-styles';
 import { InventoryFreezeActionHint, useInventoryFreezeActive } from '../inventory-count/inventory-freeze-action-hint';
+
+type BrowseLevel = 'parents' | 'subcategories' | 'lots';
 
 interface WarehouseMaintenanceStockPanelProps {
   warehouseId: string;
@@ -42,13 +52,40 @@ export const WarehouseMaintenanceStockPanel = ({
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
   const [legacySpecValues, setLegacySpecValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [browseLevel, setBrowseLevel] = useState<BrowseLevel>('parents');
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [subCategoryId, setSubCategoryId] = useState<string | null>(null);
   const leafMaintenanceCategories = getLeafCategories(state.categories).filter(
     (row) => row.categoryKind === 'MAINTENANCE',
+  );
+  const maintenanceParents = useMemo(
+    () => getParentCategories().filter((row) => row.categoryKind === 'MAINTENANCE'),
+    [state.categories],
   );
   const selectedCategory: Category | undefined = state.categories.find((row) => row.id === categoryId);
   const lotSpecFields = selectedCategory
     ? [...selectedCategory.fields, ...selectedCategory.optionalFields].filter((field) => !field.unique)
     : [];
+  const parentStats = useMemo(
+    () => buildParentCategoryStats(lots, state.categories, (lot) => lot.quantityOnHand),
+    [lots, state.categories],
+  );
+  const subStats = useMemo(() => {
+    if (!parentId) {
+      return new Map();
+    }
+    return buildSubCategoryStats(lots, state.categories, parentId, (lot) => lot.quantityOnHand);
+  }, [lots, parentId, state.categories]);
+  const lotsForSubcategory = useMemo(() => {
+    if (!subCategoryId) {
+      return [];
+    }
+    return lots.filter((lot) => lot.categoryId === subCategoryId);
+  }, [lots, subCategoryId]);
+  const browseParent = parentId ? state.categories.find((row) => row.id === parentId) : null;
+  const browseSubCategory = subCategoryId
+    ? state.categories.find((row) => row.id === subCategoryId)
+    : null;
   const loadLots = useCallback(async () => {
     if (!maintenanceEnabled) {
       setLoading(false);
@@ -67,6 +104,15 @@ export const WarehouseMaintenanceStockPanel = ({
   useEffect(() => {
     void loadLots();
   }, [loadLots]);
+  const handleNavigateRoot = () => {
+    setBrowseLevel('parents');
+    setParentId(null);
+    setSubCategoryId(null);
+  };
+  const handleNavigateParent = () => {
+    setBrowseLevel('subcategories');
+    setSubCategoryId(null);
+  };
   const handleReceive = async () => {
     if (!categoryId || !productName.trim() || !entryDate) {
       return;
@@ -182,36 +228,77 @@ export const WarehouseMaintenanceStockPanel = ({
         </div>
       ) : null}
       {loading ? <p className="text-sm text-gray-500">Učitavanje...</p> : null}
-      {!loading && lots.length === 0 ? (
-        <p className="text-sm text-gray-500">Nema zaliha za održavanje na ovom skladištu.</p>
+      {!loading ? (
+        <>
+          <CategoryBrowseBreadcrumb
+            parent={browseParent}
+            subCategory={browseSubCategory}
+            onNavigateRoot={handleNavigateRoot}
+            onNavigateParent={handleNavigateParent}
+          />
+          {browseLevel === 'parents' ? (
+            <CategoryParentGrid
+              parents={maintenanceParents}
+              stats={parentStats}
+              getSubCategoryCount={(id) =>
+                getSubCategories(id).filter((row) => row.categoryKind === 'MAINTENANCE').length
+              }
+              onSelect={(id) => {
+                setParentId(id);
+                setBrowseLevel('subcategories');
+              }}
+              emptyMessage="Nema kategorija održavanja."
+              countLabel="lotova"
+            />
+          ) : null}
+          {browseLevel === 'subcategories' && parentId ? (
+            <CategorySubGrid
+              subCategories={getSubCategories(parentId).filter(
+                (row) => row.categoryKind === 'MAINTENANCE',
+              )}
+              stats={subStats}
+              onSelect={(id) => {
+                setSubCategoryId(id);
+                setBrowseLevel('lots');
+              }}
+            />
+          ) : null}
+          {browseLevel === 'lots' && subCategoryId ? (
+            <div className="overflow-x-auto rounded-xl border border-gray-200">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-left text-xs text-gray-500">
+                  <tr>
+                    <th className="px-3 py-2">Artikal</th>
+                    <th className="px-3 py-2">Kategorija</th>
+                    <th className="px-3 py-2">Na stanju</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Prijem</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {lotsForSubcategory.map((lot) => (
+                    <tr key={lot.id}>
+                      <td className="px-3 py-2 font-medium text-gray-800">{lot.productName}</td>
+                      <td className="px-3 py-2 text-gray-600">{lot.category?.name ?? '—'}</td>
+                      <td className="px-3 py-2">{lot.quantityOnHand}</td>
+                      <td className="px-3 py-2 text-gray-600">{lot.status}</td>
+                      <td className="px-3 py-2 text-gray-500">{formatDate(lot.entryDate)}</td>
+                    </tr>
+                  ))}
+                  {lotsForSubcategory.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-8 text-center text-gray-400">
+                        Nema lotova u ovoj podkategoriji.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </>
       ) : null}
       <WarehouseMaintenanceConsumptionPanel warehouseId={warehouseId} />
-      {!loading && lots.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-gray-200">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-xs text-gray-500">
-              <tr>
-                <th className="px-3 py-2">Artikal</th>
-                <th className="px-3 py-2">Kategorija</th>
-                <th className="px-3 py-2">Na stanju</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Prijem</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {lots.map((lot) => (
-                <tr key={lot.id}>
-                  <td className="px-3 py-2 font-medium text-gray-800">{lot.productName}</td>
-                  <td className="px-3 py-2 text-gray-600">{lot.category?.name ?? '—'}</td>
-                  <td className="px-3 py-2">{lot.quantityOnHand}</td>
-                  <td className="px-3 py-2 text-gray-600">{lot.status}</td>
-                  <td className="px-3 py-2 text-gray-500">{formatDate(lot.entryDate)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
     </div>
   );
 };

@@ -289,7 +289,6 @@ export function EmployeesPage() {
           setShowForm(false);
           setRelocationPreview(null);
         }}
-        closeOnBackdrop={false}
         size="lg"
         panelClassName="bg-white shadow-xl"
       >

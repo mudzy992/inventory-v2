@@ -313,8 +313,6 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
         onClose={onClose}
         zIndex={50}
         size="xl"
-        enableEscape={!showTransferModal}
-        closeOnBackdrop={!showTransferModal}
         panelClassName="max-w-3xl"
       >
         <div className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full max-h-[90dvh] overflow-hidden flex flex-col">

@@ -30,17 +30,17 @@ export const ModalRoot = ({
   zIndex = 50,
   size = 'md',
   panelClassName,
-  closeOnBackdrop = true,
-  enableEscape = true,
+  closeOnBackdrop = false,
+  enableEscape = false,
 }: ModalRootProps) => {
   useEffect(() => {
-    if (!open || !enableEscape) {
+    if (!open) {
       return;
     }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (enableEscape && event.key === 'Escape') {
         onClose();
       }
     };

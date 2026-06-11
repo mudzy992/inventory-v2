@@ -5,6 +5,7 @@ import { CategoryFieldEditor } from './category-field-editor';
 import { CategoryMaintenanceLinksEditor } from './category-maintenance-links-editor';
 import { PageTabs } from '../ui/page-tabs';
 import { inputClass, labelClass } from '../ui/form-styles';
+import { ModalRoot } from '../ui/modal-root';
 
 type AssetSubFormTab = 'details' | 'specification' | 'catalog';
 
@@ -62,11 +63,8 @@ export const CategoryAssetSubcategoryDialog = ({
       : []),
   ];
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalRoot open onClose={onClose} size="xl" panelClassName="bg-white shadow-xl max-w-2xl">
+      <div className="bg-white rounded-xl w-full max-h-[90vh] flex flex-col">
         <div className="p-6 border-b border-gray-100 shrink-0">
           <h2 className="text-lg font-semibold">{title}</h2>
           <p className="text-xs text-gray-500 mt-1">Podkategorija opreme — host za inventar i ugradnju dijelova</p>
@@ -161,6 +159,6 @@ export const CategoryAssetSubcategoryDialog = ({
           </button>
         </div>
       </div>
-    </div>
+    </ModalRoot>
   );
 };

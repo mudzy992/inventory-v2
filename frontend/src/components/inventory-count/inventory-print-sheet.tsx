@@ -6,6 +6,7 @@ import { usePublicSettings } from '../../contexts/public-settings-context';
 import { buildCompanyAddressLine, companyHeaderFromSettings } from '../../helpers/company-header.util';
 import type { AppState } from '../../types';
 import { Button } from '../ui/button';
+import { ModalRoot } from '../ui/modal-root';
 
 interface InventoryPrintSheetProps {
   scope: InventoryPrintScopeDto;
@@ -144,8 +145,8 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
     window.print();
   };
   return (
-    <div className="fixed inset-0 z-[70] bg-black/50 flex items-start justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl print:shadow-none print:max-w-none">
+    <ModalRoot open onClose={onClose} zIndex={70} size="full" panelClassName="max-w-4xl print:max-w-none">
+      <div className="bg-white rounded-xl shadow-xl w-full print:shadow-none">
         <div className="p-4 border-b flex justify-between items-center print:hidden">
           <h2 className="font-semibold text-gray-900">Popisna lista</h2>
           <div className="flex gap-2">
@@ -259,6 +260,6 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
           @page { margin: 15mm; }
         }
       `}</style>
-    </div>
+    </ModalRoot>
   );
 };

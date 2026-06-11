@@ -20,7 +20,18 @@ import { fetchEmployeesPageApi } from '../../api/employees-api';
 import { fetchAllPaginatedItems } from '../../api/fetch-all-paginated';
 import { usePaginatedList } from '../../hooks/usePaginatedList';
 import { useStore, useRefreshData } from '../../useStore';
-import { isAdmin } from '../../store';
+import { getCurrentUser, isAdmin } from '../../store';
+import {
+  getScopedParentCategories,
+  getScopedSubCategories,
+} from '../../helpers/registrar-scope';
+import {
+  buildParentCategoryStats,
+  buildSubCategoryStats,
+} from '../../helpers/category-browse-stats.util';
+import { CategoryBrowseBreadcrumb } from '../shared/category-browse/category-browse-breadcrumb';
+import { CategoryParentGrid } from '../shared/category-browse/category-parent-grid';
+import { CategorySubGrid } from '../shared/category-browse/category-sub-grid';
 import { useAdminSettings } from '../../contexts/admin-settings-context';
 import { resolveEffectiveWarehouseForOrgUnit } from '../../helpers/org-warehouse.util';
 import type { Category, Employee, WarehouseStockLot } from '../../types';
@@ -69,6 +80,8 @@ const LotSectionCard = ({
   </section>
 );
 
+type BrowseLevel = 'parents' | 'subcategories' | 'groups';
+
 const isValueAvailabilityValid = (value: string, status: AvailabilityStatus): boolean => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -100,9 +113,14 @@ export const RegistrarStockPage = () => {
   const [groupLots, setGroupLots] = useState<Record<string, WarehouseStockLot[]>>({});
   const [loadingGroupKeys, setLoadingGroupKeys] = useState<Set<string>>(new Set());
   const [filterWarehouseId, setFilterWarehouseId] = useState('');
-  const [filterCategoryId, setFilterCategoryId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [browseLevel, setBrowseLevel] = useState<BrowseLevel>('parents');
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [subCategoryId, setSubCategoryId] = useState<string | null>(null);
+  const [statsGroups, setStatsGroups] = useState<StockLotProductGroup[]>([]);
+  const user = getCurrentUser();
   const inventoryAvailability = useInventoryNumberAvailability(inventoryNumber);
+  const groupsEnabled = browseLevel === 'groups' && Boolean(subCategoryId);
   const groupList = usePaginatedList<
     StockLotProductGroup,
     { warehouseId?: string; categoryId?: string; status?: string }
@@ -110,19 +128,92 @@ export const RegistrarStockPage = () => {
     fetchPage: fetchAssignedStockLotGroupsPageApi,
     initialSortBy: 'productName',
     initialSortDir: 'asc',
+    enabled: groupsEnabled,
   });
   const groups = groupList.items;
+  const scopedParents = useMemo(
+    () =>
+      getScopedParentCategories(user, state.categories).filter(
+        (row) => (row.categoryKind ?? 'ASSET') === 'ASSET',
+      ),
+    [user, state.categories],
+  );
+  const scopedSubs = useMemo(
+    () =>
+      parentId ? getScopedSubCategories(user, state.categories, parentId) : [],
+    [parentId, user, state.categories],
+  );
+  const parentStats = useMemo(
+    () => buildParentCategoryStats(statsGroups, state.categories, (group) => group.totalOnHand),
+    [statsGroups, state.categories],
+  );
+  const subStats = useMemo(() => {
+    if (!parentId) {
+      return new Map();
+    }
+    return buildSubCategoryStats(
+      statsGroups,
+      state.categories,
+      parentId,
+      (group) => group.totalOnHand,
+    );
+  }, [parentId, statsGroups, state.categories]);
+  const browseParent = parentId ? state.categories.find((row) => row.id === parentId) : null;
+  const browseSubCategory = subCategoryId
+    ? state.categories.find((row) => row.id === subCategoryId)
+    : null;
+  const loadStatsGroups = useCallback(async () => {
+    try {
+      const rows = await fetchAllPaginatedItems((params) =>
+        fetchAssignedStockLotGroupsPageApi({
+          ...params,
+          warehouseId: filterWarehouseId || undefined,
+          status: filterStatus || undefined,
+        }),
+      );
+      setStatsGroups(rows);
+    } catch {
+      setStatsGroups([]);
+    }
+  }, [filterStatus, filterWarehouseId]);
   useEffect(() => {
+    void loadStatsGroups();
+  }, [loadStatsGroups]);
+  useEffect(() => {
+    if (!groupsEnabled || !subCategoryId) {
+      return;
+    }
     groupList.setFilters({
       warehouseId: filterWarehouseId || undefined,
-      categoryId: filterCategoryId || undefined,
+      categoryId: subCategoryId,
       status: filterStatus || undefined,
     });
-  }, [filterWarehouseId, filterCategoryId, filterStatus, groupList.setFilters]);
-  const leafCategories = useMemo(
-    () => state.categories.filter((row) => row.parentId),
-    [state.categories],
-  );
+  }, [filterStatus, filterWarehouseId, groupList.setFilters, groupsEnabled, subCategoryId]);
+  const handleFilterWarehouseChange = (value: string) => {
+    setFilterWarehouseId(value);
+    setBrowseLevel('parents');
+    setParentId(null);
+    setSubCategoryId(null);
+    setExpandedGroupKeys(new Set());
+  };
+  const handleFilterStatusChange = (value: string) => {
+    setFilterStatus(value);
+    setBrowseLevel('parents');
+    setParentId(null);
+    setSubCategoryId(null);
+    setExpandedGroupKeys(new Set());
+  };
+  const handleNavigateBrowseRoot = () => {
+    setBrowseLevel('parents');
+    setParentId(null);
+    setSubCategoryId(null);
+    setExpandedGroupKeys(new Set());
+  };
+  const handleNavigateBrowseParent = () => {
+    setBrowseLevel('subcategories');
+    setSubCategoryId(null);
+    setExpandedGroupKeys(new Set());
+  };
   useEffect(() => {
     void fetchAllPaginatedItems((params) => fetchEmployeesPageApi(params), 100)
       .then(setScopedEmployees)
@@ -263,6 +354,7 @@ export const RegistrarStockPage = () => {
       setDetail(updated);
       toastSuccess('Specifikacija lota je sačuvana');
       await groupList.refresh();
+      await loadStatsGroups();
       setGroupLots({});
       setExpandedGroupKeys(new Set());
     } catch (err) {
@@ -289,6 +381,7 @@ export const RegistrarStockPage = () => {
       setEmployeeId('');
       toastSuccess('Komad je izdat i zadužen');
       await groupList.refresh();
+      await loadStatsGroups();
       setGroupLots({});
       setExpandedGroupKeys(new Set());
       await refresh();
@@ -512,21 +605,23 @@ export const RegistrarStockPage = () => {
       <InventoryFreezeActionHint />
       <div className={`${cardClass} border-gray-200 shadow-sm p-4 mb-4`}>
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-          <div className="relative flex-1 min-w-0">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={groupList.search}
-              onChange={(event) => groupList.setSearch(event.target.value)}
-              placeholder="Pretraži po nazivu proizvoda…"
-              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-            />
-          </div>
+          {browseLevel === 'groups' ? (
+            <div className="relative flex-1 min-w-0">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={groupList.search}
+                onChange={(event) => groupList.setSearch(event.target.value)}
+                placeholder="Pretraži po nazivu proizvoda…"
+                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <Filter size={14} className="text-gray-400 shrink-0" />
             <select
               value={filterWarehouseId}
-              onChange={(event) => setFilterWarehouseId(event.target.value)}
+              onChange={(event) => handleFilterWarehouseChange(event.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             >
               <option value="">Sva skladišta</option>
@@ -535,18 +630,8 @@ export const RegistrarStockPage = () => {
               ))}
             </select>
             <select
-              value={filterCategoryId}
-              onChange={(event) => setFilterCategoryId(event.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="">Sve kategorije</option>
-              {leafCategories.map((category) => (
-                <option key={category.id} value={category.id}>{category.name}</option>
-              ))}
-            </select>
-            <select
               value={filterStatus}
-              onChange={(event) => setFilterStatus(event.target.value)}
+              onChange={(event) => handleFilterStatusChange(event.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             >
               <option value="">Svi statusi</option>
@@ -556,6 +641,40 @@ export const RegistrarStockPage = () => {
           </div>
         </div>
       </div>
+      <CategoryBrowseBreadcrumb
+        parent={browseParent}
+        subCategory={browseSubCategory}
+        onNavigateRoot={handleNavigateBrowseRoot}
+        onNavigateParent={handleNavigateBrowseParent}
+      />
+      {browseLevel === 'parents' ? (
+        <CategoryParentGrid
+          parents={scopedParents}
+          stats={parentStats}
+          getSubCategoryCount={(id) =>
+            getScopedSubCategories(user, state.categories, id).length
+          }
+          onSelect={(id) => {
+            setParentId(id);
+            setBrowseLevel('subcategories');
+          }}
+          emptyMessage="Nema kategorija opreme u vašem opsegu."
+          countLabel="grupa"
+        />
+      ) : null}
+      {browseLevel === 'subcategories' && parentId ? (
+        <CategorySubGrid
+          subCategories={scopedSubs}
+          stats={subStats}
+          onSelect={(id) => {
+            setSubCategoryId(id);
+            setBrowseLevel('groups');
+          }}
+          statsSuffix="kom na skladištu"
+          countLabel="grupa"
+        />
+      ) : null}
+      {browseLevel === 'groups' && subCategoryId ? (
       <div className={`${cardClass} border-gray-200 shadow-sm divide-y divide-gray-100 overflow-hidden`}>
         {groups.map((group) => {
           const isExpanded = expandedGroupKeys.has(group.groupKey);
@@ -629,10 +748,11 @@ export const RegistrarStockPage = () => {
           );
         })}
         {groups.length === 0 && !groupList.isLoading ? (
-          <p className="px-4 py-12 text-center text-sm text-gray-400">Nema lotova u vašem opsegu.</p>
+          <p className="px-4 py-12 text-center text-sm text-gray-400">Nema grupa proizvoda u ovoj podkategoriji.</p>
         ) : null}
       </div>
-      {groupList.meta ? (
+      ) : null}
+      {browseLevel === 'groups' && groupList.meta ? (
         <PaginationControls
           page={groupList.meta.page}
           pageSize={groupList.meta.pageSize}

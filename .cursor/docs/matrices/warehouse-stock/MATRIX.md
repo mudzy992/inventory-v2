@@ -84,7 +84,18 @@ Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/module
 - `catalog:{uuid}` kad postoji `catalogItemId`
 - `product:{categoryId}::{normalizedProductName}` inače
 
-**UI:** accordion grupa → redovi po skladištu → detail lota (postojeći tok spec/issue).
+**UI (Skladišna roba — `registrar-stock`):** kategorijsko razvrstavanje parent → podkategorija → grupe proizvoda (accordion) → redovi po skladištu → detail lota (spec/issue). Filteri skladišta i statusa ostaju globalni; navigacija kategorijama zamjenjuje dropdown filter kategorije.
+
+**UI (Skladište — pregled ASSET lotova):** isti browse pattern (`warehouse-stock-browse-panel`).
+
+**UI (Skladište — zalihe održavanje):** browse parent → podkategorija → tabela MAINTENANCE lotova (`warehouse-maintenance-stock-panel`).
+
+**Shared browse:** `category-browse-breadcrumb`, `category-parent-grid`, `category-sub-grid`, `category-browse-stats.util`.
+
+## Dijalozi (frontend)
+
+- Form modali koriste `ModalRoot` sa default `closeOnBackdrop=false` i `enableEscape=false`.
+- Zatvaranje isključivo eksplicitnim dugmetom (Odustani / Zatvori / X).
 
 ## Izdata oprema (detail lota)
 

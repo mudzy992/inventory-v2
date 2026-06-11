@@ -6,6 +6,7 @@ import type { City, Employee, OrgUnit } from '../../types';
 import { EmployeeMultiAutocomplete } from '../employee-multi-autocomplete';
 import { SearchableAutocomplete, type SearchableOption } from '../searchable-autocomplete';
 import { inputClass, labelClass } from '../ui/form-styles';
+import { ModalRoot } from '../ui/modal-root';
 
 interface DisposalCommissionFormModalProps {
   cities: City[];
@@ -90,15 +91,9 @@ export const DisposalCommissionFormModal = ({
   const selectedCityUnavailable = Boolean(cityId && citiesWithActiveCommission.has(cityId));
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-      role="presentation"
-    >
+    <ModalRoot open onClose={onClose} size="lg" panelClassName="bg-white shadow-xl max-w-lg">
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
+        className="bg-white rounded-xl w-full max-h-[90vh] overflow-y-auto"
         aria-labelledby="disposal-commission-form-title"
       >
         <div className="p-6 border-b border-gray-100">
@@ -192,6 +187,6 @@ export const DisposalCommissionFormModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </ModalRoot>
   );
 };
