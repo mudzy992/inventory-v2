@@ -457,11 +457,12 @@ export const RegistrarStockPage = () => {
         <InventoryFreezeActionHint />
 
         <LotSpecificationSection
+          lotId={detail.id}
           status={detail.status}
           fields={lotFields}
           specs={specs}
           onSpecsChange={setSpecs}
-          onSave={() => void handleSaveSpec()}
+          onSave={handleSaveSpec}
           saving={saving}
           isFrozen={isFrozen}
           hasIssuedUnits={Boolean(detail.issuedUnits && detail.issuedUnits.length > 0)}

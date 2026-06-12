@@ -4,6 +4,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '../utils/cn';
 import type { PageId } from './page-id';
 import { pageIdToPath } from '../routes/app-routes';
+import { prefetchPage } from '../routes/page-loaders';
 
 interface SidebarNavButtonProps {
   pageId: PageId;
@@ -44,6 +45,8 @@ export const SidebarNavButton = ({
       to={pageIdToPath(pageId)}
       end={!matchNested}
       title={title ?? (collapsed ? label : undefined)}
+      onMouseEnter={() => prefetchPage(pageId)}
+      onFocus={() => prefetchPage(pageId)}
       onClick={onNavigateComplete}
       className={({ isActive }) =>
         cn(

@@ -37,6 +37,7 @@
 
 - Izmjena lot spec-a **ne retroaktivno** ažurira već izdatu opremu (snapshot pri `POST .../issue`).
 - Freeze u gradu blokira save spec-a (isto kao issue).
+- **UI kartica** (collapse): `ceka_specifikaciju` → automatski otvorena; nakon snimanja i na svakom sljedećem otvaranju lota zatvorena; korisnik ručno proširi za izmjenu, snimi → ponovo se zatvara.
 
 ## Izdavanje
 
@@ -98,6 +99,8 @@ Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/module
 **UI (Skladišna roba — `registrar-stock`):** kategorijsko razvrstavanje parent → podkategorija → grupe proizvoda (accordion) → redovi po skladištu → detail lota (spec/issue). Filteri skladišta i statusa ostaju globalni; navigacija kategorijama zamjenjuje dropdown filter kategorije.
 
 **Frontend URL rutiranje:** React Router; deep link na lot `/registrar-stock/lots/:lotId`; ostale stranice `/dashboard`, `/registrar-stock`, itd. Javna oprema `/equipment/:equipmentId` bez prijave.
+
+**Frontend bundle:** route-level `React.lazy` + `Suspense` (po stranici chunk); prefetch chunka na hover/focus navigacije; vendor split (`react`, `react-router`, `lucide`, `socket.io`).
 
 **UI (Skladište — pregled ASSET lotova):** isti browse pattern (`warehouse-stock-browse-panel`).
 

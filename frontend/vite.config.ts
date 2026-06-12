@@ -26,6 +26,31 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "src"),
       },
     },
+    build: {
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) {
+              return undefined;
+            }
+            if (id.includes("lucide-react")) {
+              return "vendor-icons";
+            }
+            if (id.includes("socket.io-client")) {
+              return "vendor-socket";
+            }
+            if (id.includes("react-router-dom") || id.includes("react-router/")) {
+              return "vendor-router";
+            }
+            if (id.includes("react-dom") || /node_modules[\\/]react[\\/]/.test(id)) {
+              return "vendor-react";
+            }
+            return undefined;
+          },
+        },
+      },
+    },
     server: {
       proxy: {
         "/backend": {

@@ -1,5 +1,7 @@
 # HANDOFF — Inventory v2
 
+> **Routing + lot spec (2026-06-12):** React Router, lazy chunks, collapsible spec — sljedeća sesija **provjera API** → [`.cursor/plans/routing-i-lot-spec/HANDOFF.md`](../routing-i-lot-spec/HANDOFF.md).
+
 > **Popis po skladištu (2026-06-05):** komisije = skladište + kategorija, admin CRUD draft — nastavak u [`.cursor/plans/popis-po-skladistu/HANDOFF.md`](../popis-po-skladistu/HANDOFF.md).
 
 > **Full Effect (faze 13–18):** nastavak u novoj sesiji → [`.cursor/plans/full-effect/HANDOFF.md`](../full-effect/HANDOFF.md) (2026-06-03). Faze 13–15 gotove; sljedeća **16**. Evidentičar više nije samo grad+kategorija — vidi `RegistrarAssignment`.
