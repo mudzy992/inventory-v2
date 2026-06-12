@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Package, ChevronRight, ChevronDown, Search, Filter, Eye } from 'lucide-react';
 import {
   fetchAssignedStockLotGroupsPageApi,
@@ -42,13 +43,14 @@ import { cardClass, inputClass, labelClass } from '../ui/form-styles';
 import { Badge } from '../ui/badge';
 import { SearchableAutocomplete, type SearchableOption } from '../searchable-autocomplete';
 import { AvailabilityHint } from './availability-hint';
-import { CategoryFieldControl } from './category-field-control';
 import { IssueUniqueFieldInput } from './issue-unique-field-input';
 import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from '../inventory-count/inventory-freeze-action-hint';
 import { EquipmentCard } from '../EquipmentCard';
+import { pageIdToPath, registrarStockLotPath } from '../../routes/app-routes';
+import { LotSpecificationSection } from './lot-specification-section';
 
 const buildSpecFields = (category: Category | undefined, unique: boolean) => {
   if (!category) {
@@ -91,6 +93,8 @@ const isValueAvailabilityValid = (value: string, status: AvailabilityStatus): bo
 };
 
 export const RegistrarStockPage = () => {
+  const navigate = useNavigate();
+  const { lotId: routeLotId } = useParams<{ lotId?: string }>();
   const [state] = useStore();
   const refresh = useRefreshData();
   const admin = isAdmin();
@@ -333,7 +337,7 @@ export const RegistrarStockPage = () => {
     setInventoryNumber('');
     setEmployeeId('');
   };
-  const openDetail = async (id: string) => {
+  const loadLotDetail = useCallback(async (id: string) => {
     setSelectedId(id);
     try {
       const row = await fetchStockLotApi(id);
@@ -342,17 +346,39 @@ export const RegistrarStockPage = () => {
       setIssueOpen(false);
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška');
+      navigate(pageIdToPath('registrar-stock'), { replace: true });
+      setSelectedId(null);
+      setDetail(null);
     }
+  }, [navigate, toastError]);
+  useEffect(() => {
+    if (!routeLotId) {
+      setSelectedId(null);
+      setDetail(null);
+      return;
+    }
+    if (routeLotId !== selectedId || !detail) {
+      void loadLotDetail(routeLotId);
+    }
+  }, [routeLotId, selectedId, detail, loadLotDetail]);
+  const openDetail = (id: string) => {
+    navigate(registrarStockLotPath(id));
+  };
+  const handleBackFromDetail = () => {
+    navigate(pageIdToPath('registrar-stock'));
+    setSelectedId(null);
+    setDetail(null);
   };
   const handleSaveSpec = async () => {
     if (!detail) {
       return;
     }
+    const wasInitialSpec = detail.status === 'ceka_specifikaciju';
     setSaving(true);
     try {
       const updated = await updateStockLotSpecApi(detail.id, specs);
       setDetail(updated);
-      toastSuccess('Specifikacija lota je sačuvana');
+      toastSuccess(wasInitialSpec ? 'Specifikacija lota je sačuvana' : 'Izmjene specifikacije su sačuvane');
       await groupList.refresh();
       await loadStatsGroups();
       setGroupLots({});
@@ -398,10 +424,7 @@ export const RegistrarStockPage = () => {
           <div className="px-5 py-4 bg-gradient-to-r from-slate-50 via-white to-blue-50/40">
             <button
               type="button"
-              onClick={() => {
-                setSelectedId(null);
-                setDetail(null);
-              }}
+              onClick={handleBackFromDetail}
               className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
             >
               <ArrowLeft size={16} />
@@ -433,30 +456,16 @@ export const RegistrarStockPage = () => {
 
         <InventoryFreezeActionHint />
 
-        {detail.status === 'ceka_specifikaciju' ? (
-          <LotSectionCard
-            title="Specifikacija lota"
-            description="Popunite zajedničke karakteristike za cijeli lot prije izdavanja pojedinačnih komada."
-            footer={
-              <div className="flex justify-end">
-                <Button disabled={saving || isFrozen} onClick={() => void handleSaveSpec()}>
-                  Sačuvaj specifikaciju
-                </Button>
-              </div>
-            }
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {lotFields.map((field) => (
-                <CategoryFieldControl
-                  key={field.id}
-                  field={field}
-                  value={specs[field.id] ?? ''}
-                  onChange={(next) => setSpecs({ ...specs, [field.id]: next })}
-                />
-              ))}
-            </div>
-          </LotSectionCard>
-        ) : null}
+        <LotSpecificationSection
+          status={detail.status}
+          fields={lotFields}
+          specs={specs}
+          onSpecsChange={setSpecs}
+          onSave={() => void handleSaveSpec()}
+          saving={saving}
+          isFrozen={isFrozen}
+          hasIssuedUnits={Boolean(detail.issuedUnits && detail.issuedUnits.length > 0)}
+        />
 
         {detail.status === 'spremno_za_izdavanje' && detail.quantityOnHand > 0 ? (
           !issueOpen ? (
@@ -725,7 +734,7 @@ export const RegistrarStockPage = () => {
                           key={lot.id}
                           type="button"
                           className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50 transition-colors"
-                          onClick={() => void openDetail(lot.id)}
+                          onClick={() => openDetail(lot.id)}
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-800 truncate">{lot.warehouseName ?? '—'}</p>

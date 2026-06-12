@@ -27,6 +27,17 @@
 - **Lot spec**: obavezna polja kategorije gdje `unique = false`
 - **Issue**: obavezna polja gdje `unique = true` + globalni `inventoryNumber`
 
+## Izmjena lot specifikacije (evidentičar)
+
+| Status lota | UI | API |
+|-------------|-----|-----|
+| `ceka_specifikaciju` | Forma + „Sačuvaj specifikaciju" | `PATCH .../specifications` |
+| `spremno_za_izdavanje` | Forma + „Sačuvaj izmjene" | `PATCH .../specifications` |
+| `zatvoreno` | Samo read-only | odbijeno (400) |
+
+- Izmjena lot spec-a **ne retroaktivno** ažurira već izdatu opremu (snapshot pri `POST .../issue`).
+- Freeze u gradu blokira save spec-a (isto kao issue).
+
 ## Izdavanje
 
 **S prenosnicom** (`transfer.generation.on_stock_lot_issue=true`, default):
@@ -85,6 +96,8 @@ Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/module
 - `product:{categoryId}::{normalizedProductName}` inače
 
 **UI (Skladišna roba — `registrar-stock`):** kategorijsko razvrstavanje parent → podkategorija → grupe proizvoda (accordion) → redovi po skladištu → detail lota (spec/issue). Filteri skladišta i statusa ostaju globalni; navigacija kategorijama zamjenjuje dropdown filter kategorije.
+
+**Frontend URL rutiranje:** React Router; deep link na lot `/registrar-stock/lots/:lotId`; ostale stranice `/dashboard`, `/registrar-stock`, itd. Javna oprema `/equipment/:equipmentId` bez prijave.
 
 **UI (Skladište — pregled ASSET lotova):** isti browse pattern (`warehouse-stock-browse-panel`).
 

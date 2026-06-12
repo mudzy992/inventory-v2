@@ -1,11 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import { useInventoryFreezeBanner } from '../../hooks/use-inventory-freeze-banner';
 import { useIsPageEnabled } from '../../hooks/use-is-page-enabled';
-import type { PageId } from '../Layout';
+import { pageIdToPath } from '../../routes/app-routes';
 import { AlertBanner } from '../ui/alert-banner';
-
-interface InventoryFreezeActionHintProps {
-  onOpenInventory?: (page: PageId) => void;
-}
 
 export const useInventoryFreezeActive = (): boolean => {
   const inventoryCountEnabled = useIsPageEnabled('inventory-count');
@@ -13,7 +10,8 @@ export const useInventoryFreezeActive = (): boolean => {
   return inventoryCountEnabled && sessions.length > 0;
 };
 
-export const InventoryFreezeActionHint = ({ onOpenInventory }: InventoryFreezeActionHintProps) => {
+export const InventoryFreezeActionHint = () => {
+  const navigate = useNavigate();
   const inventoryCountEnabled = useIsPageEnabled('inventory-count');
   const { sessions } = useInventoryFreezeBanner(inventoryCountEnabled);
   if (!inventoryCountEnabled || sessions.length === 0) {
@@ -26,15 +24,13 @@ export const InventoryFreezeActionHint = ({ onOpenInventory }: InventoryFreezeAc
         Godišnji popis je aktivan{primary.cityName ? ` u gradu ${primary.cityName}` : ''} — izmjene
         opreme i novi transferi su privremeno onemogućeni.
       </span>
-      {onOpenInventory ? (
-        <button
-          type="button"
-          className="ml-2 underline font-medium"
-          onClick={() => onOpenInventory('inventory-count')}
-        >
-          Otvori popis
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="ml-2 underline font-medium"
+        onClick={() => navigate(pageIdToPath('inventory-count'))}
+      >
+        Otvori popis
+      </button>
     </AlertBanner>
   );
 };

@@ -39,14 +39,11 @@ import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
-import type { PageId } from './page-id';
-
 interface TransfersPageProps {
-  onNavigate?: (page: PageId) => void;
   initialTab?: TransferModuleTab;
 }
 
-export function TransfersPage({ onNavigate, initialTab = 'history' }: TransfersPageProps) {
+export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const { getBoolean } = usePublicSettings();
   const documentsEnabled = getBoolean('features.documents', true);
   const [activeTab, setActiveTab] = useState<TransferModuleTab>(initialTab);
@@ -281,7 +278,7 @@ export function TransfersPage({ onNavigate, initialTab = 'history' }: TransfersP
   if (activeTab === 'history') {
     tabContent = (
       <>
-      <InventoryFreezeActionHint onOpenInventory={onNavigate} />
+      <InventoryFreezeActionHint />
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
         <div className="relative flex-1 min-w-0">

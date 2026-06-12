@@ -19,18 +19,16 @@ import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
-import type { PageId } from './page-id';
+import { useNavigate } from 'react-router-dom';
+import { pageIdToPath } from '../routes/app-routes';
 import { PageTabs } from './ui/page-tabs';
 import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
 import { PaginationControls } from './ui/pagination-controls';
 import { ModalRoot } from './ui/modal-root';
 
-interface EquipmentPageProps {
-  onNavigate?: (page: PageId) => void;
-}
-
-export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
+export function EquipmentPage() {
+  const navigate = useNavigate();
   const { getBoolean } = usePublicSettings();
   const labelsEnabled = getBoolean('features.equipment_labels', true);
   const [state] = useStore();
@@ -169,7 +167,6 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
         canEditContext={admin}
         canManageDestruction={admin || skladistar}
         canReceiveStock={admin || skladistar}
-        onNavigate={onNavigate}
       />
     );
   }
@@ -212,10 +209,10 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
               Po skladištima
             </button>
           )}
-          {onNavigate && (admin || skladistar) && (
+          {(admin || skladistar) && (
             <button
               type="button"
-              onClick={() => onNavigate('warehouses')}
+              onClick={() => navigate(pageIdToPath('warehouses'))}
               className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
             >
               Modul Skladišta
@@ -224,7 +221,7 @@ export function EquipmentPage({ onNavigate }: EquipmentPageProps) {
         </div>
       )}
 
-      <InventoryFreezeActionHint onOpenInventory={onNavigate} />
+      <InventoryFreezeActionHint />
 
       {(evidenticar || admin) && (
         <PageTabs

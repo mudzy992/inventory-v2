@@ -16,7 +16,6 @@ import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
-import type { PageId } from './Layout';
 import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
 import { FormCard } from './ui/form-card';
@@ -27,11 +26,7 @@ import { PageTabs } from './ui/page-tabs';
 
 type WarehousesTab = 'list' | 'create';
 
-interface WarehousesPageProps {
-  onNavigate?: (page: PageId) => void;
-}
-
-export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
+export const WarehousesPage = () => {
   const [state] = useStore();
   const refresh = useRefreshData();
   const { toastError } = useToast();
@@ -122,7 +117,6 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
         canEditContext={admin}
         canManageDestruction={canManageDestruction}
         canReceiveStock={skladistar || admin}
-        onNavigate={onNavigate}
       />
     );
   }
@@ -136,7 +130,7 @@ export const WarehousesPage = ({ onNavigate }: WarehousesPageProps) => {
             : 'Registry skladišta vezana za org-jedinicu i skladištare.'
         }
       />
-      <InventoryFreezeActionHint onOpenInventory={onNavigate} />
+      <InventoryFreezeActionHint />
       <PageTabs
         tabs={[
           { id: 'list', label: 'Lista', icon: List },

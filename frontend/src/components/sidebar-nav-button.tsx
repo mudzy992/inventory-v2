@@ -1,12 +1,12 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '../utils/cn';
 import type { PageId } from './page-id';
+import { pageIdToPath } from '../routes/app-routes';
 
 interface SidebarNavButtonProps {
   pageId: PageId;
-  currentPage: PageId;
-  onNavigate: (page: PageId) => void;
   collapsed: boolean;
   label: string;
   icon: LucideIcon;
@@ -15,12 +15,13 @@ interface SidebarNavButtonProps {
   className?: string;
   badge?: number;
   children?: ReactNode;
+  onNavigateComplete?: () => void;
+  alsoActivePaths?: string[];
+  matchNested?: boolean;
 }
 
 export const SidebarNavButton = ({
   pageId,
-  currentPage,
-  onNavigate,
   collapsed,
   label,
   icon: Icon,
@@ -29,20 +30,28 @@ export const SidebarNavButton = ({
   className,
   badge,
   children,
+  onNavigateComplete,
+  alsoActivePaths,
+  matchNested = false,
 }: SidebarNavButtonProps) => {
+  const location = useLocation();
   if (!visible) {
     return null;
   }
+  const isAlsoActive = alsoActivePaths?.includes(location.pathname) ?? false;
   return (
-    <button
-      type="button"
-      onClick={() => onNavigate(pageId)}
+    <NavLink
+      to={pageIdToPath(pageId)}
+      end={!matchNested}
       title={title ?? (collapsed ? label : undefined)}
-      className={cn(
-        'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-        currentPage === pageId ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-        className,
-      )}
+      onClick={onNavigateComplete}
+      className={({ isActive }) =>
+        cn(
+          'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+          isActive || isAlsoActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+          className,
+        )
+      }
     >
       <span className="relative shrink-0">
         <Icon size={children ? 16 : 20} />
@@ -70,6 +79,6 @@ export const SidebarNavButton = ({
           </span>
         )
       )}
-    </button>
+    </NavLink>
   );
 };

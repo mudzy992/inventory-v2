@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import {
   LogOut, User, Shield, Briefcase, ClipboardList, Menu,
 } from 'lucide-react';
@@ -14,17 +15,16 @@ import { useInventoryFreezeBanner } from '../hooks/use-inventory-freeze-banner';
 import { InventoryFreezeBanner } from './inventory-count/inventory-freeze-banner';
 import { AppSidebarNav } from './app-sidebar-nav';
 import { AppNavDrawer } from './app-nav-drawer';
+import { pageIdToPath } from '../routes/app-routes';
 
 export type { PageId } from './page-id';
 
 interface LayoutProps {
-  currentPage: PageId;
-  onNavigate: (page: PageId) => void;
   onLogout: () => void;
   children: React.ReactNode;
 }
 
-export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutProps) {
+export function Layout({ onLogout, children }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -73,8 +73,6 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
         )}
       >
         <AppSidebarNav
-          currentPage={currentPage}
-          onNavigate={onNavigate}
           collapsed={collapsed}
           onLogout={handleLogout}
           showCollapseToggle
@@ -88,8 +86,6 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
       <AppNavDrawer
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
-        currentPage={currentPage}
-        onNavigate={onNavigate}
         onLogout={handleLogout}
         appName={appName}
         appSubtitle={appSubtitle}
@@ -113,7 +109,7 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
             )}
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <NotificationsPanel onNavigate={onNavigate} />
+            <NotificationsPanel />
 
             <div className="relative">
               <button
@@ -145,13 +141,13 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
                       </div>
                     )}
                     <div className="p-2">
-                      <button
-                        type="button"
-                        onClick={() => { onNavigate('my-equipment'); setShowUserMenu(false); }}
+                      <NavLink
+                        to={pageIdToPath('my-equipment')}
+                        onClick={() => setShowUserMenu(false)}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                       >
                         <Briefcase size={16} /> Moja oprema
-                      </button>
+                      </NavLink>
                       <button
                         type="button"
                         onClick={handleLogout}
@@ -167,7 +163,7 @@ export function Layout({ currentPage, onNavigate, onLogout, children }: LayoutPr
           </div>
         </header>
 
-        <InventoryFreezeBanner sessions={freezeSessions} onNavigate={onNavigate} />
+        <InventoryFreezeBanner sessions={freezeSessions} />
 
         <main className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
           <div className="px-4 pt-4 pb-[max(2.5rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:pt-6 sm:pb-8 max-w-[1400px] mx-auto w-full">

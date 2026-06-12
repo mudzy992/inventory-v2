@@ -1,14 +1,15 @@
+import { useNavigate } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import type { InventoryFreezeBannerSessionDto } from '../../api/inventory-api';
-import type { PageId } from '../Layout';
+import { pageIdToPath } from '../../routes/app-routes';
 import { useIsPageEnabled } from '../../hooks/use-is-page-enabled';
 
 interface InventoryFreezeBannerProps {
   sessions: InventoryFreezeBannerSessionDto[];
-  onNavigate: (page: PageId) => void;
 }
 
-export const InventoryFreezeBanner = ({ sessions, onNavigate }: InventoryFreezeBannerProps) => {
+export const InventoryFreezeBanner = ({ sessions }: InventoryFreezeBannerProps) => {
+  const navigate = useNavigate();
   const inventoryCountEnabled = useIsPageEnabled('inventory-count');
   if (sessions.length === 0 || !inventoryCountEnabled) {
     return null;
@@ -34,7 +35,7 @@ export const InventoryFreezeBanner = ({ sessions, onNavigate }: InventoryFreezeB
       </div>
       <button
         type="button"
-        onClick={() => onNavigate('inventory-count')}
+        onClick={() => navigate(pageIdToPath('inventory-count'))}
         className="shrink-0 text-sm font-medium text-amber-900 underline hover:text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-400 rounded px-1"
       >
         Otvori popis

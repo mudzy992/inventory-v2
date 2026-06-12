@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Building2, Users, Package, ArrowLeftRight, FolderTree,
   LayoutDashboard, ChevronLeft, ChevronRight,
@@ -12,6 +13,7 @@ import { cn } from '../utils/cn';
 import { isAdmin, isEvidenticar, isSkladistar, getUserRole } from '../store';
 import { useCurrentEmployee } from '../hooks/use-current-employee';
 import { useModuleBadges } from '../hooks/use-module-badges';
+import { pathToPageId } from '../routes/app-routes';
 import { SidebarNavButton } from './sidebar-nav-button';
 import type { PageId } from './page-id';
 
@@ -42,8 +44,6 @@ const NavSection = ({
 };
 
 interface AppSidebarNavProps {
-  currentPage: PageId;
-  onNavigate: (page: PageId) => void;
   collapsed: boolean;
   onNavigateComplete?: () => void;
   onLogout?: () => void;
@@ -55,8 +55,6 @@ interface AppSidebarNavProps {
 }
 
 export const AppSidebarNav = ({
-  currentPage,
-  onNavigate,
   collapsed,
   onNavigateComplete,
   onLogout,
@@ -67,6 +65,8 @@ export const AppSidebarNav = ({
   appSubtitle = 'Upravljanje opremom',
 }: AppSidebarNavProps) => {
   const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(true);
+  const location = useLocation();
+  const currentPage = pathToPageId(location.pathname);
   const currentEmployee = useCurrentEmployee();
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
@@ -121,11 +121,6 @@ export const AppSidebarNav = ({
           ? 'bg-teal-500 text-teal-900'
           : 'bg-gray-500 text-gray-100';
 
-  const handleNavigate = (page: PageId) => {
-    onNavigate(page);
-    onNavigateComplete?.();
-  };
-
   const handleLogout = () => {
     onLogout?.();
     onNavigateComplete?.();
@@ -172,12 +167,11 @@ export const AppSidebarNav = ({
         >
           <SidebarNavButton
             pageId="dashboard"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Kontrolna tabla"
             icon={LayoutDashboard}
             visible={showNavPage('dashboard')}
+            onNavigateComplete={onNavigateComplete}
           />
         </NavSection>
 
@@ -209,8 +203,6 @@ export const AppSidebarNav = ({
                 <div className={cn(!collapsed && 'ml-4 border-l border-slate-700')}>
                   <SidebarNavButton
                     pageId="equipment"
-                    currentPage={currentPage}
-                    onNavigate={handleNavigate}
                     collapsed={collapsed}
                     label="Sva oprema"
                     icon={List}
@@ -218,17 +210,17 @@ export const AppSidebarNav = ({
                     title="Sva oprema"
                     className="py-2 text-slate-400 hover:text-white"
                     badge={moduleBadges.equipment}
+                    onNavigateComplete={onNavigateComplete}
                   />
                   <SidebarNavButton
                     pageId="equipment-by-category"
-                    currentPage={currentPage}
-                    onNavigate={handleNavigate}
                     collapsed={collapsed}
                     label="Po kategorijama"
                     icon={Layers}
                     visible={showNavPage('equipment-by-category')}
                     title="Po kategorijama"
                     className="py-2 text-slate-400 hover:text-white"
+                    onNavigateComplete={onNavigateComplete}
                   />
                 </div>
               ) : null}
@@ -236,36 +228,34 @@ export const AppSidebarNav = ({
           ) : null}
           <SidebarNavButton
             pageId="transfers"
-            currentPage={currentPage === 'documents' ? 'transfers' : currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Zaduženja"
             icon={ArrowLeftRight}
             visible={showNavPage('transfers')}
             badge={moduleBadges.transfers}
+            alsoActivePaths={['/documents']}
+            onNavigateComplete={onNavigateComplete}
           />
         </NavSection>
 
         <NavSection label="Procesi" collapsed={collapsed} show={showProcessSection}>
           <SidebarNavButton
             pageId="inventory-count"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Popis"
             icon={ClipboardCheck}
             visible={showNavPage('inventory-count') && (admin || evidenticar)}
             badge={moduleBadges['inventory-count']}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="disposal-commissions"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Komisija rashod"
             icon={Trash2}
             visible={admin && showNavPage('disposal-commissions')}
             badge={moduleBadges['disposal-commissions']}
+            onNavigateComplete={onNavigateComplete}
           />
         </NavSection>
 
@@ -276,163 +266,149 @@ export const AppSidebarNav = ({
         >
           <SidebarNavButton
             pageId="warehouses"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Moja skladišta"
             icon={Warehouse}
             visible={showNavPage('warehouses')}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="warehouse-inventory"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Popis skladišta"
             icon={ClipboardCheck}
             visible={showNavPage('warehouse-inventory')}
+            onNavigateComplete={onNavigateComplete}
           />
         </NavSection>
 
         <NavSection label="Šifarnici" collapsed={collapsed} show={showMasterDataSection}>
           <SidebarNavButton
             pageId="organization"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Organizacija"
             icon={Building2}
             visible={showNavPage('organization')}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="locations"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Lokacije"
             icon={MapPin}
             visible={showNavPage('locations')}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="warehouses"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Skladišta"
             icon={Warehouse}
             visible={showNavPage('warehouses')}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="employees"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Radnici"
             icon={Users}
             visible={showNavPage('employees')}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="categories"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Kategorije"
             icon={FolderTree}
             visible={showNavPage('categories')}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="registrar-stock"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Skladišna roba"
             icon={Package}
             visible={showNavPage('registrar-stock')}
             badge={moduleBadges['registrar-stock']}
+            matchNested
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="employee-relocation"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Org. promjena"
             icon={ArrowLeftRight}
             visible={showNavPage('employee-relocation')}
             badge={moduleBadges['employee-relocation']}
+            onNavigateComplete={onNavigateComplete}
           />
         </NavSection>
 
         <NavSection label="Registar" collapsed={collapsed} show={showRegistrarSection}>
           <SidebarNavButton
             pageId="employees"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Radnici"
             icon={Users}
             visible={showNavPage('employees')}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="registrar-stock"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Skladišna roba"
             icon={Package}
             visible={showNavPage('registrar-stock')}
             badge={moduleBadges['registrar-stock']}
+            matchNested
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="employee-relocation"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Org. promjena"
             icon={ArrowLeftRight}
             visible={showNavPage('employee-relocation')}
             badge={moduleBadges['employee-relocation']}
+            onNavigateComplete={onNavigateComplete}
           />
         </NavSection>
 
         <NavSection label="Sistem" collapsed={collapsed} show={admin}>
           <SidebarNavButton
             pageId="user-management"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Korisnici"
             icon={ClipboardList}
             visible={showNavPage('user-management')}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="settings"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Postavke"
             icon={Settings}
             visible={true}
+            onNavigateComplete={onNavigateComplete}
           />
         </NavSection>
 
         <NavSection label="Moj profil" collapsed={collapsed} show={showProfileSection}>
           <SidebarNavButton
             pageId="my-equipment"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="Moja oprema"
             icon={Briefcase}
             visible={showNavPage('my-equipment')}
+            onNavigateComplete={onNavigateComplete}
           />
           <SidebarNavButton
             pageId="qr-scanner"
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
             collapsed={collapsed}
             label="QR Skener"
             icon={QrCode}
             visible={showNavPage('qr-scanner')}
+            onNavigateComplete={onNavigateComplete}
           />
         </NavSection>
       </nav>

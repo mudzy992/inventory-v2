@@ -1,5 +1,10 @@
 # Changelog — warehouse-stock
 
+## 2026-06-12
+
+- Frontend: migracija na React Router (URL rute, bookmark, back/forward); deep link lota `/registrar-stock/lots/:lotId`.
+- Evidentičar može **izmijeniti** lot specifikaciju dok lot nije `zatvoreno` (`spremno_za_izdavanje`); UI komponenta `lot-specification-section.tsx`.
+
 ## 2026-06-11
 
 - Frontend browse: Skladišna roba (`registrar-stock-page`) — parent → podkategorija → grupe proizvoda; shared category-browse komponente.

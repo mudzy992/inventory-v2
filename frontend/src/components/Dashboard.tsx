@@ -23,18 +23,16 @@ import {
   getScopedParentCategories,
   getScopedSubCategories,
 } from '../helpers/registrar-scope';
-import type { PageId } from './Layout';
+import { useNavigate } from 'react-router-dom';
+import { pageIdToPath } from '../routes/app-routes';
 import { useIsPageEnabled } from '../hooks/use-is-page-enabled';
 import { Package, Users, ArrowLeftRight, AlertTriangle, MapPin, Layers, Clock } from 'lucide-react';
 import { getEmployeeFullName } from '../helpers';
 import type { EquipmentSummary } from '../api/equipment-api';
 import type { TransferRecord } from '../types';
 
-interface DashboardProps {
-  onNavigate?: (page: PageId) => void;
-}
-
-export function Dashboard({ onNavigate }: DashboardProps) {
+export function Dashboard() {
+  const navigate = useNavigate();
   const [state] = useStore();
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
@@ -173,33 +171,31 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
-            {onNavigate ? (
-              <>
+            <>
+              <button
+                type="button"
+                onClick={() => navigate(pageIdToPath('equipment'))}
+                className="text-xs font-medium text-purple-800 underline"
+              >
+                Oprema u mom skladištu
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(pageIdToPath('transfers'))}
+                className="text-xs font-medium text-purple-800 underline"
+              >
+                Zaduženja
+              </button>
+              {inventoryCountEnabled ? (
                 <button
                   type="button"
-                  onClick={() => onNavigate('equipment')}
+                  onClick={() => navigate(pageIdToPath('inventory-count'))}
                   className="text-xs font-medium text-purple-800 underline"
                 >
-                  Oprema u mom skladištu
+                  Popis (pregled)
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('transfers')}
-                  className="text-xs font-medium text-purple-800 underline"
-                >
-                  Zaduženja
-                </button>
-                {inventoryCountEnabled ? (
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('inventory-count')}
-                    className="text-xs font-medium text-purple-800 underline"
-                  >
-                    Popis (pregled)
-                  </button>
-                ) : null}
-              </>
-            ) : null}
+              ) : null}
+            </>
           </div>
           {myWarehouses.length > 0 ? (
             <p className="text-xs text-purple-700">
@@ -225,12 +221,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 </>
               ) : null}
             </p>
-            {onNavigate &&
-            (relocationAlerts.openCases > 0 || relocationAlerts.unmappedCatalogLines > 0) ? (
+            {(relocationAlerts.openCases > 0 || relocationAlerts.unmappedCatalogLines > 0) ? (
               <button
                 type="button"
                 className="text-xs font-medium text-amber-900 underline mt-2"
-                onClick={() => onNavigate('employee-relocation')}
+                onClick={() => navigate(pageIdToPath('employee-relocation'))}
               >
                 Otvori akcije
               </button>

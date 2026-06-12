@@ -9,7 +9,8 @@ import { WarehouseMaintenanceStockPanel } from './warehouse-maintenance-stock-pa
 import { isSkladistar, isAdmin } from '../../store';
 import { getCityLabel, formatDate } from '../../helpers';
 import { useStore } from '../../useStore';
-import type { PageId } from '../Layout';
+import { useNavigate } from 'react-router-dom';
+import { pageIdToPath } from '../../routes/app-routes';
 import type { TransferRecord } from '../../types';
 import { WarehouseDestructionPanel } from './warehouse-destruction-panel';
 import { WarehouseContextPanel } from './warehouse-context-panel';
@@ -26,7 +27,6 @@ interface WarehouseDetailViewProps {
   canEditContext?: boolean;
   canManageDestruction?: boolean;
   canReceiveStock?: boolean;
-  onNavigate?: (page: PageId) => void;
 }
 
 export const WarehouseDetailView = ({
@@ -35,8 +35,8 @@ export const WarehouseDetailView = ({
   canEditContext = false,
   canManageDestruction = false,
   canReceiveStock = false,
-  onNavigate,
 }: WarehouseDetailViewProps) => {
+  const navigate = useNavigate();
   const admin = isAdmin();
   const skladistar = isSkladistar();
   const { getBoolean } = usePublicSettings();
@@ -120,8 +120,8 @@ export const WarehouseDetailView = ({
             <Badge tone="neutral">Roba na skladištu (lotovi)</Badge>
           </div>
         </div>
-        {onNavigate && (admin || !skladistar) ? (
-          <Button variant="secondary" onClick={() => onNavigate('equipment')}>
+        {(admin || !skladistar) ? (
+          <Button variant="secondary" onClick={() => navigate(pageIdToPath('equipment'))}>
             Oprema (globalno)
           </Button>
         ) : null}
@@ -209,13 +209,11 @@ export const WarehouseDetailView = ({
             </tbody>
           </table>
           </div>
-          {onNavigate ? (
-            <div className="p-3 border-t">
-              <Button variant="secondary" onClick={() => onNavigate('transfers')}>
-                Svi transferi
-              </Button>
-            </div>
-          ) : null}
+          <div className="p-3 border-t">
+            <Button variant="secondary" onClick={() => navigate(pageIdToPath('transfers'))}>
+              Svi transferi
+            </Button>
+          </div>
         </div>
       ) : null}
       {tab === 'destruction' && canManageDestruction ? (

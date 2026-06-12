@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useNotifications } from '../contexts/SocketContext';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { getNotificationTypeMeta } from '../helpers/notification-type.util';
-import type { PageId } from './page-id';
+import { pageIdToPath } from '../routes/app-routes';
 import type { Notification } from '../types';
 
 const formatRelativeTime = (iso: string): string => {
@@ -24,7 +25,8 @@ const formatRelativeTime = (iso: string): string => {
   return date.toLocaleDateString('bs-BA');
 };
 
-export const NotificationsPanel = ({ onNavigate }: { onNavigate?: (page: PageId) => void }) => {
+export const NotificationsPanel = () => {
+  const navigate = useNavigate();
   const {
     notifications,
     unreadCount,
@@ -51,12 +53,11 @@ export const NotificationsPanel = ({ onNavigate }: { onNavigate?: (page: PageId)
   const handleNotificationClick = (notification: Notification) => {
     handleMarkRead(notification);
     if (
-      onNavigate &&
-      (notification.type === 'employee_relocation_admin_alert' ||
-        notification.type === 'employee_relocation_action_required' ||
-        notification.type === 'employee_relocation_incoming')
+      notification.type === 'employee_relocation_admin_alert' ||
+      notification.type === 'employee_relocation_action_required' ||
+      notification.type === 'employee_relocation_incoming'
     ) {
-      onNavigate('employee-relocation');
+      navigate(pageIdToPath('employee-relocation'));
       setOpen(false);
     }
   };
@@ -68,77 +69,76 @@ export const NotificationsPanel = ({ onNavigate }: { onNavigate?: (page: PageId)
         aria-label="Notifikacije"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+        className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors"
       >
-        <Bell size={20} />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-            {unreadCount > 9 ? '9+' : unreadCount}
+        <Bell size={20} className="text-gray-600" />
+        {unreadCount > 0 ? (
+          <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-4 text-center">
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
-        )}
+        ) : null}
       </button>
-      {open && (
+
+      {open ? (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 w-[min(100vw-2rem,24rem)] bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <p className="font-medium text-gray-800">Notifikacije</p>
-              {unreadCount > 0 && (
+              <h2 className="text-sm font-semibold text-gray-900">Notifikacije</h2>
+              {unreadCount > 0 ? (
                 <button
                   type="button"
                   onClick={() => void markAllRead()}
-                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
                 >
                   <CheckCheck size={14} />
                   Označi sve
                 </button>
-              )}
+              ) : null}
             </div>
             <div className="max-h-80 overflow-y-auto">
               {notifications.length === 0 ? (
-                <p className="px-4 py-8 text-sm text-center text-gray-400">Nema notifikacija</p>
+                <p className="px-4 py-6 text-sm text-gray-500 text-center">Nema notifikacija</p>
               ) : (
-                notifications.map((notification) => {
-                  const typeMeta = getNotificationTypeMeta(notification.type);
-                  const TypeIcon = typeMeta.icon;
-                  return (
-                  <button
-                    key={notification.id}
-                    type="button"
-                    onClick={() => handleNotificationClick(notification)}
-                    className={cn(
-                      'w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors',
-                      !notification.read && 'bg-blue-50/50',
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 min-w-0">
-                        <TypeIcon size={16} className="text-gray-400 mt-0.5 flex-shrink-0" aria-hidden />
-                        <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800">{notification.title}</p>
-                      <p className="text-[10px] text-gray-400">{typeMeta.label}</p>
-                        </div>
-                      </div>
-                      {!notification.read && (
-                        <span className="mt-1 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{notification.message}</p>
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      {formatRelativeTime(notification.createdAt)}
-                    </p>
-                  </button>
-                  );
-                })
+                <ul>
+                  {notifications.map((notification) => {
+                    const meta = getNotificationTypeMeta(notification.type);
+                    return (
+                      <li key={notification.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleNotificationClick(notification)}
+                          className={cn(
+                            'w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors',
+                            !notification.read && 'bg-blue-50/50',
+                          )}
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className={cn('text-xs font-medium px-1.5 py-0.5 rounded', meta.badgeClass)}>
+                              {meta.label}
+                            </span>
+                            <span className="text-[10px] text-gray-400 ml-auto shrink-0">
+                              {formatRelativeTime(notification.createdAt)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-800 mt-1">{notification.title}</p>
+                          {notification.body ? (
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notification.body}</p>
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </div>
             {hasMoreNotifications ? (
-              <div className="border-t border-gray-100 px-4 py-2">
+              <div className="p-2 border-t border-gray-100">
                 <button
                   type="button"
                   disabled={isLoadingMore}
                   onClick={() => void loadMoreNotifications()}
-                  className="w-full text-xs text-blue-600 hover:text-blue-700 disabled:text-gray-400 py-1"
+                  className="w-full text-sm text-blue-600 hover:text-blue-800 py-2 disabled:opacity-50"
                 >
                   {isLoadingMore ? 'Učitavanje…' : 'Učitaj više'}
                 </button>
@@ -146,7 +146,7 @@ export const NotificationsPanel = ({ onNavigate }: { onNavigate?: (page: PageId)
             ) : null}
           </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 };

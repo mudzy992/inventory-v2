@@ -1,13 +1,10 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { AppSidebarNav } from './app-sidebar-nav';
-import type { PageId } from './page-id';
 
 interface AppNavDrawerProps {
   open: boolean;
   onClose: () => void;
-  currentPage: PageId;
-  onNavigate: (page: PageId) => void;
   onLogout: () => void;
   appName: string;
   appSubtitle: string;
@@ -16,8 +13,6 @@ interface AppNavDrawerProps {
 export const AppNavDrawer = ({
   open,
   onClose,
-  currentPage,
-  onNavigate,
   onLogout,
   appName,
   appSubtitle,
@@ -57,8 +52,6 @@ export const AppNavDrawer = ({
           <X size={20} />
         </button>
         <AppSidebarNav
-          currentPage={currentPage}
-          onNavigate={onNavigate}
           collapsed={false}
           onNavigateComplete={onClose}
           onLogout={onLogout}
