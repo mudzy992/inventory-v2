@@ -21,6 +21,10 @@ import { CategoryFieldBadges } from './categories/category-field-badges';
 import { CategoryMaintenanceCatalogBadges } from './categories/category-maintenance-catalog-badges';
 import { CategoryAssetSubcategoryDialog } from './categories/category-asset-subcategory-dialog';
 import { isAssetLeafCategory } from '../helpers/expand-maintenance-catalog.util';
+import {
+  normalizeLotCategoryFields,
+  normalizeUnitCategoryFields,
+} from '../helpers/category-fields-normalize.util';
 import { EquipmentCatalogPanel } from './catalog/equipment-catalog-panel';
 import { PageTabs } from './ui/page-tabs';
 import { PageHeaderRow } from './ui/page-header-row';
@@ -183,8 +187,14 @@ export function CategoriesPage() {
         description: fDesc.trim(),
         parentId: fParentId,
         categoryKind: fCategoryKind,
-        fields: fFields,
-        optionalFields: fOptFields,
+        fields:
+          fCategoryKind === 'MAINTENANCE'
+            ? []
+            : normalizeUnitCategoryFields(fFields),
+        optionalFields:
+          fCategoryKind === 'MAINTENANCE'
+            ? normalizeLotCategoryFields(fFields)
+            : normalizeLotCategoryFields(fOptFields),
       };
       const saved = editing
         ? await updateCategoryApi(editing.id, payload)
@@ -488,7 +498,12 @@ export function CategoriesPage() {
                 </div>
               ) : null}
               {isFormSubCategory && fCategoryKind === 'MAINTENANCE' ? (
-                <CategoryFieldEditor fields={fFields} onChange={setFFields} label="Polja specifikacije (opcionalno)" />
+                <CategoryFieldEditor
+                  fields={fFields}
+                  onChange={setFFields}
+                  label="Polja lota"
+                  mode="lot"
+                />
               ) : null}
               {!isFormSubCategory ? (
                 <div className={`rounded-lg p-4 text-sm ${fCategoryKind === 'MAINTENANCE' ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-700'}`}>

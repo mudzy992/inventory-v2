@@ -10,7 +10,9 @@ import { InventoryFreezeService } from '../../common/services/inventory-freeze.s
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { SignerResolutionService } from '../../common/services/signer-resolution.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
+import { assertUniqueUnitSpecificationValues } from '../../common/utils/assert-unique-spec-values.util';
 import {
+  hasRequiredLotSpecFields,
   validateIssueSpecifications,
   validateLotSpecifications,
 } from '../../common/utils/category-fields.util';
@@ -311,6 +313,10 @@ export class WarehouseStockService {
     if (!resolved.productName) {
       throw new BadRequestException('Naziv robe ili stavka šifrarnika je obavezan');
     }
+    const { optionalFields } = this.categoriesService.getFieldDefinitions(category);
+    const initialStatus = hasRequiredLotSpecFields(optionalFields)
+      ? 'ceka_specifikaciju'
+      : 'spremno_za_izdavanje';
     const lot = await this.prisma.warehouseStockLot.create({
       data: {
         warehouseId,
@@ -320,7 +326,7 @@ export class WarehouseStockService {
         productName: resolved.productName,
         quantityReceived: dto.quantity,
         quantityOnHand: dto.quantity,
-        status: 'ceka_specifikaciju',
+        status: initialStatus,
         specifications: {},
         contractNumber: dto.contractNumber?.trim() || null,
         entryDate: new Date(dto.entryDate),
@@ -361,6 +367,10 @@ export class WarehouseStockService {
           productName: '',
           categoryId: item.categoryId,
         });
+        const { optionalFields } = this.categoriesService.getFieldDefinitions(category);
+        const initialStatus = hasRequiredLotSpecFields(optionalFields)
+          ? 'ceka_specifikaciju'
+          : 'spremno_za_izdavanje';
         const lot = await tx.warehouseStockLot.create({
           data: {
             warehouseId,
@@ -370,7 +380,7 @@ export class WarehouseStockService {
             productName: resolved.productName,
             quantityReceived: item.quantity,
             quantityOnHand: item.quantity,
-            status: 'ceka_specifikaciju',
+            status: initialStatus,
             specifications: {},
             contractNumber: item.contractNumber?.trim() || null,
             entryDate: new Date(item.entryDate),
@@ -409,8 +419,8 @@ export class WarehouseStockService {
       await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_issue');
     }
     const category = await this.categoriesService.assertLeafCategory(lot.categoryId);
-    const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
-    validateLotSpecifications(dto.specifications, fields, optionalFields);
+    const { optionalFields } = this.categoriesService.getFieldDefinitions(category);
+    validateLotSpecifications(dto.specifications, optionalFields);
     const updated = await this.prisma.warehouseStockLot.update({
       where: { id: lotId },
       data: {
@@ -449,7 +459,13 @@ export class WarehouseStockService {
     }
     const category = await this.categoriesService.assertLeafCategory(lot.categoryId);
     const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
-    validateIssueSpecifications(dto.uniqueSpecifications, fields, optionalFields);
+    validateIssueSpecifications(dto.uniqueSpecifications, fields);
+    await assertUniqueUnitSpecificationValues(
+      this.prisma,
+      lot.categoryId,
+      dto.uniqueSpecifications,
+      fields,
+    );
     const holder = await this.prisma.employee.findUnique({ where: { id: dto.employeeId } });
     if (!holder) {
       throw new NotFoundException('Employee not found');

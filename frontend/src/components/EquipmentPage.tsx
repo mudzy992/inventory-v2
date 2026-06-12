@@ -16,6 +16,11 @@ import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
 import { getUserWarehouseIds } from '../helpers/org-warehouse.util';
 import { getScopedCategoryIds } from '../helpers/registrar-scope';
 import {
+  isRegistrarLockedEquipmentSpecField,
+  mergeRegistrarEquipmentSpecifications,
+} from '../helpers/registrar-equipment-spec.util';
+import type { CategoryField } from '../types';
+import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
@@ -115,6 +120,9 @@ export function EquipmentPage() {
   const setSearch = list.setSearch;
 
   const selectedCategory = state.categories.find(c => c.id === fCategoryId);
+  const isSpecFieldLocked = (field: CategoryField): boolean =>
+    evidenticar && !admin && isRegistrarLockedEquipmentSpecField(field);
+  const lockedFieldClassName = 'bg-gray-100 text-gray-600 cursor-not-allowed';
 
   function openEdit(eq: Equipment) {
     setEditing(eq);
@@ -137,10 +145,19 @@ export function EquipmentPage() {
       toastError('Odaberite skladište za opremu na skladištu.');
       return;
     }
+    const specifications =
+      evidenticar && !admin && selectedCategory
+        ? mergeRegistrarEquipmentSpecifications(
+            editing.specifications,
+            fSpecs,
+            selectedCategory.fields,
+            selectedCategory.optionalFields,
+          )
+        : fSpecs;
     const payload = {
       categoryId: fCategoryId,
       inventoryNumber: fInventoryNumber.trim(),
-      specifications: fSpecs,
+      specifications,
       status,
       contractNumber: fContract || undefined,
       entryDate: fEntryDate,
@@ -550,17 +567,24 @@ export function EquipmentPage() {
               {selectedCategory && (
                 <>
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Specifikacije</h3>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Specifikacije po komadu</h3>
                     <div className="grid grid-cols-2 gap-3">
                       {selectedCategory.fields.map(f => (
                         <div key={f.id}>
                           <label className="block text-xs font-medium text-gray-600 mb-1">
-                            {f.name} {f.required && <span className="text-red-500">*</span>}
-                            {f.unique && <span className="text-purple-500 ml-1">(unikat)</span>}
+                            {f.name} <span className="text-red-500">*</span>
+                            {f.unique ? <span className="text-purple-500 ml-1">(unikat)</span> : null}
                           </label>
+                          {isSpecFieldLocked(f) ? (
+                            <p className="text-[11px] text-gray-500 mb-1">Definisano pri izdavanju — samo administrator može mijenjati</p>
+                          ) : null}
                           {f.type === 'select' ? (
-                            <select value={fSpecs[f.id] || ''} onChange={e => setFSpecs({ ...fSpecs, [f.id]: e.target.value })}
-                              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                            <select
+                              value={fSpecs[f.id] || ''}
+                              onChange={e => setFSpecs({ ...fSpecs, [f.id]: e.target.value })}
+                              disabled={isSpecFieldLocked(f)}
+                              className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${isSpecFieldLocked(f) ? lockedFieldClassName : ''}`}
+                            >
                               <option value="">— Odaberi —</option>
                               {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
@@ -569,7 +593,10 @@ export function EquipmentPage() {
                               type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
                               value={fSpecs[f.id] || ''}
                               onChange={e => setFSpecs({ ...fSpecs, [f.id]: e.target.value })}
-                              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              disabled={isSpecFieldLocked(f)}
+                              readOnly={isSpecFieldLocked(f)}
+                              aria-readonly={isSpecFieldLocked(f)}
+                              className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${isSpecFieldLocked(f) ? lockedFieldClassName : ''}`}
                             />
                           )}
                         </div>
@@ -578,17 +605,24 @@ export function EquipmentPage() {
                   </div>
                   {selectedCategory.optionalFields.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-500 mb-2">Opcionalna polja</h3>
+                      <h3 className="text-sm font-semibold text-gray-500 mb-2">Specifikacije lota</h3>
                       <div className="grid grid-cols-2 gap-3">
                         {selectedCategory.optionalFields.map(f => (
                           <div key={f.id}>
                             <label className="block text-xs font-medium text-gray-500 mb-1">
                               {f.name}
-                              {f.unique && <span className="text-purple-500 ml-1">(unikat)</span>}
+                              {f.required ? <span className="text-red-500 ml-1">*</span> : null}
                             </label>
+                            {isSpecFieldLocked(f) ? (
+                              <p className="text-[11px] text-gray-500 mb-1">Definisano pri izdavanju — samo administrator može mijenjati</p>
+                            ) : null}
                             {f.type === 'select' ? (
-                              <select value={fSpecs[f.id] || ''} onChange={e => setFSpecs({ ...fSpecs, [f.id]: e.target.value })}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                              <select
+                                value={fSpecs[f.id] || ''}
+                                onChange={e => setFSpecs({ ...fSpecs, [f.id]: e.target.value })}
+                                disabled={isSpecFieldLocked(f)}
+                                className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${isSpecFieldLocked(f) ? lockedFieldClassName : ''}`}
+                              >
                                 <option value="">— Odaberi —</option>
                                 {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
                               </select>
@@ -597,7 +631,10 @@ export function EquipmentPage() {
                                 type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
                                 value={fSpecs[f.id] || ''}
                                 onChange={e => setFSpecs({ ...fSpecs, [f.id]: e.target.value })}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                disabled={isSpecFieldLocked(f)}
+                                readOnly={isSpecFieldLocked(f)}
+                                aria-readonly={isSpecFieldLocked(f)}
+                                className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${isSpecFieldLocked(f) ? lockedFieldClassName : ''}`}
                               />
                             )}
                           </div>

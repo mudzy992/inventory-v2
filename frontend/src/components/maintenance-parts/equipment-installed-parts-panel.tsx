@@ -55,9 +55,7 @@ export const EquipmentInstalledPartsPanel = ({
   const [legacySpecValues, setLegacySpecValues] = useState<Record<string, string>>({});
   const [hostCategoryId, setHostCategoryId] = useState<string | null>(null);
   const installCategory = categories.find((row) => row.id === installCategoryId);
-  const installLotSpecFields = installCategory
-    ? [...installCategory.fields, ...installCategory.optionalFields].filter((field) => !field.unique)
-    : [];
+  const installLotSpecFields = installCategory ? installCategory.optionalFields : [];
   const loadParts = useCallback(async () => {
     if (!maintenanceEnabled) {
       setLoading(false);

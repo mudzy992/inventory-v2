@@ -63,9 +63,7 @@ export const WarehouseMaintenanceStockPanel = ({
     [state.categories],
   );
   const selectedCategory: Category | undefined = state.categories.find((row) => row.id === categoryId);
-  const lotSpecFields = selectedCategory
-    ? [...selectedCategory.fields, ...selectedCategory.optionalFields].filter((field) => !field.unique)
-    : [];
+  const lotSpecFields = selectedCategory ? selectedCategory.optionalFields : [];
   const parentStats = useMemo(
     () => buildParentCategoryStats(lots, state.categories, (lot) => lot.quantityOnHand),
     [lots, state.categories],

@@ -1,7 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../../../generated/prisma/client';
 import {
-  splitCategoryFieldsForStock,
+  getLotSpecFields,
   validateLotSpecifications,
   type CategoryFieldDefinition,
 } from '../../../common/utils/category-fields.util';
@@ -132,7 +132,7 @@ export const inheritDestLotSpecificationsInTx = async (
   }
 
   try {
-    validateLotSpecifications(resolved.specs, input.fields, input.optionalFields);
+    validateLotSpecifications(resolved.specs, input.optionalFields);
   } catch (err) {
     if (err instanceof BadRequestException) {
       return { inherited: false, source: null };
@@ -154,6 +154,6 @@ export const inheritDestLotSpecificationsInTx = async (
 };
 
 export const getLotFieldsFromCategoryDefinitions = (
-  fields: CategoryFieldDefinition[],
+  _fields: CategoryFieldDefinition[],
   optionalFields: CategoryFieldDefinition[],
-): CategoryFieldDefinition[] => splitCategoryFieldsForStock(fields, optionalFields).lotFields;
+): CategoryFieldDefinition[] => getLotSpecFields(optionalFields);

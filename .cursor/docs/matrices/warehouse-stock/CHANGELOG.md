@@ -2,6 +2,8 @@
 
 ## 2026-06-12
 
+- **Specifikacija po odjeljku:** lot spec = `optionalFields`; issue = sva `fields` (unit). Unikat enforcement na backendu pri issue. Lot bez obaveznih lot polja → `spremno_za_izdavanje` na prijemu.
+- API provjera (`npm run test:api:lot-spec`): lot spec PATCH (ceka/spremno/zatvoreno, scope 403, freeze 400), snapshot pri issue, paginacija opreme, bootstrap payload — 15/15 PASS na lokalnoj DB.
 - Frontend: migracija na React Router (URL rute, bookmark, back/forward); deep link lota `/registrar-stock/lots/:lotId`.
 - Evidentičar može **izmijeniti** lot specifikaciju dok lot nije `zatvoreno` (`spremno_za_izdavanje`); UI komponenta `lot-specification-section.tsx`.
 - Specifikacija lota: collapsible kartica — otvorena samo na `ceka_specifikaciju`, zatvara se nakon snimanja i ostaje zatvorena pri sljedećim posjetama.

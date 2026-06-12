@@ -11,7 +11,8 @@ import { InventoryFreezeService } from '../../common/services/inventory-freeze.s
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
-import { validateSpecifications } from '../../common/utils/category-fields.util';
+import { validateEquipmentSpecifications } from '../../common/utils/category-fields.util';
+import { resolveRegistrarEquipmentSpecifications } from '../../common/utils/registrar-equipment-spec.util';
 import { buildSpecificationFieldFilter } from '../../common/utils/json-specification-filter.util';
 import {
   buildOrderBy,
@@ -190,9 +191,18 @@ export class EquipmentService {
     }
     const categoryId = dto.categoryId ?? existing.categoryId;
     const category = await this.categoriesService.assertLeafCategory(categoryId);
-    const specifications = (dto.specifications ?? existing.specifications) as Record<string, string>;
     const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
-    validateSpecifications(specifications, fields, optionalFields);
+    const existingSpecs = (existing.specifications ?? {}) as Record<string, string>;
+    let specifications = (dto.specifications ?? existingSpecs) as Record<string, string>;
+    if (user.role === 'evidenticar' && dto.specifications) {
+      specifications = resolveRegistrarEquipmentSpecifications(
+        existingSpecs,
+        dto.specifications,
+        fields,
+        optionalFields,
+      );
+    }
+    validateEquipmentSpecifications(specifications, fields, optionalFields);
     if (dto.currentHolderId) {
       const holder = await this.getEmployeeOrThrow(dto.currentHolderId);
       const draft = { ...existing, categoryId, currentHolderId: dto.currentHolderId };
@@ -260,9 +270,8 @@ export class EquipmentService {
       return { available: false };
     }
     const category = await this.categoriesService.assertLeafCategory(categoryId);
-    const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
-    const uniqueFields = [...fields, ...optionalFields].filter((field) => field.unique);
-    const field = uniqueFields.find((row) => row.id === fieldId);
+    const { fields } = this.categoriesService.getFieldDefinitions(category);
+    const field = fields.find((row) => row.id === fieldId && row.unique);
     if (!field) {
       throw new BadRequestException('Invalid unique specification field');
     }

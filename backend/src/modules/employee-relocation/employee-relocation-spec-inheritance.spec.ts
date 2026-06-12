@@ -12,10 +12,10 @@ type LotRow = {
   specDefinedAt: Date | null;
 };
 
-const fields: CategoryFieldDefinition[] = [
+const fields: CategoryFieldDefinition[] = [];
+const optionalFields: CategoryFieldDefinition[] = [
   { id: 'ram', name: 'RAM', type: 'text', required: true, unique: false },
 ];
-const optionalFields: CategoryFieldDefinition[] = [];
 
 const createTx = (lots: Record<string, LotRow>) => {
   const updates: Array<{ id: string; data: Record<string, unknown> }> = [];

@@ -3,17 +3,22 @@ import { v4 as uuidv4 } from 'uuid';
 import type { CategoryField } from '../../types';
 import { CategoryFieldOptionsEditor } from './category-field-options-editor';
 
+export type CategoryFieldEditorMode = 'unit' | 'lot';
+
 interface CategoryFieldEditorProps {
   fields: CategoryField[];
   onChange: (fields: CategoryField[]) => void;
   label: string;
+  mode: CategoryFieldEditorMode;
 }
 
-export const CategoryFieldEditor = ({ fields, onChange, label }: CategoryFieldEditorProps) => {
+export const CategoryFieldEditor = ({ fields, onChange, label, mode }: CategoryFieldEditorProps) => {
   const handleAddField = () => {
     onChange([
       ...fields,
-      { id: uuidv4(), name: '', type: 'text', required: false, unique: false },
+      mode === 'unit'
+        ? { id: uuidv4(), name: '', type: 'text', required: true, unique: false }
+        : { id: uuidv4(), name: '', type: 'text', required: false, unique: false },
     ]);
   };
   const handleUpdateField = (index: number, update: Partial<CategoryField>) => {
@@ -27,6 +32,15 @@ export const CategoryFieldEditor = ({ fields, onChange, label }: CategoryFieldEd
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      {mode === 'unit' ? (
+        <p className="text-xs text-gray-500 mb-2">
+          Sva polja su obavezna pri izdavanju komada. Označite Unikat samo ako vrijednost mora biti jedinstvena u podkategoriji.
+        </p>
+      ) : (
+        <p className="text-xs text-gray-500 mb-2">
+          Polja koja vrijede za cijeli lot. Obavezna polja mora evidentičar popuniti prije izdavanja.
+        </p>
+      )}
       <div className="space-y-2 mb-2">
         {fields.map((field, i) => (
           <div key={field.id} className="flex gap-2 items-start bg-gray-50 rounded-lg p-2 flex-wrap">
@@ -47,24 +61,27 @@ export const CategoryFieldEditor = ({ fields, onChange, label }: CategoryFieldEd
               <option value="date">Datum</option>
               <option value="select">Izbor</option>
             </select>
-            <label className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={field.required}
-                onChange={(e) => handleUpdateField(i, { required: e.target.checked })}
-                className="rounded"
-              />
-              Obavezno
-            </label>
-            <label className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={field.unique}
-                onChange={(e) => handleUpdateField(i, { unique: e.target.checked })}
-                className="rounded"
-              />
-              Unikat
-            </label>
+            {mode === 'lot' ? (
+              <label className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={field.required}
+                  onChange={(e) => handleUpdateField(i, { required: e.target.checked })}
+                  className="rounded"
+                />
+                Obavezno
+              </label>
+            ) : (
+              <label className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={field.unique}
+                  onChange={(e) => handleUpdateField(i, { unique: e.target.checked })}
+                  className="rounded"
+                />
+                Unikat
+              </label>
+            )}
             <button
               type="button"
               onClick={() => handleRemoveField(i)}

@@ -11,7 +11,7 @@
 
 Frontend je migriran na **React Router** s **lazy-loaded** stranicama i vendor chunk splitom. Evidentičar može **dodavati i mijenjati** lot specifikacije; kartica je **collapsible** (otvorena samo na `ceka_specifikaciju`).
 
-**Sljedeći korak (dogovoreno):** ručna / sistematska **provjera API-ja** — posebno lot spec, performanse s ~2–3k opreme, bootstrap i paginacija.
+**Sljedeći korak:** ručno testiranje rutiranja u browseru; opcionalno load test opreme na stagingu s punim šifrarnikom (~2–3k).
 
 **Build status:** `cd frontend && npm run build` — **prolazi** (lazy chunkovi, bez circular chunk upozorenja).
 
@@ -89,44 +89,53 @@ Frontend je migriran na **React Router** s **lazy-loaded** stranicama i vendor c
 
 | Tema | Napomena |
 |------|----------|
-| **API spec edit** | Frontend omogućava edit na `spremno_za_izdavanje`; potvrditi da backend ponašanje odgovara poslovnim pravilima (audit, issued units). |
-| **2–3k opreme** | Bundle je optimizovan; **API/paginacija** na `EquipmentPage` / filteri treba provjeriti pod opterećenjem. |
+| **API spec edit** | ✓ Potvrđeno skriptom — backend usklađen; `specDefinedAt` u response. |
+| **2–3k opreme** | Paginacija OK na malom uzorku; puni load test još na stagingu. |
 | **Skladišta u bootstrapu** | `fetchAllPaginatedItems` za warehouses — može rasti; nije kritično kao oprema, ali vrijedi pogledati. |
 | **Ručno testiranje rutiranja** | Korisnik testira routing u produkciji/dev — back/forward, deep link, role redirect, feature flag off. |
 | **Nije commitovano** | Sve promjene su lokalne; prije deploya commit + push. |
 
 ---
 
-## Next steps — provjera API (sljedeća sesija)
+## API provjera — rezultati (2026-06-12)
 
-### A. Lot specifikacije (prioritet)
+**Skripta:** `cd backend && npm run test:api:lot-spec`  
+**Preduvjet:** API na `localhost:3000/backend` (ili `SMOKE_API_BASE`). Auth: `SMOKE_ADMIN_PASSWORD` / `SMOKE_REGISTRAR_PASSWORD`, ili JWT potpis preko `JWT_SECRET` ako login lozinke nisu poznate.
 
-1. **`PATCH /stock-lots/:id/specifications`** kao `evidenticar` (Mode A assignment):
-   - Lot `ceka_specifikaciju` → prvi save → status `spremno_za_izdavanje`
-   - Lot `spremno_za_izdavanje` → izmjena polja → drugi save → spec ažuriran, status ostaje
-   - Lot `zatvoreno` → očekivano **400**
-2. **Scope:** evidentičar bez assignmenta za warehouse+category → **403**
-3. **Freeze:** aktivni popis u gradu → save blokiran
-4. **Issued units:** nakon izdavanja komada, promjena lot spec-a — provjeriti da **izdata oprema** zadrži snapshot (ne retroaktivno)
+**Rezultat: 15/15 PASS** (lokalna DB, ~5 komada opreme)
 
-**Backend fajlovi:** `warehouse-stock.service.ts` → `defineSpecifications`  
-**Controller:** `PATCH stock-lots/:id/specifications`
+### A. Lot specifikacije — potvrđeno
 
-### B. Performanse / oprema (~2–3k zapisa)
+| Scenarij | Očekivano | Rezultat |
+|----------|-----------|----------|
+| `ceka_specifikaciju` → prvi PATCH | 200, `spremno_za_izdavanje`, `specDefinedAt` | ✓ |
+| `spremno_za_izdavanje` → drugi PATCH | 200, status ostaje, spec ažuriran | ✓ |
+| `zatvoreno` → PATCH | 400 | ✓ |
+| Lot izvan registrar scope-a | 403 | ✓ |
+| Aktivni popis u gradu (freeze) | 400 | ✓ |
+| Issue + promjena lot spec-a | Equipment zadrži snapshot | ✓ |
 
-1. **`GET /equipment`** (paginirani) — vrijeme odgovora, `pageSize`, filteri (`categoryId`, `status`, search)
-2. **`GET /equipment/summary`** — dashboard brojači
-3. **`GET /equipment-by-category`** / lot groups ako se koriste
-4. Frontend: `EquipmentPage`, `EquipmentByCategoryPage` — samo paginirani API, bez punog učitavanja u Zustand
-5. Network tab: nema višestrukih redundantnih poziva pri navigaciji (TanStack nije u upotrebi; React Query na pojedinim stranicama provjeriti)
+Backend `defineSpecifications` ponašanje **usklađeno** s matricom i frontend UI — nema potrebe za backend promjenom.
 
-### C. Bootstrap i referentni podaci
+### B. Performanse / oprema
 
-1. **`fetchBootstrap`** — šta tačno ide u payload (org units, categories flat, warehouses all-pages)
-2. Veličina odgovora kategorija/org jedinica pri punom šifrarniku
-3. Da li neki modul i dalje poziva deprecated `fetchAppState` punu listu
+| Endpoint | Rezultat |
+|----------|----------|
+| `GET /equipment?page=1&pageSize=50` | 200, ~180–230 ms (5 zapisa) |
+| `GET /equipment/summary` | 200, ~110–125 ms |
+| Paginacija | `meta.total` + `items`; nema full dump |
 
-### D. Rutiranje (brza regresija uz API test)
+**Napomena:** Lokalna DB ima malo opreme; load test s 2–3k zapisa treba na stagingu/produkcijskoj kopiji.
+
+### C. Bootstrap
+
+| Stavka | Rezultat |
+|--------|----------|
+| `fetchBootstrap` | `equipment: []` — potvrđeno u `data-api.ts` |
+| Referentni pozivi | `/org-units`, `/categories`, `/warehouses?page=1` — ~70 KB ukupno |
+| `fetchAppState` | Alias za `fetchBootstrap` — nema punog učitavanja opreme |
+
+### D. Rutiranje (brza regresija — ručno)
 
 - [ ] `/registrar-stock/lots/:id` — direktan ulaz, refresh stranice
 - [ ] Browser back s lot detail na listu
@@ -161,6 +170,9 @@ frontend/vite.config.ts  # manualChunks
 backend/src/modules/warehouse-stock/
   warehouse-stock.controller.ts
   warehouse-stock.service.ts      # defineSpecifications, issueUnit
+
+backend/prisma/
+  routing-lot-spec-api-verify.ts  # npm run test:api:lot-spec
 ```
 
 ---

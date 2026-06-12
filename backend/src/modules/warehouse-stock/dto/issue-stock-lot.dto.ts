@@ -8,6 +8,7 @@ export class IssueStockLotDto {
   @MaxLength(120)
   inventoryNumber!: string;
 
+  /** All unit-level fields (`Category.fields`) for the issued piece. */
   @IsObject()
   uniqueSpecifications!: Record<string, string>;
 

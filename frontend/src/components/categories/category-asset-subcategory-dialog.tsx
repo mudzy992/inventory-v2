@@ -115,12 +115,14 @@ export const CategoryAssetSubcategoryDialog = ({
               <CategoryFieldEditor
                 fields={fields}
                 onChange={onFieldsChange}
-                label="Obavezna polja (specifikacije)"
+                label="Polja po komadu"
+                mode="unit"
               />
               <CategoryFieldEditor
                 fields={optionalFields}
                 onChange={onOptionalFieldsChange}
-                label="Opcionalna polja"
+                label="Polja lota"
+                mode="lot"
               />
             </>
           ) : null}

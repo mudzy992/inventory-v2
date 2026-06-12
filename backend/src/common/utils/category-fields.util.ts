@@ -16,15 +16,47 @@ export const parseCategoryFields = (value: unknown): CategoryFieldDefinition[] =
   return value as CategoryFieldDefinition[];
 };
 
+export const getUnitSpecFields = (fields: CategoryFieldDefinition[]): CategoryFieldDefinition[] =>
+  fields;
+
+export const getLotSpecFields = (optionalFields: CategoryFieldDefinition[]): CategoryFieldDefinition[] =>
+  optionalFields;
+
+export const normalizeUnitCategoryFields = (
+  fields: CategoryFieldDefinition[],
+): CategoryFieldDefinition[] =>
+  fields.map((field) => ({
+    ...field,
+    required: true,
+    unique: field.unique === true,
+  }));
+
+export const normalizeLotCategoryFields = (
+  optionalFields: CategoryFieldDefinition[],
+): CategoryFieldDefinition[] => {
+  for (const field of optionalFields) {
+    if (field.unique === true) {
+      throw new BadRequestException(`Lot polje ne može biti unikatno: ${field.name}`);
+    }
+  }
+  return optionalFields.map((field) => ({
+    ...field,
+    required: field.required === true,
+    unique: false,
+  }));
+};
+
+export const hasRequiredLotSpecFields = (optionalFields: CategoryFieldDefinition[]): boolean =>
+  optionalFields.some((field) => field.required);
+
 const validateFieldValues = (
   specifications: Record<string, string>,
   allowedFields: CategoryFieldDefinition[],
+  requiredFields: CategoryFieldDefinition[],
 ): void => {
   const allowedIds = new Set(allowedFields.map((field) => field.id));
-  for (const field of allowedFields) {
-    if (!field.required) {
-      continue;
-    }
+  const requiredIds = new Set(requiredFields.map((field) => field.id));
+  for (const field of requiredFields) {
     const fieldValue = specifications[field.id];
     if (fieldValue === undefined || fieldValue.trim() === '') {
       throw new BadRequestException(`Missing required field: ${field.name}`);
@@ -33,6 +65,9 @@ const validateFieldValues = (
   for (const [key, value] of Object.entries(specifications)) {
     if (!allowedIds.has(key)) {
       throw new BadRequestException(`Unknown specification field: ${key}`);
+    }
+    if (!requiredIds.has(key) && value.trim() === '') {
+      continue;
     }
     const definition = allowedFields.find((field) => field.id === key);
     if (!definition) {
@@ -50,40 +85,41 @@ const validateFieldValues = (
   }
 };
 
-export const validateSpecifications = (
-  specifications: Record<string, string>,
-  fields: CategoryFieldDefinition[],
-  optionalFields: CategoryFieldDefinition[],
-): void => {
-  validateFieldValues(specifications, [...fields, ...optionalFields]);
-};
-
-export const splitCategoryFieldsForStock = (
-  fields: CategoryFieldDefinition[],
-  optionalFields: CategoryFieldDefinition[],
-): { lotFields: CategoryFieldDefinition[]; issueFields: CategoryFieldDefinition[] } => {
-  const all = [...fields, ...optionalFields];
-  const lotFields = all.filter((field) => !field.unique);
-  const issueFields = all.filter((field) => field.unique);
-  return { lotFields, issueFields };
-};
-
 export const validateLotSpecifications = (
   specifications: Record<string, string>,
-  fields: CategoryFieldDefinition[],
   optionalFields: CategoryFieldDefinition[],
 ): void => {
-  const { lotFields } = splitCategoryFieldsForStock(fields, optionalFields);
-  validateFieldValues(specifications, lotFields);
+  const lotFields = getLotSpecFields(optionalFields);
+  const requiredLotFields = lotFields.filter((field) => field.required);
+  validateFieldValues(specifications, lotFields, requiredLotFields);
 };
 
 export const validateIssueSpecifications = (
   specifications: Record<string, string>,
   fields: CategoryFieldDefinition[],
+): void => {
+  const unitFields = getUnitSpecFields(fields);
+  validateFieldValues(specifications, unitFields, unitFields);
+};
+
+export const validateEquipmentSpecifications = (
+  specifications: Record<string, string>,
+  fields: CategoryFieldDefinition[],
   optionalFields: CategoryFieldDefinition[],
 ): void => {
-  const { issueFields } = splitCategoryFieldsForStock(fields, optionalFields);
-  validateFieldValues(specifications, issueFields);
+  const unitFields = getUnitSpecFields(fields);
+  const lotFields = getLotSpecFields(optionalFields);
+  const requiredFields = [...unitFields, ...lotFields.filter((field) => field.required)];
+  validateFieldValues(specifications, [...unitFields, ...lotFields], requiredFields);
+};
+
+/** @deprecated Use validateEquipmentSpecifications */
+export const validateSpecifications = (
+  specifications: Record<string, string>,
+  fields: CategoryFieldDefinition[],
+  optionalFields: CategoryFieldDefinition[],
+): void => {
+  validateEquipmentSpecifications(specifications, fields, optionalFields);
 };
 
 export const isLeafCategory = async (

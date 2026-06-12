@@ -28,14 +28,10 @@ export const getUniqueFieldDisplay = (
 
 export const getUniqueFieldsDisplay = (
   fields: unknown,
-  optionalFields: unknown,
+  _optionalFields: unknown,
   specifications: Record<string, string>,
 ): UniqueFieldDisplay[] => {
-  const all = [
-    ...parseCategoryFields(fields),
-    ...parseCategoryFields(optionalFields),
-  ];
-  return all
+  return parseCategoryFields(fields)
     .filter((field) => field.unique)
     .map((field) => {
       const value = specifications[field.id]?.trim();

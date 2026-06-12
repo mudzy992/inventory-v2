@@ -4,7 +4,14 @@ export const getLotSpecFieldsForCategory = (category: Category | undefined): Cat
   if (!category) {
     return [];
   }
-  return [...category.fields, ...category.optionalFields].filter((field) => !field.unique);
+  return category.optionalFields;
+};
+
+export const getUnitSpecFieldsForCategory = (category: Category | undefined): CategoryField[] => {
+  if (!category) {
+    return [];
+  }
+  return category.fields;
 };
 
 export const buildLegacySpecsPayload = (

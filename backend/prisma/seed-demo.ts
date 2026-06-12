@@ -236,13 +236,6 @@ const main = async (): Promise<void> => {
       parentId: parentCategoryId,
       fields: [
         {
-          id: 'proizvodjac',
-          name: 'Proizvođač',
-          type: 'text',
-          required: true,
-          unique: false,
-        },
-        {
           id: 'sn',
           name: 'Serijski broj',
           type: 'text',
@@ -250,7 +243,15 @@ const main = async (): Promise<void> => {
           unique: true,
         },
       ],
-      optionalFields: [],
+      optionalFields: [
+        {
+          id: 'proizvodjac',
+          name: 'Proizvođač',
+          type: 'text',
+          required: true,
+          unique: false,
+        },
+      ],
     },
   });
 

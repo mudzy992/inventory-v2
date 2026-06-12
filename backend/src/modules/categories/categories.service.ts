@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Category, Prisma } from '../../../generated/prisma/client';
 import {
+  normalizeLotCategoryFields,
+  normalizeUnitCategoryFields,
   parseCategoryFields,
   type CategoryFieldDefinition,
 } from '../../common/utils/category-fields.util';
@@ -64,14 +66,16 @@ export class CategoriesService {
       await this.findOne(dto.parentId);
     }
     const categoryKind = dto.categoryKind ?? (dto.parentId ? 'ASSET' : 'ASSET');
+    const fields = normalizeUnitCategoryFields(dto.fields);
+    const optionalFields = normalizeLotCategoryFields(dto.optionalFields ?? []);
     return this.prisma.category.create({
       data: {
         name: dto.name,
         description: dto.description,
         parentId: dto.parentId ?? null,
         categoryKind,
-        fields: dto.fields as unknown as Prisma.InputJsonValue,
-        optionalFields: (dto.optionalFields ?? []) as unknown as Prisma.InputJsonValue,
+        fields: fields as unknown as Prisma.InputJsonValue,
+        optionalFields: optionalFields as unknown as Prisma.InputJsonValue,
       },
     });
   }
@@ -85,6 +89,10 @@ export class CategoriesService {
       }
       await this.findOne(dto.parentId);
     }
+    const normalizedFields = dto.fields ? normalizeUnitCategoryFields(dto.fields) : undefined;
+    const normalizedOptionalFields = dto.optionalFields
+      ? normalizeLotCategoryFields(dto.optionalFields)
+      : undefined;
     return this.prisma.category.update({
       where: { id },
       data: {
@@ -92,8 +100,8 @@ export class CategoriesService {
         description: dto.description,
         parentId: dto.parentId,
         categoryKind: dto.categoryKind,
-        fields: dto.fields as unknown as Prisma.InputJsonValue | undefined,
-        optionalFields: dto.optionalFields as unknown as Prisma.InputJsonValue | undefined,
+        fields: normalizedFields as unknown as Prisma.InputJsonValue | undefined,
+        optionalFields: normalizedOptionalFields as unknown as Prisma.InputJsonValue | undefined,
       },
     });
   }

@@ -9,8 +9,8 @@
 
 | Status | Značenje |
 |--------|----------|
-| `ceka_specifikaciju` | Prijem skladištara, spec prazna |
-| `spremno_za_izdavanje` | Evidentičar popunio non-unique polja kategorije |
+| `ceka_specifikaciju` | Prijem skladištara; lot spec nije kompletna (ima obaveznih lot polja) |
+| `spremno_za_izdavanje` | Evidentičar popunio obavezna lot polja (`optionalFields`), ili kategorija nema obaveznih lot polja |
 | `zatvoreno` | `quantityOnHand = 0` |
 
 ## Uloge
@@ -24,8 +24,11 @@
 
 ## Validacija polja
 
-- **Lot spec**: obavezna polja kategorije gdje `unique = false`
-- **Issue**: obavezna polja gdje `unique = true` + globalni `inventoryNumber`
+- **Lot spec** (`PATCH .../specifications`): polja iz `Category.optionalFields`; obavezna gdje `required = true`
+- **Issue** (`POST .../issue`): **sva** polja iz `Category.fields` (unit polja) + globalni `inventoryNumber`
+- Unit polja s `unique: true`: backend provjerava globalnu jedinstvenost pri izdavanju
+- Pri prijemu lota: ako kategorija nema obaveznih lot polja → status odmah `spremno_za_izdavanje`
+- Issue payload `uniqueSpecifications`: sadrži sva unit polja (legacy ime polja u DTO)
 
 ## Izmjena lot specifikacije (evidentičar)
 

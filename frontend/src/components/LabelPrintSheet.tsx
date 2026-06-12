@@ -3,7 +3,7 @@ import type { Category, Equipment } from '../types';
 import {
   buildEquipmentDisplayName,
   buildEquipmentQrUrl,
-  getUniqueFieldDisplay,
+  getUniqueFieldsDisplay,
 } from '../helpers/equipment-display.util';
 import { ModalRoot } from './ui/modal-root';
 
@@ -41,7 +41,7 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
             const category = categories.find((row) => row.id === item.categoryId);
             const qrData = buildEquipmentQrUrl(item);
             const displayName = buildEquipmentDisplayName(category, item.specifications);
-            const uniqueField = getUniqueFieldDisplay(category, item.specifications);
+            const uniqueFields = getUniqueFieldsDisplay(category, item.specifications);
             return (
               <div
                 key={item.id}
@@ -54,11 +54,11 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
                   <p className="text-xs font-semibold text-gray-900 line-clamp-2 leading-tight">
                     {displayName || category?.name}
                   </p>
-                  {uniqueField && (
-                    <p className="text-[10px] text-gray-700 mt-1 truncate">
+                  {uniqueFields.map((uniqueField) => (
+                    <p key={uniqueField.label} className="text-[10px] text-gray-700 mt-1 truncate">
                       <span className="text-gray-500">{uniqueField.label}:</span> {uniqueField.value}
                     </p>
-                  )}
+                  ))}
                   <p className="font-mono text-[11px] font-bold text-gray-900 mt-1">
                     {item.inventoryNumber}
                   </p>

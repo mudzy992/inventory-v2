@@ -51,13 +51,11 @@ import {
 import { EquipmentCard } from '../EquipmentCard';
 import { pageIdToPath, registrarStockLotPath } from '../../routes/app-routes';
 import { LotSpecificationSection } from './lot-specification-section';
-
-const buildSpecFields = (category: Category | undefined, unique: boolean) => {
-  if (!category) {
-    return [];
-  }
-  return [...category.fields, ...category.optionalFields].filter((field) => field.unique === unique);
-};
+import { CategoryFieldControl } from './category-field-control';
+import {
+  getLotSpecFieldsForCategory,
+  getUnitSpecFieldsForCategory,
+} from '../../helpers/category-lot-spec-fields.util';
 
 const LotSectionCard = ({
   title,
@@ -109,7 +107,7 @@ export const RegistrarStockPage = () => {
   const [issueOpen, setIssueOpen] = useState(false);
   const [employeeId, setEmployeeId] = useState('');
   const [inventoryNumber, setInventoryNumber] = useState('');
-  const [uniqueSpecs, setUniqueSpecs] = useState<Record<string, string>>({});
+  const [unitSpecs, setUnitSpecs] = useState<Record<string, string>>({});
   const [uniqueAvailability, setUniqueAvailability] = useState<Record<string, AvailabilityStatus>>({});
   const [saving, setSaving] = useState(false);
   const [viewItemId, setViewItemId] = useState<string | null>(null);
@@ -227,8 +225,8 @@ export const RegistrarStockPage = () => {
     () => (detail ? state.categories.find((row) => row.id === detail.categoryId) : undefined),
     [detail, state.categories],
   );
-  const lotFields = useMemo(() => buildSpecFields(category, false), [category]);
-  const issueFields = useMemo(() => buildSpecFields(category, true), [category]);
+  const lotFields = useMemo(() => getLotSpecFieldsForCategory(category), [category]);
+  const issueFields = useMemo(() => getUnitSpecFieldsForCategory(category), [category]);
   const crossWarehouseIssueHint = useMemo(() => {
     if (!crossWarehouseIssueEnabled || !detail || !employeeId) {
       return null;
@@ -275,11 +273,11 @@ export const RegistrarStockPage = () => {
       return false;
     }
     for (const field of issueFields) {
-      const value = uniqueSpecs[field.id] ?? '';
-      if (field.required && !value.trim()) {
+      const value = unitSpecs[field.id] ?? '';
+      if (!value.trim()) {
         return false;
       }
-      if (!isValueAvailabilityValid(value, uniqueAvailability[field.id] ?? 'idle')) {
+      if (field.unique && !isValueAvailabilityValid(value, uniqueAvailability[field.id] ?? 'idle')) {
         return false;
       }
     }
@@ -290,7 +288,7 @@ export const RegistrarStockPage = () => {
     inventoryNumber,
     issueFields,
     uniqueAvailability,
-    uniqueSpecs,
+    unitSpecs,
   ]);
   const handleUniqueAvailabilityChange = useCallback((fieldId: string, status: AvailabilityStatus) => {
     setUniqueAvailability((prev) => ({ ...prev, [fieldId]: status }));
@@ -333,7 +331,7 @@ export const RegistrarStockPage = () => {
   const openIssueForm = () => {
     setIssueOpen(true);
     setUniqueAvailability({});
-    setUniqueSpecs({});
+    setUnitSpecs({});
     setInventoryNumber('');
     setEmployeeId('');
   };
@@ -398,12 +396,12 @@ export const RegistrarStockPage = () => {
       const updated = await issueStockLotUnitApi(detail.id, {
         employeeId,
         inventoryNumber: inventoryNumber.trim(),
-        uniqueSpecifications: uniqueSpecs,
+        uniqueSpecifications: unitSpecs,
       });
       setDetail(updated);
       setIssueOpen(false);
       setInventoryNumber('');
-      setUniqueSpecs({});
+      setUnitSpecs({});
       setEmployeeId('');
       toastSuccess('Komad je izdat i zadužen');
       await groupList.refresh();
@@ -478,7 +476,7 @@ export const RegistrarStockPage = () => {
           ) : (
             <LotSectionCard
               title="Izdavanje komada"
-              description="Dodijelite inventurni broj i unikatne podatke za jedan komad iz lota."
+              description="Dodijelite inventurni broj i specifikaciju po komadu za jedan komad iz lota."
               footer={
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="secondary" onClick={() => setIssueOpen(false)}>
@@ -522,16 +520,29 @@ export const RegistrarStockPage = () => {
                   />
                   <AvailabilityHint status={inventoryAvailability} />
                 </div>
-                {issueFields.map((field) => (
-                  <IssueUniqueFieldInput
-                    key={field.id}
-                    categoryId={detail.categoryId}
-                    field={field}
-                    value={uniqueSpecs[field.id] ?? ''}
-                    onChange={(next) => setUniqueSpecs({ ...uniqueSpecs, [field.id]: next })}
-                    onAvailabilityChange={handleUniqueAvailabilityChange}
-                  />
-                ))}
+                {issueFields.map((field) =>
+                  field.unique ? (
+                    <IssueUniqueFieldInput
+                      key={field.id}
+                      categoryId={detail.categoryId}
+                      field={field}
+                      value={unitSpecs[field.id] ?? ''}
+                      onChange={(next) => setUnitSpecs({ ...unitSpecs, [field.id]: next })}
+                      onAvailabilityChange={handleUniqueAvailabilityChange}
+                    />
+                  ) : (
+                    <div key={field.id}>
+                      <label className={labelClass}>
+                        {field.name} *
+                      </label>
+                      <CategoryFieldControl
+                        field={field}
+                        value={unitSpecs[field.id] ?? ''}
+                        onChange={(next) => setUnitSpecs({ ...unitSpecs, [field.id]: next })}
+                      />
+                    </div>
+                  ),
+                )}
               </div>
             </LotSectionCard>
           )

@@ -184,14 +184,13 @@ export class MaintenancePartsService {
     const specs: Record<string, string> = Object.fromEntries(
       Object.entries(specsInput).map(([key, value]) => [key, String(value)]),
     );
-    const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
-    const allFields = [...fields, ...optionalFields].filter((field) => !field.unique);
+    const { optionalFields } = this.categoriesService.getFieldDefinitions(category);
     let status: 'ceka_specifikaciju' | 'spremno_za_izdavanje' = 'ceka_specifikaciju';
-    if (allFields.length === 0) {
+    if (optionalFields.length === 0) {
       status = 'spremno_za_izdavanje';
     } else {
       try {
-        validateLotSpecifications(specs, fields, optionalFields);
+        validateLotSpecifications(specs, optionalFields);
         status = 'spremno_za_izdavanje';
       } catch {
         status = 'ceka_specifikaciju';

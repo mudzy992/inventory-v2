@@ -13,7 +13,7 @@ import { getOrgUnitPath, getEmployeeFullName, formatDate, getStatusLabel, getSta
 import {
   buildEquipmentDisplayName,
   buildEquipmentQrUrl,
-  getUniqueFieldDisplay,
+  getUniqueFieldsDisplay,
 } from '../helpers/equipment-display.util';
 import { buildTransferCreatePayload, canSignDisposalTransfer } from '../helpers/create-transfer-payload.util';
 import { canRegistrarCreateTransfer } from '../helpers/registrar-scope';
@@ -187,7 +187,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
 
   const qrData = buildEquipmentQrUrl(eq);
   const displayName = buildEquipmentDisplayName(cat, eq.specifications);
-  const uniqueField = getUniqueFieldDisplay(cat, eq.specifications);
+  const uniqueFields = getUniqueFieldsDisplay(cat, eq.specifications);
+  const uniqueFieldsSummary = uniqueFields.map((row) => `${row.label}: ${row.value}`).join(' · ');
 
   const canManage = admin || evidenticar;
   const canRegistrarAct = (type: TransferType): boolean =>
@@ -218,8 +219,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       ctx.fillText(displayName.slice(0, 40), 150, 290);
       ctx.font = '12px Arial';
       ctx.fillText(eq.inventoryNumber, 150, 310);
-      if (uniqueField) {
-        ctx.fillText(`${uniqueField.label}: ${uniqueField.value}`.slice(0, 42), 150, 328);
+      if (uniqueFieldsSummary) {
+        ctx.fillText(uniqueFieldsSummary.slice(0, 42), 150, 328);
       }
       ctx.fillText('Skeniraj za detalje', 150, 346);
       const link = document.createElement('a');
@@ -250,7 +251,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
         <div class="qr-container">
           ${document.querySelector('#equipment-qr-code')?.innerHTML || ''}
           <div style="font-size:13px;font-weight:bold;margin-top:12px;">${displayName}</div>
-          ${uniqueField ? `<div style="font-size:11px;margin-top:4px;">${uniqueField.label}: ${uniqueField.value}</div>` : ''}
+          ${uniqueFieldsSummary ? `<div style="font-size:11px;margin-top:4px;">${uniqueFieldsSummary}</div>` : ''}
           <div class="inv-number">${eq.inventoryNumber}</div>
           <div class="category">${cat?.name || ''}</div>
           <div class="instruction">Skeniraj za detalje opreme</div>
