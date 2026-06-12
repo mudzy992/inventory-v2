@@ -531,16 +531,12 @@ export const RegistrarStockPage = () => {
                       onAvailabilityChange={handleUniqueAvailabilityChange}
                     />
                   ) : (
-                    <div key={field.id}>
-                      <label className={labelClass}>
-                        {field.name} *
-                      </label>
-                      <CategoryFieldControl
-                        field={field}
-                        value={unitSpecs[field.id] ?? ''}
-                        onChange={(next) => setUnitSpecs({ ...unitSpecs, [field.id]: next })}
-                      />
-                    </div>
+                    <CategoryFieldControl
+                      key={field.id}
+                      field={field}
+                      value={unitSpecs[field.id] ?? ''}
+                      onChange={(next) => setUnitSpecs({ ...unitSpecs, [field.id]: next })}
+                    />
                   ),
                 )}
               </div>
