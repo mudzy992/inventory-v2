@@ -8,6 +8,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { BulkCreateStockLotDto } from './dto/bulk-create-stock-lot.dto';
 import { ListStockLotsQueryDto } from './dto/list-stock-lots-query.dto';
 import { CreateStockLotDto } from './dto/create-stock-lot.dto';
+import { CommissionStockLotDto } from './dto/commission-stock-lot.dto';
 import { IssueStockLotDto } from './dto/issue-stock-lot.dto';
 import { UpdateStockLotSpecDto } from './dto/update-stock-lot-spec.dto';
 import { WarehouseStockService } from './warehouse-stock.service';
@@ -83,5 +84,15 @@ export class WarehouseStockController {
     @Body() body: IssueStockLotDto,
   ) {
     return this.warehouseStockService.issueUnit(user, id, body);
+  }
+
+  @Post('stock-lots/:id/commission')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  commission(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: CommissionStockLotDto,
+  ) {
+    return this.warehouseStockService.commissionUnit(user, id, body);
   }
 }

@@ -20,13 +20,15 @@
 | `POST .../stock-lots` (prijem) | ✓ keeper | — | ✓ |
 | `PATCH .../specifications` | — | ✓ assignment A | ✓ |
 | `POST .../issue` | — | ✓ assignment A | ✓ |
+| `POST .../commission` (kolaudacija) | — | ✓ assignment A | ✓ |
 | Čitanje lota | ✓ bez spec detalja u listi | ✓ puno | ✓ |
 
 ## Validacija polja
 
 - **Lot spec** (`PATCH .../specifications`): polja iz `Category.optionalFields`; obavezna gdje `required = true`
 - **Issue** (`POST .../issue`): **sva** polja iz `Category.fields` (unit polja) + globalni `inventoryNumber`
-- Unit polja s `unique: true`: backend provjerava globalnu jedinstvenost pri izdavanju
+- **Kolaudacija** (`POST .../commission`): ista validacija kao issue (sva unit polja + `inventoryNumber`); **bez** `employeeId`
+- Unit polja s `unique: true`: backend provjerava globalnu jedinstvenost pri izdavanju i kolaudaciji
 - Pri prijemu lota: ako kategorija nema obaveznih lot polja → status odmah `spremno_za_izdavanje`
 - Issue payload `uniqueSpecifications`: sadrži sva unit polja (legacy ime polja u DTO)
 
@@ -56,6 +58,21 @@
 1. Kreira `Equipment` direktno kao `zaduzeno` s `currentHolderId`
 2. Nema `Transfer` zapisa ni generisanja dokumenta
 3. `quantityOnHand -= 1`
+
+## Kolaudacija (evidentičar)
+
+`POST /stock-lots/:id/commission` — paralelna akcija uz issue, kad je lot `spremno_za_izdavanje` i `quantityOnHand > 0`.
+
+1. Kreira `Equipment` direktno kao `skladiste` + `warehouseCondition: na_skladistu` na skladištu lota
+2. **Nema** `Transfer` zapisa ni generisanja prenosnice
+3. **Nema** zaduženja (`currentHolderId` null)
+4. `quantityOnHand -= 1`; lot `zatvoreno` kad `quantityOnHand = 0`
+
+**UI:** na detail lota dugmad „Izdaj 1 komad" i „Kolaudiraj 1 komad"; zajednička forma za inventurni broj i unit polja (`lot-unit-action-section.tsx`).
+
+**Ograničenja:** nema cross-warehouse logike; freeze `stock_lot_issue` (isti kao issue).
+
+Implementacija: [`finalize-stock-lot-commission.util.ts`](../../../../backend/src/modules/warehouse-stock/utils/finalize-stock-lot-commission.util.ts).
 
 ## Cross-warehouse izdavanje (admin)
 
@@ -99,7 +116,7 @@ Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/module
 - `catalog:{uuid}` kad postoji `catalogItemId`
 - `product:{categoryId}::{normalizedProductName}` inače
 
-**UI (Skladišna roba — `registrar-stock`):** kategorijsko razvrstavanje parent → podkategorija → grupe proizvoda (accordion) → redovi po skladištu → detail lota (spec/issue). Filteri skladišta i statusa ostaju globalni; navigacija kategorijama zamjenjuje dropdown filter kategorije.
+**UI (Skladišna roba — `registrar-stock`):** kategorijsko razvrstavanje parent → podkategorija → grupe proizvoda (accordion) → redovi po skladištu → detail lota (spec/issue/kolaudacija). Filteri skladišta i statusa ostaju globalni; navigacija kategorijama zamjenjuje dropdown filter kategorije.
 
 **Frontend URL rutiranje:** React Router; deep link na lot `/registrar-stock/lots/:lotId`; ostale stranice `/dashboard`, `/registrar-stock`, itd. Javna oprema `/equipment/:equipmentId` bez prijave.
 
@@ -119,3 +136,4 @@ Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/module
 ## Izdata oprema (detail lota)
 
 - `issuedUnits` uključuje `currentHolder` (ime, org jedinica) za prikaz zaduženja i link na detalj opreme.
+- Kolaudirani komadi (`status: skladiste`, bez `currentHolder`): u koloni nosioca prikazuje se ime skladišta lota.

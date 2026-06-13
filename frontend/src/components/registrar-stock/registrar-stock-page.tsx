@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Package, ChevronRight, ChevronDown, Search, Filter, Eye } from 'lucide-react';
 import {
+  commissionStockLotUnitApi,
   fetchAssignedStockLotGroupsPageApi,
   fetchAssignedStockLotsPageApi,
   fetchStockLotApi,
@@ -35,15 +36,13 @@ import { CategoryParentGrid } from '../shared/category-browse/category-parent-gr
 import { CategorySubGrid } from '../shared/category-browse/category-sub-grid';
 import { useAdminSettings } from '../../contexts/admin-settings-context';
 import { resolveEffectiveWarehouseForOrgUnit } from '../../helpers/org-warehouse.util';
-import type { Category, Employee, WarehouseStockLot } from '../../types';
+import type { Employee, WarehouseStockLot } from '../../types';
 import { PageHeaderRow } from '../ui/page-header-row';
 import { Button } from '../ui/button';
 import { PaginationControls } from '../ui/pagination-controls';
-import { cardClass, inputClass, labelClass } from '../ui/form-styles';
+import { cardClass } from '../ui/form-styles';
 import { Badge } from '../ui/badge';
-import { SearchableAutocomplete, type SearchableOption } from '../searchable-autocomplete';
-import { AvailabilityHint } from './availability-hint';
-import { IssueUniqueFieldInput } from './issue-unique-field-input';
+import { type SearchableOption } from '../searchable-autocomplete';
 import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
@@ -51,7 +50,7 @@ import {
 import { EquipmentCard } from '../EquipmentCard';
 import { pageIdToPath, registrarStockLotPath } from '../../routes/app-routes';
 import { LotSpecificationSection } from './lot-specification-section';
-import { CategoryFieldControl } from './category-field-control';
+import { LotUnitActionSection, type LotUnitActionMode } from './lot-unit-action-section';
 import {
   getLotSpecFieldsForCategory,
   getUnitSpecFieldsForCategory,
@@ -104,7 +103,7 @@ export const RegistrarStockPage = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WarehouseStockLot | null>(null);
   const [specs, setSpecs] = useState<Record<string, string>>({});
-  const [issueOpen, setIssueOpen] = useState(false);
+  const [unitActionMode, setUnitActionMode] = useState<LotUnitActionMode | null>(null);
   const [employeeId, setEmployeeId] = useState('');
   const [inventoryNumber, setInventoryNumber] = useState('');
   const [unitSpecs, setUnitSpecs] = useState<Record<string, string>>({});
@@ -265,8 +264,8 @@ export const RegistrarStockPage = () => {
       };
     });
   }, [scopedEmployees, state.orgUnits]);
-  const canSubmitIssue = useMemo(() => {
-    if (!employeeId || !inventoryNumber.trim()) {
+  const canSubmitUnitSpecs = useMemo(() => {
+    if (!inventoryNumber.trim()) {
       return false;
     }
     if (!isValueAvailabilityValid(inventoryNumber, inventoryAvailability)) {
@@ -282,14 +281,14 @@ export const RegistrarStockPage = () => {
       }
     }
     return true;
-  }, [
-    employeeId,
-    inventoryAvailability,
-    inventoryNumber,
-    issueFields,
-    uniqueAvailability,
-    unitSpecs,
-  ]);
+  }, [inventoryAvailability, inventoryNumber, issueFields, uniqueAvailability, unitSpecs]);
+  const canSubmitIssue = useMemo(() => {
+    if (!employeeId) {
+      return false;
+    }
+    return canSubmitUnitSpecs;
+  }, [canSubmitUnitSpecs, employeeId]);
+  const canSubmitCommission = canSubmitUnitSpecs;
   const handleUniqueAvailabilityChange = useCallback((fieldId: string, status: AvailabilityStatus) => {
     setUniqueAvailability((prev) => ({ ...prev, [fieldId]: status }));
   }, []);
@@ -328,8 +327,8 @@ export const RegistrarStockPage = () => {
       return next;
     });
   }, [groupLots, loadGroupLots]);
-  const openIssueForm = () => {
-    setIssueOpen(true);
+  const openUnitActionForm = (mode: LotUnitActionMode) => {
+    setUnitActionMode(mode);
     setUniqueAvailability({});
     setUnitSpecs({});
     setInventoryNumber('');
@@ -341,7 +340,7 @@ export const RegistrarStockPage = () => {
       const row = await fetchStockLotApi(id);
       setDetail(row);
       setSpecs((row.specifications ?? {}) as Record<string, string>);
-      setIssueOpen(false);
+      setUnitActionMode(null);
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška');
       navigate(pageIdToPath('registrar-stock'), { replace: true });
@@ -399,7 +398,7 @@ export const RegistrarStockPage = () => {
         uniqueSpecifications: unitSpecs,
       });
       setDetail(updated);
-      setIssueOpen(false);
+      setUnitActionMode(null);
       setInventoryNumber('');
       setUnitSpecs({});
       setEmployeeId('');
@@ -411,6 +410,32 @@ export const RegistrarStockPage = () => {
       await refresh();
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška pri izdavanju');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const handleCommission = async () => {
+    if (!detail || !inventoryNumber.trim()) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await commissionStockLotUnitApi(detail.id, {
+        inventoryNumber: inventoryNumber.trim(),
+        uniqueSpecifications: unitSpecs,
+      });
+      setDetail(updated);
+      setUnitActionMode(null);
+      setInventoryNumber('');
+      setUnitSpecs({});
+      toastSuccess('Komad je kolaudiran i evidentiran na skladištu');
+      await groupList.refresh();
+      await loadStatsGroups();
+      setGroupLots({});
+      setExpandedGroupKeys(new Set());
+      await refresh();
+    } catch (err) {
+      toastError(err instanceof ApiError ? err.message : 'Greška pri kolaudaciji');
     } finally {
       setSaving(false);
     }
@@ -467,80 +492,36 @@ export const RegistrarStockPage = () => {
         />
 
         {detail.status === 'spremno_za_izdavanje' && detail.quantityOnHand > 0 ? (
-          !issueOpen ? (
-            <div className="flex justify-start">
-              <Button disabled={isFrozen} onClick={openIssueForm}>
+          !unitActionMode ? (
+            <div className="flex flex-wrap justify-start gap-2">
+              <Button disabled={isFrozen} onClick={() => openUnitActionForm('issue')}>
                 Izdaj 1 komad
+              </Button>
+              <Button variant="secondary" disabled={isFrozen} onClick={() => openUnitActionForm('commission')}>
+                Kolaudiraj 1 komad
               </Button>
             </div>
           ) : (
-            <LotSectionCard
-              title="Izdavanje komada"
-              description="Dodijelite inventurni broj i specifikaciju po komadu za jedan komad iz lota."
-              footer={
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button variant="secondary" onClick={() => setIssueOpen(false)}>
-                    Odustani
-                  </Button>
-                  <Button disabled={saving || isFrozen || !canSubmitIssue} onClick={() => void handleIssue()}>
-                    Potvrdi izdavanje
-                  </Button>
-                </div>
-              }
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Radnik *</label>
-                  <SearchableAutocomplete
-                    options={employeeSearchOptions}
-                    value={employeeId}
-                    onChange={setEmployeeId}
-                    emptyOption={{ id: '', label: '— Odaberi —' }}
-                    placeholder="Pretraži radnika…"
-                    ariaLabel="Radnik"
-                    required
-                  />
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    Prikaz: ime · pozicija · org. putanja.
-                  </p>
-                  {crossWarehouseIssueHint ? (
-                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                      Radnik pripada drugom efektivnom skladištu ({crossWarehouseIssueHint}). Oprema će
-                      automatski preći na lot tog skladišta nakon izdavanja.
-                    </p>
-                  ) : null}
-                </div>
-                <div>
-                  <label className={labelClass}>Inventurni broj *</label>
-                  <input
-                    type="text"
-                    value={inventoryNumber}
-                    onChange={(event) => setInventoryNumber(event.target.value)}
-                    className={inputClass}
-                  />
-                  <AvailabilityHint status={inventoryAvailability} />
-                </div>
-                {issueFields.map((field) =>
-                  field.unique ? (
-                    <IssueUniqueFieldInput
-                      key={field.id}
-                      categoryId={detail.categoryId}
-                      field={field}
-                      value={unitSpecs[field.id] ?? ''}
-                      onChange={(next) => setUnitSpecs({ ...unitSpecs, [field.id]: next })}
-                      onAvailabilityChange={handleUniqueAvailabilityChange}
-                    />
-                  ) : (
-                    <CategoryFieldControl
-                      key={field.id}
-                      field={field}
-                      value={unitSpecs[field.id] ?? ''}
-                      onChange={(next) => setUnitSpecs({ ...unitSpecs, [field.id]: next })}
-                    />
-                  ),
-                )}
-              </div>
-            </LotSectionCard>
+            <LotUnitActionSection
+              mode={unitActionMode}
+              categoryId={detail.categoryId}
+              issueFields={issueFields}
+              inventoryNumber={inventoryNumber}
+              onInventoryNumberChange={setInventoryNumber}
+              inventoryAvailability={inventoryAvailability}
+              unitSpecs={unitSpecs}
+              onUnitSpecsChange={setUnitSpecs}
+              onUniqueAvailabilityChange={handleUniqueAvailabilityChange}
+              employeeId={employeeId}
+              onEmployeeIdChange={setEmployeeId}
+              employeeSearchOptions={employeeSearchOptions}
+              crossWarehouseIssueHint={crossWarehouseIssueHint}
+              canSubmit={unitActionMode === 'issue' ? canSubmitIssue : canSubmitCommission}
+              saving={saving}
+              isFrozen={isFrozen}
+              onSubmit={() => void (unitActionMode === 'issue' ? handleIssue() : handleCommission())}
+              onCancel={() => setUnitActionMode(null)}
+            />
           )
         ) : null}
 
@@ -582,6 +563,8 @@ export const RegistrarStockPage = () => {
                                 <p className="text-[10px] text-gray-400">{holderOrg.name}</p>
                               ) : null}
                             </div>
+                          ) : unit.status === 'skladiste' ? (
+                            <span className="text-xs text-gray-800">{detail.warehouseName ?? 'Skladište'}</span>
                           ) : (
                             <span className="text-xs text-gray-300">—</span>
                           )}
@@ -617,7 +600,7 @@ export const RegistrarStockPage = () => {
     <div className="space-y-4">
       <PageHeaderRow
         title="Skladišna roba"
-        description="Definišite specifikaciju lotova i izdajte pojedinačne komade na radnike."
+        description="Definišite specifikaciju lotova, izdajte komade na radnike ili kolaudirajte na skladište."
       />
       <InventoryFreezeActionHint />
       <div className={`${cardClass} border-gray-200 shadow-sm p-4 mb-4`}>

@@ -104,3 +104,15 @@ export const issueStockLotUnitApi = (
     method: 'POST',
     body: JSON.stringify(body),
   });
+
+export const commissionStockLotUnitApi = (
+  id: string,
+  body: {
+    inventoryNumber: string;
+    uniqueSpecifications: Record<string, string>;
+  },
+) =>
+  apiRequest<WarehouseStockLot>(`/stock-lots/${id}/commission`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });

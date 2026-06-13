@@ -32,9 +32,11 @@
 
 ## Nastanak opreme
 
-- Pojedinačni `Equipment` nastaje **isključivo** pri **issue** iz `WarehouseStockLot` (evidentičar/admin), s `stockLotId` i transferom `zaduzenje`
+- Pojedinačni `Equipment` nastaje iz `WarehouseStockLot` (evidentičar/admin), s `stockLotId`:
+  - **Issue** (`POST .../issue`): zaduženje na radnika (`zaduzeno`), opciono transfer `zaduzenje`
+  - **Kolaudacija** (`POST .../commission`): ostaje na skladištu (`skladiste` + `na_skladistu`), bez transfera
 - `POST /equipment` — zabranjen za sve uloge (403); prijem robe = stock lot, ne direktan unos opreme
-- UI modul **Oprema**: samo pregled i uređivanje postojećih stavki; nova oprema preko Skladišta → prijem → lot → izdavanje
+- UI modul **Oprema**: samo pregled i uređivanje postojećih stavki; nova oprema preko Skladišta → prijem → lot → izdavanje ili kolaudacija
 
 ## Ostalo
 

@@ -1,5 +1,10 @@
 # Changelog — warehouse-stock
 
+## 2026-06-13
+
+- **Kolaudacija komada:** `POST /stock-lots/:id/commission` — evidentičar evidentira pojedinačni komad na skladištu bez zaduženja; ista unit validacija kao issue; bez prenosnice; `executeStockLotCommissionInTx`.
+- Frontend: dugme „Kolaudiraj 1 komad" + shared forma `lot-unit-action-section.tsx`; kolaudirani komadi u tabeli prikazuju skladište umjesto radnika.
+
 ## 2026-06-12
 
 - **Specifikacija po odjeljku:** lot spec = `optionalFields`; issue = sva `fields` (unit). Unikat enforcement na backendu pri issue. Lot bez obaveznih lot polja → `spremno_za_izdavanje` na prijemu.

@@ -37,6 +37,7 @@ import { SettingsService } from '../settings/settings.service';
 import { WarehousesService } from '../warehouses/warehouses.service';
 import { BulkCreateStockLotDto } from './dto/bulk-create-stock-lot.dto';
 import { CreateStockLotDto } from './dto/create-stock-lot.dto';
+import { CommissionStockLotDto } from './dto/commission-stock-lot.dto';
 import { IssueStockLotDto } from './dto/issue-stock-lot.dto';
 import { ListStockLotsQueryDto } from './dto/list-stock-lots-query.dto';
 import { UpdateStockLotSpecDto } from './dto/update-stock-lot-spec.dto';
@@ -49,6 +50,7 @@ const STOCK_LOT_SORT_FIELDS: Record<string, string> = {
 };
 import { TransferDocumentGenerationService } from '../transfers/transfer-document-generation.service';
 import { isStockLotTransferDocumentEnabled } from '../transfers/utils/transfer-generation-policy.util';
+import { executeStockLotCommissionInTx } from './utils/finalize-stock-lot-commission.util';
 import {
   executeStockLotIssueDirectInTx,
   executeStockLotIssueWithTransferInTx,
@@ -583,6 +585,73 @@ export class WarehouseStockService {
           .catch(() => undefined);
         await this.notificationsService.notifyTransferSigned(result.transferId);
       }
+      return this.findOne(user, lotId);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('Inventory number already exists');
+      }
+      throw err;
+    }
+  }
+
+  async commissionUnit(user: AuthenticatedUser, lotId: string, dto: CommissionStockLotDto) {
+    await this.settingsService.assertFeatureEnabled('features.registrar_stock');
+    if (user.role !== 'evidenticar' && user.role !== 'admin') {
+      throw new ForbiddenException('Only registrar can commission stock');
+    }
+    const lot = await this.getLotOrThrow(lotId);
+    if (lot.lotKind === 'MAINTENANCE') {
+      throw new BadRequestException('Maintenance stock lots cannot commission equipment units');
+    }
+    await this.registrarScope.assertCanAccessStockLot(user, lot);
+    if (lot.status !== 'spremno_za_izdavanje') {
+      throw new BadRequestException('Define lot specifications before commissioning units');
+    }
+    if (lot.quantityOnHand <= 0) {
+      throw new BadRequestException('No units remaining on this lot');
+    }
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: lot.warehouseId },
+      select: { cityId: true },
+    });
+    if (warehouse) {
+      await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_issue');
+    }
+    const category = await this.categoriesService.assertLeafCategory(lot.categoryId);
+    const { fields } = this.categoriesService.getFieldDefinitions(category);
+    validateIssueSpecifications(dto.uniqueSpecifications, fields);
+    await assertUniqueUnitSpecificationValues(
+      this.prisma,
+      lot.categoryId,
+      dto.uniqueSpecifications,
+      fields,
+    );
+    const lotSpecs = (lot.specifications ?? {}) as Record<string, string>;
+    const mergedSpecifications = { ...lotSpecs, ...dto.uniqueSpecifications };
+    const lotInput = {
+      id: lot.id,
+      warehouseId: lot.warehouseId,
+      categoryId: lot.categoryId,
+      catalogItemId: lot.catalogItemId,
+      contractNumber: lot.contractNumber,
+      entryDate: lot.entryDate,
+    };
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await executeStockLotCommissionInTx(tx, {
+          lot: lotInput,
+          inventoryNumber: dto.inventoryNumber.trim(),
+          mergedSpecifications,
+        });
+        const nextOnHand = lot.quantityOnHand - 1;
+        await tx.warehouseStockLot.update({
+          where: { id: lotId },
+          data: {
+            quantityOnHand: nextOnHand,
+            status: nextOnHand === 0 ? 'zatvoreno' : 'spremno_za_izdavanje',
+          },
+        });
+      });
       return this.findOne(user, lotId);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
