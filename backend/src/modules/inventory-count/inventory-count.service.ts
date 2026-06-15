@@ -44,6 +44,7 @@ import { ListCommitteesQueryDto } from './dto/list-committees-query.dto';
 import { ListInventoryLinesQueryDto } from './dto/list-inventory-lines-query.dto';
 import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
+import { provisionSessionCommitteeSlots } from './utils/provision-session-committee-slots.util';
 
 const SESSION_LIST_INCLUDE = {
   orgUnit: { include: { effectiveLocationCity: { include: { canton: true } } } },
@@ -170,9 +171,53 @@ export class InventoryCountService {
           ...(sessionCityId ? [{ orgUnitId: null, cityId: sessionCityId }] : []),
         ],
       },
+      select: { id: true, name: true, cityId: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  private async listParentAssetCategories() {
+    return this.prisma.category.findMany({
+      where: { parentId: null, categoryKind: 'ASSET' },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
+  }
+
+  private async provisionCommitteeSlotsForSession(
+    sessionId: string,
+    sessionName: string,
+    orgUnitId: string,
+  ): Promise<{ created: number; skipped: number }> {
+    const warehouses = await this.listWarehousesForSessionOrgUnit(orgUnitId);
+    const categories = await this.listParentAssetCategories();
+    if (warehouses.length === 0 || categories.length === 0) {
+      return { created: 0, skipped: warehouses.length * categories.length };
+    }
+    return this.prisma.$transaction((tx) =>
+      provisionSessionCommitteeSlots({
+        tx,
+        sessionId,
+        sessionName,
+        warehouses,
+        categories,
+      }),
+    );
+  }
+
+  async reconcileSessionSlots(sessionId: string): Promise<{ created: number; skipped: number }> {
+    await this.assertInventoryCountEnabled();
+    const session = await this.prisma.inventorySession.findUnique({
+      where: { id: sessionId },
+      select: { id: true, name: true, orgUnitId: true, status: true },
+    });
+    if (!session) {
+      throw new NotFoundException('Inventory session not found');
+    }
+    if (session.status !== 'draft') {
+      throw new BadRequestException('Slots can only be reconciled for draft sessions');
+    }
+    return this.provisionCommitteeSlotsForSession(session.id, session.name, session.orgUnitId);
   }
 
   private async assertWarehouseInventoryEnabled(): Promise<void> {
@@ -209,13 +254,31 @@ export class InventoryCountService {
     if (orgUnit.type !== 'distribucija') {
       throw new BadRequestException('Inventory session must be created for a distribution org unit');
     }
-    return this.prisma.inventorySession.create({
-      data: {
-        name,
-        orgUnitId: input.orgUnitId,
-        year: input.year,
-        status: 'draft',
-      },
+    const session = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.inventorySession.create({
+        data: {
+          name,
+          orgUnitId: input.orgUnitId,
+          year: input.year,
+          status: 'draft',
+        },
+        include: { orgUnit: true, committees: true },
+      });
+      const warehouses = await this.listWarehousesForSessionOrgUnit(input.orgUnitId);
+      const categories = await this.listParentAssetCategories();
+      if (warehouses.length > 0 && categories.length > 0) {
+        await provisionSessionCommitteeSlots({
+          tx,
+          sessionId: created.id,
+          sessionName: created.name,
+          warehouses,
+          categories,
+        });
+      }
+      return created;
+    });
+    return this.prisma.inventorySession.findUniqueOrThrow({
+      where: { id: session.id },
       include: { orgUnit: true, committees: true },
     });
   }
@@ -230,6 +293,7 @@ export class InventoryCountService {
       select: { id: true, name: true },
     });
     if (existing) {
+      await this.provisionCommitteeSlotsForSession(existing.id, existing.name, orgUnitId);
       return { session: existing, created: false };
     }
     const session = await this.createSession({
@@ -324,11 +388,22 @@ export class InventoryCountService {
         warehouseId: input.warehouseId,
         categoryId: input.categoryId,
       },
-      select: { id: true },
+      select: { id: true, membersConfigured: true },
     });
     if (existing) {
       throw new BadRequestException(
-        'Committee already exists for this warehouse and category in selected session',
+        existing.membersConfigured
+          ? 'Committee already exists for this warehouse and category in selected session'
+          : 'Slot već postoji — dodijelite članove komisije putem uređivanja postojećeg slota',
+      );
+    }
+    const manualCreateEnabled = await this.settingsService.getBooleanValue(
+      'features.inventory_manual_committee_create',
+      false,
+    );
+    if (!manualCreateEnabled) {
+      throw new BadRequestException(
+        'Ručno kreiranje komisije je isključeno — koristite auto-generisane slotove sesije',
       );
     }
     const category = await this.prisma.category.findUnique({ where: { id: input.categoryId } });
@@ -362,6 +437,7 @@ export class InventoryCountService {
           categoryId: input.categoryId,
           name: input.name?.trim() || null,
           disposalCommissionId: disposal.id,
+          membersConfigured: true,
           members: { create: input.inventoryMembers },
         },
         include: {
@@ -420,6 +496,7 @@ export class InventoryCountService {
           where: {
             sessionId,
             warehouseId,
+            membersConfigured: true,
             ...(excludeCommitteeId ? { id: { not: excludeCommitteeId } } : {}),
           },
           select: { categoryId: true },
@@ -476,7 +553,7 @@ export class InventoryCountService {
     await this.assertInventoryCountEnabled();
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: sessionId },
-      include: { _count: { select: { committees: true } } },
+      select: { id: true, status: true },
     });
     if (!session) {
       throw new NotFoundException('Inventory session not found');
@@ -484,8 +561,17 @@ export class InventoryCountService {
     if (session.status !== 'draft') {
       throw new BadRequestException('Only draft sessions can be deleted');
     }
-    if (session._count.committees > 0) {
-      throw new BadRequestException('Remove all committees before deleting the session');
+    const [listedOrAssigned, lineCount] = await Promise.all([
+      this.prisma.equipmentDisposalListItem.count({
+        where: { sessionId, status: { in: ['listed', 'assigned'] } },
+      }),
+      this.prisma.inventoryLine.count({ where: { committee: { sessionId } } }),
+    ]);
+    if (listedOrAssigned > 0) {
+      throw new BadRequestException('Remove disposal list items before deleting the session');
+    }
+    if (lineCount > 0) {
+      throw new BadRequestException('Remove inventory lines before deleting the session');
     }
     await this.prisma.inventorySession.delete({ where: { id: sessionId } });
     return { ok: true };
@@ -495,13 +581,22 @@ export class InventoryCountService {
     await this.assertInventoryCountEnabled();
     const committee = await this.prisma.inventoryCommittee.findUnique({
       where: { id: committeeId },
-      include: { session: true },
+      include: { session: true, _count: { select: { lines: true } } },
     });
     if (!committee) {
       throw new NotFoundException('Inventory committee not found');
     }
     if (committee.session.status !== 'draft') {
       throw new BadRequestException('Committees can only be deleted while session is draft');
+    }
+    if (!committee.membersConfigured) {
+      throw new BadRequestException('Auto-generisani slotovi se ne mogu brisati');
+    }
+    if (user?.role !== 'admin') {
+      throw new ForbiddenException('Samo administrator može brisati konfigurisane komisije');
+    }
+    if (committee._count.lines > 0) {
+      throw new BadRequestException('Komisija ima unesene linije i ne može se obrisati');
     }
     if (user && committee.warehouseId) {
       await this.coordinatorScope.assertCanManageWarehouse(user, committee.warehouseId);
@@ -527,13 +622,21 @@ export class InventoryCountService {
     if (committee.session.status !== 'draft') {
       throw new BadRequestException('Committees can only be updated while session is draft');
     }
-    await this.validateCommitteeMembers(input.inventoryMembers, { requireUserForPresidentOnly: true });
-    await this.validateCommitteeMembers(input.disposalMembers, { requireUserForPresidentOnly: true });
-    if (!input.warehouseId?.trim()) {
+    const warehouseId = committee.warehouseId;
+    const categoryId = committee.categoryId;
+    if (!warehouseId) {
       throw new BadRequestException('Warehouse is required');
     }
+    if (input.warehouseId && input.warehouseId !== warehouseId) {
+      throw new BadRequestException('Skladište slota se ne može mijenjati');
+    }
+    if (input.categoryId && input.categoryId !== categoryId) {
+      throw new BadRequestException('Kategorija slota se ne može mijenjati');
+    }
+    await this.validateCommitteeMembers(input.inventoryMembers, { requireUserForPresidentOnly: true });
+    await this.validateCommitteeMembers(input.disposalMembers, { requireUserForPresidentOnly: true });
     const warehouse = await this.prisma.warehouse.findUnique({
-      where: { id: input.warehouseId },
+      where: { id: warehouseId },
       select: { id: true, name: true, cityId: true, orgUnitId: true, isActive: true },
     });
     if (!warehouse || !warehouse.isActive) {
@@ -543,42 +646,18 @@ export class InventoryCountService {
       await this.coordinatorScope.assertCanManageWarehouse(user, warehouse.id);
     }
     await this.assertWarehouseInSessionScope(committee.session.orgUnitId, warehouse);
-    await this.assertMembersEligibleForWarehouse(input.warehouseId, [
+    await this.assertMembersEligibleForWarehouse(warehouseId, [
       ...input.inventoryMembers.map((row) => row.employeeId),
       ...input.disposalMembers.map((row) => row.employeeId),
     ]);
-    const duplicate = await this.prisma.inventoryCommittee.findFirst({
-      where: {
-        sessionId: committee.sessionId,
-        warehouseId: input.warehouseId,
-        categoryId: input.categoryId,
-        id: { not: committeeId },
-      },
-      select: { id: true },
-    });
-    if (duplicate) {
-      throw new BadRequestException(
-        'Committee already exists for this warehouse and category in selected session',
-      );
-    }
-    const category = await this.prisma.category.findUnique({ where: { id: input.categoryId } });
+    const category = await this.prisma.category.findUnique({ where: { id: categoryId } });
     if (!category) {
       throw new BadRequestException('Category not found');
     }
     if (category.categoryKind !== 'ASSET' || category.parentId !== null) {
       throw new BadRequestException('Only parent ASSET categories can be assigned to inventory committees');
     }
-    const setupOptions = await this.getCommitteeSetupOptions(
-      committee.sessionId,
-      input.warehouseId,
-      committeeId,
-    );
-    const allowedCategory = setupOptions.categories.find(
-      (row) => row.id === input.categoryId && (!row.alreadyAssigned || row.id === committee.categoryId),
-    );
-    if (!allowedCategory) {
-      throw new BadRequestException('Category is not available for this warehouse in the session');
-    }
+    const wasConfigured = committee.membersConfigured;
     return this.prisma.$transaction(async (tx) => {
       if (committee.disposalCommissionId) {
         await tx.disposalCommission.update({
@@ -597,6 +676,20 @@ export class InventoryCountService {
             role: member.role,
           })),
         });
+      } else {
+        const disposal = await tx.disposalCommission.create({
+          data: {
+            cityId: warehouse.cityId,
+            name: `${committee.session.name} — ${warehouse.name} — ${category.name} — rashod`,
+            isActive: true,
+            members: { create: input.disposalMembers },
+          },
+        });
+        await tx.inventoryCommittee.update({
+          where: { id: committeeId },
+          data: { disposalCommissionId: disposal.id },
+        });
+        committee.disposalCommissionId = disposal.id;
       }
       await tx.inventoryCommitteeMember.deleteMany({ where: { committeeId } });
       await tx.inventoryCommitteeMember.createMany({
@@ -606,12 +699,11 @@ export class InventoryCountService {
           role: member.role,
         })),
       });
-      return tx.inventoryCommittee.update({
+      const updated = await tx.inventoryCommittee.update({
         where: { id: committeeId },
         data: {
-          warehouseId: input.warehouseId,
-          categoryId: input.categoryId,
-          name: input.name?.trim() || null,
+          name: input.name?.trim() || committee.name,
+          membersConfigured: true,
         },
         include: {
           warehouse: true,
@@ -621,6 +713,15 @@ export class InventoryCountService {
           session: { include: { orgUnit: true } },
         },
       });
+      if (!wasConfigured && committee.disposalCommissionId) {
+        await this.equipmentDisposalListService.assignListedItemsToCommitteeInTx(tx, {
+          sessionId: committee.sessionId,
+          warehouseId,
+          parentCategoryId: categoryId,
+          disposalCommissionId: committee.disposalCommissionId,
+        });
+      }
+      return updated;
     });
   }
 
@@ -1160,9 +1261,13 @@ export class InventoryCountService {
     if (session.status !== 'draft') {
       throw new BadRequestException('Only draft sessions can be activated');
     }
-    const committeeCount = await this.prisma.inventoryCommittee.count({ where: { sessionId } });
-    if (committeeCount === 0) {
-      throw new BadRequestException('At least one inventory committee is required before activation');
+    const pendingSlots = await this.prisma.inventoryCommittee.count({
+      where: { sessionId, membersConfigured: false },
+    });
+    if (pendingSlots > 0) {
+      throw new BadRequestException(
+        `Postoji ${pendingSlots} slotova bez dodijeljenih članova — konfigurišite sve komisije prije aktivacije`,
+      );
     }
     const unassignedListed = await this.equipmentDisposalListService.countUnassignedListed(sessionId);
     if (unassignedListed > 0) {

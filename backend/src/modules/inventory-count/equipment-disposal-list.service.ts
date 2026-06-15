@@ -130,6 +130,19 @@ export class EquipmentDisposalListService {
       this.prisma,
       equipment.categoryId,
     );
+    const committeeSlot = await this.prisma.inventoryCommittee.findFirst({
+      where: {
+        sessionId,
+        warehouseId,
+        categoryId: parentCategoryId,
+      },
+      select: { id: true },
+    });
+    if (!committeeSlot) {
+      throw new BadRequestException(
+        'Nema definisanog opsega popisa za ovo skladište i kategoriju u odabranoj sesiji',
+      );
+    }
     const createTransfer = await isTransferCreationAllowed(
       this.settingsService,
       'razduzenje',
@@ -257,6 +270,89 @@ export class EquipmentDisposalListService {
     return this.prisma.equipmentDisposalListItem.count({
       where: { sessionId, status: 'listed' },
     });
+  }
+
+  async findEligibleSessionsForEquipment(user: AuthenticatedUser, equipmentId: string) {
+    await this.assertPreListEnabled();
+    const equipment = await this.prisma.equipment.findUnique({
+      where: { id: equipmentId },
+      include: {
+        category: { select: { id: true, categoryKind: true } },
+        currentHolder: true,
+        warehouse: { select: { id: true, cityId: true } },
+      },
+    });
+    if (!equipment) {
+      throw new NotFoundException('Equipment not found');
+    }
+    if (equipment.status === 'rashodovano') {
+      return [];
+    }
+    if (equipment.category.categoryKind !== 'ASSET') {
+      return [];
+    }
+    const equipmentCityId = equipment.currentHolder
+      ? await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+          equipment.currentHolder.orgUnitId,
+        )
+      : equipment.warehouse?.cityId ??
+        (equipment.warehouseId
+          ? (
+              await this.prisma.warehouse.findUnique({
+                where: { id: equipment.warehouseId },
+                select: { cityId: true },
+              })
+            )?.cityId
+          : null);
+    if (!equipmentCityId) {
+      return [];
+    }
+    let warehouseId: string | null = null;
+    try {
+      warehouseId = await this.resolveTargetWarehouseId(user, equipment);
+    } catch {
+      return [];
+    }
+    const parentCategoryId = await resolveParentAssetCategoryIdInTx(
+      this.prisma,
+      equipment.categoryId,
+    );
+    const draftSessions = await this.prisma.inventorySession.findMany({
+      where: { status: 'draft' },
+      include: {
+        orgUnit: { select: { id: true, name: true } },
+      },
+      orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
+    });
+    const eligible = [];
+    for (const session of draftSessions) {
+      const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+        session.orgUnitId,
+      );
+      if (sessionCityId !== equipmentCityId) {
+        continue;
+      }
+      const slot = await this.prisma.inventoryCommittee.findFirst({
+        where: {
+          sessionId: session.id,
+          warehouseId,
+          categoryId: parentCategoryId,
+        },
+        select: { id: true },
+      });
+      if (!slot) {
+        continue;
+      }
+      eligible.push({
+        id: session.id,
+        name: session.name,
+        year: session.year,
+        status: session.status,
+        orgUnitId: session.orgUnitId,
+        orgUnit: session.orgUnit,
+      });
+    }
+    return eligible;
   }
 
   private async getSessionOrThrow(sessionId: string) {

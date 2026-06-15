@@ -257,6 +257,16 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'modules',
   }),
   def({
+    key: 'features.inventory_manual_committee_create',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: false,
+    label: 'Ručno kreiranje komisije popisa',
+    description:
+      'Dozvoljava POST kreiranje komisije izvan auto-generisanih slotova (samo dev/legacy).',
+    group: 'modules',
+  }),
+  def({
     key: 'inventory.production_mode',
     scope: 'private',
     valueType: 'boolean',
@@ -290,7 +300,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     valueType: 'boolean',
     defaultValue: true,
     label: 'Auto kreiranje draft sesije',
-    description: 'Na lock datum kreira POPIS {year} po svakoj distribuciji ako ne postoji.',
+    description:
+      'Na lock datum (npr. 30.11.) i 1.1. kreira POPIS {year} po svakoj distribuciji ako ne postoji, sa auto slotovima.',
     group: 'inventory',
   }),
   def({

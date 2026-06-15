@@ -35,33 +35,46 @@ Opseg unosa:
 Ograničenja:
 
 - 1× sesija po `(orgUnitId, year)`
+- pri kreiranju sesije automatski se generišu slotovi: sva aktivna skladišta u opsegu × sve roditeljske `ASSET` kategorije
+- svaki slot = `InventoryCommittee` + `DisposalCommission` bez članova (`membersConfigured=false`)
 - admin može sesiju **aktivirati** i **zatvoriti**, ali **ne može unositi linije**
-- aktivacija zahtijeva ≥1 popisnu komisiju (`InventoryCommittee`)
+- aktivacija zahtijeva da **svi** slotovi imaju `membersConfigured=true`
 - aktivacija **odbija** ako postoje stavke na listi za rashod (`listed`) bez dodijeljene komisije
+
+## Auto slotovi (draft sesija)
+
+| Pravilo | Opis |
+|---------|------|
+| Provisioning | `createSession`, `ensureDraftSessionForDistribution`, `POST reconcile-slots` |
+| Idempotentnost | ponovni poziv ne duplira `(sessionId, warehouseId, categoryId)` |
+| Koordinator | `PATCH committees/:id` dodjeljuje članove; `warehouseId`/`categoryId` read-only |
+| Brisanje slota | zabranjeno dok je `membersConfigured=false` |
+| Ručni create | `POST committees` samo ako `features.inventory_manual_committee_create=true` |
 
 ## Lista za rashod (draft sesija)
 
 | Akcija | Ko | Pravilo |
 |--------|-----|---------|
 | Označi opremu | evidentičar / admin | samo dok je sesija `draft` |
+| Opseg | sistem | grad opreme = grad distribucije **i** postoji slot za skladište + parent kategoriju |
+| Eligible sesije | API | `GET eligible-for-equipment/:equipmentId` |
 | Auto razduženje | sistem | `zaduzeno` → skladište (prenosnica po postavkama) |
 | Povrat s liste | admin | samo `draft`, stavka `listed` |
-| Dodjela komisiji | sistem | pri kreiranju popisne komisije |
+| Dodjela komisiji | sistem | pri konfiguraciji članova slota (`membersConfigured=true`) |
 
-## Kreiranje komisije (admin, draft sesija)
+## Konfiguracija komisije (admin / koordinator, draft sesija)
 
 | Korak | Polje | Pravilo |
 |------:|-------|---------|
-| 1 | `warehouseId` | aktivno skladište u org opsegu distribucije (podružnice u drugim gradovima uključene) |
-| 2 | `categoryId` | roditeljska `ASSET` kategorija (prikaz i s 0 opreme u opsegu); broj komada informativan |
-| 3 | `inventoryMembers[]` | 1× predsjednik (**aktivan `User`**) + ≥2× član; samo zaposlenici eligible za skladište |
-| 4 | `disposalMembers[]` | isto |
-| 5 | auto | kreira se `DisposalCommission` vezana uz komisiju |
+| 1 | odabir slota | skladište + kategorija (`membersConfigured=false`) |
+| 2 | `inventoryMembers[]` | 1× predsjednik (**aktivan `User`**) + ≥2× član |
+| 3 | `disposalMembers[]` | isto |
+| auto | | `DisposalCommission` već postoji; dodjeljuju se članovi |
 
 Ograničenja:
 
 - 1× komisija po `(sessionId, warehouseId, categoryId)`
-- `MAINTENANCE` kategorije nisu dostupne
+- `MAINTENANCE` kategorije nisu u slotovima
 - članovi: u gradu skladišta i (warehouse coverage **ili** `RegistrarAssignment` za skladište)
 
 ## Ko smije unositi linije
@@ -113,7 +126,7 @@ U Popisu, za unos linija važi: **članstvo komisije** je dovoljno (bez registra
 | Empty state | bez sesija → centrirana poruka + forma kreiranja |
 | Sesije | lista sa statusom; command center za odabranu |
 | Komisije | grupisane po skladištu; detalj s članovima i rashod komisijom |
-| Wizard | 5 koraka: skladište → kategorija → popis → rashod → potvrda |
+| Wizard | 4 koraka: slot (skladište+kategorija) → popis → rashod → potvrda |
 
 ## API
 
@@ -127,6 +140,10 @@ U Popisu, za unos linija važi: **članstvo komisije** je dovoljno (bez registra
 - `POST /inventory-sessions/committees/:id/lines` (evidentičar, user)
 - `PATCH /inventory-sessions/:id/activate` (admin)
 - `PATCH /inventory-sessions/:id/close` (admin)
+- `GET /inventory-sessions/eligible-for-equipment/:equipmentId` (evidentičar/admin)
+- `POST /inventory-sessions/:id/reconcile-slots` (admin)
+- `GET/POST /inventory-sessions/:id/disposal-list` (evidentičar/admin; POST samo draft)
+- `DELETE /inventory-sessions/:id/disposal-list/:equipmentId` (admin, draft)
 
 ## Produkcijski režim (faza 5)
 
@@ -134,9 +151,8 @@ U Popisu, za unos linija važi: **članstvo komisije** je dovoljno (bez registra
 |---------|------|
 | `inventory.production_mode=false` | Ponašanje kao ručni režim (faze 1–4) |
 | Lock datum | Od `inventory.lock_date` do `closed` sesije: blok warehouse-stock (osim admin) |
-| Auto draft | Job kreira `POPIS {year}` po distribuciji (idempotentno) |
+| Auto draft | Job kreira `POPIS {year}` po distribuciji (idempotentno) + auto slotovi; ponavlja se i **1.1.** |
 | Auto close | Na `session_end_date` — samo ako nema pending `DisposalInventoryApproval` |
 | Koordinator | `popis_koordinator` + `InventoryCoordinatorAssignment`: CRUD komisija u draft, bez activate/close sesije |
 | Scheduler | `INVENTORY_SCHEDULER_ENABLED=true` + cron `5 0 * * *` (TZ iz postavke) |
-- `GET/POST /inventory-sessions/:id/disposal-list` (evidentičar/admin; POST samo draft)
 - `DELETE /inventory-sessions/:id/disposal-list/:equipmentId` (admin, draft)

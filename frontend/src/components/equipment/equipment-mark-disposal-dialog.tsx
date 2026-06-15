@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  fetchInventorySessionsPageApi,
-  markDisposalListApi,
-  type InventorySessionDto,
-} from '../../api/inventory-api';
+import { fetchEligibleDisposalSessionsApi, markDisposalListApi } from '../../api/inventory-api';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { Button } from '../ui/button';
@@ -25,7 +21,9 @@ export const EquipmentMarkDisposalDialog = ({
   onMarked,
 }: EquipmentMarkDisposalDialogProps) => {
   const { toastError, toastSuccess } = useToast();
-  const [sessions, setSessions] = useState<InventorySessionDto[]>([]);
+  const [sessions, setSessions] = useState<
+    { id: string; name: string; year: number }[]
+  >([]);
   const [sessionId, setSessionId] = useState('');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,18 +32,20 @@ export const EquipmentMarkDisposalDialog = ({
   const loadSessions = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetchInventorySessionsPageApi({ page: 1, pageSize: 100 });
-      const draftSessions = response.items.filter((row) => row.status === 'draft');
-      setSessions(draftSessions);
-      if (draftSessions.length === 1) {
-        setSessionId(draftSessions[0]!.id);
+      const eligibleSessions = await fetchEligibleDisposalSessionsApi(equipmentId);
+      setSessions(eligibleSessions);
+      if (eligibleSessions.length === 1) {
+        setSessionId(eligibleSessions[0]!.id);
+      } else {
+        setSessionId('');
       }
     } catch {
       setSessions([]);
+      setSessionId('');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [equipmentId]);
 
   useEffect(() => {
     if (open) {
@@ -78,52 +78,57 @@ export const EquipmentMarkDisposalDialog = ({
       size="md"
       zIndex={70}
       panelClassName="bg-white shadow-xl"
-    >
-      <div className="p-6 space-y-4">
-        <h3 className="text-lg font-semibold">Označi za rashod</h3>
-        <p className="text-sm text-gray-600">
-          Oprema {inventoryNumber} ide na listu za rashod u odabranoj sesiji. Zadužena oprema se
-          automatski razdužuje na skladište.
-        </p>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Sesija popisa (nacrt)</label>
-          <select
-            value={sessionId}
-            onChange={(e) => setSessionId(e.target.value)}
-            disabled={loading || sessions.length === 0}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          >
-            <option value="">— Odaberi sesiju —</option>
-            {sessions.map((session) => (
-              <option key={session.id} value={session.id}>
-                {session.name} ({session.year})
-              </option>
-            ))}
-          </select>
-          {!loading && sessions.length === 0 ? (
-            <p className="text-xs text-amber-700 mt-1">
-              Nema aktivnih nacrta sesije. Administrator mora kreirati sesiju popisa.
-            </p>
-          ) : null}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Napomena</label>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-20"
-            placeholder="Opcionalno"
-          />
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
+      title="Označi za rashod"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>
             Odustani
           </Button>
           <Button onClick={() => void handleSubmit()} disabled={submitting || !sessionId}>
-            {submitting ? 'Spremanje…' : 'Dodaj na listu'}
+            {submitting ? 'Snimam…' : 'Dodaj na listu'}
           </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-gray-600 mb-4">
+        Oprema <strong>{inventoryNumber}</strong> bit će dodana na listu za rashod u odabranoj draft
+        sesiji popisa.
+      </p>
+      {loading ? (
+        <p className="text-sm text-gray-500">Učitavam sesije…</p>
+      ) : sessions.length === 0 ? (
+        <p className="text-sm text-amber-700">
+          Nema draft sesije popisa u opsegu ove opreme (grad, skladište i kategorija).
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Sesija popisa</label>
+            <select
+              value={sessionId}
+              onChange={(event) => setSessionId(event.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+            >
+              <option value="">— Odaberite —</option>
+              {sessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.name} ({session.year})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Napomena (opcionalno)</label>
+            <textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              placeholder="Razlog ili kontekst za rashod"
+            />
+          </div>
         </div>
-      </div>
+      )}
     </ModalRoot>
   );
 };

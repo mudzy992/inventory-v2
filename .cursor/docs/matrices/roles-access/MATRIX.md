@@ -7,7 +7,7 @@
 | Administrator | `admin` | Puna konfiguracija sistema |
 | Evidentičar | `evidenticar` | Evidencija u dodijeljenim parovima **skladište + kategorija** (+ opcionalno org suženje) |
 | Skladištar | `skladistar` | Evidencija na dodijeljenim skladištima |
-| Koordinator popisa | `popis_koordinator` | Komisije u draft sesiji za dodijeljena skladišta |
+| Koordinator popisa | `popis_koordinator` | Konfiguracija članova auto-slotova u draft sesiji za dodijeljena skladišta |
 | Korisnik | `user` | Pregled vlastitog zaduženja, QR |
 
 ## Opseg evidentičara (`RegistrarAssignment`)

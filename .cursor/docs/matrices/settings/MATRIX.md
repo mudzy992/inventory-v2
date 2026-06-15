@@ -126,7 +126,7 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 | `inventory.production_mode` | false | Uključuje kalendar i scheduler |
 | `inventory.lock_date` | `11-30` | MM-DD lock + auto draft |
 | `inventory.session_end_date` | `12-31` | MM-DD pokušaj zatvaranja |
-| `inventory.auto_create_draft_session` | true | |
+| `inventory.auto_create_draft_session` | true | Lock dan + 1.1. auto draft sa slotovima |
 | `inventory.auto_close_session` | true | Bez force ako pending rashod |
 | `inventory.auto_activate_session` | false | |
 | `inventory.scheduler_timezone` | `Europe/Sarajevo` | |

@@ -1,5 +1,10 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-15 (auto slotovi)
+
+- `features.inventory_manual_committee_create` (private, default false).
+- `inventory.auto_create_draft_session` opis proširen: lock dan + 1.1.
+
 ## 2026-06-15 (faza 5)
 
 - `inventory.production_mode`, `inventory.lock_date`, `inventory.session_end_date`, auto flags, `inventory.scheduler_timezone`, `inventory.system_user_id`.

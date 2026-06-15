@@ -42,7 +42,33 @@ export class InventorySchedulerService {
       await this.runEndDayJobs(today.year);
     }
     if (today.month === 1 && today.day === 1) {
-      this.logger.log(`Inventory year rollover: ${today.year}`);
+      await this.runJan1DraftJobs(today.year);
+    }
+  }
+
+  private async runJan1DraftJobs(year: number): Promise<void> {
+    const autoCreate = await this.readBooleanSetting('inventory.auto_create_draft_session', true);
+    if (!autoCreate) {
+      return;
+    }
+    const distributions = await this.prisma.orgUnit.findMany({
+      where: { type: 'distribucija' },
+      select: { id: true, name: true },
+    });
+    for (const distribution of distributions) {
+      try {
+        const result = await this.inventoryCountService.ensureDraftSessionForDistribution(
+          distribution.id,
+          year,
+        );
+        this.logger.log(
+          `Jan 1 draft session ${result.created ? 'created' : 'reconciled'} for ${distribution.name} year ${year}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Jan 1 draft job failed for distribution ${distribution.id}: ${String(error)}`,
+        );
+      }
     }
   }
 

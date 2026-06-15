@@ -32,6 +32,7 @@ export interface InventoryCommitteeDto {
   warehouseId?: string | null;
   categoryId: string;
   name?: string | null;
+  membersConfigured?: boolean;
   disposalCommissionId?: string | null;
   isClosed?: boolean;
   closedAt?: string | null;
@@ -402,6 +403,11 @@ export interface EquipmentDisposalListItemDto {
 
 export const fetchDisposalListApi = (sessionId: string) =>
   apiRequest<EquipmentDisposalListItemDto[]>(`/inventory-sessions/${sessionId}/disposal-list`);
+
+export const fetchEligibleDisposalSessionsApi = (equipmentId: string) =>
+  apiRequest<Pick<InventorySessionDto, 'id' | 'name' | 'year' | 'status' | 'orgUnitId' | 'orgUnit'>[]>(
+    `/inventory-sessions/eligible-for-equipment/${equipmentId}`,
+  );
 
 export const markDisposalListApi = (
   sessionId: string,

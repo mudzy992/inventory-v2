@@ -44,7 +44,7 @@ export const InventorySessionListPanel = ({
                   <p className="text-sm font-medium text-gray-900 truncate">{session.name}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{session.year} · {period}</p>
                   <p className="text-[11px] text-gray-400 mt-1">
-                    {stats.closedCommittees}/{stats.totalCommittees} komisija · {stats.recordedLines} linija
+                    {stats.configuredCommittees}/{stats.totalCommittees} komisija · {stats.recordedLines} linija
                   </p>
                 </div>
                 <Badge tone={getInventorySessionStatusTone(session.status)}>
@@ -63,6 +63,7 @@ interface InventoryCommitteeListPanelProps {
   committees: InventorySessionDto['committees'];
   selectedCommitteeId: string;
   sessionStatus: InventorySessionDto['status'];
+  canDeleteCommittees?: boolean;
   onSelect: (committeeId: string) => void;
   onEdit?: (committeeId: string) => void;
   onDelete?: (committeeId: string) => void;
@@ -72,6 +73,7 @@ export const InventoryCommitteeListPanel = ({
   committees,
   selectedCommitteeId,
   sessionStatus,
+  canDeleteCommittees = false,
   onSelect,
   onEdit,
   onDelete,
@@ -112,8 +114,10 @@ export const InventoryCommitteeListPanel = ({
                           </span>
                           {committee.isClosed ? (
                             <Badge tone="neutral">Zaključeno</Badge>
+                          ) : committee.membersConfigured === false ? (
+                            <Badge tone="warning">Čeka članove</Badge>
                           ) : (
-                            <Badge tone="info">Aktivno</Badge>
+                            <Badge tone="success">Spremno</Badge>
                           )}
                         </div>
                       </button>
@@ -129,7 +133,7 @@ export const InventoryCommitteeListPanel = ({
                               <Pencil size={14} />
                             </button>
                           ) : null}
-                          {onDelete ? (
+                          {onDelete && canDeleteCommittees && committee.membersConfigured ? (
                             <button
                               type="button"
                               className="p-1.5 text-gray-500 hover:text-red-700"

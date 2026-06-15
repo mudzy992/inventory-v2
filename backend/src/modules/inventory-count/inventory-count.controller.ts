@@ -43,6 +43,15 @@ export class InventoryCountController {
     return this.inventoryCountService.getFreezeBannerForUser(user);
   }
 
+  @Get('eligible-for-equipment/:equipmentId')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  findEligibleSessionsForEquipment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('equipmentId') equipmentId: string,
+  ) {
+    return this.equipmentDisposalListService.findEligibleSessionsForEquipment(user, equipmentId);
+  }
+
   @Post('ensure-draft')
   @Roles(UserRole.admin)
   ensureDraft(@Query('year') year?: string, @Query('orgUnitId') orgUnitId?: string) {
@@ -51,6 +60,12 @@ export class InventoryCountController {
       return this.inventoryCountService.ensureDraftSessionsForAllDistributions(parsedYear);
     }
     return this.inventoryCountService.ensureDraftSessionForDistribution(orgUnitId, parsedYear);
+  }
+
+  @Post(':id/reconcile-slots')
+  @Roles(UserRole.admin)
+  reconcileSlots(@Param('id') sessionId: string) {
+    return this.inventoryCountService.reconcileSessionSlots(sessionId);
   }
 
   @Get(':id/committees/setup-options')

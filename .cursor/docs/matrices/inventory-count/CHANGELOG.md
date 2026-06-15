@@ -1,5 +1,12 @@
 # Changelog — inventory-count
 
+## 2026-06-15 (auto slotovi)
+
+- `InventoryCommittee.membersConfigured` — auto slotovi (skladište × ASSET kategorija) pri kreiranju draft sesije.
+- Koordinator/admin konfigurišu članove putem `PATCH committees/:id`; `POST` samo uz `features.inventory_manual_committee_create`.
+- Aktivacija zahtijeva sve slotove konfigurisane; rashod provjerava postojanje slota + `GET eligible-for-equipment`.
+- Scheduler: auto draft + slotovi i na **1.1.** (uz postojeći lock dan).
+
 ## 2026-06-15 (faza 5)
 
 - Produkcijski režim: scheduler (`INVENTORY_SCHEDULER_ENABLED`), auto draft na lock datum, auto-close na end datum (bez force ako pending rashod).

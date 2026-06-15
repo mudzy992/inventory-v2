@@ -8,6 +8,7 @@ export interface InventorySessionStats {
   recordedLines: number;
   closedCommittees: number;
   totalCommittees: number;
+  configuredCommittees: number;
   transferPendingCount: number;
   failedCount: number;
 }
@@ -32,6 +33,7 @@ export const computeInventorySessionStats = (
       resolvedCommittees.length > 0
         ? resolvedCommittees.length
         : (session?._count?.committees ?? 0),
+    configuredCommittees: resolvedCommittees.filter((committee) => committee.membersConfigured).length,
     transferPendingCount: allLines.filter((line) => isTransferPending(line)).length,
     failedCount: allLines.filter((line) => line.pendingAction?.status === 'failed').length,
   };

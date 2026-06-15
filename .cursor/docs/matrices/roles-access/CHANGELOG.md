@@ -1,5 +1,9 @@
 # Changelog — roles-access
 
+## 2026-06-15 (auto slotovi)
+
+- Koordinator: konfiguracija članova auto-slotova (ne kreiranje strukture).
+
 ## 2026-06-15 (popis_koordinator)
 
 - Nova uloga `popis_koordinator` + `InventoryCoordinatorAssignment` (skladište, opcionalno distribucija).

@@ -879,6 +879,7 @@ model InventoryCommittee {
   name                 String?  @db.VarChar(255)
   disposalCommissionId String?  @unique
   isClosed             Boolean  @default(false)
+  membersConfigured    Boolean  @default(false)
   closedAt             DateTime?
   closedByUserId       String?
   createdAt            DateTime @default(now())

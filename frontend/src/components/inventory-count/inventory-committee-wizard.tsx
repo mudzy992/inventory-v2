@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
-  createInventoryCommitteeApi,
   fetchCommitteeSetupOptionsApi,
+  fetchInventoryCommitteesApi,
   fetchSessionWarehousesApi,
   updateInventoryCommitteeApi,
   type CommitteeSetupOptionsDto,
@@ -33,6 +33,8 @@ export const InventoryCommitteeWizard = ({
   const isEdit = Boolean(editCommittee);
   const [step, setStep] = useState(1);
   const [warehouses, setWarehouses] = useState<InventorySessionWarehouseDto[]>([]);
+  const [committees, setCommittees] = useState<InventoryCommitteeDto[]>([]);
+  const [selectedCommitteeId, setSelectedCommitteeId] = useState('');
   const [setupOptions, setSetupOptions] = useState<CommitteeSetupOptionsDto | null>(null);
   const [warehouseId, setWarehouseId] = useState('');
   const [name, setName] = useState('');
@@ -49,15 +51,32 @@ export const InventoryCommitteeWizard = ({
     () => eligibleEmployees.filter((employee) => employee.hasUserAccount),
     [eligibleEmployees],
   );
-  const availableCategories = useMemo(
-    () =>
-      (setupOptions?.categories ?? []).filter(
-        (row) => !row.alreadyAssigned || row.id === editCommittee?.categoryId,
-      ),
-    [editCommittee?.categoryId, setupOptions],
-  );
+  const availableCategories = useMemo(() => {
+    if (isEdit && editCommittee) {
+      return (setupOptions?.categories ?? []).filter(
+        (row) => !row.alreadyAssigned || row.id === editCommittee.categoryId,
+      );
+    }
+    return committees
+      .filter(
+        (row) =>
+          row.warehouseId === warehouseId &&
+          row.membersConfigured === false &&
+          row.category,
+      )
+      .map((row) => ({
+        id: row.categoryId,
+        name: row.category?.name ?? row.categoryId,
+        equipmentCount: 0,
+        alreadyAssigned: false,
+        committeeId: row.id,
+      }));
+  }, [committees, editCommittee, isEdit, setupOptions?.categories, warehouseId]);
   const selectedWarehouse = warehouses.find((row) => row.id === warehouseId) ?? setupOptions?.warehouse ?? null;
-  const selectedCategory = setupOptions?.categories.find((row) => row.id === categoryId) ?? null;
+  const selectedCategory =
+    availableCategories.find((row) => row.id === categoryId) ??
+    setupOptions?.categories.find((row) => row.id === categoryId) ??
+    null;
 
   useEffect(() => {
     if (!editCommittee) {
@@ -76,6 +95,7 @@ export const InventoryCommitteeWizard = ({
     const disposalClerks = editCommittee.disposalCommission?.members.filter((row) => row.role === 'clan') ?? [];
     setDisposalPresidentId(disposalPresident?.employeeId ?? '');
     setDisposalMemberIds(disposalClerks.map((row) => row.employeeId));
+    setSelectedCommitteeId(editCommittee.id);
     setStep(1);
     setError(null);
   }, [editCommittee]);
@@ -85,9 +105,13 @@ export const InventoryCommitteeWizard = ({
     void (async () => {
       setLoading(true);
       try {
-        const rows = await fetchSessionWarehousesApi(sessionId);
+        const [rows, committeeRows] = await Promise.all([
+          fetchSessionWarehousesApi(sessionId),
+          fetchInventoryCommitteesApi(sessionId),
+        ]);
         if (!cancelled) {
           setWarehouses(rows);
+          setCommittees(committeeRows);
         }
       } catch (err) {
         if (!cancelled) {
@@ -152,6 +176,7 @@ export const InventoryCommitteeWizard = ({
       setWarehouseId('');
       setSetupOptions(null);
     }
+    setSelectedCommitteeId('');
     setName('');
     setCategoryId('');
     setInventoryPresidentId('');
@@ -184,7 +209,7 @@ export const InventoryCommitteeWizard = ({
       return Boolean(warehouseId);
     }
     if (step === 2) {
-      return Boolean(categoryId);
+      return Boolean(categoryId && selectedCommitteeId);
     }
     if (step === 3) {
       return Boolean(inventoryPresidentId) && inventoryMemberIds.length >= 2;
@@ -214,22 +239,24 @@ export const InventoryCommitteeWizard = ({
   };
 
   const handleSave = async () => {
-    if (!warehouseId || !categoryId) {
+    const committeeId = isEdit && editCommittee ? editCommittee.id : selectedCommitteeId;
+    if (!warehouseId || !categoryId || !committeeId) {
       return;
     }
     setError(null);
     setSaving(true);
     try {
       const payload = buildPayload();
-      if (isEdit && editCommittee) {
-        const updated = await updateInventoryCommitteeApi(editCommittee.id, payload);
+      const updated = await updateInventoryCommitteeApi(committeeId, payload);
+      if (isEdit) {
         onUpdated?.(updated.id);
         onCancelEdit?.();
       } else {
-        const created = await createInventoryCommitteeApi(sessionId, payload);
-        onCreated(created.id);
+        onCreated(updated.id);
         resetWizard(true);
         setStep(2);
+        const committeeRows = await fetchInventoryCommitteesApi(sessionId);
+        setCommittees(committeeRows);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Greška pri snimanju');
@@ -239,9 +266,9 @@ export const InventoryCommitteeWizard = ({
   };
 
   return (
-    <FormCard title={isEdit ? 'Uredi popisnu komisiju' : 'Dodaj popisnu komisiju'}>
+    <FormCard title={isEdit ? 'Uredi popisnu komisiju' : 'Dodijeli članove komisiji'}>
       <p className="text-xs text-gray-500 mb-4">
-        Korak {step} / 5 — komisija je vezana za skladište i jednu kategoriju opreme.
+        Korak {step} / 4 — odaberite slot (skladište + kategorija) i dodijelite članove.
       </p>
       {loading ? <p className="text-xs text-gray-500 mb-3">Učitavam…</p> : null}
       {step === 1 ? (
@@ -269,7 +296,7 @@ export const InventoryCommitteeWizard = ({
             </AlertBanner>
           ) : null}
           <AlertBanner tone="info">
-            Za svaku kategoriju opreme na skladištu kreirajte zasebnu popisnu komisiju.
+            Odaberite skladište i kategoriju za slot koji čeka dodjelu članova.
           </AlertBanner>
         </div>
       ) : null}
@@ -279,7 +306,14 @@ export const InventoryCommitteeWizard = ({
             <label className={labelClass}>Kategorija opreme</label>
             <select
               value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
+              onChange={(event) => {
+                const nextCategoryId = event.target.value;
+                setCategoryId(nextCategoryId);
+                const slot = availableCategories.find((row) => row.id === nextCategoryId);
+                setSelectedCommitteeId(
+                  'committeeId' in (slot ?? {}) ? String((slot as { committeeId: string }).committeeId) : '',
+                );
+              }}
               className={selectClass}
             >
               <option value="">— Odaberite —</option>
@@ -306,12 +340,7 @@ export const InventoryCommitteeWizard = ({
           </div>
           {availableCategories.length === 0 ? (
             <AlertBanner tone="info">
-              Nema dostupnih kategorija za ovo skladište ili su sve već dodijeljene.
-            </AlertBanner>
-          ) : availableCategories.every((row) => row.equipmentCount === 0) ? (
-            <AlertBanner tone="warning">
-              Nema evidentirane opreme u opsegu skladišta — možete ipak kreirati komisiju; popisna
-              lista će biti prazna dok se oprema ne doda.
+              Nema slotova koji čekaju dodjelu članova za ovo skladište.
             </AlertBanner>
           ) : null}
         </div>
@@ -394,25 +423,6 @@ export const InventoryCommitteeWizard = ({
           </div>
         </div>
       ) : null}
-      {step === 5 ? (
-        <div className="text-sm text-gray-700 space-y-2">
-          <p>
-            <strong>Skladište:</strong> {selectedWarehouse?.name ?? '—'}
-          </p>
-          <p>
-            <strong>Kategorija:</strong> {selectedCategory?.name ?? '—'}
-          </p>
-          <p>
-            <strong>Naziv:</strong> {name.trim() || '—'}
-          </p>
-          <p>
-            <strong>Popis:</strong> 1 predsjednik + {inventoryMemberIds.length} člana
-          </p>
-          <p>
-            <strong>Rashod:</strong> 1 predsjednik + {disposalMemberIds.length} člana
-          </p>
-        </div>
-      ) : null}
       {error ? <p className="text-sm text-red-600 mt-2">{error}</p> : null}
       <div className="flex justify-between gap-2 pt-2">
         <div className="flex gap-2">
@@ -430,14 +440,14 @@ export const InventoryCommitteeWizard = ({
             </Button>
           ) : null}
         </div>
-        {step < 5 ? (
+        {step < 4 ? (
           <Button onClick={() => setStep((value) => value + 1)} disabled={!canNext() || loading}>
             Dalje
             <ChevronRight size={14} />
           </Button>
         ) : (
           <Button onClick={() => void handleSave()} disabled={saving || !canNext()}>
-            {saving ? 'Snimanje...' : isEdit ? 'Sačuvaj izmjene' : 'Kreiraj komisiju'}
+            {saving ? 'Snimanje...' : isEdit ? 'Sačuvaj izmjene' : 'Dodijeli članove'}
           </Button>
         )}
       </div>

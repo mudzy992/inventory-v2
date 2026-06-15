@@ -35,7 +35,7 @@ export const SessionCommandCenter = ({
   onRefresh,
   canManageLifecycle = true,
 }: SessionCommandCenterProps) => {
-  const canDeleteSession = session.status === 'draft' && stats.totalCommittees === 0;
+  const canDeleteSession = session.status === 'draft';
   const period =
     session.startDate && session.endDate
       ? `${formatDate(session.startDate)} – ${formatDate(session.endDate)}`
@@ -71,9 +71,13 @@ export const SessionCommandCenter = ({
         <div className="rounded-lg bg-gray-50 px-3 py-2">
           <dt className="text-[10px] uppercase text-gray-500">Komisije</dt>
           <dd className="text-sm font-semibold text-gray-900">
-            {stats.closedCommittees}/{stats.totalCommittees}
+            {session.status === 'draft'
+              ? `${stats.configuredCommittees}/${stats.totalCommittees}`
+              : `${stats.closedCommittees}/${stats.totalCommittees}`}
           </dd>
-          <dd className="text-[10px] text-gray-500">zatvoreno</dd>
+          <dd className="text-[10px] text-gray-500">
+            {session.status === 'draft' ? 'konfigurisano' : 'zatvoreno'}
+          </dd>
         </div>
         <div className="rounded-lg bg-gray-50 px-3 py-2">
           <dt className="text-[10px] uppercase text-gray-500">Linije</dt>
@@ -135,9 +139,9 @@ export const SessionCommandCenter = ({
             Obriši sesiju
           </Button>
         ) : null}
-        {session.status === 'draft' && stats.totalCommittees > 0 ? (
-          <p className="text-xs text-gray-500 self-center">
-            Obrišite sve komisije prije brisanja sesije.
+        {session.status === 'draft' && stats.configuredCommittees < stats.totalCommittees ? (
+          <p className="text-xs text-amber-700 self-center">
+            {stats.totalCommittees - stats.configuredCommittees} slotova čeka dodjelu članova prije aktivacije.
           </p>
         ) : null}
         {canManageLifecycle && session.status === 'active' ? (

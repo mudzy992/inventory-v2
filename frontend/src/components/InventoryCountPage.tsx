@@ -671,6 +671,7 @@ export const InventoryCountPage = () => {
                                 setEditingCommitteeId(id);
                               }}
                               onDelete={(id) => void handleDeleteCommittee(id)}
+                              canDeleteCommittees={admin}
                             />
                           </div>
                           <InventoryCommitteeDetailPanel
@@ -691,7 +692,7 @@ export const InventoryCountPage = () => {
                                 : undefined
                             }
                             onDelete={
-                              canManageDraft && committeeId
+                              admin && canManageDraft && committeeId && selectedCommittee?.membersConfigured
                                 ? () => void handleDeleteCommittee(committeeId)
                                 : undefined
                             }
