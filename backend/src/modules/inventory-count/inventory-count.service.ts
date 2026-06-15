@@ -158,6 +158,29 @@ export class InventoryCountService {
     }
   }
 
+  private async assertWarehouseAllowedForSessionCommittee(
+    sessionId: string,
+    sessionOrgUnitId: string,
+    warehouse: { id: string; cityId: string; orgUnitId: string | null },
+  ): Promise<void> {
+    const slot = await this.prisma.inventoryCommittee.findFirst({
+      where: { sessionId, warehouseId: warehouse.id },
+      select: { id: true },
+    });
+    if (slot) {
+      return;
+    }
+    await this.assertWarehouseInSessionScope(sessionOrgUnitId, warehouse);
+  }
+
+  private async listWarehousesForSessionSlots() {
+    return this.prisma.warehouse.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, cityId: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   private async listWarehousesForSessionOrgUnit(sessionOrgUnitId: string) {
     const orgUnitIds = await this.orgScopeService.expandOrgUnitIds([sessionOrgUnitId]);
     const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
@@ -187,9 +210,9 @@ export class InventoryCountService {
   private async provisionCommitteeSlotsForSession(
     sessionId: string,
     sessionName: string,
-    orgUnitId: string,
+    _orgUnitId: string,
   ): Promise<{ created: number; skipped: number }> {
-    const warehouses = await this.listWarehousesForSessionOrgUnit(orgUnitId);
+    const warehouses = await this.listWarehousesForSessionSlots();
     const categories = await this.listParentAssetCategories();
     if (warehouses.length === 0 || categories.length === 0) {
       return { created: 0, skipped: warehouses.length * categories.length };
@@ -264,7 +287,7 @@ export class InventoryCountService {
         },
         include: { orgUnit: true, committees: true },
       });
-      const warehouses = await this.listWarehousesForSessionOrgUnit(input.orgUnitId);
+      const warehouses = await this.listWarehousesForSessionSlots();
       const categories = await this.listParentAssetCategories();
       if (warehouses.length > 0 && categories.length > 0) {
         await provisionSessionCommitteeSlots({
@@ -375,7 +398,7 @@ export class InventoryCountService {
     if (user) {
       await this.coordinatorScope.assertCanManageWarehouse(user, warehouse.id);
     }
-    await this.assertWarehouseInSessionScope(session.orgUnitId, warehouse);
+    await this.assertWarehouseAllowedForSessionCommittee(sessionId, session.orgUnitId, warehouse);
     await this.validateCommitteeMembers(input.inventoryMembers, { requireUserForPresidentOnly: true });
     await this.validateCommitteeMembers(input.disposalMembers, { requireUserForPresidentOnly: true });
     await this.assertMembersEligibleForWarehouse(input.warehouseId, [
@@ -467,7 +490,18 @@ export class InventoryCountService {
     if (!session) {
       throw new NotFoundException('Inventory session not found');
     }
-    return this.listWarehousesForSessionOrgUnit(session.orgUnitId);
+    const committees = await this.prisma.inventoryCommittee.findMany({
+      where: { sessionId, warehouseId: { not: null } },
+      select: { warehouse: { select: { id: true, name: true } } },
+      distinct: ['warehouseId'],
+      orderBy: { warehouse: { name: 'asc' } },
+    });
+    if (committees.length > 0) {
+      return committees
+        .map((row) => row.warehouse)
+        .filter((row): row is { id: string; name: string } => Boolean(row));
+    }
+    return this.listWarehousesForSessionSlots();
   }
 
   async getCommitteeSetupOptions(sessionId: string, warehouseId: string, excludeCommitteeId?: string) {
@@ -489,7 +523,7 @@ export class InventoryCountService {
     if (!warehouse || !warehouse.isActive) {
       throw new BadRequestException('Warehouse not found or inactive');
     }
-    await this.assertWarehouseInSessionScope(session.orgUnitId, warehouse);
+    await this.assertWarehouseAllowedForSessionCommittee(sessionId, session.orgUnitId, warehouse);
     const assignedCategoryIds = new Set(
       (
         await this.prisma.inventoryCommittee.findMany({
@@ -645,7 +679,11 @@ export class InventoryCountService {
     if (user) {
       await this.coordinatorScope.assertCanManageWarehouse(user, warehouse.id);
     }
-    await this.assertWarehouseInSessionScope(committee.session.orgUnitId, warehouse);
+    await this.assertWarehouseAllowedForSessionCommittee(
+      committee.sessionId,
+      committee.session.orgUnitId,
+      warehouse,
+    );
     await this.assertMembersEligibleForWarehouse(warehouseId, [
       ...input.inventoryMembers.map((row) => row.employeeId),
       ...input.disposalMembers.map((row) => row.employeeId),

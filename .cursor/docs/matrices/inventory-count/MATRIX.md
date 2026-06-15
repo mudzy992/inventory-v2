@@ -35,7 +35,7 @@ Opseg unosa:
 Ograničenja:
 
 - 1× sesija po `(orgUnitId, year)`
-- pri kreiranju sesije automatski se generišu slotovi: sva aktivna skladišta u opsegu × sve roditeljske `ASSET` kategorije
+- pri kreiranju sesije automatski se generišu slotovi: **sva aktivna skladišta** iz tabele `warehouses` × sve roditeljske `ASSET` kategorije
 - svaki slot = `InventoryCommittee` + `DisposalCommission` bez članova (`membersConfigured=false`)
 - admin može sesiju **aktivirati** i **zatvoriti**, ali **ne može unositi linije**
 - aktivacija zahtijeva da **svi** slotovi imaju `membersConfigured=true`
@@ -45,7 +45,7 @@ Ograničenja:
 
 | Pravilo | Opis |
 |---------|------|
-| Provisioning | `createSession`, `ensureDraftSessionForDistribution`, `POST reconcile-slots` |
+| Provisioning | `createSession`, `ensureDraftSessionForDistribution`, `POST reconcile-slots` — **sva aktivna skladišta** (ne org-stablo distribucije) |
 | Idempotentnost | ponovni poziv ne duplira `(sessionId, warehouseId, categoryId)` |
 | Koordinator | `PATCH committees/:id` dodjeljuje članove; `warehouseId`/`categoryId` read-only |
 | Brisanje slota | zabranjeno dok je `membersConfigured=false` |
@@ -56,7 +56,7 @@ Ograničenja:
 | Akcija | Ko | Pravilo |
 |--------|-----|---------|
 | Označi opremu | evidentičar / admin | samo dok je sesija `draft` |
-| Opseg | sistem | grad opreme = grad distribucije **i** postoji slot za skladište + parent kategoriju |
+| Opseg | sistem | postoji slot `(sessionId, warehouseId, parentCategoryId)`; za `skladiste` grad se ne provjerava; za `zaduzeno` grad nosioca = grad distribucije |
 | Eligible sesije | API | `GET eligible-for-equipment/:equipmentId` |
 | Auto razduženje | sistem | `zaduzeno` → skladište (prenosnica po postavkama) |
 | Povrat s liste | admin | samo `draft`, stavka `listed` |

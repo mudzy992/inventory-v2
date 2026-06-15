@@ -1,5 +1,13 @@
 # Changelog — inventory-count
 
+## 2026-06-15 (fix slotovi + rashod)
+
+- Provisioning slotova: sva aktivna skladišta (`warehouses.isActive`), ne org-stablo distribucije — uključuje skladišta na vrhu hijerarhije.
+- `POST reconcile-slots` + admin UI **Osvježi slotove** za postojeće draft sesije.
+- Rashod eligible: slot-first; `skladiste` koristi `equipment.warehouseId` bez provjere grada.
+- Konfiguracija slota: skladište s postojećim slotom u sesiji dopušteno i izvan org-stabla distribucije.
+- Dialog **Za rashod**: ispravan `ModalRoot` (X, Escape, backdrop, footer).
+
 ## 2026-06-15 (auto slotovi)
 
 - `InventoryCommittee.membersConfigured` — auto slotovi (skladište × ASSET kategorija) pri kreiranju draft sesije.

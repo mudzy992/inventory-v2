@@ -19,6 +19,7 @@ interface SessionCommandCenterProps {
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
   onDelete?: (id: string) => void;
+  onReconcileSlots?: (id: string) => void;
   onRefresh: () => void;
   canManageLifecycle?: boolean;
 }
@@ -32,6 +33,7 @@ export const SessionCommandCenter = ({
   onActivate,
   onClose,
   onDelete,
+  onReconcileSlots,
   onRefresh,
   canManageLifecycle = true,
 }: SessionCommandCenterProps) => {
@@ -127,6 +129,12 @@ export const SessionCommandCenter = ({
           <Button variant="secondary" onClick={() => onActivate(session.id)}>
             <Play size={14} />
             Aktiviraj sesiju
+          </Button>
+        ) : null}
+        {canManageLifecycle && session.status === 'draft' && onReconcileSlots ? (
+          <Button variant="secondary" onClick={() => onReconcileSlots(session.id)} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Osvježi slotove
           </Button>
         ) : null}
         {canManageLifecycle && canDeleteSession && onDelete ? (

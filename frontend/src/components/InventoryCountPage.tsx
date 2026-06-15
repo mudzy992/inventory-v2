@@ -8,6 +8,7 @@ import {
   createInventorySessionApi,
   deleteInventoryCommitteeApi,
   deleteInventorySessionApi,
+  reconcileInventorySessionSlotsApi,
   fetchInventoryCommitteeReportApi,
   fetchInventoryCommitteesPageApi,
   fetchInventoryEquipmentScopePageApi,
@@ -373,6 +374,22 @@ export const InventoryCountPage = () => {
       toastError(err instanceof ApiError ? err.message : 'Greška');
     }
   };
+  const handleReconcileSlots = async (id: string) => {
+    setLoading(true);
+    try {
+      const result = await reconcileInventorySessionSlotsApi(id);
+      await handleSessionRefresh();
+      toastSuccess(
+        result.created > 0
+          ? `Dodano ${result.created} novih slotova (${result.skipped} već postoje).`
+          : 'Svi slotovi su već ažurirani.',
+      );
+    } catch (err) {
+      toastError(err instanceof ApiError ? err.message : 'Greška pri osvježavanju slotova');
+    } finally {
+      setLoading(false);
+    }
+  };
   const handleDeleteCommittee = async (id: string) => {
     if (!confirm('Obrisati popisnu komisiju? Povezana komisija rashoda će također biti uklonjena.')) {
       return;
@@ -584,6 +601,7 @@ export const InventoryCountPage = () => {
                         onActivate={(id) => void handleActivate(id)}
                         onClose={(id) => void handleClose(id)}
                         onDelete={(id) => void handleDeleteSession(id)}
+                        onReconcileSlots={(id) => void handleReconcileSlots(id)}
                         onRefresh={() => void refreshAll()}
                         canManageLifecycle={admin}
                       />

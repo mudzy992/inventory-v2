@@ -257,6 +257,12 @@ export const createInventorySessionApi = (body: {
 export const activateInventorySessionApi = (id: string) =>
   apiRequest<InventorySessionDto>(`/inventory-sessions/${id}/activate`, { method: 'PATCH' });
 
+export const reconcileInventorySessionSlotsApi = (sessionId: string) =>
+  apiRequest<{ created: number; skipped: number }>(
+    `/inventory-sessions/${sessionId}/reconcile-slots`,
+    { method: 'POST' },
+  );
+
 export const recordInventoryLineApi = (
   committeeId: string,
   body: {

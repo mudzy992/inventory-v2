@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import { fetchEligibleDisposalSessionsApi, markDisposalListApi } from '../../api/inventory-api';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { Button } from '../ui/button';
+import { inputClass, labelClass, selectClass } from '../ui/form-styles';
 import { ModalRoot } from '../ui/modal-root';
 
 interface EquipmentMarkDisposalDialogProps {
@@ -21,9 +23,7 @@ export const EquipmentMarkDisposalDialog = ({
   onMarked,
 }: EquipmentMarkDisposalDialogProps) => {
   const { toastError, toastSuccess } = useToast();
-  const [sessions, setSessions] = useState<
-    { id: string; name: string; year: number }[]
-  >([]);
+  const [sessions, setSessions] = useState<{ id: string; name: string; year: number }[]>([]);
   const [sessionId, setSessionId] = useState('');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,6 +49,7 @@ export const EquipmentMarkDisposalDialog = ({
 
   useEffect(() => {
     if (open) {
+      setNote('');
       void loadSessions();
     }
   }, [open, loadSessions]);
@@ -77,58 +78,74 @@ export const EquipmentMarkDisposalDialog = ({
       onClose={onClose}
       size="md"
       zIndex={70}
-      panelClassName="bg-white shadow-xl"
-      title="Označi za rashod"
-      footer={
-        <>
+      enableEscape
+      closeOnBackdrop
+    >
+      <div className="bg-white rounded-xl shadow-2xl w-full p-6">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Označi za rashod</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 p-1"
+            aria-label="Zatvori"
+            disabled={submitting}
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          Oprema <strong>{inventoryNumber}</strong> bit će dodana na listu za rashod u odabranoj
+          draft sesiji popisa.
+        </p>
+        {loading ? (
+          <p className="text-sm text-gray-500">Učitavam sesije…</p>
+        ) : sessions.length === 0 ? (
+          <p className="text-sm text-amber-700">
+            Nema draft sesije popisa u opsegu ove opreme (skladište i kategorija). Provjerite da
+            sesija ima slotove za ovo skladište.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className={labelClass}>Sesija popisa</label>
+              <select
+                value={sessionId}
+                onChange={(event) => setSessionId(event.target.value)}
+                className={selectClass}
+              >
+                <option value="">— Odaberite —</option>
+                {sessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.name} ({session.year})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Napomena (opcionalno)</label>
+              <textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                rows={3}
+                className={inputClass}
+                placeholder="Razlog ili kontekst za rashod"
+              />
+            </div>
+          </div>
+        )}
+        <div className="flex justify-end gap-2 mt-6">
           <Button variant="secondary" onClick={onClose} disabled={submitting}>
             Odustani
           </Button>
-          <Button onClick={() => void handleSubmit()} disabled={submitting || !sessionId}>
+          <Button
+            onClick={() => void handleSubmit()}
+            disabled={submitting || !sessionId || sessions.length === 0}
+          >
             {submitting ? 'Snimam…' : 'Dodaj na listu'}
           </Button>
-        </>
-      }
-    >
-      <p className="text-sm text-gray-600 mb-4">
-        Oprema <strong>{inventoryNumber}</strong> bit će dodana na listu za rashod u odabranoj draft
-        sesiji popisa.
-      </p>
-      {loading ? (
-        <p className="text-sm text-gray-500">Učitavam sesije…</p>
-      ) : sessions.length === 0 ? (
-        <p className="text-sm text-amber-700">
-          Nema draft sesije popisa u opsegu ove opreme (grad, skladište i kategorija).
-        </p>
-      ) : (
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Sesija popisa</label>
-            <select
-              value={sessionId}
-              onChange={(event) => setSessionId(event.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-            >
-              <option value="">— Odaberite —</option>
-              {sessions.map((session) => (
-                <option key={session.id} value={session.id}>
-                  {session.name} ({session.year})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Napomena (opcionalno)</label>
-            <textarea
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              rows={3}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              placeholder="Razlog ili kontekst za rashod"
-            />
-          </div>
         </div>
-      )}
+      </div>
     </ModalRoot>
   );
 };

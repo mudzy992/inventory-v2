@@ -103,25 +103,6 @@ export class EquipmentDisposalListService {
     if (existing && existing.status !== 'withdrawn') {
       throw new BadRequestException('Oprema je već na listi za rashod u ovoj sesiji');
     }
-    const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
-      session.orgUnitId,
-    );
-    const equipmentCityId = equipment.currentHolder
-      ? await this.locationResolutionService.getEffectiveLocationForOrgUnit(
-          equipment.currentHolder.orgUnitId,
-        )
-      : equipment.warehouse?.cityId ??
-        (equipment.warehouseId
-          ? (
-              await this.prisma.warehouse.findUnique({
-                where: { id: equipment.warehouseId },
-                select: { cityId: true },
-              })
-            )?.cityId
-          : null);
-    if (!sessionCityId || equipmentCityId !== sessionCityId) {
-      throw new BadRequestException('Oprema nije u opsegu sesije popisa');
-    }
     if (equipment.category.categoryKind !== 'ASSET') {
       throw new BadRequestException('Samo ASSET oprema može biti na listi za rashod');
     }
@@ -142,6 +123,19 @@ export class EquipmentDisposalListService {
       throw new BadRequestException(
         'Nema definisanog opsega popisa za ovo skladište i kategoriju u odabranoj sesiji',
       );
+    }
+    if (equipment.status === 'zaduzeno') {
+      const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+        session.orgUnitId,
+      );
+      const equipmentCityId = equipment.currentHolder
+        ? await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+            equipment.currentHolder.orgUnitId,
+          )
+        : null;
+      if (!sessionCityId || equipmentCityId !== sessionCityId) {
+        throw new BadRequestException('Oprema nije u opsegu sesije popisa');
+      }
     }
     const createTransfer = await isTransferCreationAllowed(
       this.settingsService,
@@ -291,26 +285,8 @@ export class EquipmentDisposalListService {
     if (equipment.category.categoryKind !== 'ASSET') {
       return [];
     }
-    const equipmentCityId = equipment.currentHolder
-      ? await this.locationResolutionService.getEffectiveLocationForOrgUnit(
-          equipment.currentHolder.orgUnitId,
-        )
-      : equipment.warehouse?.cityId ??
-        (equipment.warehouseId
-          ? (
-              await this.prisma.warehouse.findUnique({
-                where: { id: equipment.warehouseId },
-                select: { cityId: true },
-              })
-            )?.cityId
-          : null);
-    if (!equipmentCityId) {
-      return [];
-    }
-    let warehouseId: string | null = null;
-    try {
-      warehouseId = await this.resolveTargetWarehouseId(user, equipment);
-    } catch {
+    const warehouseId = await this.resolveEquipmentWarehouseIdForDisposal(user, equipment);
+    if (!warehouseId) {
       return [];
     }
     const parentCategoryId = await resolveParentAssetCategoryIdInTx(
@@ -326,12 +302,6 @@ export class EquipmentDisposalListService {
     });
     const eligible = [];
     for (const session of draftSessions) {
-      const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
-        session.orgUnitId,
-      );
-      if (sessionCityId !== equipmentCityId) {
-        continue;
-      }
       const slot = await this.prisma.inventoryCommittee.findFirst({
         where: {
           sessionId: session.id,
@@ -353,6 +323,27 @@ export class EquipmentDisposalListService {
       });
     }
     return eligible;
+  }
+
+  private async resolveEquipmentWarehouseIdForDisposal(
+    user: AuthenticatedUser,
+    equipment: {
+      id: string;
+      categoryId: string;
+      status: string;
+      warehouseId: string | null;
+      currentHolderId: string | null;
+      currentHolder: { id: string; orgUnitId: string } | null;
+    },
+  ): Promise<string | null> {
+    if (equipment.status === 'skladiste' && equipment.warehouseId) {
+      return equipment.warehouseId;
+    }
+    try {
+      return await this.resolveTargetWarehouseId(user, equipment);
+    } catch {
+      return null;
+    }
   }
 
   private async getSessionOrThrow(sessionId: string) {
