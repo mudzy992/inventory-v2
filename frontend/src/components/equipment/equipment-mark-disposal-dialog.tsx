@@ -72,7 +72,13 @@ export const EquipmentMarkDisposalDialog = ({
   };
 
   return (
-    <ModalRoot open={open} onClose={onClose} size="md">
+    <ModalRoot
+      open={open}
+      onClose={onClose}
+      size="md"
+      zIndex={70}
+      panelClassName="bg-white shadow-xl"
+    >
       <div className="p-6 space-y-4">
         <h3 className="text-lg font-semibold">Označi za rashod</h3>
         <p className="text-sm text-gray-600">
