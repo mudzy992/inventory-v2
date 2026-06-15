@@ -101,7 +101,7 @@ const matchesAssignmentEquipment = (
     if (equipment.status === 'zaduzeno' && holder) {
       return isOrgUnitInEffectiveWarehouseScope(state, assignment.warehouseId, holder.orgUnitId);
     }
-    if (equipment.status === 'rashodovano') {
+    if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
       return equipment.warehouseId === assignment.warehouseId;
     }
     return false;

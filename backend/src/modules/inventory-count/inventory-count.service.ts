@@ -45,6 +45,13 @@ import { ListInventoryLinesQueryDto } from './dto/list-inventory-lines-query.dto
 import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 import { provisionSessionCommitteeSlots } from './utils/provision-session-committee-slots.util';
+import { deleteInventorySessionCascadeInTx } from './utils/delete-inventory-session-cascade.util';
+
+const OPEN_INVENTORY_SESSION_STATUSES = ['draft', 'active', 'closing'] as const;
+
+const INVENTORY_COUNTABLE_EQUIPMENT_STATUS = {
+  notIn: ['rashodovano', 'za_rashod'] as const,
+} satisfies Prisma.EnumEquipmentStatusFilter;
 
 const SESSION_LIST_INCLUDE = {
   orgUnit: { include: { effectiveLocationCity: { include: { canton: true } } } },
@@ -173,6 +180,31 @@ export class InventoryCountService {
     await this.assertWarehouseInSessionScope(sessionOrgUnitId, warehouse);
   }
 
+  private async assertNoOpenInventorySession(excludeSessionId?: string): Promise<void> {
+    const openSession = await this.prisma.inventorySession.findFirst({
+      where: {
+        status: { in: [...OPEN_INVENTORY_SESSION_STATUSES] },
+        ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}),
+      },
+      select: { id: true, name: true, status: true },
+    });
+    if (openSession) {
+      throw new BadRequestException(
+        `Postoji otvorena sesija popisa "${openSession.name}" (${openSession.status}). Zatvorite je prije kreiranja nove.`,
+      );
+    }
+  }
+
+  private async findOpenInventorySession(excludeSessionId?: string) {
+    return this.prisma.inventorySession.findFirst({
+      where: {
+        status: { in: [...OPEN_INVENTORY_SESSION_STATUSES] },
+        ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}),
+      },
+      select: { id: true, name: true, status: true },
+    });
+  }
+
   private async listWarehousesForSessionSlots() {
     return this.prisma.warehouse.findMany({
       where: { isActive: true },
@@ -263,6 +295,7 @@ export class InventoryCountService {
 
   async createSession(input: CreateSessionInput) {
     await this.assertInventoryCountEnabled();
+    await this.assertNoOpenInventorySession();
     const name = input.name.trim();
     if (!name) {
       throw new BadRequestException('Name is required');
@@ -309,7 +342,7 @@ export class InventoryCountService {
   async ensureDraftSessionForDistribution(
     orgUnitId: string,
     year: number,
-  ): Promise<{ session: { id: string; name: string }; created: boolean }> {
+  ): Promise<{ session: { id: string; name: string }; created: boolean; skipped?: boolean }> {
     await this.assertInventoryCountEnabled();
     const existing = await this.prisma.inventorySession.findUnique({
       where: { orgUnitId_year: { orgUnitId, year } },
@@ -318,6 +351,10 @@ export class InventoryCountService {
     if (existing) {
       await this.provisionCommitteeSlotsForSession(existing.id, existing.name, orgUnitId);
       return { session: existing, created: false };
+    }
+    const openSession = await this.findOpenInventorySession();
+    if (openSession) {
+      return { session: { id: openSession.id, name: openSession.name }, created: false, skipped: true };
     }
     const session = await this.createSession({
       name: `POPIS ${year}`,
@@ -595,19 +632,9 @@ export class InventoryCountService {
     if (session.status !== 'draft') {
       throw new BadRequestException('Only draft sessions can be deleted');
     }
-    const [listedOrAssigned, lineCount] = await Promise.all([
-      this.prisma.equipmentDisposalListItem.count({
-        where: { sessionId, status: { in: ['listed', 'assigned'] } },
-      }),
-      this.prisma.inventoryLine.count({ where: { committee: { sessionId } } }),
-    ]);
-    if (listedOrAssigned > 0) {
-      throw new BadRequestException('Remove disposal list items before deleting the session');
-    }
-    if (lineCount > 0) {
-      throw new BadRequestException('Remove inventory lines before deleting the session');
-    }
-    await this.prisma.inventorySession.delete({ where: { id: sessionId } });
+    await this.prisma.$transaction(async (tx) => {
+      await deleteInventorySessionCascadeInTx({ tx, sessionId });
+    });
     return { ok: true };
   }
 
@@ -1128,7 +1155,7 @@ export class InventoryCountService {
     }
     const categoryIds = [...(await this.registrarScope.expandCategoryIds([committee.categoryId]))];
     const base: Prisma.EquipmentWhereInput = {
-      status: { not: 'rashodovano' },
+      status: INVENTORY_COUNTABLE_EQUIPMENT_STATUS,
       category: { categoryKind: 'ASSET' },
       categoryId: { in: categoryIds },
     };
@@ -2080,6 +2107,10 @@ export class InventoryCountService {
           where: { approvalId: approval.id },
           data: { status: 'rejected' },
         });
+        await tx.equipment.update({
+          where: { id: approval.equipmentId },
+          data: { status: 'skladiste' },
+        });
       }
       return row;
     });
@@ -2355,7 +2386,7 @@ export class InventoryCountService {
     }
     return this.prisma.equipment.findMany({
       where: {
-        status: { not: 'rashodovano' },
+        status: INVENTORY_COUNTABLE_EQUIPMENT_STATUS,
         category: { categoryKind: 'ASSET' },
         OR: orConditions,
       },
@@ -2380,7 +2411,7 @@ export class InventoryCountService {
     const orgUnitIds = orgUnitsInCity.map((row) => row.id);
     return this.prisma.equipment.findMany({
       where: {
-        status: { not: 'rashodovano' },
+        status: INVENTORY_COUNTABLE_EQUIPMENT_STATUS,
         category: { categoryKind: 'ASSET' },
         OR: [
           { warehouseId: { in: warehouseIds } },

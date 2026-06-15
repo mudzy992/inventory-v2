@@ -357,7 +357,7 @@ export const InventoryCountPage = () => {
     return selectedCommittee.members.find((m) => m.employeeId === user.employeeId) ?? null;
   }, [selectedCommittee, user?.employeeId]);
   const handleDeleteSession = async (id: string) => {
-    if (!confirm('Obrisati sesiju popisa? Ova radnja je nepovratna.')) {
+    if (!confirm('Obrisati sesiju popisa? Briše sve komisije, slotove, listu rashoda i povezane komisije rashoda. Ova radnja je nepovratna.')) {
       return;
     }
     try {

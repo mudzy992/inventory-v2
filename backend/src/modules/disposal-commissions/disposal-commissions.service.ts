@@ -378,7 +378,7 @@ export class DisposalCommissionsService {
       warehouseId?: string | null;
     },
   ): Promise<boolean> {
-    if (equipment.status === 'rashodovano') {
+    if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
       return false;
     }
     const expanded = await this.registrarScope.expandCategoryIds([categoryId]);

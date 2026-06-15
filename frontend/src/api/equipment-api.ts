@@ -14,6 +14,8 @@ export interface EquipmentListFilters extends PaginatedListParams {
   currentHolderId?: string;
   /** UUID lota ili `none` za opremu bez lota */
   stockLotId?: string;
+  specFieldId?: string;
+  specValue?: string;
 }
 
 export interface EquipmentLotGroup {

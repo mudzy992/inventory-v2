@@ -344,6 +344,7 @@ export class RegistrarScopeService {
         warehouseId: { in: keeperIds },
         OR: [
           { status: 'skladiste' },
+          { status: 'za_rashod' },
           {
             status: 'rashodovano',
             warehouseCondition: { in: ['spremno_za_unistenje', 'unisteno'] },
@@ -512,6 +513,7 @@ export class RegistrarScopeService {
             OR: [
               { status: 'skladiste', warehouseId: assignment.warehouseId },
               zaduzenoClause,
+              { status: 'za_rashod', warehouseId: assignment.warehouseId },
               { status: 'rashodovano', warehouseId: assignment.warehouseId },
             ],
           },
@@ -568,7 +570,7 @@ export class RegistrarScopeService {
       if (equipment.status === 'zaduzeno' && holder) {
         return this.isOrgUnitInEffectiveWarehouseScope(assignment.warehouseId, holder.orgUnitId);
       }
-      if (equipment.status === 'rashodovano') {
+      if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
         return equipment.warehouseId === assignment.warehouseId;
       }
       return false;

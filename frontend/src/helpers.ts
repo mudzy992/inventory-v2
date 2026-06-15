@@ -123,6 +123,7 @@ export function getStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     skladiste: 'Na skladištu',
     zaduzeno: 'Zaduženo',
+    za_rashod: 'Za rashod',
     rashodovano: 'Rashodovano',
     raw: 'RAW (čeka potpis)',
     potpisan: 'Potpisan',
@@ -138,6 +139,7 @@ export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     skladiste: 'bg-blue-100 text-blue-800',
     zaduzeno: 'bg-green-100 text-green-800',
+    za_rashod: 'bg-orange-100 text-orange-800',
     rashodovano: 'bg-red-100 text-red-800',
     raw: 'bg-yellow-100 text-yellow-800',
     potpisan: 'bg-green-100 text-green-800',

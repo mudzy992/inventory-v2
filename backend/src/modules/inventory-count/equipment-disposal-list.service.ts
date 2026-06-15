@@ -85,8 +85,8 @@ export class EquipmentDisposalListService {
     if (!equipment) {
       throw new NotFoundException('Equipment not found');
     }
-    if (equipment.status === 'rashodovano') {
-      throw new BadRequestException('Oprema je već rashodovana');
+    if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
+      throw new BadRequestException('Oprema je već označena ili rashodovana');
     }
     await assertCanWriteEquipment(
       user,
@@ -178,8 +178,9 @@ export class EquipmentDisposalListService {
       } else {
         throw new BadRequestException('Nepodržan status opreme za listu rashoda');
       }
+      let listItem;
       if (existing?.status === 'withdrawn') {
-        return tx.equipmentDisposalListItem.update({
+        listItem = await tx.equipmentDisposalListItem.update({
           where: { id: existing.id },
           data: {
             status: 'listed',
@@ -197,19 +198,29 @@ export class EquipmentDisposalListService {
           },
           include: LIST_ITEM_INCLUDE,
         });
+      } else {
+        listItem = await tx.equipmentDisposalListItem.create({
+          data: {
+            sessionId,
+            equipmentId: input.equipmentId,
+            warehouseId,
+            categoryId: parentCategoryId,
+            note: input.note?.trim() ?? null,
+            markedByUserId: user.id,
+            razduzenjeTransferId,
+          },
+          include: LIST_ITEM_INCLUDE,
+        });
       }
-      return tx.equipmentDisposalListItem.create({
+      await tx.equipment.update({
+        where: { id: equipment.id },
         data: {
-          sessionId,
-          equipmentId: input.equipmentId,
+          status: 'za_rashod',
           warehouseId,
-          categoryId: parentCategoryId,
-          note: input.note?.trim() ?? null,
-          markedByUserId: user.id,
-          razduzenjeTransferId,
+          currentHolderId: null,
         },
-        include: LIST_ITEM_INCLUDE,
       });
+      return listItem;
     });
   }
 
@@ -236,15 +247,22 @@ export class EquipmentDisposalListService {
     if (item.status !== 'listed') {
       throw new BadRequestException('Samo stavke na listi (prije dodjele komisiji) se mogu vratiti');
     }
-    return this.prisma.equipmentDisposalListItem.update({
-      where: { id: item.id },
-      data: {
-        status: 'withdrawn',
-        withdrawnByUserId: user.id,
-        withdrawnAt: new Date(),
-        withdrawalNote: note?.trim() ?? null,
-      },
-      include: LIST_ITEM_INCLUDE,
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.equipmentDisposalListItem.update({
+        where: { id: item.id },
+        data: {
+          status: 'withdrawn',
+          withdrawnByUserId: user.id,
+          withdrawnAt: new Date(),
+          withdrawalNote: note?.trim() ?? null,
+        },
+        include: LIST_ITEM_INCLUDE,
+      });
+      await tx.equipment.update({
+        where: { id: equipmentId },
+        data: { status: 'skladiste' },
+      });
+      return updated;
     });
   }
 
@@ -279,7 +297,7 @@ export class EquipmentDisposalListService {
     if (!equipment) {
       throw new NotFoundException('Equipment not found');
     }
-    if (equipment.status === 'rashodovano') {
+    if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
       return [];
     }
     if (equipment.category.categoryKind !== 'ASSET') {

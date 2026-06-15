@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID, IsEnum } from 'class-validator';
 import { EquipmentStatus } from '../../../../generated/prisma/client';
 import { PaginatedQueryDto } from '../../../common/dto/paginated-query.dto';
 
@@ -18,4 +18,12 @@ export class ListEquipmentQueryDto extends PaginatedQueryDto {
   /** UUID lota ili literal `none` za opremu bez lota */
   @IsOptional()
   stockLotId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  specFieldId?: string;
+
+  @IsOptional()
+  @IsString()
+  specValue?: string;
 }

@@ -1,5 +1,12 @@
 # Changelog — inventory-count
 
+## 2026-06-15 (sesija + za_rashod + pretraga)
+
+- Kaskadno brisanje draft sesije (komisije rashoda, lista, slotovi); `za_rashod` oprema → `skladiste`.
+- Globalni lock: max jedna otvorena sesija u sistemu.
+- Lista za rashod postavlja status opreme `za_rashod`; povrat/odbijanje → `skladiste`.
+- Pretraga opreme proširena na JSON specifikaciju (`search`, opcionalno `specFieldId` + `specValue`).
+
 ## 2026-06-15 (fix slotovi + rashod)
 
 - Provisioning slotova: sva aktivna skladišta (`warehouses.isActive`), ne org-stablo distribucije — uključuje skladišta na vrhu hijerarhije.

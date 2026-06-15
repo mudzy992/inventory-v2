@@ -278,7 +278,7 @@ export function EquipmentPage() {
         <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Pretraži po inv. broju, serijskom broju, osobi..."
+            placeholder="Pretraži po inv. broju, ugovoru, bilješkama ili specifikaciji..."
             className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -293,6 +293,7 @@ export function EquipmentPage() {
             <option value="">Svi statusi</option>
             <option value="skladiste">Na skladištu</option>
             <option value="zaduzeno">Zaduženo</option>
+            <option value="za_rashod">Za rashod</option>
             <option value="rashodovano">Rashodovano</option>
           </select>
         </div>
@@ -311,6 +312,9 @@ export function EquipmentPage() {
             </span>
             <span className="bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg text-green-700">
               Zaduženo: <strong>{equipmentSummary.byStatus.zaduzeno ?? 0}</strong>
+            </span>
+            <span className="bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-lg text-orange-700">
+              Za rashod: <strong>{equipmentSummary.byStatus.za_rashod ?? 0}</strong>
             </span>
             <span className="bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-red-700">
               Rashod: <strong>{equipmentSummary.byStatus.rashodovano ?? 0}</strong>

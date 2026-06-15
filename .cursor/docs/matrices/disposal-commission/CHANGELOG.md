@@ -1,5 +1,9 @@
 # disposal-commission — CHANGELOG
 
+## 2026-06-15 (za_rashod)
+
+- Lista za rashod postavlja `equipment.status=za_rashod`; povrat/odbijanje vraća `skladiste`.
+
 ## 2026-06-15 — Popisni rashod workflow
 
 - `EquipmentDisposalListItem` — lista za rashod u draft sesiji; auto dodjela pri kreiranju popisne komisije.

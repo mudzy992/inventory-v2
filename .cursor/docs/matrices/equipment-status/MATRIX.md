@@ -6,6 +6,7 @@
 |--------|----------|
 | `skladiste` | Na skladištu, bez zaduženja |
 | `zaduzeno` | Zaduženo (`currentHolderId`) |
+| `za_rashod` | Na listi za rashod (draft sesija); čeka odluku komisije |
 | `rashodovano` | Rashodovano |
 
 ## `warehouseCondition` (kada je oprema u skladištu ili rashod u skladištu)
@@ -15,6 +16,12 @@
 | `na_skladistu` | Normalno na skladištu ili rashod primljen u skladište |
 | `spremno_za_unistenje` | Legacy — odobreno prije novog toka; skladištar može `destroy-equipment` |
 | `unisteno` | Službeni otpis komisije rashoda (novi tok) ili legacy destroy |
+
+## Pretraga opreme
+
+- `GET /equipment?search=` — inv. broj, ugovor, bilješke + `contains` u JSON specifikaciji
+- `specFieldId` + `specValue` — tačan match jednog polja specifikacije
+- uz `categoryId` + `search` — pretraga samo po text poljima te kategorije
 
 ## Reaktivacija (admin)
 

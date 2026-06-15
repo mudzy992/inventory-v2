@@ -36,6 +36,8 @@ export function EquipmentByCategoryPage() {
   const [newFilterOperator, setNewFilterOperator] = useState<FilterCondition['operator']>('contains');
   const [newFilterValue, setNewFilterValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [specFieldId, setSpecFieldId] = useState('');
+  const [specValue, setSpecValue] = useState('');
   const [showAllStatuses, setShowAllStatuses] = useState(false);
   
   // Saved filter name
@@ -46,7 +48,7 @@ export function EquipmentByCategoryPage() {
   const evidenticar = isEvidenticar();
   const user = getCurrentUser();
   const [categoryStats, setCategoryStats] = useState<
-    Record<string, { total: number; skladiste: number; zaduzeno: number; rashodovano: number }>
+    Record<string, { total: number; skladiste: number; zaduzeno: number; za_rashod: number; rashodovano: number }>
   >({});
   const [lotGroups, setLotGroups] = useState<EquipmentLotGroup[]>([]);
 
@@ -74,6 +76,7 @@ export function EquipmentByCategoryPage() {
             total: summary.total,
             skladiste: summary.byStatus.skladiste,
             zaduzeno: summary.byStatus.zaduzeno,
+            za_rashod: summary.byStatus.za_rashod,
             rashodovano: summary.byStatus.rashodovano,
           },
         ] as const;
@@ -104,8 +107,10 @@ export function EquipmentByCategoryPage() {
         categoryId: selectedSubId!,
         stockLotId: selectedLotKey === 'none' ? 'none' : selectedLotKey ?? undefined,
         status: showAllStatuses ? undefined : 'zaduzeno',
+        specFieldId: specFieldId || undefined,
+        specValue: specValue.trim() || undefined,
       }),
-    [selectedSubId, selectedLotKey, showAllStatuses],
+    [selectedSubId, selectedLotKey, showAllStatuses, specFieldId, specValue],
   );
 
   const equipmentList = usePaginatedList({
@@ -494,6 +499,7 @@ export function EquipmentByCategoryPage() {
               <span className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs">Ukupno: <strong>{stats.total}</strong></span>
               <span className="bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg text-xs text-green-700">Zaduženo: <strong>{stats.zaduzeno}</strong></span>
               <span className="bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs text-blue-700">Skladište: <strong>{stats.skladiste}</strong></span>
+              <span className="bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-lg text-xs text-orange-700">Za rashod: <strong>{stats.za_rashod}</strong></span>
               <span className="bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-xs text-red-700">Rashod: <strong>{stats.rashodovano}</strong></span>
             </div>
           )}
@@ -507,10 +513,37 @@ export function EquipmentByCategoryPage() {
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Pretraži..."
+                  placeholder="Pretraži po inv. broju, specifikaciji..."
                   className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </div>
+              {selectedSub ? (
+                <div className="flex flex-wrap items-center gap-2 min-w-[240px]">
+                  <select
+                    value={specFieldId}
+                    onChange={(event) => setSpecFieldId(event.target.value)}
+                    className="border border-gray-300 rounded-lg px-2 py-2 text-sm"
+                    aria-label="Polje specifikacije"
+                  >
+                    <option value="">Polje specifikacije</option>
+                    {[...(selectedSub.fields ?? []), ...(selectedSub.optionalFields ?? [])]
+                      .filter((field) => field.type === 'text')
+                      .map((field) => (
+                        <option key={field.id} value={field.id}>
+                          {field.name}
+                        </option>
+                      ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={specValue}
+                    onChange={(event) => setSpecValue(event.target.value)}
+                    placeholder="Tačna vrijednost"
+                    className="border border-gray-300 rounded-lg px-2 py-2 text-sm min-w-[140px]"
+                    disabled={!specFieldId}
+                  />
+                </div>
+              ) : null}
               <button
                 onClick={() => setShowFilterBuilder(true)}
                 className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"

@@ -492,7 +492,7 @@ export class MaintenancePartsService {
     if (!equipment) {
       throw new NotFoundException('Equipment not found');
     }
-    if (equipment.status === 'rashodovano') {
+    if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
       throw new BadRequestException('Cannot manage parts on decommissioned equipment');
     }
     if (equipment.category.categoryKind !== 'ASSET') {

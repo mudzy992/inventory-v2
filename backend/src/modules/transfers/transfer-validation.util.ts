@@ -31,6 +31,9 @@ export const validateEquipmentForTransfer = (
   equipment: Equipment,
   dto: CreateTransferDto,
 ): void => {
+  if (equipment.status === 'za_rashod') {
+    throw new BadRequestException('Oprema je na listi za rashod i ne može se prenositi');
+  }
   if (dto.type === 'zaduzenje' && equipment.status !== 'skladiste') {
     throw new BadRequestException('zaduzenje requires equipment in skladiste');
   }

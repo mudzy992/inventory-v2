@@ -1,5 +1,10 @@
 # Changelog — equipment-status
 
+## 2026-06-15 (za_rashod + pretraga)
+
+- Novi status `za_rashod` — prijedlog rashoda na draft listi; `rashodovano` tek nakon odobrenja komisije.
+- Pretraga opreme po specifikaciji (`search`, `specFieldId`/`specValue`).
+
 ## 2026-06-15
 
 - Službeni otpis: komisija rashoda postavlja `unisteno`; admin reaktivacija (`POST /equipment/:id/reactivate`).

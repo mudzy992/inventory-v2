@@ -1,0 +1,61 @@
+import type { Prisma } from '../../../generated/prisma/client';
+import type { CategoryFieldDefinition } from './category-fields.util';
+import { buildSpecificationFieldFilter, buildSpecificationJsonPath } from './json-specification-filter.util';
+
+export type BuildEquipmentSearchWhereInput = {
+  search?: string;
+  specFieldId?: string;
+  specValue?: string;
+  categoryTextFieldIds?: string[];
+};
+
+export const buildSpecificationTextFieldContainsFilter = (
+  fieldId: string,
+  searchTerm: string,
+): Prisma.EquipmentWhereInput => ({
+  specifications: {
+    path: buildSpecificationJsonPath(fieldId),
+    string_contains: searchTerm,
+  },
+});
+
+export const buildEquipmentSearchWhere = (
+  input: BuildEquipmentSearchWhereInput,
+): Prisma.EquipmentWhereInput | null => {
+  const searchTerm = input.search?.trim();
+  const specFieldId = input.specFieldId?.trim();
+  const specValue = input.specValue?.trim();
+  const clauses: Prisma.EquipmentWhereInput[] = [];
+  if (specFieldId && specValue) {
+    clauses.push({ specifications: buildSpecificationFieldFilter(specFieldId, specValue) });
+  }
+  if (searchTerm) {
+    const textClauses: Prisma.EquipmentWhereInput[] = [
+      { inventoryNumber: { contains: searchTerm } },
+      { contractNumber: { contains: searchTerm } },
+      { notes: { contains: searchTerm } },
+    ];
+    if (input.categoryTextFieldIds && input.categoryTextFieldIds.length > 0) {
+      for (const fieldId of input.categoryTextFieldIds) {
+        textClauses.push(buildSpecificationTextFieldContainsFilter(fieldId, searchTerm));
+      }
+    } else {
+      textClauses.push({
+        specifications: {
+          string_contains: searchTerm,
+        },
+      });
+    }
+    clauses.push({ OR: textClauses });
+  }
+  if (clauses.length === 0) {
+    return null;
+  }
+  if (clauses.length === 1) {
+    return clauses[0]!;
+  }
+  return { AND: clauses };
+};
+
+export const collectCategoryTextFieldIds = (fields: CategoryFieldDefinition[]): string[] =>
+  fields.filter((field) => field.type === 'text').map((field) => field.id);

@@ -35,6 +35,7 @@ Opseg unosa:
 Ograničenja:
 
 - 1× sesija po `(orgUnitId, year)`
+- **globalno** samo jedna otvorena sesija (`draft` | `active` | `closing`); nova se ne može kreirati dok postoji otvorena
 - pri kreiranju sesije automatski se generišu slotovi: **sva aktivna skladišta** iz tabele `warehouses` × sve roditeljske `ASSET` kategorije
 - svaki slot = `InventoryCommittee` + `DisposalCommission` bez članova (`membersConfigured=false`)
 - admin može sesiju **aktivirati** i **zatvoriti**, ali **ne može unositi linije**
@@ -61,6 +62,20 @@ Ograničenja:
 | Auto razduženje | sistem | `zaduzeno` → skladište (prenosnica po postavkama) |
 | Povrat s liste | admin | samo `draft`, stavka `listed` |
 | Dodjela komisiji | sistem | pri konfiguraciji članova slota (`membersConfigured=true`) |
+| Status opreme | sistem | pri označavanju → `za_rashod`; povrat/brisanje sesije → `skladiste`; approve → `rashodovano` |
+
+## Brisanje draft sesije (admin)
+
+- `DELETE /inventory-sessions/:id` — kaskadno briše slotove, listu rashoda, approvals, `DisposalCommission` i ostale veze sesije
+- oprema u statusu `za_rashod` zbog liste → vraća se na `skladiste` (izvršena razduženja se ne poništavaju)
+
+## Globalni lock sesije
+
+| Pravilo | Opis |
+|---------|------|
+| Otvorena | `draft`, `active`, `closing` |
+| Kreiranje | blokirano dok postoji bilo koja otvorena sesija u sistemu |
+| Scheduler | Jan 1 / lock dan — skip + log ako je lock aktivan |
 
 ## Konfiguracija komisije (admin / koordinator, draft sesija)
 
@@ -94,7 +109,7 @@ Napomena: pri aktivaciji, ako nema perioda, postavlja se 01.12–31.12 za tu god
 sessionCityId = effectiveLocationCityId(session.orgUnitId)
 
 equipment je u opsegu komisije ako:
-  equipment.status ≠ rashodovano
+  equipment.status ∉ { rashodovano, za_rashod }
   AND category.categoryKind = ASSET
   AND equipment.categoryId ∈ expand(committee.categoryId)
   AND resolveEquipmentCityId(equipment) == sessionCityId

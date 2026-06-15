@@ -174,12 +174,15 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const canManage = admin || evidenticar;
   const canRegistrarAct = (type: TransferType): boolean =>
     admin || (evidenticar && currentUser ? canRegistrarCreateTransfer(eq, currentUser, state, type) : false);
-  const canTransfer = canManage && eq.status !== 'rashodovano';
+  const canTransfer = canManage && eq.status !== 'rashodovano' && eq.status !== 'za_rashod';
   const canAssign = canManage && eq.status === 'skladiste' && canRegistrarAct('zaduzenje');
   const canPrenos = canManage && eq.status === 'zaduzeno' && canRegistrarAct('prenos');
   const canRazduzenje = canManage && eq.status === 'zaduzeno' && canRegistrarAct('razduzenje');
   const canMarkForDisposal =
-    canManage && disposalPreListEnabled && eq.status !== 'rashodovano';
+    canManage &&
+    disposalPreListEnabled &&
+    eq.status !== 'rashodovano' &&
+    eq.status !== 'za_rashod';
   const canReactivate =
     admin && eq.status === 'rashodovano' && eq.warehouseCondition === 'unisteno';
 
@@ -323,6 +326,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
             <span className={`px-3 py-1 rounded-full text-xs font-medium ${
               eq.status === 'zaduzeno' ? 'bg-green-500 text-white' :
               eq.status === 'skladiste' ? 'bg-blue-400 text-white' :
+              eq.status === 'za_rashod' ? 'bg-orange-500 text-white' :
               'bg-red-500 text-white'
             }`}>
               {getStatusLabel(eq.status)}

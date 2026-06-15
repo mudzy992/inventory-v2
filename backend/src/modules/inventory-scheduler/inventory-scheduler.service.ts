@@ -61,6 +61,12 @@ export class InventorySchedulerService {
           distribution.id,
           year,
         );
+        if (result.skipped) {
+          this.logger.warn(
+            `Jan 1 draft skipped for ${distribution.name}: open session "${result.session.name}"`,
+          );
+          continue;
+        }
         this.logger.log(
           `Jan 1 draft session ${result.created ? 'created' : 'reconciled'} for ${distribution.name} year ${year}`,
         );
@@ -91,6 +97,12 @@ export class InventorySchedulerService {
           distribution.id,
           year,
         );
+        if (created.skipped) {
+          this.logger.warn(
+            `Lock day draft skipped for ${distribution.name}: open session "${created.session.name}"`,
+          );
+          continue;
+        }
         if (created.created) {
           this.logger.log(
             `Draft session created for ${distribution.name} (${distribution.id}) year ${year}`,

@@ -15,6 +15,10 @@ import { validateEquipmentSpecifications } from '../../common/utils/category-fie
 import { resolveRegistrarEquipmentSpecifications } from '../../common/utils/registrar-equipment-spec.util';
 import { buildSpecificationFieldFilter } from '../../common/utils/json-specification-filter.util';
 import {
+  buildEquipmentSearchWhere,
+  collectCategoryTextFieldIds,
+} from '../../common/utils/build-equipment-search-where.util';
+import {
   buildOrderBy,
   paginate,
   parsePagination,
@@ -110,6 +114,7 @@ export class EquipmentService {
     const byStatus = {
       skladiste: 0,
       zaduzeno: 0,
+      za_rashod: 0,
       rashodovano: 0,
     } satisfies Record<EquipmentStatus, number>;
     let total = 0;
@@ -351,27 +356,32 @@ export class EquipmentService {
     query: ListEquipmentQueryDto,
   ): Promise<Prisma.EquipmentWhereInput> {
     const scopeWhere = await this.registrarScope.buildEquipmentWhere(user);
-    const searchTerm = query.search?.trim();
     const stockLotFilter: Prisma.EquipmentWhereInput =
       query.stockLotId === 'none'
         ? { stockLotId: null }
         : query.stockLotId
           ? { stockLotId: query.stockLotId }
           : {};
+    let categoryTextFieldIds: string[] | undefined;
+    if (query.categoryId && query.search?.trim()) {
+      const category = await this.prisma.category.findUnique({ where: { id: query.categoryId } });
+      if (category) {
+        const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
+        categoryTextFieldIds = collectCategoryTextFieldIds([...fields, ...optionalFields]);
+      }
+    }
+    const searchWhere = buildEquipmentSearchWhere({
+      search: query.search,
+      specFieldId: query.specFieldId,
+      specValue: query.specValue,
+      categoryTextFieldIds,
+    });
     const filters: Prisma.EquipmentWhereInput = {
       status: query.status,
       categoryId: query.categoryId,
       currentHolderId: query.currentHolderId,
       ...stockLotFilter,
-      ...(searchTerm
-        ? {
-            OR: [
-              { inventoryNumber: { contains: searchTerm } },
-              { contractNumber: { contains: searchTerm } },
-              { notes: { contains: searchTerm } },
-            ],
-          }
-        : {}),
+      ...(searchWhere ?? {}),
     };
     const parts = [scopeWhere, filters].filter((part) => Object.keys(part).length > 0);
     if (parts.length === 0) {

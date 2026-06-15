@@ -29,6 +29,7 @@ enum OrgUnitType {
 enum EquipmentStatus {
   skladiste
   zaduzeno
+  za_rashod
   rashodovano
 }
 

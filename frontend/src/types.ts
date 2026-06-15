@@ -136,13 +136,15 @@ export interface WarehouseStockLot {
   }[];
 }
 
+export type EquipmentStatus = 'skladiste' | 'zaduzeno' | 'za_rashod' | 'rashodovano';
+
 export interface Equipment {
   id: string;
   categoryId: string;
   stockLotId?: string | null;
   inventoryNumber: string;
   specifications: Record<string, string>;
-  status: 'skladiste' | 'zaduzeno' | 'rashodovano';
+  status: EquipmentStatus;
   contractNumber?: string;
   entryDate: string;
   currentHolderId?: string;

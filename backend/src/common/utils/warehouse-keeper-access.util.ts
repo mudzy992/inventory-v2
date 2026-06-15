@@ -20,7 +20,7 @@ export const canKeeperReadEquipment = (
   if (!equipment.warehouseId || !keeperWarehouseIds.has(equipment.warehouseId)) {
     return false;
   }
-  if (equipment.status === 'skladiste') {
+  if (equipment.status === 'skladiste' || equipment.status === 'za_rashod') {
     return true;
   }
   if (equipment.status === 'rashodovano') {

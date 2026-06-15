@@ -61,7 +61,7 @@ export async function evaluateEquipmentInCommitteeScope(
   committee: CommitteeScopeInput,
   equipment: WarehouseScopeEquipment,
 ): Promise<boolean> {
-  if (equipment.status === 'rashodovano') {
+  if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
     return false;
   }
   if (equipment.category?.categoryKind === 'MAINTENANCE') {
