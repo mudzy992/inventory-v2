@@ -1,5 +1,10 @@
 # Changelog — roles-access
 
+## 2026-06-15 (popis_koordinator)
+
+- Nova uloga `popis_koordinator` + `InventoryCoordinatorAssignment` (skladište, opcionalno distribucija).
+- CRUD popisnih komisija u draft sesiji; activate/close sesije ostaje admin.
+
 ## 2026-06-10 (transfer scope ID-based filter)
 
 - `buildTransferWhere` sada koristi eksplicitne skupove `equipmentId` / `fromPersonId` / `toPersonId` iz `buildEquipmentWhere` + `buildEmployeeWhere` (1:1 parity s Opremom/Radnicima; izbjegava Prisma relation filter edge-case).

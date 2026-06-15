@@ -637,6 +637,7 @@ export const RegistrarStockPage = () => {
               <option value="">Svi statusi</option>
               <option value="ceka_specifikaciju">Čeka specifikaciju</option>
               <option value="spremno_za_izdavanje">Spremno za izdavanje</option>
+              <option value="zatvoreno">Zatvoreno</option>
             </select>
           </div>
         </div>
@@ -695,7 +696,8 @@ export const RegistrarStockPage = () => {
                   <p className="font-medium text-gray-900 truncate">{group.productName}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {group.categoryName} · {group.warehouseCount} skladišt
-                    {group.warehouseCount === 1 ? 'e' : 'a'} · {group.totalOnHand}/{group.totalReceived} na skladištu
+                    {group.warehouseCount === 1 ? 'e' : 'a'} · {group.totalOnHand}/{group.totalReceived} na stanju
+                    {group.warehouseCount > 1 ? ' · ukupno primljeno uključuje zatvorene lotove' : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -730,7 +732,7 @@ export const RegistrarStockPage = () => {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-800 truncate">{lot.warehouseName ?? '—'}</p>
                             <p className="text-xs text-gray-500">
-                              {lot.quantityOnHand}/{lot.quantityReceived} na skladištu
+                              {lot.quantityOnHand}/{lot.quantityReceived} na stanju
                               {lot.contractNumber ? ` · Ugovor ${lot.contractNumber}` : ''}
                             </p>
                           </div>

@@ -11,6 +11,7 @@ interface UserListDto {
   employeeId: string | null;
   isActive: boolean;
   registrarScopes: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
+  coordinatorAssignments?: { warehouseId: string; orgUnitId?: string | null }[];
   lastLoginAt: string | null;
 }
 
@@ -22,6 +23,7 @@ const mapUser = (row: UserListDto): UserAccount => ({
   password: '',
   isActive: row.isActive,
   registrarScopes: row.registrarScopes,
+  coordinatorAssignments: row.coordinatorAssignments ?? [],
   lastLogin: row.lastLoginAt ?? undefined,
 });
 

@@ -275,6 +275,84 @@ export class NotificationsService {
     });
   }
 
+  async notifyInventoryDraftCreated(
+    sessionId: string,
+    sessionName: string,
+    orgUnitId: string,
+  ): Promise<void> {
+    if (!(await this.areNotificationsEnabled())) {
+      return;
+    }
+    const adminIds = await this.prisma.user.findMany({
+      where: { role: 'admin', isActive: true },
+      select: { id: true },
+    });
+    const coordinatorIds = await this.prisma.user.findMany({
+      where: {
+        role: 'popis_koordinator',
+        isActive: true,
+        inventoryCoordinatorAssignments: {
+          some: { OR: [{ orgUnitId }, { orgUnitId: null }] },
+        },
+      },
+      select: { id: true },
+    });
+    const recipients = [...adminIds, ...coordinatorIds].map((row) => row.id);
+    await this.createForUsers(recipients, {
+      type: 'inventory_draft_created',
+      title: 'Kreirana draft sesija popisa',
+      message: `Sesija „${sessionName}" je kreirana — definirajte komisije prije aktivacije.`,
+      relatedId: sessionId,
+    });
+  }
+
+  async notifyInventoryCloseBlocked(
+    sessionId: string,
+    sessionName: string,
+    pendingDisposal: number,
+    detail?: string,
+  ): Promise<void> {
+    if (!(await this.areNotificationsEnabled())) {
+      return;
+    }
+    const adminIds = await this.prisma.user.findMany({
+      where: { role: 'admin', isActive: true },
+      select: { id: true },
+    });
+    const message =
+      pendingDisposal > 0
+        ? `Sesija „${sessionName}" nije automatski zatvorena — ${pendingDisposal} rashoda čeka odluku.`
+        : `Sesija „${sessionName}" nije automatski zatvorena${detail ? `: ${detail}` : '.'}`;
+    await this.createForUsers(
+      adminIds.map((row) => row.id),
+      {
+        type: 'inventory_close_blocked',
+        title: 'Zatvaranje popisa blokirano',
+        message,
+        relatedId: sessionId,
+      },
+    );
+  }
+
+  async notifyInventoryAutoClosed(sessionId: string, sessionName: string): Promise<void> {
+    if (!(await this.areNotificationsEnabled())) {
+      return;
+    }
+    const adminIds = await this.prisma.user.findMany({
+      where: { role: 'admin', isActive: true },
+      select: { id: true },
+    });
+    await this.createForUsers(
+      adminIds.map((row) => row.id),
+      {
+        type: 'inventory_auto_closed',
+        title: 'Sesija popisa automatski zatvorena',
+        message: `Sesija „${sessionName}" je automatski prebačena u zatvaranje.`,
+        relatedId: sessionId,
+      },
+    );
+  }
+
   async notifyEmployeeRelocationActionRequired(input: {
     userId: string;
     employeeName: string;

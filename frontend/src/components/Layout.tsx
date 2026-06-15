@@ -36,7 +36,7 @@ export function Layout({ onLogout, children }: LayoutProps) {
   const role = getUserRole();
   const orgUnit = currentEmployee ? state.orgUnits.find(o => o.id === currentEmployee.orgUnitId) : null;
   const inventoryCountEnabled = useIsPageEnabled('inventory-count');
-  const { sessions: freezeSessions } = useInventoryFreezeBanner(
+  const { sessions: freezeSessions, productionLockSessions } = useInventoryFreezeBanner(
     Boolean(currentEmployee) && inventoryCountEnabled,
   );
   const { getString: getPublicString } = usePublicSettings();
@@ -163,7 +163,7 @@ export function Layout({ onLogout, children }: LayoutProps) {
           </div>
         </header>
 
-        <InventoryFreezeBanner sessions={freezeSessions} />
+        <InventoryFreezeBanner sessions={freezeSessions} productionLockSessions={productionLockSessions} />
 
         <main className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
           <div className="px-4 pt-4 pb-[max(2.5rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:pt-6 sm:pb-8 max-w-[1400px] mx-auto w-full">

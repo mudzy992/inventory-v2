@@ -56,3 +56,9 @@ export const fetchEquipmentApi = async (id: string) => {
   const row = await apiRequest<Equipment & { entryDate: string }>(`/equipment/${id}`);
   return mapEquipmentRow(row);
 };
+
+export const reactivateEquipmentApi = (id: string, reason: string) =>
+  apiRequest<Equipment>(`/equipment/${id}/reactivate`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });

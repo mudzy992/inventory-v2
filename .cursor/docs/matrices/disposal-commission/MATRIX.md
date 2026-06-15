@@ -2,46 +2,51 @@
 
 ## Model
 
-- `DisposalCommission` po **`cityId`** (grad)
+- `DisposalCommission` — **samo** uz `InventoryCommittee` (auto pri wizardu popisne komisije)
 - `DisposalCommissionMember`: employeeId, role (`predsjednik` | `clan`)
-- `DisposalApproval` na transfer `rashodovanje` + `status`: pending | approved | rejected
-- `DisposalApprovalVote` po članu
-- Jedna aktivna komisija po gradu (`isActive`), osim vezanih uz popis
-- `inventoryCommitteeId` — 1:1 s popisnom komisijom (auto-kreiranje pri wizardu)
+- `DisposalInventoryApproval` — odobrenje po opremi u sesiji popisa
+- `EquipmentDisposalListItem` — pre-popisna lista (evidentičar, sesija `draft`)
+- Legacy `DisposalApproval` na transfer `rashodovanje` — **zastarjelo** (novi unosi blokirani)
 
 ## Par s popisom
 
-Pri kreiranju `InventoryCommittee` automatski se kreira `DisposalCommission` (isti grad, isti članovi). Rashod tokom aktivnog popisa koristi tu komisiju.
-
-## Rezolucija komisije
-
-1. Za rashod opreme zadužene osobi: `effectiveLocationCityId` radnika (holder).
-2. Za opremu na skladištu bez holdera: `warehouse.cityId`.
-3. Aktivna komisija za taj `cityId`.
+Pri kreiranju `InventoryCommittee` automatski se kreira `DisposalCommission`. Stavke s `EquipmentDisposalListItem` (`listed`) za isto skladište + roditeljsku kategoriju se dodjeljuju komisiji (`DisposalInventoryApproval` pending).
 
 ## Workflow
 
-### Legacy (transfer rashodovanje)
+### Lista za rashod (prije aktivacije sesije)
 
-1. Evidentičar kreira transfer `rashodovanje` → `raw` + `DisposalApproval` **pending**
-2. Članovi glasaju → **approved** → upload/finalize
-3. **Blokirano** tokom aktivnog popisa u istom gradu (`InventoryFreezeService`)
+1. Evidentičar/admin: `POST /inventory-sessions/:id/disposal-list` (samo sesija `draft`)
+2. Zadužena oprema → auto `razduzenje` (direktno ili prenosnica ako `transfer.generation.on_razduzenje`)
+3. Admin može povrat: `DELETE .../disposal-list/:equipmentId` (samo `draft`, status `listed`)
 
-### Popisni rashod (faza 17+)
+### Popisni rashod (aktivna sesija + zatvaranje)
 
-1. Popisna komisija: linija `predlozen_rashod` (oprema na skladištu)
-2. Close job: `DisposalInventoryApproval` **pending** po opremi
-3. Predsjednik komisije rashoda: inbox → approve/reject
-4. Approve → `status=rashodovano`, `warehouseCondition=spremno_za_unistenje` → skladištar uništi (faza 16)
+1. Popisna komisija: linija `predlozen_rashod` (oprema `skladiste`) → close job → `DisposalInventoryApproval` pending
+2. Predsjednik komisije rashoda: inbox → approve/reject
+3. **Approve** → `status=rashodovano`, `warehouseCondition=unisteno` (bez koraka skladištara)
+4. **Reject** → oprema ostaje `skladiste`; list item `rejected` ako postoji
+
+### Admin reaktivacija
+
+- `POST /equipment/:id/reactivate` — samo `rashodovano` + `unisteno`, obavezno obrazloženje → `skladiste` + `na_skladistu`
 
 ## API
 
 | Endpoint | Opis |
 |----------|------|
-| `GET/POST /disposal-commissions` | admin CRUD |
-| `GET /disposal-commissions/resolve` | preview komisije (`equipmentId` ili `holderEmployeeId`) |
-| `POST /disposal-commissions/approvals/:id/vote` | član komisije / admin |
+| `GET /disposal-commissions` | pregled komisija (read-only registry) |
+| `GET /inventory-sessions/:id/disposal-list` | lista za rashod |
+| `POST /inventory-sessions/:id/disposal-list` | označi opremu (evidentičar/admin) |
+| `DELETE /inventory-sessions/:id/disposal-list/:equipmentId` | admin povrat (draft) |
+| `GET /inventory-sessions/:id/disposal-inbox` | inbox predsjednika |
+| `PATCH /inventory-sessions/disposal-approvals/:id` | odluka predsjednika |
+
+## Postavke
+
+- `features.disposal_pre_list` — gate za listu prije popisa
+- `features.disposal_commissions` — modul komisija rashoda
 
 ## Notifikacije
 
-- `disposal_pending_approval`, `disposal_approved` (Socket.IO + in-app)
+- Socket refresh inboxa rashoda na close job / review

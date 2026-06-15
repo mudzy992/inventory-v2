@@ -7,11 +7,16 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { InventoryCountService } from './inventory-count.service';
+import { EquipmentDisposalListService } from './equipment-disposal-list.service';
+import { MarkDisposalListDto, WithdrawDisposalListDto } from './dto/mark-disposal-list.dto';
 
 @Controller('inventory-sessions')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class InventoryCountController {
-  constructor(private readonly inventoryCountService: InventoryCountService) {}
+  constructor(
+    private readonly inventoryCountService: InventoryCountService,
+    private readonly equipmentDisposalListService: EquipmentDisposalListService,
+  ) {}
 
   @Post()
   @Roles(UserRole.admin)
@@ -27,7 +32,7 @@ export class InventoryCountController {
   }
 
   @Get()
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.popis_koordinator, UserRole.user)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListSessionsQueryDto) {
     return this.inventoryCountService.findSessionsForUser(user, query);
   }
@@ -38,8 +43,18 @@ export class InventoryCountController {
     return this.inventoryCountService.getFreezeBannerForUser(user);
   }
 
-  @Get(':id/committees/setup-options')
+  @Post('ensure-draft')
   @Roles(UserRole.admin)
+  ensureDraft(@Query('year') year?: string, @Query('orgUnitId') orgUnitId?: string) {
+    const parsedYear = year ? Number(year) : new Date().getFullYear();
+    if (!orgUnitId) {
+      return this.inventoryCountService.ensureDraftSessionsForAllDistributions(parsedYear);
+    }
+    return this.inventoryCountService.ensureDraftSessionForDistribution(orgUnitId, parsedYear);
+  }
+
+  @Get(':id/committees/setup-options')
+  @Roles(UserRole.admin, UserRole.popis_koordinator)
   getCommitteeSetupOptions(
     @Param('id') sessionId: string,
     @Query('warehouseId') warehouseId: string,
@@ -53,13 +68,13 @@ export class InventoryCountController {
   }
 
   @Get(':id/session-warehouses')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.popis_koordinator)
   getSessionWarehouses(@Param('id') sessionId: string) {
     return this.inventoryCountService.getSessionWarehouses(sessionId);
   }
 
   @Get(':id/committees')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.popis_koordinator, UserRole.user)
   findCommittees(@Param('id') sessionId: string) {
     return this.inventoryCountService.findCommittees(sessionId);
   }
@@ -71,8 +86,9 @@ export class InventoryCountController {
   }
 
   @Post(':id/committees')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.popis_koordinator)
   createCommittee(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') sessionId: string,
     @Body()
     body: {
@@ -83,19 +99,23 @@ export class InventoryCountController {
       disposalMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
     },
   ) {
-    return this.inventoryCountService.createCommittee({
-      sessionId,
-      warehouseId: body.warehouseId,
-      categoryId: body.categoryId,
-      name: body.name,
-      inventoryMembers: body.inventoryMembers,
-      disposalMembers: body.disposalMembers,
-    });
+    return this.inventoryCountService.createCommittee(
+      {
+        sessionId,
+        warehouseId: body.warehouseId,
+        categoryId: body.categoryId,
+        name: body.name,
+        inventoryMembers: body.inventoryMembers,
+        disposalMembers: body.disposalMembers,
+      },
+      user,
+    );
   }
 
   @Patch('committees/:id')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.popis_koordinator)
   updateCommittee(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') committeeId: string,
     @Body()
     body: {
@@ -106,13 +126,13 @@ export class InventoryCountController {
       disposalMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
     },
   ) {
-    return this.inventoryCountService.updateCommittee(committeeId, body);
+    return this.inventoryCountService.updateCommittee(committeeId, body, user);
   }
 
   @Delete('committees/:id')
-  @Roles(UserRole.admin)
-  deleteCommittee(@Param('id') committeeId: string) {
-    return this.inventoryCountService.deleteCommittee(committeeId);
+  @Roles(UserRole.admin, UserRole.popis_koordinator)
+  deleteCommittee(@CurrentUser() user: AuthenticatedUser, @Param('id') committeeId: string) {
+    return this.inventoryCountService.deleteCommittee(committeeId, user);
   }
 
   @Delete(':id')
@@ -194,6 +214,33 @@ export class InventoryCountController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
   getSessionReport(@Param('id') id: string) {
     return this.inventoryCountService.getSessionReport(id);
+  }
+
+  @Get(':id/disposal-list')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  getDisposalList(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.equipmentDisposalListService.listForSession(user, id);
+  }
+
+  @Post(':id/disposal-list')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  markDisposalList(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: MarkDisposalListDto,
+  ) {
+    return this.equipmentDisposalListService.markForDisposal(user, id, body);
+  }
+
+  @Delete(':id/disposal-list/:equipmentId')
+  @Roles(UserRole.admin)
+  withdrawDisposalList(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('equipmentId') equipmentId: string,
+    @Body() body: WithdrawDisposalListDto,
+  ) {
+    return this.equipmentDisposalListService.withdrawFromList(user, id, equipmentId, body.note);
   }
 
   @Get(':id/disposal-inbox')

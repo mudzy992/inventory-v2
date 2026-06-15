@@ -14,6 +14,7 @@ export const PUBLIC_FEATURE_DEFAULTS: Record<string, boolean> = {
   'features.transfers': true,
   'features.documents': true,
   'features.disposal_commissions': true,
+  'features.disposal_pre_list': true,
   'features.inventory_count': true,
   'features.my_equipment': true,
   'features.qr_scanner': true,

@@ -3,6 +3,7 @@ import type { Prisma } from '../../../../generated/prisma/client';
 import type { CategoryFieldDefinition } from '../../../common/utils/category-fields.util';
 import { inheritDestLotSpecificationsInTx } from '../../employee-relocation/utils/inherit-dest-lot-specifications.util';
 import { applyDestAcceptLotUpdatesInTx } from '../../employee-relocation/utils/relocation-lot-accounting.util';
+import { maybeCloseDispatchedRelocationLotInTx } from './maybe-close-dispatched-relocation-lot.util';
 
 export type FindOrCreateDestLotInput = {
   destWarehouseId: string;
@@ -82,5 +83,6 @@ export const applyCrossWarehouseIssueLotUpdatesInTx = async (
       catalogItemId: lotUpdate.catalogItemId,
     },
   });
+  await maybeCloseDispatchedRelocationLotInTx(tx, lotUpdate.destStockLotId);
   return { destStockLotId: lotUpdate.destStockLotId };
 };

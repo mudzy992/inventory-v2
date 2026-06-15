@@ -85,6 +85,7 @@ Kad admin izda komad iz lota skladišta **W1** na radnika čije efektivno skladi
 3. Ciljni lot na W2: pronađi otvoreni lot po `catalogItemId` ili kreiraj `incomingRelocation` lot
 4. Ciljni lot: `quantityReceived += 1` (za `zaduzeno` bez `quantityOnHand` promjene → izdato +1)
 5. `equipment.stockLotId` prelazi na ciljni lot; spec nasljeđivanje kao kod relocation dest-accept
+6. Destinacijski lot: ako `quantityOnHand = 0` i `quantityReceived > 0` → `status = zatvoreno` (`maybeCloseDispatchedRelocationLotInTx`)
 
 **Ograničenja:**
 
@@ -109,14 +110,26 @@ Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/module
 | `GET /warehouse-stock/assigned/groups` | Paginirani **grupni** prikaz po proizvodu (`catalogItemId` ili `categoryId` + `productName`) |
 | `GET /warehouse-stock/assigned` | Pojedinačni lotovi; filter `groupKey` za expand grupe |
 
-**Query filteri** (oba endpointa): `search`, `warehouseId`, `categoryId`, `status`, `groupKey` (samo flat lista).
+**Query filteri** (oba endpointa): `search`, `warehouseId`, `categoryId`, `status` (`ceka_specifikaciju` | `spremno_za_izdavanje` | `zatvoreno`), `groupKey` (samo flat lista).
+
+**Default lista:** samo aktivni lotovi (`ceka_specifikaciju`, `spremno_za_izdavanje`). Filter `status=zatvoreno` → arhiva.
+
+**Grupna agregacija** (`GET .../assigned/groups`):
+
+| Metrika | Izvor |
+|---------|--------|
+| `totalOnHand`, `awaitingSpecCount`, `readyToIssueCount` | samo aktivni lotovi u grupi |
+| `totalReceived`, `warehouseCount` | svi lotovi u grupi (uključujući `zatvoreno`) kad nema status filtera |
+| Grupa u default listi | barem jedan aktivni lot |
+
+Kad su svi lotovi u grupi `zatvoreno`, grupa **ne ulazi** u default pregled.
 
 **Grupni ključ:**
 
 - `catalog:{uuid}` kad postoji `catalogItemId`
 - `product:{categoryId}::{normalizedProductName}` inače
 
-**UI (Skladišna roba — `registrar-stock`):** kategorijsko razvrstavanje parent → podkategorija → grupe proizvoda (accordion) → redovi po skladištu → detail lota (spec/issue/kolaudacija). Filteri skladišta i statusa ostaju globalni; navigacija kategorijama zamjenjuje dropdown filter kategorije.
+**UI (Skladišna roba — `registrar-stock`):** kategorijsko razvrstavanje parent → podkategorija → grupe proizvoda (accordion) → redovi po skladištu → detail lota (spec/issue/kolaudacija). Filteri skladišta i statusa (uključujući **Zatvoreno** za arhivu); grupni red `onHand/received na stanju`.
 
 **Frontend URL rutiranje:** React Router; deep link na lot `/registrar-stock/lots/:lotId`; ostale stranice `/dashboard`, `/registrar-stock`, itd. Javna oprema `/equipment/:equipmentId` bez prijave.
 

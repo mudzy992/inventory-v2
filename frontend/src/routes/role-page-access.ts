@@ -1,5 +1,5 @@
 import type { PageId } from '../components/page-id';
-import { isAdmin, isEvidenticar, isSkladistar } from '../store';
+import { isAdmin, isEvidenticar, isPopisKoordinator, isSkladistar } from '../store';
 
 export const ADMIN_ONLY_PAGES: PageId[] = [
   'organization',
@@ -11,6 +11,8 @@ export const ADMIN_ONLY_PAGES: PageId[] = [
 ];
 
 export const ADMIN_OR_EVIDENTICAR_INVENTORY_PAGES: PageId[] = ['inventory-count'];
+
+export const POPIS_KOORDINATOR_PAGES: PageId[] = ['inventory-count'];
 
 export const ADMIN_OR_EVIDENTICAR_PAGES: PageId[] = [
   'dashboard',
@@ -38,7 +40,7 @@ export const canAccessPage = (pageId: PageId): boolean => {
     return admin;
   }
   if (ADMIN_OR_EVIDENTICAR_INVENTORY_PAGES.includes(pageId)) {
-    return admin || evidenticar;
+    return admin || evidenticar || isPopisKoordinator();
   }
   if (ADMIN_OR_EVIDENTICAR_PAGES.includes(pageId)) {
     return admin || evidenticar;

@@ -1,8 +1,14 @@
-import { ClipboardList, Package, Shield, User } from 'lucide-react';
+import { ClipboardList, Package, Shield, User, CalendarRange } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { UserRole } from '../../types';
 
-export const USER_ROLE_OPTIONS: UserRole[] = ['admin', 'evidenticar', 'skladistar', 'user'];
+export const USER_ROLE_OPTIONS: UserRole[] = [
+  'admin',
+  'evidenticar',
+  'popis_koordinator',
+  'skladistar',
+  'user',
+];
 
 export const USER_ROLE_META: Record<
   UserRole,
@@ -19,6 +25,12 @@ export const USER_ROLE_META: Record<
     color: 'bg-purple-100 text-purple-800',
     icon: <ClipboardList size={12} />,
     description: 'Evidencija po gradu i kategoriji opreme',
+  },
+  popis_koordinator: {
+    label: 'Koordinator popisa',
+    color: 'bg-indigo-100 text-indigo-800',
+    icon: <CalendarRange size={12} />,
+    description: 'Definisanje komisija u draft sesiji popisa',
   },
   skladistar: {
     label: 'Skladištar',

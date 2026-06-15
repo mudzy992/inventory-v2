@@ -1,5 +1,10 @@
 # Changelog — equipment-status
 
+## 2026-06-15
+
+- Službeni otpis: komisija rashoda postavlja `unisteno`; admin reaktivacija (`POST /equipment/:id/reactivate`).
+- Novi `EquipmentEventAction.reaktivirano`.
+
 ## 2026-06-13
 
 - Drugi put nastanka opreme: **kolaudacija** iz skladišnog lota (`POST .../commission`) → `skladiste` + `na_skladistu`, bez transfera.

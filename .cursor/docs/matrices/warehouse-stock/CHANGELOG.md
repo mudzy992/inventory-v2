@@ -2,6 +2,7 @@
 
 ## 2026-06-13
 
+- **Cross-warehouse prikaz:** dest relocation lot auto-`zatvoreno` kad `onHand=0` i komadi izdati; grupna agregacija `totalReceived`/`warehouseCount` uključuje zatvorene lotove; UI filter „Zatvoreno"; badge „Sve izdato" za privremeno stanje.
 - **Kolaudacija komada:** `POST /stock-lots/:id/commission` — evidentičar evidentira pojedinačni komad na skladištu bez zaduženja; ista unit validacija kao issue; bez prenosnice; `executeStockLotCommissionInTx`.
 - Frontend: dugme „Kolaudiraj 1 komad" + shared forma `lot-unit-action-section.tsx`; kolaudirani komadi u tabeli prikazuju skladište umjesto radnika.
 

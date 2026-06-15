@@ -3,6 +3,7 @@ import type { SettingScope, SettingValueType } from '../../../generated/prisma/c
 export type SettingGroup =
   | 'branding'
   | 'company'
+  | 'inventory'
   | 'lists'
   | 'modules'
   | 'system'
@@ -244,6 +245,90 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     label: 'Inventurni popis',
     description: 'Godišnji popis, komiteti i zamrzavanje promjena tokom sesije.',
     group: 'modules',
+  }),
+  def({
+    key: 'features.disposal_pre_list',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Lista za rashod prije popisa',
+    description:
+      'Evidentičar označava opremu za rashod u nacrtu sesije; komisija rashoda odlučuje na zatvaranju.',
+    group: 'modules',
+  }),
+  def({
+    key: 'inventory.production_mode',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: false,
+    label: 'Produkcijski režim popisa',
+    description:
+      'Uključuje kalendar (zaključavanje, auto draft sesija, pokušaj zatvaranja) i scheduler jobove.',
+    group: 'inventory',
+  }),
+  def({
+    key: 'inventory.lock_date',
+    scope: 'private',
+    valueType: 'string',
+    defaultValue: '11-30',
+    label: 'Datum zaključavanja (MM-DD)',
+    description: 'Dan u godini kada počinje produkcijski lock i (opciono) kreiranje draft sesije.',
+    group: 'inventory',
+  }),
+  def({
+    key: 'inventory.session_end_date',
+    scope: 'private',
+    valueType: 'string',
+    defaultValue: '12-31',
+    label: 'Kraj popisa (MM-DD)',
+    description: 'Dan kada scheduler pokušava zatvoriti aktivnu sesiju (ako nema pending rashoda).',
+    group: 'inventory',
+  }),
+  def({
+    key: 'inventory.auto_create_draft_session',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Auto kreiranje draft sesije',
+    description: 'Na lock datum kreira POPIS {year} po svakoj distribuciji ako ne postoji.',
+    group: 'inventory',
+  }),
+  def({
+    key: 'inventory.auto_close_session',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Auto zatvaranje sesije',
+    description: 'Na end datum pokušava zatvoriti aktivnu sesiju ako nema pending rashoda.',
+    group: 'inventory',
+  }),
+  def({
+    key: 'inventory.auto_activate_session',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: false,
+    label: 'Auto aktivacija sesije',
+    description:
+      'Opcionalno: 01.12 aktivira draft sesiju ako postoje komisije i nema listed stavki bez komisije.',
+    group: 'inventory',
+  }),
+  def({
+    key: 'inventory.scheduler_timezone',
+    scope: 'private',
+    valueType: 'string',
+    defaultValue: 'Europe/Sarajevo',
+    label: 'Vremenska zona schedulera',
+    description: 'IANA timezone za cron jobove popisa (npr. Europe/Sarajevo).',
+    group: 'inventory',
+  }),
+  def({
+    key: 'inventory.system_user_id',
+    scope: 'private',
+    valueType: 'string',
+    defaultValue: '',
+    label: 'System user za close job',
+    description: 'UUID admin korisnika za automatsko zatvaranje sesije; prazno = prvi aktivni admin.',
+    group: 'inventory',
   }),
   def({
     key: 'features.my_equipment',

@@ -14,6 +14,7 @@ import type {
   Employee,
   Equipment,
   OrgUnit,
+  CoordinatorScopeAssignment,
   RegistrarScopeAssignment,
   UserAccount,
   UserRole,
@@ -72,6 +73,9 @@ export const UserFormModal = ({
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('user');
   const [registrarScopes, setRegistrarScopes] = useState<RegistrarScopeAssignment[]>([]);
+  const [coordinatorAssignments, setCoordinatorAssignments] = useState<CoordinatorScopeAssignment[]>(
+    [],
+  );
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -107,6 +111,7 @@ export const UserFormModal = ({
       setPassword('');
       setRole(user.role);
       setRegistrarScopes(user.registrarScopes ?? []);
+      setCoordinatorAssignments(user.coordinatorAssignments ?? []);
       setIsActive(user.isActive);
       return;
     }
@@ -116,6 +121,7 @@ export const UserFormModal = ({
     setPassword('');
     setRole('user');
     setRegistrarScopes([]);
+    setCoordinatorAssignments([]);
     setIsActive(true);
   }, [mode, user, employeesWithoutAccount]);
 
@@ -135,6 +141,9 @@ export const UserFormModal = ({
     if (nextRole !== 'evidenticar') {
       setRegistrarScopes([]);
     }
+    if (nextRole !== 'popis_koordinator') {
+      setCoordinatorAssignments([]);
+    }
   };
 
   const handleSubmit = async () => {
@@ -145,6 +154,10 @@ export const UserFormModal = ({
     }
     if (mode === 'create' && (!username.trim() || password.length < 6)) {
       setError('Korisničko ime i lozinka (min. 6 znakova) su obavezni');
+      return;
+    }
+    if (role === 'popis_koordinator' && coordinatorAssignments.length === 0) {
+      setError('Koordinator popisa mora imati barem jedno dodijeljeno skladište.');
       return;
     }
     if (role === 'evidenticar' && registrarScopes.length === 0) {
@@ -173,6 +186,7 @@ export const UserFormModal = ({
           employeeId,
           isActive,
           registrarScopes: role === 'evidenticar' ? registrarScopes : [],
+          coordinatorAssignments: role === 'popis_koordinator' ? coordinatorAssignments : [],
         };
         await createUserApi(createPayload);
       } else if (user) {
@@ -181,6 +195,7 @@ export const UserFormModal = ({
           employeeId,
           isActive,
           registrarScopes: role === 'evidenticar' ? registrarScopes : [],
+          coordinatorAssignments: role === 'popis_koordinator' ? coordinatorAssignments : [],
         };
         if (password.length >= 6) {
           updatePayload.password = password;
@@ -277,6 +292,8 @@ export const UserFormModal = ({
                 onRoleChange={handleRoleChange}
                 registrarScopes={registrarScopes}
                 onRegistrarScopesChange={setRegistrarScopes}
+                coordinatorAssignments={coordinatorAssignments}
+                onCoordinatorAssignmentsChange={setCoordinatorAssignments}
                 warehouses={warehouses}
                 categories={categories}
                 orgUnits={orgUnits}

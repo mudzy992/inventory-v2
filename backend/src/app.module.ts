@@ -16,6 +16,7 @@ import { WarehousesModule } from './modules/warehouses/warehouses.module';
 import { WarehouseStockModule } from './modules/warehouse-stock/warehouse-stock.module';
 import { DisposalCommissionsModule } from './modules/disposal-commissions/disposal-commissions.module';
 import { InventoryCountModule } from './modules/inventory-count/inventory-count.module';
+import { InventorySchedulerModule } from './modules/inventory-scheduler/inventory-scheduler.module';
 import { PublicEquipmentModule } from './modules/public-equipment/public-equipment.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { SetupModule } from './modules/setup/setup.module';
@@ -46,6 +47,7 @@ import { PrismaModule } from './prisma/prisma.module';
     WarehouseStockModule,
     DisposalCommissionsModule,
     InventoryCountModule,
+    InventorySchedulerModule,
     EmployeesModule,
     CategoriesModule,
     EquipmentModule,

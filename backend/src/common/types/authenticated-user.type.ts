@@ -1,4 +1,5 @@
 import type { UserRole } from '../../../generated/prisma/client';
+import type { CoordinatorScopeAssignment } from './coordinator-scope.type';
 import type { RegistrarScopeAssignment } from './registrar-scope.type';
 
 export interface AuthenticatedUser {
@@ -7,4 +8,5 @@ export interface AuthenticatedUser {
   role: UserRole;
   employeeId: string | null;
   registrarScopes: RegistrarScopeAssignment[];
+  coordinatorAssignments: CoordinatorScopeAssignment[];
 }

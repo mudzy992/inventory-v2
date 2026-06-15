@@ -108,6 +108,7 @@ export interface CreateUserPayload {
   employeeId: string;
   isActive?: boolean;
   registrarScopes?: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
+  coordinatorAssignments?: { warehouseId: string; orgUnitId?: string | null }[];
 }
 
 export interface UpdateUserPayload {
@@ -116,6 +117,7 @@ export interface UpdateUserPayload {
   employeeId?: string | null;
   isActive?: boolean;
   registrarScopes?: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
+  coordinatorAssignments?: { warehouseId: string; orgUnitId?: string | null }[];
 }
 
 export const createUserApi = (body: CreateUserPayload) =>

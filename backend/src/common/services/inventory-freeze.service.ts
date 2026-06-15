@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import { LocationResolutionService } from './location-resolution.service';
+import { InventoryProductionModeService } from './inventory-production-mode.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export type InventoryFreezeAction =
@@ -16,6 +17,7 @@ export class InventoryFreezeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly locationResolutionService: LocationResolutionService,
+    private readonly productionModeService: InventoryProductionModeService,
   ) {}
 
   async assertNoEquipmentMutation(
@@ -124,6 +126,11 @@ export class InventoryFreezeService {
     if (session) {
       throw new BadRequestException(
         `Godišnji popis "${session.name}" je aktivan u ovom gradu — akcija "${action}" nije dozvoljena`,
+      );
+    }
+    if (await this.productionModeService.isProductionLockActiveForCity(cityId)) {
+      throw new BadRequestException(
+        `Produkcijski režim popisa je aktivan u ovom gradu — akcija "${action}" nije dozvoljena`,
       );
     }
   }

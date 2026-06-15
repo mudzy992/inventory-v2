@@ -8,7 +8,7 @@ export type OrgUnitType =
   | 'sluzba'
   | 'odjeljenje';
 
-export type UserRole = 'admin' | 'evidenticar' | 'user' | 'skladistar';
+export type UserRole = 'admin' | 'evidenticar' | 'popis_koordinator' | 'user' | 'skladistar';
 
 export type WarehouseCondition = 'na_skladistu' | 'spremno_za_unistenje' | 'unisteno';
 
@@ -44,6 +44,11 @@ export interface RegistrarScopeAssignment {
   orgUnitId?: string | null;
 }
 
+export interface CoordinatorScopeAssignment {
+  warehouseId: string;
+  orgUnitId?: string | null;
+}
+
 export interface UserAccount {
   id: string;
   employeeId: string;
@@ -53,6 +58,7 @@ export interface UserAccount {
   isActive: boolean;
   lastLogin?: string;
   registrarScopes?: RegistrarScopeAssignment[];
+  coordinatorAssignments?: CoordinatorScopeAssignment[];
 }
 
 export interface OrgUnit {

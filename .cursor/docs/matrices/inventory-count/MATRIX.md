@@ -37,6 +37,16 @@ Ograničenja:
 - 1× sesija po `(orgUnitId, year)`
 - admin može sesiju **aktivirati** i **zatvoriti**, ali **ne može unositi linije**
 - aktivacija zahtijeva ≥1 popisnu komisiju (`InventoryCommittee`)
+- aktivacija **odbija** ako postoje stavke na listi za rashod (`listed`) bez dodijeljene komisije
+
+## Lista za rashod (draft sesija)
+
+| Akcija | Ko | Pravilo |
+|--------|-----|---------|
+| Označi opremu | evidentičar / admin | samo dok je sesija `draft` |
+| Auto razduženje | sistem | `zaduzeno` → skladište (prenosnica po postavkama) |
+| Povrat s liste | admin | samo `draft`, stavka `listed` |
+| Dodjela komisiji | sistem | pri kreiranju popisne komisije |
 
 ## Kreiranje komisije (admin, draft sesija)
 
@@ -117,3 +127,16 @@ U Popisu, za unos linija važi: **članstvo komisije** je dovoljno (bez registra
 - `POST /inventory-sessions/committees/:id/lines` (evidentičar, user)
 - `PATCH /inventory-sessions/:id/activate` (admin)
 - `PATCH /inventory-sessions/:id/close` (admin)
+
+## Produkcijski režim (faza 5)
+
+| Pravilo | Opis |
+|---------|------|
+| `inventory.production_mode=false` | Ponašanje kao ručni režim (faze 1–4) |
+| Lock datum | Od `inventory.lock_date` do `closed` sesije: blok warehouse-stock (osim admin) |
+| Auto draft | Job kreira `POPIS {year}` po distribuciji (idempotentno) |
+| Auto close | Na `session_end_date` — samo ako nema pending `DisposalInventoryApproval` |
+| Koordinator | `popis_koordinator` + `InventoryCoordinatorAssignment`: CRUD komisija u draft, bez activate/close sesije |
+| Scheduler | `INVENTORY_SCHEDULER_ENABLED=true` + cron `5 0 * * *` (TZ iz postavke) |
+- `GET/POST /inventory-sessions/:id/disposal-list` (evidentičar/admin; POST samo draft)
+- `DELETE /inventory-sessions/:id/disposal-list/:equipmentId` (admin, draft)

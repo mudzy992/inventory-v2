@@ -1,5 +1,16 @@
 # Changelog — inventory-count
 
+## 2026-06-15 (faza 5)
+
+- Produkcijski režim: scheduler (`INVENTORY_SCHEDULER_ENABLED`), auto draft na lock datum, auto-close na end datum (bez force ako pending rashod).
+- Production freeze proširen na warehouse-stock; freeze-banner vraća `productionLockSessions`.
+- Uloga `popis_koordinator` + `InventoryCoordinatorAssignment`; CRUD komisija u draft sesiji.
+
+## 2026-06-15
+
+- Lista za rashod (`EquipmentDisposalListItem`) u draft sesiji; API disposal-list; dodjela pri `createCommittee`.
+- Aktivacija sesije blokirana dok postoje nedodijeljene stavke liste.
+
 ## 2026-06-05 (c)
 
 - `session-warehouses` i validacija komisije: skladišta po org stablu distribucije (ne samo grad distribucije); opseg opreme/kategorija po gradu skladišta.

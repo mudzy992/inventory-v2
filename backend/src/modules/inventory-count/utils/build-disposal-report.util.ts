@@ -28,6 +28,7 @@ export interface DisposalReportItem {
   reviewedByUsername: string | null;
   commissionName: string;
   commissionCategoryName: string | null;
+  source: 'registrar_list' | 'inventory_line';
 }
 
 export interface DisposalReportCommission {
@@ -70,6 +71,7 @@ const mapApprovalItem = (row: DisposalApprovalRow): DisposalReportItem => ({
   reviewedByUsername: row.reviewedByUser?.username ?? null,
   commissionName: row.disposalCommission.name,
   commissionCategoryName: row.disposalCommission.inventoryCommittee?.category?.name ?? null,
+  source: row.inventoryLineId ? 'inventory_line' : 'registrar_list',
 });
 
 const mapCommission = (commission: DisposalApprovalRow['disposalCommission']): DisposalReportCommission => {

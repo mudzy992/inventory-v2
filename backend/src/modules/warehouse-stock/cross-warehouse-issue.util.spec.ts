@@ -105,6 +105,9 @@ const createTx = (
             lot.specifications = data.specifications;
             lot.status = 'spremno_za_izdavanje';
           }
+          if (data.status === 'zatvoreno') {
+            lot.status = 'zatvoreno';
+          }
           return lot;
         },
       },
@@ -221,6 +224,7 @@ describe('applyCrossWarehouseIssueLotUpdatesInTx', () => {
     assert.equal(lots['lot-a'].quantityReceived, 4);
     assert.equal(lots[result.destStockLotId].quantityReceived, 1);
     assert.equal(lots[result.destStockLotId].quantityOnHand, 0);
+    assert.equal(lots[result.destStockLotId].status, 'zatvoreno');
     assert.equal(equipment['eq-1'].stockLotId, result.destStockLotId);
   });
 

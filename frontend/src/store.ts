@@ -36,6 +36,7 @@ function buildAuthUserCacheKey(user: AuthUserDto): string {
     role: user.role,
     employeeId: user.employeeId ?? '',
     registrarScopes: user.registrarScopes,
+    coordinatorAssignments: user.coordinatorAssignments,
   });
 }
 
@@ -88,6 +89,7 @@ export function getCurrentUser(): UserAccount | null {
     password: '',
     isActive: true,
     registrarScopes: _authUser.registrarScopes,
+    coordinatorAssignments: _authUser.coordinatorAssignments ?? [],
   };
   return _cachedAuthUserView;
 }
@@ -100,6 +102,11 @@ export function isAdmin(): boolean {
 export function isEvidenticar(): boolean {
   const user = getCurrentUser();
   return user?.role === 'evidenticar';
+}
+
+export function isPopisKoordinator(): boolean {
+  const user = getCurrentUser();
+  return user?.role === 'popis_koordinator';
 }
 
 export function isSkladistar(): boolean {

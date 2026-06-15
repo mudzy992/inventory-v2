@@ -58,9 +58,13 @@ import {
 import { applyCrossWarehouseIssueLotUpdatesInTx } from './utils/cross-warehouse-issue.util';
 import { resolveTransferSignerId } from '../transfers/utils/resolve-transfer-signer.util';
 import {
-  buildStockLotGroupKey,
   buildStockLotGroupWhere,
 } from './utils/stock-lot-group-key.util';
+import {
+  applyHistoricalTotalsToProductGroups,
+  buildStockLotHistoricalTotalsByGroup,
+  buildStockLotProductGroupsFromLots,
+} from './utils/build-stock-lot-group-aggregates.util';
 export interface StockLotProductGroup {
   groupKey: string;
   productName: string;
@@ -185,55 +189,30 @@ export class WarehouseStockService {
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
     const { page, skip, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
     const where = await this.buildAssignedLotsWhere(user, query);
+    const lotSelect = {
+      warehouseId: true,
+      catalogItemId: true,
+      categoryId: true,
+      productName: true,
+      quantityOnHand: true,
+      quantityReceived: true,
+      status: true,
+      category: { select: { name: true } },
+    } as const;
     const lots = await this.prisma.warehouseStockLot.findMany({
       where,
-      select: {
-        warehouseId: true,
-        catalogItemId: true,
-        categoryId: true,
-        productName: true,
-        quantityOnHand: true,
-        quantityReceived: true,
-        status: true,
-        category: { select: { name: true } },
-      },
+      select: lotSelect,
     });
-    const groupMap = new Map<string, StockLotProductGroup>();
-    const warehouseIdsByGroup = new Map<string, Set<string>>();
-    for (const lot of lots) {
-      const groupKey = buildStockLotGroupKey(lot);
-      const warehouseIds = warehouseIdsByGroup.get(groupKey) ?? new Set<string>();
-      warehouseIds.add(lot.warehouseId);
-      warehouseIdsByGroup.set(groupKey, warehouseIds);
-      const existing = groupMap.get(groupKey);
-      if (existing) {
-        existing.warehouseCount = warehouseIds.size;
-        existing.totalOnHand += lot.quantityOnHand;
-        existing.totalReceived += lot.quantityReceived;
-        if (lot.status === 'ceka_specifikaciju') {
-          existing.awaitingSpecCount += 1;
-        }
-        if (lot.status === 'spremno_za_izdavanje') {
-          existing.readyToIssueCount += 1;
-        }
-        continue;
-      }
-      groupMap.set(groupKey, {
-        groupKey,
-        productName: lot.productName,
-        categoryId: lot.categoryId,
-        categoryName: lot.category.name,
-        catalogItemId: lot.catalogItemId,
-        warehouseCount: warehouseIds.size,
-        totalOnHand: lot.quantityOnHand,
-        totalReceived: lot.quantityReceived,
-        awaitingSpecCount: lot.status === 'ceka_specifikaciju' ? 1 : 0,
-        readyToIssueCount: lot.status === 'spremno_za_izdavanje' ? 1 : 0,
+    let groups = buildStockLotProductGroupsFromLots(lots);
+    if (!query.status) {
+      const historicalWhere = await this.buildAssignedLotsWhere(user, query, { allStatuses: true });
+      const allLots = await this.prisma.warehouseStockLot.findMany({
+        where: historicalWhere,
+        select: lotSelect,
       });
+      const historicalByGroup = buildStockLotHistoricalTotalsByGroup(allLots);
+      groups = applyHistoricalTotalsToProductGroups(groups, historicalByGroup);
     }
-    const groups = [...groupMap.values()].sort((a, b) =>
-      a.productName.localeCompare(b.productName, 'bs'),
-    );
     const items = groups.slice(skip, skip + take);
     return buildPaginatedResponse(items, groups.length, page, take);
   }
@@ -241,13 +220,16 @@ export class WarehouseStockService {
   private async buildAssignedLotsWhere(
     user: AuthenticatedUser,
     query: ListStockLotsQueryDto,
+    options?: { allStatuses?: boolean },
   ): Promise<Prisma.WarehouseStockLotWhereInput> {
     const filters: Prisma.WarehouseStockLotWhereInput[] = [
       {
         lotKind: 'ISSUABLE',
-        ...(query.status
-          ? { status: query.status }
-          : { status: { in: ['ceka_specifikaciju', 'spremno_za_izdavanje'] } }),
+        ...(options?.allStatuses
+          ? {}
+          : query.status
+            ? { status: query.status }
+            : { status: { in: ['ceka_specifikaciju', 'spremno_za_izdavanje'] } }),
       },
     ];
     if (user.role === 'evidenticar') {

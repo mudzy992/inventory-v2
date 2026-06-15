@@ -6,10 +6,11 @@ import {
   Bell,
   LayoutGrid,
   List,
+  CalendarRange,
 } from 'lucide-react';
 import type { SettingUiGroup } from './settings-ui-groups';
 
-export type SettingsTabId = 'general' | 'lists' | 'modules' | 'transfers' | 'uploads' | 'notifications';
+export type SettingsTabId = 'general' | 'inventory' | 'lists' | 'modules' | 'transfers' | 'uploads' | 'notifications';
 
 export interface SettingsTabMeta {
   id: SettingsTabId;
@@ -20,6 +21,7 @@ export interface SettingsTabMeta {
 
 export const SETTINGS_TAB_ORDER: SettingsTabId[] = [
   'general',
+  'inventory',
   'lists',
   'modules',
   'transfers',
@@ -33,6 +35,12 @@ export const SETTINGS_TAB_META: Record<SettingsTabId, SettingsTabMeta> = {
     label: 'Opšte',
     icon: Building2,
     description: 'Brending aplikacije i podaci preduzeća za štampu.',
+  },
+  inventory: {
+    id: 'inventory',
+    label: 'Inventura',
+    icon: CalendarRange,
+    description: 'Produkcijski režim popisa, kalendar i scheduler.',
   },
   lists: {
     id: 'lists',
@@ -69,6 +77,7 @@ export const SETTINGS_TAB_META: Record<SettingsTabId, SettingsTabMeta> = {
 const GROUP_TO_TAB: Record<SettingUiGroup, SettingsTabId> = {
   branding: 'general',
   company: 'general',
+  inventory: 'inventory',
   lists: 'lists',
   modules: 'modules',
   transfers: 'transfers',

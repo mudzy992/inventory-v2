@@ -7,6 +7,7 @@ import { InventoryCountListController } from './inventory-count-list.controller'
 import { InventoryWarehouseCommitteeController } from './inventory-warehouse-committee.controller';
 import { InventoryCountService } from './inventory-count.service';
 import { InventorySessionCloseWorkerService } from './inventory-session-close-worker.service';
+import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 
 @Module({
   imports: [CommonModule, NotificationsModule, SettingsModule],
@@ -15,7 +16,7 @@ import { InventorySessionCloseWorkerService } from './inventory-session-close-wo
     InventoryCountListController,
     InventoryWarehouseCommitteeController,
   ],
-  providers: [InventoryCountService, InventorySessionCloseWorkerService],
-  exports: [InventoryCountService],
+  providers: [InventoryCountService, InventorySessionCloseWorkerService, EquipmentDisposalListService],
+  exports: [InventoryCountService, EquipmentDisposalListService],
 })
 export class InventoryCountModule {}

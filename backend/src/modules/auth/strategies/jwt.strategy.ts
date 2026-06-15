@@ -22,7 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: { registrarAssignments: true },
+      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
     });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid or inactive user');
@@ -35,6 +35,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       registrarScopes: user.registrarAssignments.map((row) => ({
         warehouseId: row.warehouseId,
         categoryId: row.categoryId,
+        orgUnitId: row.orgUnitId,
+      })),
+      coordinatorAssignments: user.inventoryCoordinatorAssignments.map((row) => ({
+        warehouseId: row.warehouseId,
         orgUnitId: row.orgUnitId,
       })),
     };

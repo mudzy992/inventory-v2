@@ -3,19 +3,19 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useStore, useRefreshData } from '../useStore';
 import { getCurrentUser, isAdmin, isEvidenticar } from '../store';
 import { createTransferApi } from '../api/data-api';
-import { fetchEquipmentApi } from '../api/equipment-api';
+import { fetchEquipmentApi, reactivateEquipmentApi } from '../api/equipment-api';
 import { fetchEmployeesPageApi } from '../api/employees-api';
 import { fetchTransfersPageApi } from '../api/transfers-api';
-import { resolveDisposalCommissionApi, type DisposalResolveDto } from '../api/disposal-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
+import { usePublicSettings } from '../contexts/public-settings-context';
 import { getOrgUnitPath, getEmployeeFullName, formatDate, getStatusLabel, getStatusColor } from '../helpers';
 import {
   buildEquipmentDisplayName,
   buildEquipmentQrUrl,
   getUniqueFieldsDisplay,
 } from '../helpers/equipment-display.util';
-import { buildTransferCreatePayload, canSignDisposalTransfer } from '../helpers/create-transfer-payload.util';
+import { buildTransferCreatePayload } from '../helpers/create-transfer-payload.util';
 import { canRegistrarCreateTransfer } from '../helpers/registrar-scope';
 import { X, Package, QrCode, History, ArrowRight, Download, Printer, User, Building2, FileText, AlertTriangle, CheckCircle, Warehouse, Trash2 } from 'lucide-react';
 import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
@@ -23,6 +23,7 @@ import { TransferDocumentPanel } from './TransferDocumentPanel';
 import { AlertBanner } from './ui/alert-banner';
 import { ModalRoot } from './ui/modal-root';
 import { EquipmentInstalledPartsPanel } from './maintenance-parts/equipment-installed-parts-panel';
+import { EquipmentMarkDisposalDialog } from './equipment/equipment-mark-disposal-dialog';
 
 interface EquipmentCardProps {
   equipmentId: string;
@@ -35,13 +36,17 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const [state] = useStore();
   const refresh = useRefreshData();
   const { toastError, toastSuccess } = useToast();
+  const { getBoolean } = usePublicSettings();
+  const disposalPreListEnabled = getBoolean('features.disposal_pre_list', true);
   const [showQR, setShowQR] = useState(initialShowQR);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<TransferType>('prenos');
   const [toPersonId, setToPersonId] = useState('');
   const [reason, setReason] = useState('');
   const [expandedTransferId, setExpandedTransferId] = useState<string | null>(null);
-  const [disposalResolve, setDisposalResolve] = useState<DisposalResolveDto | null>(null);
+  const [showMarkDisposal, setShowMarkDisposal] = useState(false);
+  const [showReactivate, setShowReactivate] = useState(false);
+  const [reactivateReason, setReactivateReason] = useState('');
   const [eq, setEq] = useState<Equipment | null>(null);
   const [transfers, setTransfers] = useState<TransferRecord[]>([]);
   const [availableEmployees, setAvailableEmployees] = useState<Employee[]>([]);
@@ -128,30 +133,6 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     }
   }, [eq, loadEmployees, showTransferModal, transferType]);
 
-  useEffect(() => {
-    if (!eq || !showTransferModal || transferType !== 'rashodovanje') {
-      setDisposalResolve(null);
-      return;
-    }
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const resolved = await resolveDisposalCommissionApi(eq.id);
-        if (!cancelled) {
-          setDisposalResolve(resolved);
-        }
-      } catch {
-        if (!cancelled) {
-          setDisposalResolve(null);
-        }
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [eq, showTransferModal, transferType]);
-
   const holderOrg = holder?.orgUnitId
     ? state.orgUnits.find((o) => o.id === holder.orgUnitId)
     : null;
@@ -197,7 +178,10 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const canAssign = canManage && eq.status === 'skladiste' && canRegistrarAct('zaduzenje');
   const canPrenos = canManage && eq.status === 'zaduzeno' && canRegistrarAct('prenos');
   const canRazduzenje = canManage && eq.status === 'zaduzeno' && canRegistrarAct('razduzenje');
-  const canDecommission = canManage && eq.status !== 'rashodovano' && canRegistrarAct('rashodovanje');
+  const canMarkForDisposal =
+    canManage && disposalPreListEnabled && eq.status !== 'rashodovano';
+  const canReactivate =
+    admin && eq.status === 'rashodovano' && eq.warehouseCondition === 'unisteno';
 
   const handleDownloadQR = () => {
     const canvas = document.createElement('canvas');
@@ -282,7 +266,6 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       reason,
       admin,
       evidenticar,
-      hasDisposalCommission: Boolean(disposalResolve?.commission),
     });
     if (result.error) {
       toastError(result.error);
@@ -293,19 +276,28 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       await refresh();
       await loadEquipment();
       handleCloseTransferModal();
-      toastSuccess(
-        transferType === 'rashodovanje'
-          ? 'Predlog rashoda je kreiran (RAW). Odobrenje komisije je potrebno prije potpisa.'
-          : 'Transfer je kreiran.',
-      );
+      toastSuccess('Transfer je kreiran.');
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri transferu';
       toastError(message);
     }
   };
 
-  const rashodBlocked =
-    transferType === 'rashodovanje' && evidenticar && !admin && !disposalResolve?.commission;
+  const handleReactivate = async () => {
+    if (!eq || !reactivateReason.trim()) {
+      toastError('Unesite obrazloženje reaktivacije.');
+      return;
+    }
+    try {
+      await reactivateEquipmentApi(eq.id, reactivateReason.trim());
+      await loadEquipment();
+      setShowReactivate(false);
+      setReactivateReason('');
+      toastSuccess('Oprema je reaktivirana na skladištu.');
+    } catch (err) {
+      toastError(err instanceof ApiError ? err.message : 'Greška pri reaktivaciji');
+    }
+  };
 
   return (
     <>
@@ -554,13 +546,22 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   )}
                 </>
               )}
-              {canDecommission && (
+              {canMarkForDisposal && (
                 <button
                   type="button"
-                  onClick={() => { setTransferType('rashodovanje'); setShowTransferModal(true); }}
+                  onClick={() => setShowMarkDisposal(true)}
                   className="flex items-center gap-1.5 text-sm bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
                 >
-                  <Trash2 size={14} /> Rashod
+                  <Trash2 size={14} /> Za rashod
+                </button>
+              )}
+              {canReactivate && (
+                <button
+                  type="button"
+                  onClick={() => setShowReactivate(true)}
+                  className="flex items-center gap-1.5 text-sm bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  Reaktiviraj
                 </button>
               )}
             </div>
@@ -576,7 +577,6 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
             {transferType === 'zaduzenje' && 'Zaduženje opreme'}
             {transferType === 'prenos' && 'Prenos opreme'}
             {transferType === 'razduzenje' && 'Razduženje opreme'}
-            {transferType === 'rashodovanje' && 'Predlog rashoda (komisija)'}
           </h3>
 
           <div className="space-y-4">
@@ -604,26 +604,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
               </AlertBanner>
             ) : null}
 
-            {transferType === 'rashodovanje' && evidenticar ? (
-              disposalResolve?.commission ? (
-                <AlertBanner tone="info">
-                  Komisija za rashod: <strong>{disposalResolve.commission.name}</strong>
-                  {disposalResolve.city?.name ? ` (${disposalResolve.city.name})` : ''}
-                </AlertBanner>
-              ) : (
-                <AlertBanner tone="warning">
-                  Nema aktivne komisije za rashod u gradu zaduženog radnika.
-                </AlertBanner>
-              )
-            ) : null}
-
-            {transferType === 'rashodovanje' ? (
-              <p className="text-xs text-gray-500">
-                Kreira se RAW prenosnica; oprema se rashoduje tek nakon odobrenja komisije i potpisa.
-              </p>
-            ) : null}
-
-            {(transferType === 'razduzenje' || transferType === 'rashodovanje') && (
+            {transferType === 'razduzenje' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Razlog</label>
                 <textarea
@@ -631,7 +612,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   onChange={(e) => setReason(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   rows={3}
-                  placeholder={transferType === 'rashodovanje' ? 'Razlog rashodovanja...' : 'Razlog razduženja...'}
+                  placeholder="Razlog razduženja..."
                 />
               </div>
             )}
@@ -648,11 +629,49 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
             <button
               type="button"
               onClick={() => void handleTransfer()}
-              disabled={rashodBlocked}
               className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
               <CheckCircle size={14} className="inline mr-1" />
               Potvrdi
+            </button>
+          </div>
+        </div>
+      </ModalRoot>
+
+      <EquipmentMarkDisposalDialog
+        equipmentId={eq.id}
+        inventoryNumber={eq.inventoryNumber}
+        open={showMarkDisposal}
+        onClose={() => setShowMarkDisposal(false)}
+        onMarked={() => void loadEquipment()}
+      />
+
+      <ModalRoot open={showReactivate} onClose={() => setShowReactivate(false)} zIndex={70} size="md">
+        <div className="bg-white rounded-xl shadow-2xl w-full p-6 space-y-4">
+          <h3 className="text-lg font-semibold">Reaktiviraj opremu</h3>
+          <p className="text-sm text-gray-600">
+            Oprema {eq.inventoryNumber} vraća se na skladište kao aktivna.
+          </p>
+          <textarea
+            value={reactivateReason}
+            onChange={(e) => setReactivateReason(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-24"
+            placeholder="Obrazloženje reaktivacije *"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowReactivate(false)}
+              className="px-4 py-2 text-sm border border-gray-300 rounded-lg"
+            >
+              Odustani
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleReactivate()}
+              className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg"
+            >
+              Reaktiviraj
             </button>
           </div>
         </div>

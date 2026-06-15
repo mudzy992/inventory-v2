@@ -1,5 +1,14 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-15 (faza 5)
+
+- `inventory.production_mode`, `inventory.lock_date`, `inventory.session_end_date`, auto flags, `inventory.scheduler_timezone`, `inventory.system_user_id`.
+- Grupa `inventory` u admin Postavkama (tab Inventura).
+
+## 2026-06-15
+
+- `features.disposal_pre_list` — lista za rashod prije aktivacije sesije popisa.
+
 ## 2026-06-10 (cross-warehouse issue)
 
 - Registry: `transfer.allow_admin_cross_warehouse_issue` — admin izdavanje iz lota na radnika u drugom efektivnom skladištu.

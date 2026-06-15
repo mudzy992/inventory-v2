@@ -24,7 +24,7 @@ import {
 import { fetchAllPaginatedItems } from '../api/fetch-all-paginated';
 import { ApiError } from '../api/client';
 import { resolveRootDistributionOrgUnit } from '../helpers/resolve-root-distribution.util';
-import { isAdmin, getCurrentUser } from '../store';
+import { isAdmin, isPopisKoordinator, getCurrentUser } from '../store';
 import { useStore } from '../useStore';
 import { useToast } from '../contexts/toast-context';
 import { useInventorySocketEvents } from '../hooks/use-inventory-socket-events';
@@ -39,6 +39,7 @@ import {
 import { InventoryCommitteeDetailPanel } from './inventory-count/inventory-committee-detail-panel';
 import { InventorySessionEmptyState } from './inventory-count/inventory-session-empty-state';
 import { SessionDisposalTab } from './inventory-count/session-disposal-tab';
+import { DisposalListPanel } from './inventory-count/disposal-list-panel';
 import { SessionCommandCenter } from './inventory-count/session-command-center';
 import { computeInventorySessionStats } from './inventory-count/inventory-session-stats.util';
 import { AlertBanner } from './ui/alert-banner';
@@ -71,6 +72,8 @@ const mapScopeItemsToEquipment = (items: PrintScopeEquipmentDto[]): Equipment[] 
 export const InventoryCountPage = () => {
   const [state] = useStore();
   const admin = isAdmin();
+  const coordinator = isPopisKoordinator();
+  const canManageCommittees = admin || coordinator;
   const user = getCurrentUser();
   const userId = user?.id ?? null;
   const { toastError, toastSuccess } = useToast();
@@ -108,7 +111,7 @@ export const InventoryCountPage = () => {
     memberCommittees.find(({ committee }) => committee.id === committeeId)?.committee ??
     null;
   const activeCommittees = useMemo(() => {
-    if (admin) {
+    if (canManageCommittees) {
       return [];
     }
     return memberCommittees
@@ -129,7 +132,7 @@ export const InventoryCountPage = () => {
         const bLabel = getCommitteeDisplayLabel(b.committee);
         return aLabel.localeCompare(bLabel);
       });
-  }, [admin, memberCommittees]);
+  }, [canManageCommittees, memberCommittees]);
   const loadSessions = useCallback(async () => {
     const response = await fetchInventorySessionsPageApi({
       orgUnitId: orgUnitId || undefined,
@@ -206,18 +209,18 @@ export const InventoryCountPage = () => {
       if (payload.status === 'done') {
         toastSuccess('Sesija popisa je zatvorena.');
         const rows = await loadSessions();
-        if (!admin) {
+        if (!canManageCommittees) {
           await loadMemberCommittees(rows);
         }
       } else if (payload.status === 'failed') {
         toastError(latest.lastError ?? 'Zatvaranje sesije nije uspjelo.');
         const rows = await loadSessions();
-        if (!admin) {
+        if (!canManageCommittees) {
           await loadMemberCommittees(rows);
         }
       }
     },
-    [admin, loadMemberCommittees, loadSessions, refreshCloseJob, toastError, toastSuccess],
+    [canManageCommittees, loadMemberCommittees, loadSessions, refreshCloseJob, toastError, toastSuccess],
   );
   useInventorySocketEvents({
     sessionId: sessionId || null,
@@ -227,7 +230,7 @@ export const InventoryCountPage = () => {
     setLoading(true);
     try {
       const rows = await loadSessions();
-      if (!admin) {
+      if (!canManageCommittees) {
         await loadMemberCommittees(rows);
       } else if (sessionId) {
         await loadCommittees(sessionId);
@@ -238,9 +241,9 @@ export const InventoryCountPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [admin, committeeId, loadCommitteeDetail, loadCommittees, loadMemberCommittees, loadSessions, sessionId]);
+  }, [canManageCommittees, committeeId, loadCommitteeDetail, loadCommittees, loadMemberCommittees, loadSessions, sessionId]);
   useEffect(() => {
-    if (!admin) {
+    if (!canManageCommittees) {
       if (!userId) {
         return;
       }
@@ -259,16 +262,16 @@ export const InventoryCountPage = () => {
       return;
     }
     void refreshAll();
-  }, [admin, orgUnitId, refreshAll, userId]);
+  }, [canManageCommittees, orgUnitId, refreshAll, userId]);
   useEffect(() => {
-    if (!sessionId || !admin) {
+    if (!sessionId || !canManageCommittees) {
       if (!sessionId) {
         setCommittees([]);
       }
       return;
     }
     void loadCommittees(sessionId);
-  }, [admin, loadCommittees, sessionId]);
+  }, [canManageCommittees, loadCommittees, sessionId]);
   useEffect(() => {
     if (!committeeId) {
       setCommitteeLines([]);
@@ -329,7 +332,7 @@ export const InventoryCountPage = () => {
   };
   const handleSessionRefresh = async () => {
     const rows = await loadSessions();
-    if (!admin) {
+    if (!canManageCommittees) {
       await loadMemberCommittees(rows);
     } else if (sessionId) {
       await loadCommittees(sessionId);
@@ -413,7 +416,7 @@ export const InventoryCountPage = () => {
         title="Godišnji popis"
         description="Sesija popisa po distribuciji; komisije po skladištu i kategoriji; unos samo članovi komisije."
       />
-      {!admin ? (
+      {!canManageCommittees ? (
         <>
           {activeCommittees.length === 0 ? (
             <AlertBanner tone="info">
@@ -524,7 +527,7 @@ export const InventoryCountPage = () => {
           )}
         </>
       ) : null}
-      {admin ? (
+      {canManageCommittees ? (
         <>
           {!rootDistribution ? (
             <AlertBanner tone="warning">
@@ -555,7 +558,7 @@ export const InventoryCountPage = () => {
                     <Button
                       variant="secondary"
                       onClick={() => void handleCreateSession()}
-                      disabled={!sessionName.trim()}
+                      disabled={!sessionName.trim() || !admin}
                     >
                       <Plus size={14} />
                       Nova sesija
@@ -582,6 +585,7 @@ export const InventoryCountPage = () => {
                         onClose={(id) => void handleClose(id)}
                         onDelete={(id) => void handleDeleteSession(id)}
                         onRefresh={() => void refreshAll()}
+                        canManageLifecycle={admin}
                       />
                     ) : (
                       <FormCard title="Command center">
@@ -617,7 +621,17 @@ export const InventoryCountPage = () => {
                       </div>
                       {sessionTab === 'disposal' ? (
                         <FormCard title="Rashod — sesija popisa">
-                          <SessionDisposalTab sessionId={selectedSession.id} sessionStatus={selectedSession.status} />
+                          {selectedSession.status === 'closing' || selectedSession.status === 'closed' ? (
+                            <SessionDisposalTab
+                              sessionId={selectedSession.id}
+                              sessionStatus={selectedSession.status}
+                            />
+                          ) : (
+                            <DisposalListPanel
+                              sessionId={selectedSession.id}
+                              sessionStatus={selectedSession.status}
+                            />
+                          )}
                         </FormCard>
                       ) : (
                         <div className="grid gap-4 xl:grid-cols-[360px_1fr]">

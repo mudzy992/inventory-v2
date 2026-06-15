@@ -83,23 +83,11 @@ export class DisposalCommissionsService {
     });
   }
 
-  async create(cityId: string, name: string, members: MemberInput[]) {
+  async create(_cityId: string, _name: string, _members: MemberInput[]) {
     await this.assertDisposalCommissionsEnabled();
-    const city = await this.prisma.city.findUnique({ where: { id: cityId } });
-    if (!city) {
-      throw new BadRequestException('City not found');
-    }
-    const existing = await this.prisma.disposalCommission.findFirst({
-      where: { cityId, isActive: true },
-    });
-    if (existing) {
-      throw new BadRequestException('Active disposal commission already exists for this city');
-    }
-    const commission = await this.prisma.disposalCommission.create({
-      data: { cityId, name, isActive: true },
-    });
-    await this.replaceMembers(commission.id, members);
-    return this.findOne(commission.id);
+    throw new BadRequestException(
+      'Komisija za rashod se kreira isključivo uz popisnu komisiju u sesiji inventure',
+    );
   }
 
   async findOne(id: string) {
@@ -314,10 +302,15 @@ export class DisposalCommissionsService {
       }
     }
     return this.prisma.disposalCommission.findFirst({
-      where: { cityId, isActive: true, inventoryCommittee: { is: null } },
+      where: {
+        cityId,
+        isActive: true,
+        inventoryCommittee: { isNot: null },
+      },
       include: {
         city: { include: { canton: true } },
         members: { include: { employee: true } },
+        inventoryCommittee: true,
       },
     });
   }

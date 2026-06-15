@@ -4,6 +4,7 @@ import type {
   Category,
   Equipment,
   OrgUnit,
+  CoordinatorScopeAssignment,
   RegistrarScopeAssignment,
   UserRole,
   Warehouse as WarehouseType,
@@ -24,6 +25,8 @@ interface UserAccessFieldsProps {
   onRoleChange: (role: UserRole) => void;
   registrarScopes: RegistrarScopeAssignment[];
   onRegistrarScopesChange: (scopes: RegistrarScopeAssignment[]) => void;
+  coordinatorAssignments: CoordinatorScopeAssignment[];
+  onCoordinatorAssignmentsChange: (scopes: CoordinatorScopeAssignment[]) => void;
   warehouses: WarehouseType[];
   categories: Category[];
   orgUnits: OrgUnit[];
@@ -39,6 +42,8 @@ export const UserAccessFields = ({
   onRoleChange,
   registrarScopes,
   onRegistrarScopesChange,
+  coordinatorAssignments,
+  onCoordinatorAssignmentsChange,
   warehouses,
   categories,
   orgUnits,
@@ -197,6 +202,88 @@ export const UserAccessFields = ({
               </ul>
             </div>
           )}
+        </div>
+      )}
+      {role === 'popis_koordinator' && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            <Warehouse size={14} className="inline mr-1" />
+            Dodjele koordinatora (skladišta)
+          </label>
+          <div className="space-y-2">
+            {coordinatorAssignments.map((scope, index) => (
+              <div key={`coord-${scope.warehouseId}-${index}`} className="flex flex-wrap gap-2 items-center">
+                <select
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                  value={scope.warehouseId}
+                  onChange={(event) =>
+                    onCoordinatorAssignmentsChange(
+                      coordinatorAssignments.map((row, rowIndex) =>
+                        rowIndex === index ? { ...row, warehouseId: event.target.value } : row,
+                      ),
+                    )
+                  }
+                >
+                  {activeWarehouses.map((warehouse) => (
+                    <option key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                  value={scope.orgUnitId ?? ''}
+                  onChange={(event) =>
+                    onCoordinatorAssignmentsChange(
+                      coordinatorAssignments.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? { ...row, orgUnitId: event.target.value || null }
+                          : row,
+                      ),
+                    )
+                  }
+                >
+                  <option value="">Sva distribucija (skladište)</option>
+                  {orgUnits
+                    .filter((unit) => unit.type === 'distribucija')
+                    .map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="text-xs text-red-600"
+                  onClick={() =>
+                    onCoordinatorAssignmentsChange(
+                      coordinatorAssignments.filter((_, rowIndex) => rowIndex !== index),
+                    )
+                  }
+                >
+                  Ukloni
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const warehouseId = activeWarehouses[0]?.id ?? '';
+                if (!warehouseId) {
+                  return;
+                }
+                onCoordinatorAssignmentsChange([
+                  ...coordinatorAssignments,
+                  { warehouseId, orgUnitId: null },
+                ]);
+              }}
+              disabled={activeWarehouses.length === 0}
+              className="flex items-center gap-1 text-sm text-indigo-700 hover:text-indigo-900 disabled:opacity-50"
+            >
+              <Plus size={14} />
+              Dodaj skladište
+            </button>
+          </div>
         </div>
       )}
       <div>

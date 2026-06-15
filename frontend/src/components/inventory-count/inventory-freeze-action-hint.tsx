@@ -6,23 +6,28 @@ import { AlertBanner } from '../ui/alert-banner';
 
 export const useInventoryFreezeActive = (): boolean => {
   const inventoryCountEnabled = useIsPageEnabled('inventory-count');
-  const { sessions } = useInventoryFreezeBanner(inventoryCountEnabled);
-  return inventoryCountEnabled && sessions.length > 0;
+  const { sessions, productionLockSessions } = useInventoryFreezeBanner(inventoryCountEnabled);
+  return inventoryCountEnabled && (sessions.length > 0 || productionLockSessions.length > 0);
 };
 
 export const InventoryFreezeActionHint = () => {
   const navigate = useNavigate();
   const inventoryCountEnabled = useIsPageEnabled('inventory-count');
-  const { sessions } = useInventoryFreezeBanner(inventoryCountEnabled);
-  if (!inventoryCountEnabled || sessions.length === 0) {
+  const { sessions, productionLockSessions } = useInventoryFreezeBanner(inventoryCountEnabled);
+  if (!inventoryCountEnabled) {
     return null;
   }
-  const primary = sessions[0];
+  if (sessions.length === 0 && productionLockSessions.length === 0) {
+    return null;
+  }
+  const primary = sessions[0] ?? productionLockSessions[0];
+  const isProductionOnly = sessions.length === 0 && productionLockSessions.length > 0;
   return (
     <AlertBanner tone="warning" className="mb-4">
       <span>
-        Godišnji popis je aktivan{primary.cityName ? ` u gradu ${primary.cityName}` : ''} — izmjene
-        opreme i novi transferi su privremeno onemogućeni.
+        {isProductionOnly
+          ? `Produkcijski režim popisa je aktivan${primary.cityName ? ` u gradu ${primary.cityName}` : ''} — prijem/izdavanje i transferi su ograničeni.`
+          : `Godišnji popis je aktivan${primary.cityName ? ` u gradu ${primary.cityName}` : ''} — izmjene opreme i novi transferi su privremeno onemogućeni.`}
       </span>
       <button
         type="button"

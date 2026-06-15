@@ -10,6 +10,7 @@ datasource db {
 enum UserRole {
   admin
   evidenticar
+  popis_koordinator
   user
   skladistar
 }
@@ -39,6 +40,15 @@ enum WarehouseCondition {
 
 enum EquipmentEventAction {
   unisteno
+  reaktivirano
+}
+
+enum EquipmentDisposalListStatus {
+  listed
+  withdrawn
+  assigned
+  approved
+  rejected
 }
 
 enum TransferType {
@@ -82,6 +92,9 @@ enum NotificationType {
   employee_relocation_incoming
   employee_relocation_admin_alert
   employee_relocation_resolved
+  inventory_draft_created
+  inventory_close_blocked
+  inventory_auto_closed
   info
 }
 
@@ -278,8 +291,9 @@ model User {
   updatedAt    DateTime  @updatedAt
 
   employee             Employee?              @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  registrarAssignments RegistrarAssignment[]
-  notifications        Notification[]
+  registrarAssignments              RegistrarAssignment[]
+  inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
+  notifications                   Notification[]
   savedFilters         SavedFilter[]
   refreshTokens        RefreshToken[]
   warehouseAssignments WarehouseKeeper[]
@@ -301,6 +315,8 @@ model User {
   relocationLinesSourceResolved    EmployeeRelocationLine[]      @relation("RelocationLineSourceResolver")
   relocationLinesDestResolved      EmployeeRelocationLine[]      @relation("RelocationLineDestResolver")
   relocationEvents                 EmployeeRelocationEvent[]     @relation("RelocationEventActor")
+  disposalListItemsMarked          EquipmentDisposalListItem[] @relation("DisposalListMarkedBy")
+  disposalListItemsWithdrawn       EquipmentDisposalListItem[] @relation("DisposalListWithdrawnBy")
 
   @@index([role])
   @@map("users")
@@ -325,6 +341,24 @@ model RegistrarAssignment {
   @@index([categoryId])
   @@index([orgUnitId])
   @@map("registrar_assignments")
+}
+
+model InventoryCoordinatorAssignment {
+  id          String   @id @default(uuid())
+  userId      String
+  warehouseId String
+  orgUnitId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  orgUnit   OrgUnit?  @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, warehouseId])
+  @@index([userId])
+  @@index([warehouseId])
+  @@map("inventory_coordinator_assignments")
 }
 
 model Employee {
@@ -376,8 +410,9 @@ model OrgUnit {
   effectiveLocationCity City?              @relation("OrgUnitEffectiveLocation", fields: [effectiveLocationCityId], references: [id], onDelete: SetNull)
   employees             Employee[]
   warehouses            Warehouse[]
-  inventorySessions     InventorySession[]
-  registrarAssignments  RegistrarAssignment[]
+  inventorySessions               InventorySession[]
+  registrarAssignments            RegistrarAssignment[]
+  inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
 
   @@index([parentId])
   @@index([type])
@@ -403,8 +438,9 @@ model Warehouse {
   keepers               WarehouseKeeper[]
   equipment             Equipment[]
   inventoryLineTargets  InventoryLine[]
-  registrarAssignments  RegistrarAssignment[]
-  transfersFrom         Transfer[]            @relation("TransferFromWarehouse")
+  registrarAssignments            RegistrarAssignment[]
+  inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
+  transfersFrom                   Transfer[]            @relation("TransferFromWarehouse")
   transfersTo           Transfer[]            @relation("TransferToWarehouse")
   equipmentEvents       EquipmentEvent[]
   stockLots             WarehouseStockLot[]
@@ -413,6 +449,7 @@ model Warehouse {
   transferTemplates     WarehouseTransferTemplate[]
   transferDocumentSequences TransferDocumentSequence[]
   documentTransfers     Transfer[] @relation("TransferDocumentWarehouse")
+  disposalListItems     EquipmentDisposalListItem[]
 
   @@index([cityId])
   @@index([orgUnitId])
@@ -479,6 +516,7 @@ model Category {
   linkedAsMaintenanceLeaf CategoryMaintenanceLink[] @relation("MaintenanceCategoryLink")
   installedPartsAsType    EquipmentInstalledPart[]
   catalogItems            EquipmentCatalogItem[]
+  disposalListItems       EquipmentDisposalListItem[]
 
   @@index([parentId])
   @@index([categoryKind])
@@ -545,6 +583,7 @@ model Equipment {
   inventoryPendingActions InventoryPendingAction[]
   equipmentEvents       EquipmentEvent[]
   disposalInventoryApprovals DisposalInventoryApproval[]
+  disposalListItems        EquipmentDisposalListItem[]
   installedParts           EquipmentInstalledPart[]
   relocationLines          EmployeeRelocationLine[]
 
@@ -703,6 +742,7 @@ model Transfer {
   disposalApproval DisposalApproval?
   inventoryLine    InventoryLine?    @relation(fields: [inventoryLineId], references: [id], onDelete: SetNull)
   inventoryLineEventsGenerated InventoryLineEvent[] @relation("InventoryLineEventGeneratedTransfer")
+  disposalListRazduzenje EquipmentDisposalListItem[] @relation("DisposalListRazduzenjeTransfer")
 
   @@index([equipmentId])
   @@index([signerId])
@@ -725,9 +765,44 @@ model DisposalCommission {
   members            DisposalCommissionMember[]
   inventoryCommittee InventoryCommittee?
   inventoryApprovals DisposalInventoryApproval[]
+  disposalListItems  EquipmentDisposalListItem[]
 
   @@index([cityId])
   @@map("disposal_commissions")
+}
+
+model EquipmentDisposalListItem {
+  id                   String                      @id @default(uuid())
+  sessionId            String
+  equipmentId          String
+  warehouseId          String
+  categoryId           String
+  status               EquipmentDisposalListStatus @default(listed)
+  note                 String?                     @db.Text
+  markedByUserId       String
+  markedAt             DateTime                    @default(now())
+  withdrawnByUserId    String?
+  withdrawnAt          DateTime?
+  withdrawalNote       String?                     @db.Text
+  razduzenjeTransferId String?
+  disposalCommissionId String?
+  approvalId           String?                     @unique
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  session            InventorySession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  equipment          Equipment                  @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  warehouse          Warehouse                  @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  category           Category                   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  markedByUser       User                       @relation("DisposalListMarkedBy", fields: [markedByUserId], references: [id], onDelete: Restrict)
+  withdrawnByUser    User?                      @relation("DisposalListWithdrawnBy", fields: [withdrawnByUserId], references: [id], onDelete: SetNull)
+  razduzenjeTransfer Transfer?                  @relation("DisposalListRazduzenjeTransfer", fields: [razduzenjeTransferId], references: [id], onDelete: SetNull)
+  disposalCommission DisposalCommission?        @relation(fields: [disposalCommissionId], references: [id], onDelete: SetNull)
+  approval           DisposalInventoryApproval? @relation(fields: [approvalId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, equipmentId], map: "equip_disp_list_session_equip_uq")
+  @@index([sessionId, warehouseId, categoryId, status], map: "equip_disp_list_scope_idx")
+  @@map("equipment_disposal_list_items")
 }
 
 model DisposalInventoryApproval {
@@ -748,6 +823,7 @@ model DisposalInventoryApproval {
   session            InventorySession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   inventoryLine      InventoryLine?     @relation(fields: [inventoryLineId], references: [id], onDelete: SetNull)
   reviewedByUser     User?              @relation("DisposalInventoryApprovalReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  disposalListItem   EquipmentDisposalListItem?
 
   @@unique([equipmentId, disposalCommissionId], map: "disp_inv_appr_equip_comm_uq")
   @@index([disposalCommissionId, status], map: "disp_inv_appr_comm_st_idx")
@@ -855,6 +931,7 @@ model InventorySession {
   pendingActions InventoryPendingAction[]
   closeJobs      InventorySessionCloseJob[]
   disposalApprovals DisposalInventoryApproval[]
+  disposalListItems EquipmentDisposalListItem[]
 
   @@unique([orgUnitId, year])
   @@index([status])

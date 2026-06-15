@@ -19,7 +19,7 @@ export const getStockLotListBadge = (
     return { label: getStockLotStatusLabel(status), tone: 'warning' };
   }
   if (status === 'spremno_za_izdavanje' && quantityReceived > 0 && quantityOnHand === 0) {
-    return { label: 'Nema više na stanju', tone: 'warning' };
+    return { label: 'Sve izdato', tone: 'warning' };
   }
   if (status === 'spremno_za_izdavanje') {
     return { label: getStockLotStatusLabel(status), tone: 'success' };

@@ -20,6 +20,7 @@ interface SessionCommandCenterProps {
   onClose: (id: string) => void;
   onDelete?: (id: string) => void;
   onRefresh: () => void;
+  canManageLifecycle?: boolean;
 }
 
 export const SessionCommandCenter = ({
@@ -32,6 +33,7 @@ export const SessionCommandCenter = ({
   onClose,
   onDelete,
   onRefresh,
+  canManageLifecycle = true,
 }: SessionCommandCenterProps) => {
   const canDeleteSession = session.status === 'draft' && stats.totalCommittees === 0;
   const period =
@@ -117,13 +119,13 @@ export const SessionCommandCenter = ({
         </div>
       ) : null}
       <div className="flex flex-wrap gap-2 mt-4">
-        {session.status === 'draft' ? (
+        {canManageLifecycle && session.status === 'draft' ? (
           <Button variant="secondary" onClick={() => onActivate(session.id)}>
             <Play size={14} />
             Aktiviraj sesiju
           </Button>
         ) : null}
-        {canDeleteSession && onDelete ? (
+        {canManageLifecycle && canDeleteSession && onDelete ? (
           <Button
             variant="danger"
             onClick={() => onDelete(session.id)}
@@ -138,7 +140,7 @@ export const SessionCommandCenter = ({
             Obrišite sve komisije prije brisanja sesije.
           </p>
         ) : null}
-        {session.status === 'active' ? (
+        {canManageLifecycle && session.status === 'active' ? (
           <Button variant="danger" onClick={() => onClose(session.id)}>
             <Square size={14} />
             Zatvori sesiju popisa

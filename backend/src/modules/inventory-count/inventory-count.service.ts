@@ -20,6 +20,8 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
+import { InventoryCoordinatorScopeService } from '../../common/services/inventory-coordinator-scope.service';
+import { InventoryProductionModeService } from '../../common/services/inventory-production-mode.service';
 import { OrgScopeService } from '../../common/services/org-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
@@ -41,6 +43,7 @@ import {
 import { ListCommitteesQueryDto } from './dto/list-committees-query.dto';
 import { ListInventoryLinesQueryDto } from './dto/list-inventory-lines-query.dto';
 import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
+import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 
 const SESSION_LIST_INCLUDE = {
   orgUnit: { include: { effectiveLocationCity: { include: { canton: true } } } },
@@ -122,10 +125,13 @@ export class InventoryCountService {
     private readonly prisma: PrismaService,
     private readonly locationResolutionService: LocationResolutionService,
     private readonly registrarScope: RegistrarScopeService,
+    private readonly coordinatorScope: InventoryCoordinatorScopeService,
+    private readonly productionModeService: InventoryProductionModeService,
     private readonly orgScopeService: OrgScopeService,
     private readonly notificationsService: NotificationsService,
     private readonly warehouseResolutionService: WarehouseResolutionService,
     private readonly settingsService: SettingsService,
+    private readonly equipmentDisposalListService: EquipmentDisposalListService,
   ) {}
 
   private async assertInventoryCountEnabled(): Promise<void> {
@@ -214,7 +220,73 @@ export class InventoryCountService {
     });
   }
 
-  async createCommittee(input: CreateCommitteeInput) {
+  async ensureDraftSessionForDistribution(
+    orgUnitId: string,
+    year: number,
+  ): Promise<{ session: { id: string; name: string }; created: boolean }> {
+    await this.assertInventoryCountEnabled();
+    const existing = await this.prisma.inventorySession.findUnique({
+      where: { orgUnitId_year: { orgUnitId, year } },
+      select: { id: true, name: true },
+    });
+    if (existing) {
+      return { session: existing, created: false };
+    }
+    const session = await this.createSession({
+      name: `POPIS ${year}`,
+      orgUnitId,
+      year,
+    });
+    await this.notificationsService.notifyInventoryDraftCreated(session.id, session.name, orgUnitId);
+    return { session: { id: session.id, name: session.name }, created: true };
+  }
+
+  async ensureDraftSessionsForAllDistributions(year: number) {
+    const distributions = await this.prisma.orgUnit.findMany({
+      where: { type: 'distribucija' },
+      select: { id: true, name: true },
+    });
+    const results = [];
+    for (const distribution of distributions) {
+      results.push(await this.ensureDraftSessionForDistribution(distribution.id, year));
+    }
+    return results;
+  }
+
+  async attemptAutoCloseSessionsForYear(year: number): Promise<void> {
+    await this.assertInventoryCountEnabled();
+    const sessions = await this.prisma.inventorySession.findMany({
+      where: { year, status: 'active' },
+      select: { id: true, name: true },
+    });
+    const actor = await this.resolveSystemActorUser();
+    for (const session of sessions) {
+      const pendingDisposal = await this.prisma.disposalInventoryApproval.count({
+        where: { sessionId: session.id, status: 'pending' },
+      });
+      if (pendingDisposal > 0) {
+        await this.notificationsService.notifyInventoryCloseBlocked(
+          session.id,
+          session.name,
+          pendingDisposal,
+        );
+        continue;
+      }
+      try {
+        await this.closeSession(actor, session.id);
+        await this.notificationsService.notifyInventoryAutoClosed(session.id, session.name);
+      } catch (error) {
+        await this.notificationsService.notifyInventoryCloseBlocked(
+          session.id,
+          session.name,
+          0,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+  }
+
+  async createCommittee(input: CreateCommitteeInput, user?: AuthenticatedUser) {
     await this.assertInventoryCountEnabled();
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: input.sessionId },
@@ -235,6 +307,9 @@ export class InventoryCountService {
     });
     if (!warehouse || !warehouse.isActive) {
       throw new BadRequestException('Warehouse not found or inactive');
+    }
+    if (user) {
+      await this.coordinatorScope.assertCanManageWarehouse(user, warehouse.id);
     }
     await this.assertWarehouseInSessionScope(session.orgUnitId, warehouse);
     await this.validateCommitteeMembers(input.inventoryMembers, { requireUserForPresidentOnly: true });
@@ -296,6 +371,12 @@ export class InventoryCountService {
           disposalCommission: { include: { members: { include: { employee: true } } } },
           session: { include: { orgUnit: true } },
         },
+      });
+      await this.equipmentDisposalListService.assignListedItemsToCommitteeInTx(tx, {
+        sessionId: session.id,
+        warehouseId: input.warehouseId,
+        parentCategoryId: input.categoryId,
+        disposalCommissionId: disposal.id,
       });
       return committee;
     });
@@ -410,7 +491,7 @@ export class InventoryCountService {
     return { ok: true };
   }
 
-  async deleteCommittee(committeeId: string) {
+  async deleteCommittee(committeeId: string, user?: AuthenticatedUser) {
     await this.assertInventoryCountEnabled();
     const committee = await this.prisma.inventoryCommittee.findUnique({
       where: { id: committeeId },
@@ -422,6 +503,9 @@ export class InventoryCountService {
     if (committee.session.status !== 'draft') {
       throw new BadRequestException('Committees can only be deleted while session is draft');
     }
+    if (user && committee.warehouseId) {
+      await this.coordinatorScope.assertCanManageWarehouse(user, committee.warehouseId);
+    }
     await this.prisma.$transaction(async (tx) => {
       await tx.inventoryCommittee.delete({ where: { id: committeeId } });
       if (committee.disposalCommissionId) {
@@ -431,7 +515,7 @@ export class InventoryCountService {
     return { ok: true };
   }
 
-  async updateCommittee(committeeId: string, input: UpdateCommitteeInput) {
+  async updateCommittee(committeeId: string, input: UpdateCommitteeInput, user?: AuthenticatedUser) {
     await this.assertInventoryCountEnabled();
     const committee = await this.prisma.inventoryCommittee.findUnique({
       where: { id: committeeId },
@@ -454,6 +538,9 @@ export class InventoryCountService {
     });
     if (!warehouse || !warehouse.isActive) {
       throw new BadRequestException('Warehouse not found or inactive');
+    }
+    if (user) {
+      await this.coordinatorScope.assertCanManageWarehouse(user, warehouse.id);
     }
     await this.assertWarehouseInSessionScope(committee.session.orgUnitId, warehouse);
     await this.assertMembersEligibleForWarehouse(input.warehouseId, [
@@ -782,6 +869,23 @@ export class InventoryCountService {
       filters.push({ orgUnitId });
     }
     if (user.role !== 'admin' && user.role !== 'evidenticar') {
+      if (user.role === 'popis_koordinator') {
+        const warehouseIds = await this.coordinatorScope.getAssignedWarehouseIds(user);
+        const orgUnitIds = await this.coordinatorScope.getAssignedOrgUnitIds(user);
+        if (warehouseIds.length === 0 && orgUnitIds.length === 0) {
+          return { id: { in: [] } };
+        }
+        const orFilters: Prisma.InventorySessionWhereInput[] = [];
+        if (orgUnitIds.length > 0) {
+          orFilters.push({ orgUnitId: { in: orgUnitIds } });
+        }
+        if (warehouseIds.length > 0) {
+          orFilters.push({
+            committees: { some: { warehouseId: { in: warehouseIds } } },
+          });
+        }
+        filters.push(orFilters.length === 1 ? orFilters[0]! : { OR: orFilters });
+      } else {
       const actor = await this.prisma.user.findUnique({
         where: { id: user.id },
         select: { employeeId: true },
@@ -792,6 +896,7 @@ export class InventoryCountService {
       filters.push({
         committees: { some: { members: { some: { employeeId: actor.employeeId } } } },
       });
+      }
     }
     if (filters.length === 0) {
       return {};
@@ -806,6 +911,13 @@ export class InventoryCountService {
     const base: Prisma.InventoryCommitteeWhereInput = { sessionId };
     if (user.role === 'admin' || user.role === 'evidenticar') {
       return base;
+    }
+    if (user.role === 'popis_koordinator') {
+      const warehouseIds = await this.coordinatorScope.getAssignedWarehouseIds(user);
+      if (warehouseIds.length === 0) {
+        return { id: { in: [] } };
+      }
+      return { ...base, warehouseId: { in: warehouseIds } };
     }
     const actor = await this.prisma.user.findUnique({
       where: { id: user.id },
@@ -923,21 +1035,22 @@ export class InventoryCountService {
   async getFreezeBannerForUser(user: AuthenticatedUser) {
     await this.assertInventoryCountEnabled();
     const cityIds = await this.resolveFreezeCityIdsForUser(user);
-    const where: Prisma.InventorySessionWhereInput = { status: 'active' };
+    const activeWhere: Prisma.InventorySessionWhereInput = { status: 'active' };
     if (user.role !== 'admin') {
       if (cityIds.length === 0) {
-        return { activeSessions: [] };
+        return { activeSessions: [], productionLockSessions: [] };
       }
-      where.orgUnit = { effectiveLocationCityId: { in: cityIds } };
+      activeWhere.orgUnit = { effectiveLocationCityId: { in: cityIds } };
     }
     const sessions = await this.prisma.inventorySession.findMany({
-      where,
+      where: activeWhere,
       select: {
         id: true,
         name: true,
         year: true,
         orgUnit: {
           select: {
+            id: true,
             name: true,
             effectiveLocationCity: { select: { name: true } },
           },
@@ -945,6 +1058,49 @@ export class InventoryCountService {
       },
       orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
     });
+    const productionLockSessions: {
+      id: string;
+      name: string;
+      year: number;
+      orgUnitName: string;
+      cityName: string | null;
+    }[] = [];
+    if (await this.productionModeService.isProductionModeEnabled()) {
+      const draftWhere: Prisma.InventorySessionWhereInput = {
+        status: { in: ['draft', 'active', 'closing'] },
+      };
+      if (user.role !== 'admin' && cityIds.length > 0) {
+        draftWhere.orgUnit = { effectiveLocationCityId: { in: cityIds } };
+      } else if (user.role !== 'admin' && cityIds.length === 0) {
+        draftWhere.id = { in: [] };
+      }
+      const candidates = await this.prisma.inventorySession.findMany({
+        where: draftWhere,
+        select: {
+          id: true,
+          name: true,
+          year: true,
+          orgUnit: {
+            select: {
+              id: true,
+              name: true,
+              effectiveLocationCity: { select: { name: true } },
+            },
+          },
+        },
+      });
+      for (const row of candidates) {
+        if (await this.productionModeService.isProductionLockActive(row.orgUnit.id)) {
+          productionLockSessions.push({
+            id: row.id,
+            name: row.name,
+            year: row.year,
+            orgUnitName: row.orgUnit.name,
+            cityName: row.orgUnit.effectiveLocationCity?.name ?? null,
+          });
+        }
+      }
+    }
     return {
       activeSessions: sessions.map((row) => ({
         id: row.id,
@@ -953,6 +1109,7 @@ export class InventoryCountService {
         orgUnitName: row.orgUnit.name,
         cityName: row.orgUnit.effectiveLocationCity?.name ?? null,
       })),
+      productionLockSessions,
     };
   }
 
@@ -1006,6 +1163,12 @@ export class InventoryCountService {
     const committeeCount = await this.prisma.inventoryCommittee.count({ where: { sessionId } });
     if (committeeCount === 0) {
       throw new BadRequestException('At least one inventory committee is required before activation');
+    }
+    const unassignedListed = await this.equipmentDisposalListService.countUnassignedListed(sessionId);
+    if (unassignedListed > 0) {
+      throw new BadRequestException(
+        `Na listi za rashod ima ${unassignedListed} stavki bez dodijeljene komisije — kreirajte komisije za sva skladišta/kategorije prije aktivacije`,
+      );
     }
     const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
       session.orgUnitId,
@@ -1762,8 +1925,17 @@ export class InventoryCountService {
             status: 'rashodovano',
             currentHolderId: null,
             warehouseId: approval.equipment.warehouseId,
-            warehouseCondition: 'spremno_za_unistenje',
+            warehouseCondition: 'unisteno',
           },
+        });
+        await tx.equipmentDisposalListItem.updateMany({
+          where: { approvalId: approval.id },
+          data: { status: 'approved' },
+        });
+      } else {
+        await tx.equipmentDisposalListItem.updateMany({
+          where: { approvalId: approval.id },
+          data: { status: 'rejected' },
         });
       }
       return row;
@@ -1825,6 +1997,23 @@ export class InventoryCountService {
   }
 
   private async resolveCloseJobActorUserId(): Promise<string> {
+    return this.resolveSystemActorUserId();
+  }
+
+  private async resolveSystemActorUserId(): Promise<string> {
+    const setting = await this.prisma.setting.findUnique({
+      where: { key: 'inventory.system_user_id' },
+    });
+    const configuredId = setting?.value?.trim();
+    if (configuredId) {
+      const configured = await this.prisma.user.findFirst({
+        where: { id: configuredId, isActive: true, role: 'admin' },
+        select: { id: true },
+      });
+      if (configured) {
+        return configured.id;
+      }
+    }
     const admin = await this.prisma.user.findFirst({
       where: { role: 'admin', isActive: true },
       select: { id: true },
@@ -1833,6 +2022,32 @@ export class InventoryCountService {
       throw new BadRequestException('No admin user available for inventory close job');
     }
     return admin.id;
+  }
+
+  async resolveSystemActorUser(): Promise<AuthenticatedUser> {
+    const userId = await this.resolveSystemActorUserId();
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
+    });
+    if (!user) {
+      throw new BadRequestException('System actor user not found');
+    }
+    return {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      employeeId: user.employeeId,
+      registrarScopes: user.registrarAssignments.map((row) => ({
+        warehouseId: row.warehouseId,
+        categoryId: row.categoryId,
+        orgUnitId: row.orgUnitId,
+      })),
+      coordinatorAssignments: user.inventoryCoordinatorAssignments.map((row) => ({
+        warehouseId: row.warehouseId,
+        orgUnitId: row.orgUnitId,
+      })),
+    };
   }
 
   private async ensureRelocationDraftTransfer(

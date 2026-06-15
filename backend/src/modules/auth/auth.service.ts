@@ -21,6 +21,7 @@ export interface AuthUserResponse {
   role: string;
   employeeId: string | null;
   registrarScopes: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
+  coordinatorAssignments: { warehouseId: string; orgUnitId?: string | null }[];
 }
 
 @Injectable()
@@ -34,7 +35,7 @@ export class AuthService {
   async login(username: string, password: string): Promise<{ tokens: AuthTokens; user: AuthUserResponse }> {
     const user = await this.prisma.user.findUnique({
       where: { username },
-      include: { registrarAssignments: true },
+      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
     });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials');
@@ -50,7 +51,14 @@ export class AuthService {
     const tokens = await this.issueTokens(user.id, user.username, user.role);
     return {
       tokens,
-      user: this.mapUser(user.id, user.username, user.role, user.employeeId, user.registrarAssignments),
+      user: this.mapUser(
+        user.id,
+        user.username,
+        user.role,
+        user.employeeId,
+        user.registrarAssignments,
+        user.inventoryCoordinatorAssignments,
+      ),
     };
   }
 
@@ -89,6 +97,10 @@ export class AuthService {
         categoryId: row.categoryId,
         orgUnitId: row.orgUnitId ?? null,
       })),
+      user.coordinatorAssignments.map((row) => ({
+        warehouseId: row.warehouseId,
+        orgUnitId: row.orgUnitId ?? null,
+      })),
     );
   }
 
@@ -118,6 +130,10 @@ export class AuthService {
       categoryId: string;
       orgUnitId: string | null;
     }[],
+    coordinatorAssignments: {
+      warehouseId: string;
+      orgUnitId: string | null;
+    }[],
   ): AuthUserResponse {
     return {
       id,
@@ -127,6 +143,10 @@ export class AuthService {
       registrarScopes: registrarScopes.map((row) => ({
         warehouseId: row.warehouseId,
         categoryId: row.categoryId,
+        orgUnitId: row.orgUnitId,
+      })),
+      coordinatorAssignments: coordinatorAssignments.map((row) => ({
+        warehouseId: row.warehouseId,
         orgUnitId: row.orgUnitId,
       })),
     };

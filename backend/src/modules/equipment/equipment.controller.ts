@@ -22,6 +22,7 @@ import { EquipmentSummaryQueryDto } from './dto/equipment-summary-query.dto';
 import { EquipmentLotGroupsQueryDto } from './dto/equipment-lot-groups-query.dto';
 import { ListEquipmentQueryDto } from './dto/list-equipment-query.dto';
 import { UpdateEquipmentDto } from './dto/update-equipment.dto';
+import { ReactivateEquipmentDto } from './dto/reactivate-equipment.dto';
 import { EquipmentService } from './equipment.service';
 
 @Controller('equipment')
@@ -89,6 +90,16 @@ export class EquipmentController {
     @Body() body: UpdateEquipmentDto,
   ) {
     return this.equipmentService.update(user, id, body);
+  }
+
+  @Post(':id/reactivate')
+  @Roles(UserRole.admin)
+  reactivate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: ReactivateEquipmentDto,
+  ) {
+    return this.equipmentService.reactivate(user, id, body.reason);
   }
 
   @Delete(':id')

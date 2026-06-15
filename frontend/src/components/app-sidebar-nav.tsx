@@ -10,7 +10,7 @@ import { useAdminSettings } from '../contexts/admin-settings-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { isNavPageEnabled } from '../utils/settings-feature.util';
 import { cn } from '../utils/cn';
-import { isAdmin, isEvidenticar, isSkladistar, getUserRole } from '../store';
+import { isAdmin, isEvidenticar, isPopisKoordinator, isSkladistar, getUserRole } from '../store';
 import { useCurrentEmployee } from '../hooks/use-current-employee';
 import { useModuleBadges } from '../hooks/use-module-badges';
 import { pathToPageId } from '../routes/app-routes';
@@ -70,6 +70,7 @@ export const AppSidebarNav = ({
   const currentEmployee = useCurrentEmployee();
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
+  const coordinator = isPopisKoordinator();
   const skladistar = isSkladistar();
   const role = getUserRole();
   const { settings: publicSettings } = usePublicSettings();
@@ -83,7 +84,8 @@ export const AppSidebarNav = ({
     (showNavPage('equipment') || showNavPage('transfers'));
   const showProcessSection =
     (admin && (showNavPage('inventory-count') || showNavPage('disposal-commissions'))) ||
-    (evidenticar && !admin && showNavPage('inventory-count'));
+    (evidenticar && !admin && showNavPage('inventory-count')) ||
+    (coordinator && showNavPage('inventory-count'));
   const showMasterDataSection =
     admin &&
     (showNavPage('organization') ||
@@ -109,6 +111,8 @@ export const AppSidebarNav = ({
       ? 'Administrator'
       : role === 'evidenticar'
         ? 'Evidentičar'
+        : role === 'popis_koordinator'
+          ? 'Koordinator popisa'
         : role === 'skladistar'
           ? 'Skladištar'
           : 'Korisnik';
@@ -117,6 +121,8 @@ export const AppSidebarNav = ({
       ? 'bg-amber-500 text-amber-900'
       : role === 'evidenticar'
         ? 'bg-purple-500 text-purple-100'
+        : role === 'popis_koordinator'
+          ? 'bg-indigo-500 text-indigo-100'
         : role === 'skladistar'
           ? 'bg-teal-500 text-teal-900'
           : 'bg-gray-500 text-gray-100';
@@ -244,7 +250,7 @@ export const AppSidebarNav = ({
             collapsed={collapsed}
             label="Popis"
             icon={ClipboardCheck}
-            visible={showNavPage('inventory-count') && (admin || evidenticar)}
+            visible={showNavPage('inventory-count') && (admin || evidenticar || coordinator)}
             badge={moduleBadges['inventory-count']}
             onNavigateComplete={onNavigateComplete}
           />

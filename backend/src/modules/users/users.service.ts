@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import * as bcrypt from 'bcrypt';
 import type { Prisma, User, UserRole } from '../../../generated/prisma/client';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
+import type { CoordinatorScopeAssignment } from '../../common/types/coordinator-scope.type';
 import type { RegistrarScopeAssignment } from '../../common/types/registrar-scope.type';
 import {
   buildContainsSearchWhere,
@@ -15,7 +16,7 @@ import { SettingsService } from '../settings/settings.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { assertUserAccessRules, normalizeRegistrarScopes } from './users-validation.util';
+import { assertUserAccessRules, normalizeCoordinatorAssignments, normalizeRegistrarScopes } from './users-validation.util';
 
 export interface UserListItem {
   id: string;
@@ -24,6 +25,7 @@ export interface UserListItem {
   employeeId: string | null;
   isActive: boolean;
   registrarScopes: RegistrarScopeAssignment[];
+  coordinatorAssignments: CoordinatorScopeAssignment[];
   lastLoginAt: string | null;
 }
 
@@ -51,12 +53,16 @@ export class UsersService {
         categoryId: string;
         orgUnitId: string | null;
       }[];
+      inventoryCoordinatorAssignments: {
+        warehouseId: string;
+        orgUnitId: string | null;
+      }[];
     };
     const result = await paginate<UserWithAssignments, Prisma.UserWhereInput>({
       findMany: async (args) => {
         const rows = await this.prisma.user.findMany({
           ...args,
-          include: { registrarAssignments: true },
+          include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
         });
         return rows as UserWithAssignments[];
       },
@@ -75,7 +81,7 @@ export class UsersService {
   async findOne(id: string): Promise<UserListItem> {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: { registrarAssignments: true },
+      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
     });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -90,10 +96,15 @@ export class UsersService {
       throw new ConflictException('Username already exists');
     }
     const registrarScopes = normalizeRegistrarScopes(dto.role, dto.registrarScopes);
+    const coordinatorAssignments = normalizeCoordinatorAssignments(
+      dto.role,
+      dto.coordinatorAssignments,
+    );
     await assertUserAccessRules(this.prisma, {
       role: dto.role,
       employeeId: dto.employeeId,
       registrarScopes,
+      coordinatorAssignments,
     });
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
@@ -113,8 +124,17 @@ export class UsersService {
                 })),
               }
             : undefined,
+        inventoryCoordinatorAssignments:
+          coordinatorAssignments.length > 0
+            ? {
+                create: coordinatorAssignments.map((scope) => ({
+                  warehouseId: scope.warehouseId,
+                  orgUnitId: scope.orgUnitId ?? null,
+                })),
+              }
+            : undefined,
       },
-      include: { registrarAssignments: true },
+      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
     });
     return this.toListItem(user);
   }
@@ -123,7 +143,7 @@ export class UsersService {
     await this.settingsService.assertFeatureEnabled('features.user_management');
     const current = await this.prisma.user.findUnique({
       where: { id },
-      include: { registrarAssignments: true },
+      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
     });
     if (!current) {
       throw new NotFoundException('User not found');
@@ -141,14 +161,26 @@ export class UsersService {
               orgUnitId: row.orgUnitId,
             })),
           );
+    const coordinatorAssignments =
+      dto.coordinatorAssignments !== undefined
+        ? normalizeCoordinatorAssignments(role, dto.coordinatorAssignments)
+        : normalizeCoordinatorAssignments(
+            role,
+            current.inventoryCoordinatorAssignments.map((row) => ({
+              warehouseId: row.warehouseId,
+              orgUnitId: row.orgUnitId,
+            })),
+          );
     await assertUserAccessRules(this.prisma, {
       role,
       employeeId,
       registrarScopes,
+      coordinatorAssignments,
       excludeUserId: id,
     });
     const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : undefined;
     await this.prisma.registrarAssignment.deleteMany({ where: { userId: id } });
+    await this.prisma.inventoryCoordinatorAssignment.deleteMany({ where: { userId: id } });
     const user = await this.prisma.user.update({
       where: { id },
       data: {
@@ -166,8 +198,17 @@ export class UsersService {
                 })),
               }
             : undefined,
+        inventoryCoordinatorAssignments:
+          coordinatorAssignments.length > 0
+            ? {
+                create: coordinatorAssignments.map((scope) => ({
+                  warehouseId: scope.warehouseId,
+                  orgUnitId: scope.orgUnitId ?? null,
+                })),
+              }
+            : undefined,
       },
-      include: { registrarAssignments: true },
+      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
     });
     return this.toListItem(user);
   }
@@ -184,6 +225,10 @@ export class UsersService {
         categoryId: string;
         orgUnitId: string | null;
       }[];
+      inventoryCoordinatorAssignments: {
+        warehouseId: string;
+        orgUnitId: string | null;
+      }[];
     },
   ): UserListItem {
     return {
@@ -195,6 +240,10 @@ export class UsersService {
       registrarScopes: user.registrarAssignments.map((row) => ({
         warehouseId: row.warehouseId,
         categoryId: row.categoryId,
+        orgUnitId: row.orgUnitId,
+      })),
+      coordinatorAssignments: user.inventoryCoordinatorAssignments.map((row) => ({
+        warehouseId: row.warehouseId,
         orgUnitId: row.orgUnitId,
       })),
       lastLoginAt: user.lastLoginAt?.toISOString() ?? null,

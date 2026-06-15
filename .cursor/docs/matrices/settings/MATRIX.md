@@ -114,8 +114,25 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 | `features.warehouses` | `WarehousesService` |
 | `features.registrar_stock` | `WarehouseStockService` (receive/issue) |
 | `features.maintenance_parts` | `MaintenancePartsService` |
+| `inventory.production_mode` | `InventorySchedulerService`, `InventoryProductionModeService`, freeze proširenje |
+| `inventory.lock_date` / `inventory.session_end_date` | Scheduler dnevni job (TZ iz `inventory.scheduler_timezone`) |
+| `inventory.auto_*` | Auto draft / close / optional activate |
+| `inventory.system_user_id` | `InventoryCountService.resolveSystemActorUserId` |
 
-## Enforcement (frontend)
+## Inventura (grupa `inventory`, tab Postavke)
+
+| Ključ | Default | Opis |
+|-------|---------|------|
+| `inventory.production_mode` | false | Uključuje kalendar i scheduler |
+| `inventory.lock_date` | `11-30` | MM-DD lock + auto draft |
+| `inventory.session_end_date` | `12-31` | MM-DD pokušaj zatvaranja |
+| `inventory.auto_create_draft_session` | true | |
+| `inventory.auto_close_session` | true | Bez force ako pending rashod |
+| `inventory.auto_activate_session` | false | |
+| `inventory.scheduler_timezone` | `Europe/Sarajevo` | |
+| `inventory.system_user_id` | `` | UUID admina za close job |
+
+Env: `INVENTORY_SCHEDULER_ENABLED=true` za cron u Nest procesu.
 
 | Mekanizam | Fajl |
 |-----------|------|

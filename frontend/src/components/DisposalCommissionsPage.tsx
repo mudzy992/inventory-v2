@@ -1,151 +1,52 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Plus, X, Users, FileWarning } from 'lucide-react';
-import {
-  fetchDisposalCommissionsPageApi,
-  fetchPendingDisposalApprovalsApi,
-  voteDisposalApprovalApi,
-  type DisposalApprovalDto,
-  type DisposalCommissionDto,
-} from '../api/disposal-api';
-import { fetchEmployeeApi } from '../api/employees-api';
-import { fetchUsersPageApi } from '../api/users-api';
-import { fetchAllPaginatedItems } from '../api/fetch-all-paginated';
-import { ApiError } from '../api/client';
-import { useToast } from '../contexts/toast-context';
-import { Badge } from './ui/badge';
-import { useStore, useRefreshData } from '../useStore';
-import { isAdmin } from '../store';
+import { Users } from 'lucide-react';
+import { fetchDisposalCommissionsPageApi, type DisposalCommissionDto } from '../api/disposal-api';
 import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
-import { Button } from './ui/button';
-import { EmptyState } from './ui/empty-state';
-import { PageTabs } from './ui/page-tabs';
 import { PaginationControls } from './ui/pagination-controls';
 import { usePaginatedList } from '../hooks/usePaginatedList';
-import type { Employee } from '../types';
-import { DisposalCommissionFormModal } from './disposal-commissions/disposal-commission-form-modal';
-
-type DisposalTab = 'commissions' | 'legacy';
+import { AlertBanner } from './ui/alert-banner';
 
 export const DisposalCommissionsPage = () => {
-  const [state] = useStore();
-  const refresh = useRefreshData();
-  const admin = isAdmin();
-  const { toastError, toastSuccess } = useToast();
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [pendingApprovals, setPendingApprovals] = useState<DisposalApprovalDto[]>([]);
-  const [employeesWithUser, setEmployeesWithUser] = useState<Employee[]>([]);
-  const [loadingApprovals, setLoadingApprovals] = useState(false);
-  const [tab, setTab] = useState<DisposalTab>('commissions');
-
   const commissionsList = usePaginatedList<DisposalCommissionDto>({
     fetchPage: fetchDisposalCommissionsPageApi,
   });
   const commissions = commissionsList.items;
   const loading = commissionsList.isLoading;
 
-  useEffect(() => {
-    if (!admin) {
-      return;
-    }
-    void fetchAllPaginatedItems((params) => fetchUsersPageApi(params), 100)
-      .then(async (users) => {
-        const linkedIds = [
-          ...new Set(
-            users.filter((user) => user.isActive && user.employeeId).map((user) => user.employeeId),
-          ),
-        ];
-        const employees = await Promise.all(
-          linkedIds.map((id) => fetchEmployeeApi(id).catch(() => null)),
-        );
-        setEmployeesWithUser(employees.filter(Boolean) as Employee[]);
-      })
-      .catch(() => setEmployeesWithUser([]));
-  }, [admin]);
-
-  const citiesWithActiveCommission = useMemo(
-    () => new Set(commissions.map((commission) => commission.cityId)),
-    [commissions],
-  );
-
-  const loadApprovals = useCallback(async () => {
-    setLoadingApprovals(true);
-    try {
-      const approvals = await fetchPendingDisposalApprovalsApi().catch(
-        () => [] as DisposalApprovalDto[],
-      );
-      setPendingApprovals(approvals);
-    } finally {
-      setLoadingApprovals(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadApprovals();
-  }, [loadApprovals]);
-
-  const loadData = useCallback(async () => {
-    await Promise.all([commissionsList.refresh(), loadApprovals()]);
-  }, [commissionsList, loadApprovals]);
-  const handleCreated = async () => {
-    await refresh();
-    await loadData();
-    toastSuccess('Komisija za rashod je kreirana.');
-  };
-  const handleVote = async (approvalId: string, approved: boolean) => {
-    try {
-      await voteDisposalApprovalApi(approvalId, approved);
-      await loadData();
-      toastSuccess(approved ? 'Glas za odobrenje je zabilježen.' : 'Glas protiv je zabilježen.');
-    } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška');
-    }
-  };
   return (
     <div className="space-y-6">
       <PageHeaderRow
         title="Komisije za rashod"
-        description="Jedna aktivna komisija po gradu. Rashod opreme se vezuje na grad lokacije radnika ili skladišta gdje je oprema."
-        actions={
-          admin && tab === 'commissions' ? (
-            <Button onClick={() => setShowCreateModal(true)}>
-              <Plus size={16} />
-              Nova komisija
-            </Button>
-          ) : undefined
-        }
+        description="Komisije se kreiraju automatski uz popisne komisije u sesiji inventure. Odluke o rashodu donose se u inboxu predsjednika na zatvaranju popisa."
       />
-      <PageTabs
-        tabs={[
-          { id: 'commissions', label: 'Komisije', icon: Users },
-          { id: 'legacy', label: 'Legacy odobrenja', icon: FileWarning },
-        ]}
-        activeTab={tab}
-        onChange={setTab}
-      />
-      {tab === 'commissions' ? (
-        <div>
-          <h2 className="text-sm font-medium text-gray-800 mb-2">Aktivne komisije</h2>
-          <ResponsiveTable
-            isEmpty={commissions.length === 0 && !loading}
-            emptyMessage="Nema komisija za rashod."
-            mobile={commissions.map((commission) => (
-              <div key={commission.id} className="p-4 space-y-2">
-                <p className="font-medium text-gray-800">{commission.city?.name ?? commission.cityId}</p>
-                <p className="text-sm text-gray-700">{commission.name}</p>
-                <ul className="text-xs text-gray-600 space-y-1">
-                  {commission.members.map((member) => (
-                    <li key={member.employeeId}>
-                      {member.employee
-                        ? `${member.employee.firstName} ${member.employee.lastName}`
-                        : member.employeeId}
-                      {member.role === 'predsjednik' ? ' (predsjednik)' : ''}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-            desktop={
+      <AlertBanner tone="info">
+        Nova komisija rashoda nije moguća samostalno — definirajte je kroz wizard popisne komisije (Inventurni popis).
+      </AlertBanner>
+      <div>
+        <h2 className="text-sm font-medium text-gray-800 mb-2 flex items-center gap-2">
+          <Users size={16} />
+          Komisije vezane uz popis
+        </h2>
+        <ResponsiveTable
+          isEmpty={commissions.length === 0 && !loading}
+          emptyMessage="Nema komisija za rashod."
+          mobile={commissions.map((commission) => (
+            <div key={commission.id} className="p-4 space-y-2">
+              <p className="font-medium text-gray-800">{commission.city?.name ?? commission.cityId}</p>
+              <p className="text-sm text-gray-700">{commission.name}</p>
+              <ul className="text-xs text-gray-600 space-y-1">
+                {commission.members.map((member) => (
+                  <li key={member.employeeId}>
+                    {member.employee
+                      ? `${member.employee.firstName} ${member.employee.lastName}`
+                      : member.employeeId}
+                    {member.role === 'predsjednik' ? ' (predsjednik)' : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          desktop={
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
@@ -158,7 +59,9 @@ export const DisposalCommissionsPage = () => {
                 {commissions.map((commission) => (
                   <tr key={commission.id} className="border-t">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-800">{commission.city?.name ?? commission.cityId}</div>
+                      <div className="font-medium text-gray-800">
+                        {commission.city?.name ?? commission.cityId}
+                      </div>
                       {commission.city?.canton?.name ? (
                         <div className="text-xs text-gray-500">{commission.city.canton.name}</div>
                       ) : null}
@@ -180,94 +83,19 @@ export const DisposalCommissionsPage = () => {
                 ))}
               </tbody>
             </table>
-            }
-          />
-          {commissionsList.meta ? (
-            <PaginationControls
-              page={commissionsList.meta.page}
-              pageSize={commissionsList.meta.pageSize}
-              total={commissionsList.meta.total}
-              totalPages={commissionsList.meta.totalPages}
-              onPageChange={commissionsList.setPage}
-              onPageSizeChange={commissionsList.setPageSize}
-            />
-          ) : null}
-        </div>
-      ) : null}
-      {tab === 'legacy' ? (
-        pendingApprovals.length > 0 ? (
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <h2 className="text-sm font-medium text-gray-800">Odobrenja na čekanju</h2>
-              <Badge tone="warning">Legacy — prenos rashodovanja</Badge>
-            </div>
-            <p className="text-xs text-gray-500 mb-3">
-              Odobrenja vezana uz transfer tipa rashodovanje. Popisni rashod obrađuje se u Godišnjem popisu (inbox komisije).
-            </p>
-            <ResponsiveTable
-              mobile={pendingApprovals.map((approval) => (
-                <div key={approval.id} className="p-4 space-y-2">
-                  <p className="font-mono text-xs">{approval.transfer.documentNumber}</p>
-                  <p className="text-sm text-gray-700">{approval.transfer.equipment?.inventoryNumber ?? '—'}</p>
-                  <div className="flex gap-2">
-                    <Button variant="secondary" className="!py-1 !px-2 text-xs" onClick={() => void handleVote(approval.id, true)}>
-                      <Check size={12} />
-                      Za
-                    </Button>
-                    <Button variant="danger" className="!py-1 !px-2 text-xs" onClick={() => void handleVote(approval.id, false)}>
-                      <X size={12} />
-                      Protiv
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              desktop={
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-600">
-                  <tr>
-                    <th className="text-left px-4 py-2 font-medium">Dokument</th>
-                    <th className="text-left px-4 py-2 font-medium">Oprema</th>
-                    <th className="text-left px-4 py-2 font-medium">Akcije</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingApprovals.map((approval) => (
-                    <tr key={approval.id} className="border-t">
-                      <td className="px-4 py-3 font-mono text-xs">{approval.transfer.documentNumber}</td>
-                      <td className="px-4 py-3">{approval.transfer.equipment?.inventoryNumber ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <Button variant="secondary" className="!py-1 !px-2 text-xs" onClick={() => void handleVote(approval.id, true)}>
-                            <Check size={12} />
-                            Za
-                          </Button>
-                          <Button variant="danger" className="!py-1 !px-2 text-xs" onClick={() => void handleVote(approval.id, false)}>
-                            <X size={12} />
-                            Protiv
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              }
-            />
-          </div>
-        ) : (
-          <EmptyState message="Nema legacy odobrenja na čekanju." />
-        )
-      ) : null}
-      {showCreateModal ? (
-        <DisposalCommissionFormModal
-          cities={state.cities}
-          employeesWithUser={employeesWithUser}
-          orgUnits={state.orgUnits}
-          citiesWithActiveCommission={citiesWithActiveCommission}
-          onClose={() => setShowCreateModal(false)}
-          onCreated={handleCreated}
+          }
         />
-      ) : null}
+        {commissionsList.meta ? (
+          <PaginationControls
+            page={commissionsList.meta.page}
+            pageSize={commissionsList.meta.pageSize}
+            total={commissionsList.meta.total}
+            totalPages={commissionsList.meta.totalPages}
+            onPageChange={commissionsList.setPage}
+            onPageSizeChange={commissionsList.setPageSize}
+          />
+        ) : null}
+      </div>
     </div>
   );
 };

@@ -10,6 +10,7 @@ export interface AuthUserDto {
   role: UserRole;
   employeeId: string | null;
   registrarScopes: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
+  coordinatorAssignments?: { warehouseId: string; orgUnitId?: string | null }[];
 }
 
 export interface LoginResponseDto {

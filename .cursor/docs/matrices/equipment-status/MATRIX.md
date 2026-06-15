@@ -13,8 +13,17 @@
 | Vrijednost | Značenje |
 |------------|----------|
 | `na_skladistu` | Normalno na skladištu ili rashod primljen u skladište |
-| `spremno_za_unistenje` | Odobreno za uništenje (komisija rashoda, faza 17) |
-| `unisteno` | Finalno uništeno (skladištar `destroy-equipment`) |
+| `spremno_za_unistenje` | Legacy — odobreno prije novog toka; skladištar može `destroy-equipment` |
+| `unisteno` | Službeni otpis komisije rashoda (novi tok) ili legacy destroy |
+
+## Reaktivacija (admin)
+
+- `POST /equipment/:id/reactivate` — `rashodovano` + `unisteno` → `skladiste` + `na_skladistu`, audit `EquipmentEvent.reaktivirano`
+
+## Transfer finalize — warehouseCondition
+
+- `razduzenje` → `na_skladistu`
+- Transfer `rashodovanje` — **blokiran** za nove unose (koristiti listu za rashod)
 
 ## Pristup po ulozi
 
@@ -24,11 +33,6 @@
 | skladistar | `skladiste` / rashod u keeper skladištima; lotovi preko warehouse-stock API | nema `Equipment` create; uništenje preko destroy API |
 | evidenticar | scope A/B (`RegistrarAssignment`) | update u scope-u; nema `POST /equipment` |
 | user | samo vlastito zaduženje | — |
-
-## Transfer finalize — warehouseCondition
-
-- `razduzenje` → `na_skladistu`
-- `rashodovanje` → `na_skladistu` (spremno_za_unistenje postavlja faza 17)
 
 ## Nastanak opreme
 

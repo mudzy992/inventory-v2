@@ -219,6 +219,11 @@ export class TransfersService {
       dto.type,
       null,
     );
+    if (dto.type === 'rashodovanje') {
+      throw new BadRequestException(
+        'Rashod opreme ide preko liste za rashod u nacrtu sesije popisa, ne preko prenosnice rashodovanje',
+      );
+    }
     const isCrossService = await this.resolveCrossServiceFlag(user, dto);
     const signerId = await this.resolveSignerForCreate(dto);
     await this.assertSignerExists(signerId);
@@ -255,13 +260,6 @@ export class TransfersService {
       },
       include: transferInclude,
     });
-    if (dto.type === 'rashodovanje') {
-      const resolved = await this.disposalCommissionsService.resolveForEquipment(dto.equipmentId);
-      if (!resolved.cityId) {
-        throw new BadRequestException('Cannot resolve city for disposal');
-      }
-      await this.disposalCommissionsService.createApprovalForTransfer(created.id, resolved.cityId);
-    }
     await this.notificationsService.notifyTransferPending(created.id);
     const requireSignedPdf = await this.settingsService.getBooleanValue(
       'transfer.require_signed_pdf_upload',

@@ -242,9 +242,10 @@ export interface InventoryFreezeBannerSessionDto {
 }
 
 export const fetchInventoryFreezeBannerApi = () =>
-  apiRequest<{ activeSessions: InventoryFreezeBannerSessionDto[] }>(
-    '/inventory-sessions/freeze-banner',
-  );
+  apiRequest<{
+    activeSessions: InventoryFreezeBannerSessionDto[];
+    productionLockSessions: InventoryFreezeBannerSessionDto[];
+  }>('/inventory-sessions/freeze-banner');
 
 export const createInventorySessionApi = (body: {
   name: string;
@@ -347,6 +348,7 @@ export interface DisposalReportItemDto {
   reviewedByUsername: string | null;
   commissionName: string;
   commissionCategoryName: string | null;
+  source?: 'registrar_list' | 'inventory_line';
 }
 
 export interface DisposalReportDto {
@@ -373,6 +375,52 @@ export interface DisposalReportDto {
     rejected: DisposalReportItemDto[];
   };
 }
+
+export interface EquipmentDisposalListItemDto {
+  id: string;
+  sessionId: string;
+  equipmentId: string;
+  warehouseId: string;
+  categoryId: string;
+  status: 'listed' | 'withdrawn' | 'assigned' | 'approved' | 'rejected';
+  note?: string | null;
+  markedAt: string;
+  equipment?: {
+    id: string;
+    inventoryNumber: string;
+    status: string;
+    category?: { id: string; name: string };
+    warehouse?: { id: string; name: string };
+    currentHolder?: { id: string; firstName: string; lastName: string };
+  };
+  warehouse?: { id: string; name: string };
+  category?: { id: string; name: string };
+  markedByUser?: { id: string; username: string };
+  razduzenjeTransfer?: { id: string; status: string; documentNumber: string } | null;
+  disposalCommission?: { id: string; name: string } | null;
+}
+
+export const fetchDisposalListApi = (sessionId: string) =>
+  apiRequest<EquipmentDisposalListItemDto[]>(`/inventory-sessions/${sessionId}/disposal-list`);
+
+export const markDisposalListApi = (
+  sessionId: string,
+  body: { equipmentId: string; note?: string; signerId?: string },
+) =>
+  apiRequest<EquipmentDisposalListItemDto>(`/inventory-sessions/${sessionId}/disposal-list`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+export const withdrawDisposalListApi = (
+  sessionId: string,
+  equipmentId: string,
+  body?: { note?: string },
+) =>
+  apiRequest<EquipmentDisposalListItemDto>(
+    `/inventory-sessions/${sessionId}/disposal-list/${equipmentId}`,
+    { method: 'DELETE', body: JSON.stringify(body ?? {}) },
+  );
 
 export const fetchDisposalReportApi = (sessionId: string) =>
   apiRequest<DisposalReportDto>(`/inventory-sessions/${sessionId}/disposal-report`);

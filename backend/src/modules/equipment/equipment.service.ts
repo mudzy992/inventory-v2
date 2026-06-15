@@ -229,6 +229,53 @@ export class EquipmentService {
     }
   }
 
+  async reactivate(user: AuthenticatedUser, id: string, reason: string): Promise<Equipment> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('Only admin can reactivate equipment');
+    }
+    const existing = await this.prisma.equipment.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Equipment not found');
+    }
+    if (existing.status !== 'rashodovano' || existing.warehouseCondition !== 'unisteno') {
+      throw new BadRequestException(
+        'Reaktivacija je moguća samo za službeno rashodovanu i uništenu opremu',
+      );
+    }
+    if (!existing.warehouseId) {
+      throw new BadRequestException('Oprema nema skladište za povrat');
+    }
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      throw new BadRequestException('Obrazloženje reaktivacije je obavezno');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.equipment.update({
+        where: { id },
+        data: {
+          status: 'skladiste',
+          warehouseCondition: 'na_skladistu',
+          currentHolderId: null,
+          notes: existing.notes
+            ? `${existing.notes}\n\n[Reaktivacija] ${trimmedReason}`
+            : `[Reaktivacija] ${trimmedReason}`,
+        },
+      });
+      await tx.equipmentEvent.create({
+        data: {
+          equipmentId: id,
+          warehouseId: existing.warehouseId!,
+          actorUserId: user.id,
+          action: 'reaktivirano',
+          fromCondition: 'unisteno',
+          toCondition: 'na_skladistu',
+        },
+      });
+      return updated;
+    });
+  }
+
   async remove(user: AuthenticatedUser, id: string): Promise<void> {
     await this.settingsService.assertFeatureEnabled('features.equipment');
     const existing = await this.prisma.equipment.findUnique({

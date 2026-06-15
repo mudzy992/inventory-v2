@@ -1,6 +1,7 @@
 export type SettingUiGroup =
   | 'branding'
   | 'company'
+  | 'inventory'
   | 'lists'
   | 'modules'
   | 'transfers'
@@ -10,6 +11,7 @@ export type SettingUiGroup =
 export const SETTINGS_UI_GROUP_LABELS: Record<SettingUiGroup, string> = {
   branding: 'Brending',
   company: 'Preduzeće',
+  inventory: 'Inventura',
   lists: 'Paginacija lista',
   modules: 'Moduli',
   transfers: 'Prenosi',
@@ -20,6 +22,7 @@ export const SETTINGS_UI_GROUP_LABELS: Record<SettingUiGroup, string> = {
 export const SETTINGS_UI_GROUP_ORDER: SettingUiGroup[] = [
   'branding',
   'company',
+  'inventory',
   'lists',
   'modules',
   'transfers',
