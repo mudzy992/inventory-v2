@@ -57,7 +57,7 @@ Ograničenja:
 | Akcija | Ko | Pravilo |
 |--------|-----|---------|
 | Označi opremu | evidentičar / admin | samo dok je sesija `draft` |
-| Opseg | sistem | postoji slot `(sessionId, warehouseId, parentCategoryId)`; za `skladiste` grad se ne provjerava; za `zaduzeno` grad nosioca = grad distribucije |
+| Opseg | sistem | postoji slot `(sessionId, warehouseId, parentCategoryId)`; skladište: `equipment.warehouseId`, zatim `stockLot.warehouseId`, registrar dodjela, zadnji transfer `zaduzenje`, org nosioca |
 | Eligible sesije | API | `GET eligible-for-equipment/:equipmentId` |
 | Auto razduženje | sistem | `zaduzeno` → skladište (prenosnica po postavkama) |
 | Povrat s liste | admin | samo `draft`, stavka `listed` |

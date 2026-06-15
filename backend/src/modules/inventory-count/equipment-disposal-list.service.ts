@@ -8,6 +8,7 @@ import type { Prisma } from '../../../generated/prisma/client';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { assertCanWriteEquipment } from '../equipment/equipment-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -15,6 +16,7 @@ import { isTransferCreationAllowed } from '../transfers/utils/transfer-generatio
 import { assignListedDisposalItemsToCommissionInTx } from './utils/assign-disposal-list-to-commission.util';
 import { executeRazduzenjeForDisposalMarkInTx } from './utils/execute-disposal-mark-razduzenje.util';
 import { resolveParentAssetCategoryIdInTx } from './utils/resolve-parent-asset-category.util';
+import { resolveDisposalTargetWarehouseId } from './utils/resolve-disposal-target-warehouse.util';
 
 const LIST_ITEM_INCLUDE = {
   equipment: {
@@ -46,6 +48,7 @@ export class EquipmentDisposalListService {
     private readonly prisma: PrismaService,
     private readonly registrarScope: RegistrarScopeService,
     private readonly locationResolutionService: LocationResolutionService,
+    private readonly warehouseResolutionService: WarehouseResolutionService,
     private readonly settingsService: SettingsService,
   ) {}
 
@@ -350,18 +353,12 @@ export class EquipmentDisposalListService {
       categoryId: string;
       status: string;
       warehouseId: string | null;
+      stockLotId: string | null;
       currentHolderId: string | null;
       currentHolder: { id: string; orgUnitId: string } | null;
     },
   ): Promise<string | null> {
-    if (equipment.status === 'skladiste' && equipment.warehouseId) {
-      return equipment.warehouseId;
-    }
-    try {
-      return await this.resolveTargetWarehouseId(user, equipment);
-    } catch {
-      return null;
-    }
+    return this.resolveDisposalWarehouseId(user, equipment);
   }
 
   private async getSessionOrThrow(sessionId: string) {
@@ -415,30 +412,77 @@ export class EquipmentDisposalListService {
       categoryId: string;
       status: string;
       warehouseId: string | null;
+      stockLotId: string | null;
       currentHolderId: string | null;
       currentHolder: { id: string; orgUnitId: string } | null;
     },
   ): Promise<string> {
-    if (equipment.status === 'skladiste' && equipment.warehouseId) {
-      return equipment.warehouseId;
+    const warehouseId = await this.resolveDisposalWarehouseId(user, equipment);
+    if (!warehouseId) {
+      throw new BadRequestException('Nije moguće odrediti skladište za razduženje');
     }
+    return warehouseId;
+  }
+
+  private async resolveDisposalWarehouseId(
+    user: AuthenticatedUser,
+    equipment: {
+      id: string;
+      categoryId: string;
+      status: string;
+      warehouseId: string | null;
+      stockLotId: string | null;
+      currentHolderId: string | null;
+      currentHolder: { id: string; orgUnitId: string } | null;
+    },
+  ): Promise<string | null> {
     const fullEquipment = await this.prisma.equipment.findUnique({
       where: { id: equipment.id },
       include: { currentHolder: true },
     });
     if (!fullEquipment) {
-      throw new NotFoundException('Equipment not found');
+      return null;
     }
-    const matches = await this.registrarScope.getMatchingAssignmentsForEquipment(
-      user,
-      fullEquipment,
-      fullEquipment.currentHolder,
+    return resolveDisposalTargetWarehouseId(
+      {
+        equipmentId: equipment.id,
+        status: equipment.status,
+        warehouseId: equipment.warehouseId,
+        stockLotId: equipment.stockLotId ?? fullEquipment.stockLotId,
+        currentHolderId: equipment.currentHolderId ?? fullEquipment.currentHolderId,
+      },
+      {
+        loadStockLotWarehouseId: async (stockLotId) => {
+          const lot = await this.prisma.warehouseStockLot.findUnique({
+            where: { id: stockLotId },
+            select: { warehouseId: true },
+          });
+          return lot?.warehouseId ?? null;
+        },
+        loadLastZaduzenjeFromWarehouseId: async (equipmentId) => {
+          const transfer = await this.prisma.transfer.findFirst({
+            where: {
+              equipmentId,
+              type: 'zaduzenje',
+              fromWarehouseId: { not: null },
+            },
+            orderBy: { date: 'desc' },
+            select: { fromWarehouseId: true },
+          });
+          return transfer?.fromWarehouseId ?? null;
+        },
+        resolveRegistrarWarehouseId: async () => {
+          const matches = await this.registrarScope.getMatchingAssignmentsForEquipment(
+            user,
+            fullEquipment,
+            fullEquipment.currentHolder,
+          );
+          return matches.find((row) => row.warehouseId)?.warehouseId ?? null;
+        },
+        resolveHolderWarehouseId: async (employeeId) =>
+          this.warehouseResolutionService.resolveForEmployee(employeeId),
+      },
     );
-    const withWarehouse = matches.find((row) => row.warehouseId);
-    if (withWarehouse?.warehouseId) {
-      return withWarehouse.warehouseId;
-    }
-    throw new BadRequestException('Nije moguće odrediti skladište za razduženje');
   }
 
   private async getDefaultSignerId(): Promise<string> {

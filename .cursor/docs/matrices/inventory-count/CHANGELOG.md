@@ -5,6 +5,10 @@
 - FE guardovi: `canDeleteInventorySession`, `canDeleteInventoryCommittee`, `canActivateInventorySession`.
 - Toast pattern: mutacija odvojena od refresh (`refreshAfterMutation`).
 
+## 2026-06-15 (disposal warehouse fallback)
+
+- Rashod eligible/mark: skladište za `zaduzeno` — fallback `stockLot.warehouseId`, transfer `zaduzenje`, org nosioca (admin bez registrar scope).
+
 ## 2026-06-15 (sesija + za_rashod + pretraga)
 
 - Kaskadno brisanje draft sesije (komisije rashoda, lista, slotovi); `za_rashod` oprema → `skladiste`.
