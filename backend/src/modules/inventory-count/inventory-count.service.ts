@@ -398,7 +398,7 @@ export class InventoryCountService {
     if (user) {
       await this.coordinatorScope.assertCanManageWarehouse(user, warehouse.id);
     }
-    await this.assertWarehouseAllowedForSessionCommittee(sessionId, session.orgUnitId, warehouse);
+    await this.assertWarehouseAllowedForSessionCommittee(session.id, session.orgUnitId, warehouse);
     await this.validateCommitteeMembers(input.inventoryMembers, { requireUserForPresidentOnly: true });
     await this.validateCommitteeMembers(input.disposalMembers, { requireUserForPresidentOnly: true });
     await this.assertMembersEligibleForWarehouse(input.warehouseId, [
