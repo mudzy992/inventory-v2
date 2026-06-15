@@ -6,6 +6,7 @@ import {
   type EquipmentCatalogItem,
 } from '../../api/equipment-catalog-api';
 import { ApiError } from '../../api/client';
+import { getApiErrorMessage, refreshAfterMutation } from '../../helpers/run-mutation-with-refresh.util';
 import { useToast } from '../../contexts/toast-context';
 import { usePaginatedList } from '../../hooks/usePaginatedList';
 import { getAssetLeafCategories } from '../../helpers/warehouse-stock.util';
@@ -75,9 +76,9 @@ export const EquipmentCatalogPanel = () => {
     try {
       await deleteCatalogItemApi(id);
       toastSuccess('Stavka obrisana');
-      await loadItems();
+      await refreshAfterMutation([loadItems]);
     } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška pri brisanju');
+      toastError(getApiErrorMessage(err, 'Greška pri brisanju'));
     }
   };
 

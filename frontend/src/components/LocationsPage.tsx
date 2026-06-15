@@ -9,6 +9,8 @@ import {
   updateCityApi,
 } from '../api/locations-api';
 import { ApiError } from '../api/client';
+import { canDeleteCanton, canDeleteCity } from '../helpers/guards';
+import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { useToast } from '../contexts/toast-context';
 import { useStore, useRefreshData } from '../useStore';
 import { PageHeaderRow } from './ui/page-header-row';
@@ -137,17 +139,30 @@ export const LocationsPage = () => {
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+    if (deleteTarget.type === 'canton') {
+      const guard = canDeleteCanton(deleteTarget.item.id, state.cities);
+      if (!guard.allowed) {
+        toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
+        return;
+      }
+    } else {
+      const guard = canDeleteCity(deleteTarget.item.id, state.orgUnits, state.warehouses);
+      if (!guard.allowed) {
+        toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
+        return;
+      }
+    }
     try {
       if (deleteTarget.type === 'canton') {
         await deleteCantonApi(deleteTarget.item.id);
       } else {
         await deleteCityApi(deleteTarget.item.id);
       }
-      await refresh();
-      setDeleteTarget(null);
       toastSuccess('Stavka je obrisana.');
+      setDeleteTarget(null);
+      await refreshAfterMutation([refresh]);
     } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška');
+      toastError(getApiErrorMessage(err, 'Greška pri brisanju'));
     }
   };
 

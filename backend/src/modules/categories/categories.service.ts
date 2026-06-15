@@ -6,6 +6,7 @@ import {
   parseCategoryFields,
   type CategoryFieldDefinition,
 } from '../../common/utils/category-fields.util';
+import { CATEGORY_MESSAGES } from '../../common/utils/category-messages.util';
 import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -110,11 +111,11 @@ export class CategoriesService {
     await this.findOne(id);
     const childCount = await this.prisma.category.count({ where: { parentId: id } });
     if (childCount > 0) {
-      throw new BadRequestException('Cannot delete category with children');
+      throw new BadRequestException(CATEGORY_MESSAGES.deleteHasChildren);
     }
     const equipmentCount = await this.prisma.equipment.count({ where: { categoryId: id } });
     if (equipmentCount > 0) {
-      throw new BadRequestException('Cannot delete category used by equipment');
+      throw new BadRequestException(CATEGORY_MESSAGES.deleteHasEquipment);
     }
     await this.prisma.category.delete({ where: { id } });
   }

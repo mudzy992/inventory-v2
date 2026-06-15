@@ -5,6 +5,7 @@ import { fetchEmployeesPageApi } from '../api/employees-api';
 import { usePaginatedList } from '../hooks/usePaginatedList';
 import { previewRelocationApi, type RelocationPreview } from '../api/employee-relocation-api';
 import { ApiError } from '../api/client';
+import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { useToast } from '../contexts/toast-context';
 import { isAdmin, isEvidenticar, getCurrentUser } from '../store';
 import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
@@ -24,7 +25,7 @@ export function EmployeesPage() {
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
   const user = getCurrentUser();
-  const { toastError } = useToast();
+  const { toastError, toastSuccess } = useToast();
   const [filterOrgUnit, setFilterOrgUnit] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
@@ -133,11 +134,10 @@ export function EmployeesPage() {
     if (!confirm('Da li ste sigurni?')) return;
     try {
       await deleteEmployeeApi(id);
-      await refresh();
-    await list.refresh();
+      toastSuccess('Radnik je obrisan.');
+      await refreshAfterMutation([refresh, list.refresh]);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Greška pri brisanju';
-      toastError(message);
+      toastError(getApiErrorMessage(err, 'Greška pri brisanju'));
     }
   };
 

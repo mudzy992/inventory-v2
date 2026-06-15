@@ -1,5 +1,9 @@
 # Changelog — equipment-status
 
+## 2026-06-15 (guardovi)
+
+- FE guard `canSaveEquipmentWarehouse` pri uređivanju opreme na skladištu.
+
 ## 2026-06-15 (za_rashod + pretraga)
 
 - Novi status `za_rashod` — prijedlog rashoda na draft listi; `rashodovano` tek nakon odobrenja komisije.

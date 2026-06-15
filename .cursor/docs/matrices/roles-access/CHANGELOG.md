@@ -1,5 +1,9 @@
 # Changelog — roles-access
 
+## 2026-06-15 (employee delete guards)
+
+- Brisanje radnika: BE provjere (user račun, potpisnik, transferi, zaduženje, relocation) + `EMPLOYEE_MESSAGES`.
+
 ## 2026-06-15 (auto slotovi)
 
 - Koordinator: konfiguracija članova auto-slotova (ne kreiranje strukture).

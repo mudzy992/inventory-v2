@@ -16,6 +16,7 @@ import {
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
+import { WAREHOUSE_MESSAGES } from '../../common/utils/warehouse-messages.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
@@ -163,7 +164,7 @@ export class WarehousesService {
     await this.assertCityExists(dto.cityId);
     await this.assertOrgUnitExists(dto.orgUnitId);
     if (!dto.keeperUserIds.length) {
-      throw new BadRequestException('At least one warehouse keeper is required');
+      throw new BadRequestException(WAREHOUSE_MESSAGES.keeperRequired);
     }
     const warehouse = await this.prisma.warehouse.create({
       data: {

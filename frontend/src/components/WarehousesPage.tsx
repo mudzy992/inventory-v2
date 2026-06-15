@@ -5,7 +5,8 @@ import { Plus, List, Warehouse as WarehouseIcon } from 'lucide-react';
 import { createWarehouseApi, fetchWarehousesPageApi } from '../api/warehouses-api';
 import { usePaginatedList } from '../hooks/usePaginatedList';
 import { PaginationControls } from './ui/pagination-controls';
-import { ApiError } from '../api/client';
+import { canCreateWarehouse } from '../helpers/guards';
+import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { useToast } from '../contexts/toast-context';
 import { useStore, useRefreshData } from '../useStore';
 import { isAdmin, isSkladistar } from '../store';
@@ -29,7 +30,7 @@ type WarehousesTab = 'list' | 'create';
 export const WarehousesPage = () => {
   const [state] = useStore();
   const refresh = useRefreshData();
-  const { toastError } = useToast();
+  const { toastError, toastSuccess } = useToast();
   const admin = isAdmin();
   const skladistar = isSkladistar();
   const isFrozen = useInventoryFreezeActive();
@@ -70,24 +71,18 @@ export const WarehousesPage = () => {
     if (!admin || isFrozen) {
       return;
     }
-    if (!name.trim()) {
-      toastError('Naziv skladišta je obavezan');
-      return;
-    }
-    if (!cityId) {
-      toastError('Grad je obavezan');
+    const guard = canCreateWarehouse({
+      name,
+      cityId,
+      orgUnitId,
+      keeperUserIds: selectedKeeperIds,
+    });
+    if (!guard.allowed) {
+      toastError(guard.reason ?? 'Validacija nije prošla.');
       return;
     }
     if (!address.trim()) {
       toastError('Adresa je obavezna');
-      return;
-    }
-    if (!orgUnitId) {
-      toastError('Org. jedinica je obavezna');
-      return;
-    }
-    if (selectedKeeperIds.length < 1) {
-      toastError('Odaberite barem jednog skladištara');
       return;
     }
     try {
@@ -103,10 +98,10 @@ export const WarehousesPage = () => {
       setOrgUnitId('');
       setKeeperIds('');
       setCityId('');
-      await refresh();
-      await warehousesList.refresh();
+      toastSuccess('Skladište je kreirano.');
+      await refreshAfterMutation([refresh, warehousesList.refresh]);
     } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška');
+      toastError(getApiErrorMessage(err, 'Greška'));
     }
   };
   if (selectedWarehouseId) {

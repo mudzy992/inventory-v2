@@ -1,5 +1,9 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-15 (guard registry)
+
+- Dodani `INDEX.md` i `GUARDS_REGISTRY.md` — mapiranje feature flagova na BE/FE enforcement.
+
 ## 2026-06-15 (auto slotovi)
 
 - `features.inventory_manual_committee_create` (private, default false).

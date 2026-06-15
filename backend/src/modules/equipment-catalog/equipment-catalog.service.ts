@@ -11,6 +11,7 @@ import {
   parsePagination,
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
+import { EQUIPMENT_CATALOG_MESSAGES } from '../../common/utils/equipment-catalog-messages.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CategoriesService } from '../categories/categories.service';
 import { SettingsService } from '../settings/settings.service';
@@ -123,7 +124,7 @@ export class EquipmentCatalogService {
     await this.settingsService.assertFeatureEnabled('features.equipment_catalog');
     const inUse = await this.prisma.equipment.count({ where: { catalogItemId: id } });
     if (inUse > 0) {
-      throw new BadRequestException('Stavka šifrarnika je u upotrebi na opremi');
+      throw new BadRequestException(EQUIPMENT_CATALOG_MESSAGES.deleteInUse);
     }
     await this.prisma.equipmentCatalogItem.delete({ where: { id } });
   }

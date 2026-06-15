@@ -37,3 +37,19 @@ NestJS `setGlobalPrefix('backend')` — bez Traefik StripPrefix.
 - Host bind mount: `/mnt/shared-app-files/inventory-v2:/app/uploads` u `docker-compose.prod.yml`.
 - Struktura unutar root-a (aplikacija): `prenosnice/{warehouseId}/{godina}/...`, `templates/warehouses/{warehouseId}/...`.
 - Prije prvog `up`: `mkdir -p /mnt/shared-app-files/inventory-v2` i `chown` za user `app` u kontejneru (provjeri `docker compose run --rm backend id app`).
+
+## Docker image tagovi i build
+
+| Servis | Image tag |
+|--------|-----------|
+| backend | `inventory-v2-backend:prod` |
+| frontend | `inventory-v2-frontend:prod` |
+
+Rebuild ostavlja dangling `<none>` image-e od prethodnih slojeva. Compose nema post-build hook — koristiti skriptu:
+
+```bash
+./scripts/docker-prod-build.sh
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Skripta pokreće `docker compose build` pa `docker image prune -f` (samo dangling, ne dira tagged image-e drugih projekata).

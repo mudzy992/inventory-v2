@@ -7,6 +7,8 @@ import {
   setCategoryMaintenanceLinksApi,
 } from '../api/maintenance-parts-api';
 import { ApiError } from '../api/client';
+import { canDeleteCategory, CATEGORY_GUARD_MESSAGES } from '../helpers/guards';
+import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { useCategoryMaintenanceLinksMap } from '../hooks/use-category-maintenance-links-map';
@@ -223,11 +225,16 @@ export function CategoriesPage() {
       return;
     }
     if (hasEquipment) {
-      toastError('Nije moguće obrisati kategoriju koja sadrži opremu.');
+      toastError(CATEGORY_GUARD_MESSAGES.deleteHasEquipment);
       return;
     }
     if (hasSubCategories) {
-      toastError('Nije moguće obrisati kategoriju koja ima podkategorije. Prvo obrišite podkategorije.');
+      toastError(CATEGORY_GUARD_MESSAGES.deleteHasChildren);
+      return;
+    }
+    const guard = canDeleteCategory(id, state.categories, hasEquipment ? 1 : 0);
+    if (!guard.allowed) {
+      toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
       return;
     }
     if (!confirm('Obrisati ovu kategoriju?')) {
@@ -235,10 +242,10 @@ export function CategoriesPage() {
     }
     try {
       await deleteCategoryApi(id);
-      await refresh();
-      await refreshLinksMap();
+      toastSuccess('Kategorija je obrisana.');
+      await refreshAfterMutation([refresh, refreshLinksMap]);
     } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška pri brisanju');
+      toastError(getApiErrorMessage(err, 'Greška pri brisanju'));
     }
   };
   const formTitle = editing

@@ -1,5 +1,9 @@
 # Changelog — locations
 
+## 2026-06-15
+
+- BS poruke brisanja (`location-messages.util.ts`); FE guard `canDeleteCanton` / `canDeleteCity`.
+
 ## 2026-06-03
 
 - PATCH/DELETE API za kantone i gradove s referentnim provjerama pri brisanju.

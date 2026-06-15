@@ -1,5 +1,9 @@
 # Changelog — warehouses
 
+## 2026-06-15
+
+- BS poruke (`warehouse-messages.util.ts`); FE guard `canCreateWarehouse` pri kreiranju skladišta.
+
 ## 2026-06-04 (oprema bez direktnog create)
 
 - API matrica: uklonjen `POST /equipment` za admin/evidenticar; oprema samo iz stock lot issue.

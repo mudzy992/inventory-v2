@@ -18,7 +18,7 @@ import { formatDate } from '../../helpers';
 import { buildLegacySpecsPayload } from '../../helpers/category-lot-spec-fields.util';
 import { expandLinkedMaintenanceToLeaves } from '../../helpers/expand-maintenance-catalog.util';
 import { isAdmin, isEvidenticar } from '../../store';
-import type { Category } from '../../types';
+import type { Category, EquipmentStatus } from '../../types';
 import { CategoryLotSpecFields } from './category-lot-spec-fields';
 import { Button } from '../ui/button';
 import { inputClass, labelClass, selectClass } from '../ui/form-styles';
@@ -26,6 +26,7 @@ import { inputClass, labelClass, selectClass } from '../ui/form-styles';
 interface EquipmentInstalledPartsPanelProps {
   equipmentId: string;
   equipmentCategoryId: string;
+  equipmentStatus: EquipmentStatus;
   categories: Category[];
 }
 
@@ -38,11 +39,13 @@ const statusLabel: Record<InstalledPartDto['status'], string> = {
 export const EquipmentInstalledPartsPanel = ({
   equipmentId,
   equipmentCategoryId,
+  equipmentStatus,
   categories,
 }: EquipmentInstalledPartsPanelProps) => {
   const { getBoolean } = usePublicSettings();
   const maintenanceEnabled = getBoolean('features.maintenance_parts', true);
-  const canManage = isAdmin() || isEvidenticar();
+  const partsReadOnly = equipmentStatus === 'za_rashod';
+  const canManage = (isAdmin() || isEvidenticar()) && !partsReadOnly;
   const { toastError, toastSuccess } = useToast();
   const [parts, setParts] = useState<InstalledPartDto[]>([]);
   const [linkedCategories, setLinkedCategories] = useState<{ id: string; name: string }[]>([]);
@@ -263,6 +266,11 @@ export const EquipmentInstalledPartsPanel = ({
       <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
         <Wrench size={16} /> Ugrađeni dijelovi (održavanje)
       </h3>
+      {partsReadOnly ? (
+        <p className="text-xs text-orange-700 mb-3">
+          Oprema je na listi za rashod — ugradnja i izmjena dijelova nije moguća.
+        </p>
+      ) : null}
       {loading ? (
         <p className="text-xs text-gray-500">Učitavanje...</p>
       ) : parts.length === 0 ? (

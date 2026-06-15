@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
+import { LOCATION_MESSAGES } from '../../common/utils/location-messages.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateCantonDto } from './dto/create-canton.dto';
@@ -76,7 +77,7 @@ export class LocationsService {
     await this.assertCantonExists(id);
     const cityCount = await this.prisma.city.count({ where: { cantonId: id } });
     if (cityCount > 0) {
-      throw new ConflictException('Cannot delete canton that still has cities');
+      throw new ConflictException(LOCATION_MESSAGES.deleteCantonHasCities);
     }
     return this.prisma.canton.delete({ where: { id } });
   }
@@ -131,9 +132,7 @@ export class LocationsService {
       this.prisma.disposalCommission.count({ where: { cityId: id } }),
     ]);
     if (orgUnits > 0 || warehouses > 0 || commissions > 0) {
-      throw new ConflictException(
-        'Cannot delete city referenced by org units, warehouses, or disposal commissions',
-      );
+      throw new ConflictException(LOCATION_MESSAGES.deleteCityReferenced);
     }
     return this.prisma.city.delete({ where: { id } });
   }

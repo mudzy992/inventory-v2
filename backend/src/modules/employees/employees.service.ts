@@ -1,8 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Employee, Prisma } from '../../../generated/prisma/client';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { EMPLOYEE_MESSAGES } from '../../common/utils/employee-messages.util';
 import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
 import {
   buildContainsSearchWhere,
@@ -127,6 +128,30 @@ export class EmployeesService {
 
   async remove(id: string): Promise<void> {
     await this.findByIdOrThrow(id);
+    const [user, heldEquipment, signedTransfers, orgSigner, openRelocation] = await Promise.all([
+      this.prisma.user.findFirst({ where: { employeeId: id }, select: { id: true } }),
+      this.prisma.equipment.count({ where: { currentHolderId: id, status: 'zaduzeno' } }),
+      this.prisma.transfer.count({ where: { signerId: id } }),
+      this.prisma.orgUnit.count({ where: { signerId: id } }),
+      this.prisma.employeeRelocationCase.count({
+        where: { employeeId: id, status: 'open' },
+      }),
+    ]);
+    if (user) {
+      throw new BadRequestException(EMPLOYEE_MESSAGES.deleteHasUserAccount);
+    }
+    if (orgSigner > 0) {
+      throw new BadRequestException(EMPLOYEE_MESSAGES.deleteIsOrgSigner);
+    }
+    if (signedTransfers > 0) {
+      throw new BadRequestException(EMPLOYEE_MESSAGES.deleteHasSignedTransfers);
+    }
+    if (heldEquipment > 0) {
+      throw new BadRequestException(EMPLOYEE_MESSAGES.deleteHasHeldEquipment);
+    }
+    if (openRelocation > 0) {
+      throw new BadRequestException(EMPLOYEE_MESSAGES.deleteHasOpenRelocation);
+    }
     await this.prisma.employee.delete({ where: { id } });
   }
 

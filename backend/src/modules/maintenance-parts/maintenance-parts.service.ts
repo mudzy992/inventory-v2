@@ -219,7 +219,7 @@ export class MaintenancePartsService {
 
   async listInstalledParts(user: AuthenticatedUser, equipmentId: string) {
     await this.assertEnabled();
-    const equipment = await this.getHostEquipmentOrThrow(equipmentId);
+    const equipment = await this.getHostEquipmentForRead(equipmentId);
     const holder = equipment.currentHolderId
       ? await this.prisma.employee.findUnique({ where: { id: equipment.currentHolderId } })
       : null;
@@ -237,7 +237,7 @@ export class MaintenancePartsService {
     maintenanceCategoryId: string,
   ) {
     await this.assertEnabled();
-    const equipment = await this.getHostEquipmentOrThrow(equipmentId);
+    const equipment = await this.getHostEquipmentForWrite(equipmentId);
     const holder = equipment.currentHolderId
       ? await this.prisma.employee.findUnique({ where: { id: equipment.currentHolderId } })
       : null;
@@ -267,7 +267,7 @@ export class MaintenancePartsService {
     if (user.role !== 'evidenticar' && user.role !== 'admin') {
       throw new ForbiddenException('Only registrar can install maintenance parts');
     }
-    const equipment = await this.getHostEquipmentOrThrow(equipmentId);
+    const equipment = await this.getHostEquipmentForWrite(equipmentId);
     const holder = equipment.currentHolderId
       ? await this.prisma.employee.findUnique({ where: { id: equipment.currentHolderId } })
       : null;
@@ -370,7 +370,7 @@ export class MaintenancePartsService {
     if (lot.categoryId !== oldPart.maintenanceCategoryId) {
       throw new BadRequestException('Replacement lot must match maintenance category');
     }
-    const equipment = await this.getHostEquipmentOrThrow(oldPart.hostEquipmentId);
+    const equipment = await this.getHostEquipmentForWrite(oldPart.hostEquipmentId);
     await this.assertMaintenanceAllowedForHost(equipment, lot.categoryId);
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: lot.warehouseId },
@@ -459,7 +459,7 @@ export class MaintenancePartsService {
     user: AuthenticatedUser,
     part: { hostEquipmentId: string },
   ): Promise<void> {
-    const equipment = await this.getHostEquipmentOrThrow(part.hostEquipmentId);
+    const equipment = await this.getHostEquipmentForWrite(part.hostEquipmentId);
     const holder = equipment.currentHolderId
       ? await this.prisma.employee.findUnique({ where: { id: equipment.currentHolderId } })
       : null;
@@ -484,7 +484,7 @@ export class MaintenancePartsService {
     throw new ForbiddenException('Not allowed');
   }
 
-  private async getHostEquipmentOrThrow(equipmentId: string) {
+  private async findHostEquipmentOrThrow(equipmentId: string) {
     const equipment = await this.prisma.equipment.findUnique({
       where: { id: equipmentId },
       include: { category: true, currentHolder: true },
@@ -492,11 +492,24 @@ export class MaintenancePartsService {
     if (!equipment) {
       throw new NotFoundException('Equipment not found');
     }
-    if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
-      throw new BadRequestException('Cannot manage parts on decommissioned equipment');
-    }
     if (equipment.category.categoryKind !== 'ASSET') {
       throw new BadRequestException('Host must be asset equipment');
+    }
+    return equipment;
+  }
+
+  private async getHostEquipmentForRead(equipmentId: string) {
+    const equipment = await this.findHostEquipmentOrThrow(equipmentId);
+    if (equipment.status === 'rashodovano') {
+      throw new BadRequestException('Cannot manage parts on decommissioned equipment');
+    }
+    return equipment;
+  }
+
+  private async getHostEquipmentForWrite(equipmentId: string) {
+    const equipment = await this.getHostEquipmentForRead(equipmentId);
+    if (equipment.status === 'za_rashod') {
+      throw new BadRequestException('Cannot manage parts on equipment marked for disposal');
     }
     return equipment;
   }

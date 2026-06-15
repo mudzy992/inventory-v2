@@ -24,6 +24,12 @@ import {
 } from '../api/inventory-api';
 import { fetchAllPaginatedItems } from '../api/fetch-all-paginated';
 import { ApiError } from '../api/client';
+import {
+  canActivateInventorySession,
+  canDeleteInventoryCommittee,
+  canDeleteInventorySession,
+} from '../helpers/guards';
+import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { resolveRootDistributionOrgUnit } from '../helpers/resolve-root-distribution.util';
 import { isAdmin, isPopisKoordinator, getCurrentUser } from '../store';
 import { useStore } from '../useStore';
@@ -296,12 +302,23 @@ export const InventoryCountPage = () => {
     }
   };
   const handleActivate = async (id: string) => {
+    if (id === sessionId && selectedSession) {
+      const guard = canActivateInventorySession({
+        configuredCommittees: sessionStats.configuredCommittees,
+        totalCommittees: sessionStats.totalCommittees,
+        listedWithoutCommission: 0,
+      });
+      if (!guard.allowed) {
+        toastError(guard.reason ?? 'Aktivacija nije dozvoljena.');
+        return;
+      }
+    }
     try {
       await activateInventorySessionApi(id);
-      await refreshAll();
       toastSuccess('Sesija popisa je aktivirana.');
+      await refreshAfterMutation([refreshAll]);
     } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška');
+      toastError(getApiErrorMessage(err, 'Greška'));
     }
   };
   const handleClose = async (id: string) => {
@@ -357,6 +374,14 @@ export const InventoryCountPage = () => {
     return selectedCommittee.members.find((m) => m.employeeId === user.employeeId) ?? null;
   }, [selectedCommittee, user?.employeeId]);
   const handleDeleteSession = async (id: string) => {
+    const target = sessions.find((row) => row.id === id);
+    if (target) {
+      const guard = canDeleteInventorySession(target.status);
+      if (!guard.allowed) {
+        toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
+        return;
+      }
+    }
     if (!confirm('Obrisati sesiju popisa? Briše sve komisije, slotove, listu rashoda i povezane komisije rashoda. Ova radnja je nepovratna.')) {
       return;
     }
@@ -368,10 +393,10 @@ export const InventoryCountPage = () => {
         setEditingCommitteeId(null);
         setCommittees([]);
       }
-      await refreshAll();
       toastSuccess('Sesija popisa je obrisana.');
+      await refreshAfterMutation([refreshAll]);
     } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška');
+      toastError(getApiErrorMessage(err, 'Greška'));
     }
   };
   const handleReconcileSlots = async (id: string) => {
@@ -391,6 +416,14 @@ export const InventoryCountPage = () => {
     }
   };
   const handleDeleteCommittee = async (id: string) => {
+    const committee = committees.find((row) => row.id === id);
+    if (committee && selectedSession) {
+      const guard = canDeleteInventoryCommittee(selectedSession.status, committee.membersConfigured);
+      if (!guard.allowed) {
+        toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
+        return;
+      }
+    }
     if (!confirm('Obrisati popisnu komisiju? Povezana komisija rashoda će također biti uklonjena.')) {
       return;
     }
@@ -406,10 +439,10 @@ export const InventoryCountPage = () => {
       if (editingCommitteeId === id) {
         setEditingCommitteeId(null);
       }
-      await handleSessionRefresh();
       toastSuccess('Popisna komisija je obrisana.');
+      await refreshAfterMutation([handleSessionRefresh]);
     } catch (err) {
-      toastError(err instanceof ApiError ? err.message : 'Greška');
+      toastError(getApiErrorMessage(err, 'Greška'));
     }
   };
   const handlePrint = async () => {

@@ -1,8 +1,10 @@
 # Produkcija — Traefik (mreža web), TLS le, host inventory-v2.ba101.top
 # Prije build/up: root .env sa DATABASE_URL, JWT_SECRET, UPLOAD_DIR=/app/uploads
 # Host upload: mkdir -p /mnt/shared-app-files/inventory-v2 && chown prema `docker compose run --rm backend id app`
+# Build: ./scripts/docker-prod-build.sh  (build + uklanjanje dangling image-a)
 services:
   backend:
+    image: inventory-v2-backend:prod
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -28,6 +30,7 @@ services:
       - traefik.http.services.inventory-v2-api.loadbalancer.server.port=3000
 
   frontend:
+    image: inventory-v2-frontend:prod
     build:
       context: ./frontend
       dockerfile: Dockerfile

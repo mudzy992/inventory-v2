@@ -15,6 +15,7 @@ import { EquipmentCard } from './EquipmentCard';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
 import { getUserWarehouseIds } from '../helpers/org-warehouse.util';
 import { getScopedCategoryIds } from '../helpers/registrar-scope';
+import { canSaveEquipmentWarehouse } from '../helpers/guards';
 import {
   isRegistrarLockedEquipmentSpecField,
   mergeRegistrarEquipmentSpecifications,
@@ -141,8 +142,9 @@ export function EquipmentPage() {
       return;
     }
     const status = editing.status;
-    if (status === 'skladiste' && !fWarehouseId) {
-      toastError('Odaberite skladište za opremu na skladištu.');
+    const warehouseGuard = canSaveEquipmentWarehouse(status, fWarehouseId);
+    if (!warehouseGuard.allowed) {
+      toastError(warehouseGuard.reason ?? 'Validacija nije prošla.');
       return;
     }
     const specifications =

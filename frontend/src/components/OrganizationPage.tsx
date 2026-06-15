@@ -5,6 +5,8 @@ import type { Employee } from '../types';
 import { useStore, useRefreshData } from '../useStore';
 import { createOrgUnitApi, deleteOrgUnitApi, updateOrgUnitApi } from '../api/data-api';
 import { ApiError } from '../api/client';
+import { canDeleteOrgUnit } from '../helpers/guards';
+import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { useToast } from '../contexts/toast-context';
 import { ChevronDown, ChevronRight, Building2, Plus, Edit2, Trash2, Users, Shield } from 'lucide-react';
 import {
@@ -444,13 +446,18 @@ export function OrganizationPage() {
   };
 
   const handleDelete = async (id: string) => {
+    const guard = canDeleteOrgUnit(id, state.orgUnits, employees);
+    if (!guard.allowed) {
+      toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
+      return;
+    }
     if (!confirm('Da li ste sigurni da želite obrisati ovu organizacijsku jedinicu?')) return;
     try {
       await deleteOrgUnitApi(id);
-      await refresh();
+      toastSuccess('Organizacijska jedinica je obrisana.');
+      await refreshAfterMutation([refresh]);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Greška pri brisanju';
-      toastError(message);
+      toastError(getApiErrorMessage(err, 'Greška pri brisanju'));
     }
   };
 

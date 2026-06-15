@@ -78,8 +78,10 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     return state.warehouses.find((row) => row.id === result.targetWarehouseId);
   }, [admin, currentUser, eq, evidenticar, state, transferType]);
 
-  const loadEquipment = useCallback(async () => {
-    setLoading(true);
+  const loadEquipment = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+    }
     setLoadError(null);
     try {
       const [equipment, transferPage] = await Promise.all([
@@ -100,7 +102,9 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       setEq(null);
       setTransfers([]);
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
   }, [equipmentId]);
 
@@ -448,6 +452,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                 <EquipmentInstalledPartsPanel
                   equipmentId={equipmentId}
                   equipmentCategoryId={eq.categoryId}
+                  equipmentStatus={eq.status}
                   categories={state.categories}
                 />
               ) : null}
@@ -647,7 +652,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
         inventoryNumber={eq.inventoryNumber}
         open={showMarkDisposal}
         onClose={() => setShowMarkDisposal(false)}
-        onMarked={() => void loadEquipment()}
+        onMarked={() => void loadEquipment({ silent: true })}
       />
 
       <ModalRoot open={showReactivate} onClose={() => setShowReactivate(false)} zIndex={70} size="md">

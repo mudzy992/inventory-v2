@@ -1,3 +1,7 @@
+## 2026-06-15 — FE guard transfer generation
+
+- `canCreateTransferType` + `TRANSFER_GUARD_MESSAGES` za provjeru postavki generisanja prenosnica.
+
 ## 2026-06-10 — Modul Zaduženja: tabovi
 
 - UI: tabovi **Zaduženja** (historija prenosa), **Trenutna zaduženja** (equipment `status=zaduzeno`, bez obaveze prenosnice), **Prenosnice** (bivši DocumentsPage).

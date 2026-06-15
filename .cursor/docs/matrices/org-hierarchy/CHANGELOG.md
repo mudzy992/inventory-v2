@@ -1,3 +1,8 @@
+## 2026-06-15
+
+- FE guard `canDeleteOrgUnit` + pre-check pri brisanju; success toast; `refreshAfterMutation`.
+- Centralni katalog guardova: `GUARDS_REGISTRY.md`, `INDEX.md`.
+
 ## 2026-06-04 (5) — zatvaranje faze
 
 - **UI stabla:** samo krovni čvor (`level === 0`) otvoren pri učitavanju; djeca zatvorena, ručno expand chevronom.
