@@ -23,32 +23,38 @@ describe('buildEquipmentSearchWhere', () => {
     });
   });
 
-  it('builds general search with JSON string_contains', () => {
-    const where = buildEquipmentSearchWhere({ search: 'laptop' });
+  it('builds general search with spec match ids', () => {
+    const where = buildEquipmentSearchWhere({
+      search: 'laptop',
+      specMatchEquipmentIds: ['eq-1', 'eq-2'],
+    });
     assert.ok(where && 'OR' in where);
     const or = (where as { OR: unknown[] }).OR;
     assert.equal(or.length, 4);
-    assert.deepEqual(or[3], { specifications: { string_contains: 'laptop' } });
+    assert.deepEqual(or[3], { id: { in: ['eq-1', 'eq-2'] } });
   });
 
-  it('builds category-bound text field OR clauses with broad spec fallback', () => {
+  it('builds category-bound text field OR clauses with spec match ids', () => {
     const where = buildEquipmentSearchWhere({
       search: 'Dell',
       categoryTextFieldIds: ['f1', 'f2'],
+      specMatchEquipmentIds: ['eq-3'],
     });
     assert.ok(where && 'OR' in where);
     const or = (where as { OR: unknown[] }).OR;
     assert.equal(or.length, 6);
-    assert.deepEqual(or[3], { specifications: { string_contains: 'Dell' } });
+    assert.deepEqual(or[3], { id: { in: ['eq-3'] } });
   });
 });
 
 describe('collectCategoryTextFieldIds', () => {
-  it('returns only text fields', () => {
+  it('returns text, number and select fields', () => {
     const ids = collectCategoryTextFieldIds([
       { id: 'a', name: 'A', type: 'text', required: true, unique: false },
       { id: 'b', name: 'B', type: 'number', required: true, unique: false },
+      { id: 'c', name: 'C', type: 'date', required: true, unique: false },
+      { id: 'd', name: 'D', type: 'select', required: true, unique: false, options: ['x'] },
     ]);
-    assert.deepEqual(ids, ['a']);
+    assert.deepEqual(ids, ['a', 'b', 'd']);
   });
 });

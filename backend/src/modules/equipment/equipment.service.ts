@@ -22,6 +22,7 @@ import {
   buildEquipmentSearchWhere,
   collectCategoryTextFieldIds,
 } from '../../common/utils/build-equipment-search-where.util';
+import { findEquipmentIdsBySpecificationSearch } from '../../common/utils/find-equipment-ids-by-specification-search.util';
 import {
   buildOrderBy,
   paginate,
@@ -385,7 +386,16 @@ export class EquipmentService {
           ? { stockLotId: query.stockLotId }
           : {};
     let categoryTextFieldIds: string[] | undefined;
-    if (query.categoryId && query.search?.trim()) {
+    const trimmedSearch = query.search?.trim();
+    let specMatchEquipmentIds: string[] | undefined;
+    if (trimmedSearch) {
+      specMatchEquipmentIds = await findEquipmentIdsBySpecificationSearch(
+        this.prisma,
+        trimmedSearch,
+        query.categoryId,
+      );
+    }
+    if (query.categoryId && trimmedSearch) {
       const category = await this.prisma.category.findUnique({ where: { id: query.categoryId } });
       if (category) {
         const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
@@ -397,6 +407,7 @@ export class EquipmentService {
       specFieldId: query.specFieldId,
       specValue: query.specValue,
       categoryTextFieldIds,
+      specMatchEquipmentIds,
     });
     const filters: Prisma.EquipmentWhereInput = {
       status: query.status,

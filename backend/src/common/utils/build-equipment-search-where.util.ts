@@ -7,6 +7,7 @@ export type BuildEquipmentSearchWhereInput = {
   specFieldId?: string;
   specValue?: string;
   categoryTextFieldIds?: string[];
+  specMatchEquipmentIds?: string[];
 };
 
 export const buildSpecificationTextFieldContainsFilter = (
@@ -34,12 +35,10 @@ export const buildEquipmentSearchWhere = (
       { inventoryNumber: { contains: searchTerm } },
       { contractNumber: { contains: searchTerm } },
       { notes: { contains: searchTerm } },
-      {
-        specifications: {
-          string_contains: searchTerm,
-        },
-      },
     ];
+    if (input.specMatchEquipmentIds && input.specMatchEquipmentIds.length > 0) {
+      textClauses.push({ id: { in: input.specMatchEquipmentIds } });
+    }
     if (input.categoryTextFieldIds && input.categoryTextFieldIds.length > 0) {
       for (const fieldId of input.categoryTextFieldIds) {
         textClauses.push(buildSpecificationTextFieldContainsFilter(fieldId, searchTerm));
@@ -57,4 +56,6 @@ export const buildEquipmentSearchWhere = (
 };
 
 export const collectCategoryTextFieldIds = (fields: CategoryFieldDefinition[]): string[] =>
-  fields.filter((field) => field.type === 'text').map((field) => field.id);
+  fields
+    .filter((field) => field.type === 'text' || field.type === 'number' || field.type === 'select')
+    .map((field) => field.id);

@@ -1,5 +1,9 @@
 # Changelog — equipment-status
 
+## 2026-06-16 (pretraga specifikacija)
+
+- Pretraga opreme po vrijednostima u JSON specifikacijama koristi `CAST(specifications AS CHAR) LIKE` (MySQL); Prisma `string_contains` na root JSON objektu nije pouzdan za serijski broj i ostala polja.
+
 ## 2026-06-16 (rashod UX + public)
 
 - Obavezan razlog pri označavanju za rashod (`MarkDisposalListDto.note`, min 3 znaka).
