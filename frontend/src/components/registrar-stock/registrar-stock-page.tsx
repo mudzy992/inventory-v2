@@ -55,6 +55,7 @@ import {
   canEditLotSpecifications,
   canIssueFromLot,
   canCrossWarehouseIssue,
+  WAREHOUSE_STOCK_GUARD_MESSAGES,
 } from '../../helpers/guards';
 import {
   getLotSpecFieldsForCategory,
@@ -250,6 +251,7 @@ export const RegistrarStockPage = () => {
     const destWarehouse = state.warehouses.find((row) => row.id === destWarehouseId);
     return destWarehouse?.name ?? 'ciljno skladište radnika';
   }, [
+    admin,
     crossWarehouseIssueEnabled,
     detail,
     employeeId,
@@ -257,6 +259,9 @@ export const RegistrarStockPage = () => {
     state.orgUnits,
     state.warehouses,
   ]);
+  const crossWarehouseCatalogBlocked = Boolean(
+    crossWarehouseIssueHint && detail && !detail.catalogItemId,
+  );
   const employeeSearchOptions = useMemo((): SearchableOption[] => {
     return scopedEmployees.map((employee) => {
       const orgUnit = state.orgUnits.find((unit) => unit.id === employee.orgUnitId);
@@ -570,6 +575,11 @@ export const RegistrarStockPage = () => {
               onEmployeeIdChange={setEmployeeId}
               employeeSearchOptions={employeeSearchOptions}
               crossWarehouseIssueHint={crossWarehouseIssueHint}
+              crossWarehouseCatalogWarning={
+                crossWarehouseCatalogBlocked
+                  ? WAREHOUSE_STOCK_GUARD_MESSAGES.catalogItemRequired
+                  : null
+              }
               canSubmit={unitActionMode === 'issue' ? canSubmitIssue : canSubmitCommission}
               saving={saving}
               isFrozen={isFrozen}

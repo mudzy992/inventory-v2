@@ -23,6 +23,7 @@ interface LotUnitActionSectionProps {
   onEmployeeIdChange: (value: string) => void;
   employeeSearchOptions: SearchableOption[];
   crossWarehouseIssueHint: string | null;
+  crossWarehouseCatalogWarning?: string | null;
   canSubmit: boolean;
   saving: boolean;
   isFrozen: boolean;
@@ -44,6 +45,7 @@ export const LotUnitActionSection = ({
   onEmployeeIdChange,
   employeeSearchOptions,
   crossWarehouseIssueHint,
+  crossWarehouseCatalogWarning,
   canSubmit,
   saving,
   isFrozen,
@@ -84,6 +86,11 @@ export const LotUnitActionSection = ({
                 <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   Radnik pripada drugom efektivnom skladištu ({crossWarehouseIssueHint}). Oprema će
                   automatski preći na lot tog skladišta nakon izdavanja.
+                </p>
+              ) : null}
+              {crossWarehouseCatalogWarning ? (
+                <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                  {crossWarehouseCatalogWarning}
                 </p>
               ) : null}
             </div>

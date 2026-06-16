@@ -120,6 +120,7 @@ export interface WarehouseStockLot {
   id: string;
   warehouseId: string;
   categoryId: string;
+  catalogItemId?: string | null;
   lotKind?: WarehouseStockLotKind;
   categoryName?: string;
   warehouseName?: string;

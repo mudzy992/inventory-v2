@@ -5,6 +5,7 @@ export const WAREHOUSE_STOCK_GUARD_MESSAGES = {
   lotNotReadyForIssue: 'Popunite specifikaciju lota prije izdavanja.',
   noUnitsRemaining: 'Na lotu nema preostalih komada.',
   crossWarehouseAdminOnly: 'Cross-warehouse izdavanje dostupno je samo administratoru.',
+  crossWarehouseDisabled: 'Cross-warehouse izdavanje je isključeno u postavkama.',
   catalogItemRequired: 'Cross-warehouse izdavanje zahtijeva stavku šifrarnika na lotu.',
 } as const;
 
@@ -41,7 +42,7 @@ export const canCrossWarehouseIssue = (input: {
   catalogItemId?: string | null;
 }): WarehouseStockGuardResult => {
   if (!input.allowSetting) {
-    return { allowed: false, reason: WAREHOUSE_STOCK_GUARD_MESSAGES.crossWarehouseAdminOnly };
+    return { allowed: false, reason: WAREHOUSE_STOCK_GUARD_MESSAGES.crossWarehouseDisabled };
   }
   if (!input.isAdmin) {
     return { allowed: false, reason: WAREHOUSE_STOCK_GUARD_MESSAGES.crossWarehouseAdminOnly };

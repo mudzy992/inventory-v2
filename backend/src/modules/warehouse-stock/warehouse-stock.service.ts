@@ -702,6 +702,7 @@ export class WarehouseStockService {
       id: lot.id,
       warehouseId: lot.warehouseId,
       categoryId: lot.categoryId,
+      catalogItemId: lot.catalogItemId,
       categoryName: lot.category?.name,
       warehouseName: lot.warehouse?.name,
       productName: lot.productName,
