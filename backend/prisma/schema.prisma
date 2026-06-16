@@ -307,6 +307,7 @@ model User {
   transfersCreated        Transfer[]               @relation("TransferCreatedBy")
   transfersFinalized      Transfer[]               @relation("TransferFinalizedBy")
   stockLotsReceived       WarehouseStockLot[]      @relation("StockLotReceivedBy")
+  stockLotReceiptsReceived WarehouseStockLotReceipt[] @relation("StockLotReceiptReceivedBy")
   stockLotsSpecDefined    WarehouseStockLot[]      @relation("StockLotSpecDefinedBy")
   closedInventoryWarehouseCommittees InventoryWarehouseCommittee[] @relation("InventoryWarehouseCommitteeClosedBy")
   warehouseTransferTemplatesUploaded WarehouseTransferTemplate[] @relation("WarehouseTransferTemplateUploadedBy")
@@ -623,6 +624,7 @@ model WarehouseStockLot {
   catalogItem    EquipmentCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
   receivedBy     User        @relation("StockLotReceivedBy", fields: [receivedByUserId], references: [id], onDelete: Restrict)
   specDefinedBy  User?       @relation("StockLotSpecDefinedBy", fields: [specDefinedByUserId], references: [id], onDelete: SetNull)
+  receipts       WarehouseStockLotReceipt[]
   issuedUnits      Equipment[]
   inventoryLines   InventoryWarehouseLine[]
   installedParts   EquipmentInstalledPart[]
@@ -634,6 +636,25 @@ model WarehouseStockLot {
   @@index([status])
   @@index([lotKind], map: "wh_stock_lots_lotKind_idx")
   @@map("warehouse_stock_lots")
+}
+
+model WarehouseStockLotReceipt {
+  id                String   @id @default(uuid())
+  stockLotId         String
+  quantityReceived   Int
+  quantityRemaining  Int
+  entryDate          DateTime @db.Date
+  contractNumber     String?  @db.VarChar(120)
+  notes              String?  @db.Text
+  receivedByUserId   String
+  createdAt          DateTime @default(now())
+
+  stockLot    WarehouseStockLot @relation(fields: [stockLotId], references: [id], onDelete: Cascade)
+  receivedBy  User              @relation("StockLotReceiptReceivedBy", fields: [receivedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([stockLotId, createdAt], map: "wh_stock_lot_receipts_lot_created_idx")
+  @@index([receivedByUserId], map: "wh_stock_lot_receipts_received_by_idx")
+  @@map("warehouse_stock_lot_receipts")
 }
 
 model EquipmentInstalledPart {

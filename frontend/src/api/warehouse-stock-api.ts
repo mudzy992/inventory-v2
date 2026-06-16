@@ -4,6 +4,17 @@ import type { PaginatedListParams, PaginatedResponse } from '../types/pagination
 import { buildListQueryString } from '../types/pagination';
 import type { WarehouseStockLot } from '../types';
 
+export type StockLotReceivePreview = {
+  exists: boolean;
+  willIncrement: boolean;
+  message: string;
+  lotId?: string;
+  productName?: string;
+  currentOnHand?: number;
+  currentReceived?: number;
+  status?: string;
+};
+
 export interface StockLotProductGroup {
   groupKey: string;
   productName: string;
@@ -83,6 +94,11 @@ export const bulkCreateStockLotsApi = (
     method: 'POST',
     body: JSON.stringify(body),
   });
+
+export const fetchStockLotReceivePreviewApi = (warehouseId: string, catalogItemId: string) =>
+  apiRequest<StockLotReceivePreview>(
+    `/warehouses/${warehouseId}/stock-lots/receive-preview?catalogItemId=${encodeURIComponent(catalogItemId)}`,
+  );
 
 export const updateStockLotSpecApi = (id: string, specifications: Record<string, string>) =>
   apiRequest<WarehouseStockLot>(`/stock-lots/${id}/specifications`, {

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import type { EquipmentCatalogItem } from '../../api/equipment-catalog-api';
-import { bulkCreateStockLotsApi } from '../../api/warehouse-stock-api';
+import type { StockLotReceivePreview } from '../../api/warehouse-stock-api';
+import { bulkCreateStockLotsApi, fetchStockLotReceivePreviewApi } from '../../api/warehouse-stock-api';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { getAssetLeafCategories } from '../../helpers/warehouse-stock.util';
@@ -21,6 +22,9 @@ interface ReceiveLine {
   quantity: string;
   entryDate: string;
   contractNumber: string;
+  previewLoading: boolean;
+  previewError: string | null;
+  preview: StockLotReceivePreview | null;
 }
 
 const emptyLine = (): ReceiveLine => ({
@@ -30,6 +34,9 @@ const emptyLine = (): ReceiveLine => ({
   quantity: '1',
   entryDate: new Date().toISOString().slice(0, 10),
   contractNumber: '',
+  previewLoading: false,
+  previewError: null,
+  preview: null,
 });
 
 interface WarehouseStockReceivePageProps {
@@ -52,6 +59,23 @@ export const WarehouseStockReceivePage = ({
 
   const updateLine = (key: string, patch: Partial<ReceiveLine>) => {
     setLines((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  };
+
+  const handleCatalogItemChange = async (key: string, item: EquipmentCatalogItem | null) => {
+    updateLine(key, { catalogItem: item, preview: null, previewError: null });
+    if (!item) {
+      return;
+    }
+    updateLine(key, { previewLoading: true });
+    try {
+      const preview = await fetchStockLotReceivePreviewApi(warehouseId, item.id);
+      updateLine(key, { preview, previewLoading: false });
+    } catch (err) {
+      updateLine(key, {
+        previewLoading: false,
+        previewError: err instanceof ApiError ? err.message : 'Greška pri provjeri postojećeg tipa robe',
+      });
+    }
   };
 
   const handleSave = async () => {
@@ -119,7 +143,12 @@ export const WarehouseStockReceivePage = ({
                 <select
                   value={line.categoryId}
                   onChange={(e) =>
-                    updateLine(line.key, { categoryId: e.target.value, catalogItem: null })
+                    updateLine(line.key, {
+                      categoryId: e.target.value,
+                      catalogItem: null,
+                      preview: null,
+                      previewError: null,
+                    })
                   }
                   className={selectClass}
                 >
@@ -136,10 +165,37 @@ export const WarehouseStockReceivePage = ({
                 <CatalogItemAutocomplete
                   categoryId={line.categoryId}
                   value={line.catalogItem}
-                  onChange={(item) => updateLine(line.key, { catalogItem: item })}
+                  onChange={(item) => void handleCatalogItemChange(line.key, item)}
                   disabled={!line.categoryId}
                 />
               </div>
+              {line.catalogItem ? (
+                <div className="md:col-span-2">
+                  {line.previewLoading ? (
+                    <div className="text-xs text-gray-500">Provjera postojećeg tipa robe…</div>
+                  ) : line.previewError ? (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {line.previewError}
+                    </div>
+                  ) : line.preview ? (
+                    <div
+                      className={
+                        line.preview.exists
+                          ? 'rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800'
+                          : 'rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700'
+                      }
+                    >
+                      <div>{line.preview.message}</div>
+                      {line.preview.exists ? (
+                        <div className="mt-1 text-xs text-blue-700">
+                          Trenutno stanje: {line.preview.currentOnHand ?? 0} na stanju ·{' '}
+                          {line.preview.currentReceived ?? 0} primljeno ukupno
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div>
                 <label className={labelClass}>Količina *</label>
                 <input

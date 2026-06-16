@@ -61,6 +61,9 @@ import { resolveTransferSignerId } from '../transfers/utils/resolve-transfer-sig
 import {
   buildStockLotGroupWhere,
 } from './utils/stock-lot-group-key.util';
+import { applyStockLotReceiveInTx } from './utils/apply-stock-lot-receive.util';
+import { findCanonicalStockLotInTx } from './utils/find-canonical-stock-lot.util';
+import { consumeStockLotReceiptFifoInTx } from './utils/consume-stock-lot-receipt-fifo.util';
 import {
   applyHistoricalTotalsToProductGroups,
   buildStockLotHistoricalTotalsByGroup,
@@ -270,6 +273,63 @@ export class WarehouseStockService {
     return this.mapLotDetail(user, full);
   }
 
+  async receivePreview(user: AuthenticatedUser, warehouseId: string, catalogItemId: string) {
+    await this.settingsService.assertFeatureEnabled('features.registrar_stock');
+    if (user.role !== 'skladistar' && user.role !== 'admin') {
+      throw new ForbiddenException('Only warehouse keeper can receive stock');
+    }
+    if (user.role === 'skladistar') {
+      await this.warehousesService.assertKeeperCanManageWarehouse(user, warehouseId);
+    }
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { isActive: true },
+    });
+    if (!warehouse?.isActive) {
+      throw new BadRequestException('Warehouse not found or inactive');
+    }
+    const openLot = await this.prisma.warehouseStockLot.findFirst({
+      where: {
+        warehouseId,
+        catalogItemId,
+        lotKind: 'ISSUABLE',
+        status: { not: 'zatvoreno' },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const closedLot = openLot
+      ? null
+      : await this.prisma.warehouseStockLot.findFirst({
+          where: { warehouseId, catalogItemId, lotKind: 'ISSUABLE', status: 'zatvoreno' },
+          orderBy: { createdAt: 'desc' },
+        });
+    const lot = openLot ?? closedLot;
+    if (!lot) {
+      return {
+        exists: false,
+        willIncrement: false,
+        message:
+          'Za traženi tip ne postoji lot u ovom skladištu. Prijem će kreirati novi lot i povećati stanje.',
+      };
+    }
+    const baseMessage =
+      'Za traženi tip već postoji lot u ovom skladištu. Prijem će uvećati stanje; specifikacija ostaje ista.';
+    const reopenMessage =
+      lot.status === 'zatvoreno'
+        ? ' Lot je trenutno zatvoren (nema komada na stanju) i biće ponovo otvoren ovim prijemom.'
+        : '';
+    return {
+      exists: true,
+      willIncrement: true,
+      lotId: lot.id,
+      productName: lot.productName,
+      currentOnHand: lot.quantityOnHand,
+      currentReceived: lot.quantityReceived,
+      status: lot.status,
+      message: `${baseMessage}${reopenMessage}`,
+    };
+  }
+
   async receive(user: AuthenticatedUser, warehouseId: string, dto: CreateStockLotDto) {
     await this.settingsService.assertFeatureEnabled('features.registrar_stock');
     if (user.role !== 'skladistar' && user.role !== 'admin') {
@@ -302,26 +362,42 @@ export class WarehouseStockService {
     const initialStatus = hasRequiredLotSpecFields(optionalFields)
       ? 'ceka_specifikaciju'
       : 'spremno_za_izdavanje';
-    const lot = await this.prisma.warehouseStockLot.create({
-      data: {
+    const contractNumber = dto.contractNumber?.trim() || null;
+    const notes = dto.notes?.trim() || null;
+    const entryDate = new Date(dto.entryDate);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const canonical =
+        resolved.catalogItemId
+          ? await findCanonicalStockLotInTx(tx, { warehouseId, catalogItemId: resolved.catalogItemId })
+          : null;
+      const statusIfReopened =
+        canonical?.specDefinedAt || initialStatus === 'spremno_za_izdavanje'
+          ? 'spremno_za_izdavanje'
+          : 'ceka_specifikaciju';
+      const applied = await applyStockLotReceiveInTx(tx, canonical?.id ?? null, {
         warehouseId,
         categoryId: dto.categoryId,
-        catalogItemId: resolved.catalogItemId,
-        lotKind: 'ISSUABLE',
+        catalogItemId: resolved.catalogItemId ?? null,
         productName: resolved.productName,
-        quantityReceived: dto.quantity,
-        quantityOnHand: dto.quantity,
-        status: initialStatus,
-        specifications: {},
-        contractNumber: dto.contractNumber?.trim() || null,
-        entryDate: new Date(dto.entryDate),
-        notes: dto.notes?.trim() || null,
+        quantity: dto.quantity,
+        entryDate,
+        contractNumber,
+        notes,
         receivedByUserId: user.id,
-      },
-      include: { category: true, warehouse: true },
+        statusIfCreated: initialStatus,
+        statusIfReopened,
+      });
+      const lot = await tx.warehouseStockLot.findUnique({
+        where: { id: applied.stockLotId },
+        include: { category: true, warehouse: true },
+      });
+      if (!lot) {
+        throw new NotFoundException('Stock lot not found');
+      }
+      return lot;
     });
-    await this.notificationsService.notifyWarehouseStockReceived(lot.id);
-    return this.mapLotForUser(user, lot, true);
+    await this.notificationsService.notifyWarehouseStockReceived(result.id);
+    return this.mapLotForUser(user, result, true);
   }
 
   async receiveBulk(user: AuthenticatedUser, warehouseId: string, dto: BulkCreateStockLotDto) {
@@ -340,8 +416,8 @@ export class WarehouseStockService {
       throw new BadRequestException('Warehouse not found or inactive');
     }
     await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_create');
-    const createdLots = await this.prisma.$transaction(async (tx) => {
-      const lots = [];
+    const lotIds = await this.prisma.$transaction(async (tx) => {
+      const ids: string[] = [];
       for (const item of dto.items) {
         const category = await this.categoriesService.assertLeafCategory(item.categoryId);
         if (category.categoryKind === 'MAINTENANCE') {
@@ -356,31 +432,40 @@ export class WarehouseStockService {
         const initialStatus = hasRequiredLotSpecFields(optionalFields)
           ? 'ceka_specifikaciju'
           : 'spremno_za_izdavanje';
-        const lot = await tx.warehouseStockLot.create({
-          data: {
-            warehouseId,
-            categoryId: item.categoryId,
-            catalogItemId: resolved.catalogItemId,
-            lotKind: 'ISSUABLE',
-            productName: resolved.productName,
-            quantityReceived: item.quantity,
-            quantityOnHand: item.quantity,
-            status: initialStatus,
-            specifications: {},
-            contractNumber: item.contractNumber?.trim() || null,
-            entryDate: new Date(item.entryDate),
-            receivedByUserId: user.id,
-          },
-          include: { category: true, warehouse: true },
+        const canonical = await findCanonicalStockLotInTx(tx, {
+          warehouseId,
+          catalogItemId: item.catalogItemId,
         });
-        lots.push(lot);
+        const statusIfReopened =
+          canonical?.specDefinedAt || initialStatus === 'spremno_za_izdavanje'
+            ? 'spremno_za_izdavanje'
+            : 'ceka_specifikaciju';
+        const applied = await applyStockLotReceiveInTx(tx, canonical?.id ?? null, {
+          warehouseId,
+          categoryId: item.categoryId,
+          catalogItemId: item.catalogItemId,
+          productName: resolved.productName,
+          quantity: item.quantity,
+          entryDate: new Date(item.entryDate),
+          contractNumber: item.contractNumber?.trim() || null,
+          notes: null,
+          receivedByUserId: user.id,
+          statusIfCreated: initialStatus,
+          statusIfReopened,
+        });
+        ids.push(applied.stockLotId);
       }
-      return lots;
+      return ids;
     });
-    for (const lot of createdLots) {
-      await this.notificationsService.notifyWarehouseStockReceived(lot.id);
+    const distinctLotIds = [...new Set(lotIds)];
+    const lots = await this.prisma.warehouseStockLot.findMany({
+      where: { id: { in: distinctLotIds } },
+      include: { category: true, warehouse: true },
+    });
+    for (const lotId of distinctLotIds) {
+      await this.notificationsService.notifyWarehouseStockReceived(lotId);
     }
-    return createdLots.map((lot) => this.mapLotForUser(user, lot, true));
+    return lots.map((lot) => this.mapLotForUser(user, lot, true));
   }
 
   async defineSpecifications(
@@ -501,8 +586,6 @@ export class WarehouseStockService {
       warehouseId: lot.warehouseId,
       categoryId: lot.categoryId,
       catalogItemId: lot.catalogItemId,
-      contractNumber: lot.contractNumber,
-      entryDate: lot.entryDate,
       specifications: lot.specifications,
     };
     const issueBase = {
@@ -533,12 +616,14 @@ export class WarehouseStockService {
     }
     try {
       const result = await this.prisma.$transaction(async (tx) => {
+        const receipt = await consumeStockLotReceiptFifoInTx(tx, lot.id);
         const issued = transferIssueInput
           ? await executeStockLotIssueWithTransferInTx(tx, {
               ...issueBase,
+              receipt,
               ...transferIssueInput,
             })
-          : await executeStockLotIssueDirectInTx(tx, issueBase);
+          : await executeStockLotIssueDirectInTx(tx, { ...issueBase, receipt });
         const nextOnHand = lot.quantityOnHand - 1;
         await tx.warehouseStockLot.update({
           where: { id: lotId },
@@ -617,13 +702,13 @@ export class WarehouseStockService {
       warehouseId: lot.warehouseId,
       categoryId: lot.categoryId,
       catalogItemId: lot.catalogItemId,
-      contractNumber: lot.contractNumber,
-      entryDate: lot.entryDate,
     };
     try {
       await this.prisma.$transaction(async (tx) => {
+        const receipt = await consumeStockLotReceiptFifoInTx(tx, lot.id);
         await executeStockLotCommissionInTx(tx, {
           lot: lotInput,
+          receipt,
           inventoryNumber: dto.inventoryNumber.trim(),
           mergedSpecifications,
         });

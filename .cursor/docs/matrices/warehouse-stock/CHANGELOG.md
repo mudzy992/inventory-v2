@@ -1,5 +1,11 @@
 # Changelog — warehouse-stock
 
+## 2026-06-16
+
+- Prijem robe sada **uvećava postojeći lot** u istom skladištu po `catalogItemId` (umjesto kreiranja novog lota za svaki ulaz).
+- Dodan `WarehouseStockLotReceipt` kao evidencija prijema (količina + ugovor + datum ulaza) i uveden FIFO za dodjelu `(contractNumber, entryDate)` na `Equipment` pri `issue`/`commission`.
+- Dodan preview endpoint za prijem (`receive-preview`) radi jasne poruke skladištaru prije snimanja.
+
 ## 2026-06-15 (guard audit)
 
 - `defineSpecifications` sada poziva `assertFeatureEnabled('features.registrar_stock')`.

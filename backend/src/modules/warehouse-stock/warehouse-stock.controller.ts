@@ -11,6 +11,7 @@ import { CreateStockLotDto } from './dto/create-stock-lot.dto';
 import { CommissionStockLotDto } from './dto/commission-stock-lot.dto';
 import { IssueStockLotDto } from './dto/issue-stock-lot.dto';
 import { UpdateStockLotSpecDto } from './dto/update-stock-lot-spec.dto';
+import { ReceivePreviewQueryDto } from './dto/receive-preview-query.dto';
 import { WarehouseStockService } from './warehouse-stock.service';
 
 @Controller()
@@ -58,6 +59,16 @@ export class WarehouseStockController {
     @Body() body: BulkCreateStockLotDto,
   ) {
     return this.warehouseStockService.receiveBulk(user, warehouseId, body);
+  }
+
+  @Get('warehouses/:warehouseId/stock-lots/receive-preview')
+  @Roles(UserRole.admin, UserRole.skladistar)
+  receivePreview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('warehouseId') warehouseId: string,
+    @Query() query: ReceivePreviewQueryDto,
+  ) {
+    return this.warehouseStockService.receivePreview(user, warehouseId, query.catalogItemId);
   }
 
   @Get('stock-lots/:id')

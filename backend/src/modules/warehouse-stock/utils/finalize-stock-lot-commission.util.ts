@@ -5,12 +5,11 @@ interface StockLotCommissionLotInput {
   warehouseId: string;
   categoryId: string;
   catalogItemId: string | null;
-  contractNumber: string | null;
-  entryDate: Date;
 }
 
 interface StockLotCommissionInput {
   lot: StockLotCommissionLotInput;
+  receipt: { contractNumber: string | null; entryDate: Date };
   inventoryNumber: string;
   mergedSpecifications: Record<string, string>;
 }
@@ -30,8 +29,8 @@ export const executeStockLotCommissionInTx = async (
       stockLotId: input.lot.id,
       inventoryNumber: input.inventoryNumber,
       specifications: input.mergedSpecifications,
-      contractNumber: input.lot.contractNumber,
-      entryDate: input.lot.entryDate,
+      contractNumber: input.receipt.contractNumber,
+      entryDate: input.receipt.entryDate,
       status: 'skladiste',
       currentHolderId: null,
       warehouseId: input.lot.warehouseId,

@@ -3,6 +3,7 @@
 ## Model
 
 - `WarehouseStockLot`: količinski ulaz robe na skladište
+- `WarehouseStockLotReceipt`: pojedinačni prijem (ugovor + datum ulaza + količina) unutar lota; služi kao izvor istine za FIFO
 - `Equipment.stockLotId`: veza izdanog komada prema lotu
 
 ## Statusi lota
@@ -30,6 +31,7 @@
 - **Kolaudacija** (`POST .../commission`): ista validacija kao issue (sva unit polja + `inventoryNumber`); **bez** `employeeId`
 - Unit polja s `unique: true`: backend provjerava globalnu jedinstvenost pri izdavanju i kolaudaciji
 - Pri prijemu lota: ako kategorija nema obaveznih lot polja → status odmah `spremno_za_izdavanje`
+- Pri prijemu (po `catalogItemId`) u isto skladište: ako lot već postoji → **uvećava se postojeći lot** (`quantityOnHand/quantityReceived += qty`) i kreira se novi `WarehouseStockLotReceipt` (ugovor/datum važe samo za te komade)
 - Issue payload `uniqueSpecifications`: sadrži sva unit polja (legacy ime polja u DTO)
 
 ## Izmjena lot specifikacije (evidentičar)
@@ -59,6 +61,8 @@
 2. Nema `Transfer` zapisa ni generisanja dokumenta
 3. `quantityOnHand -= 1`
 
+**FIFO ugovor/datum:** pri `issue` se uzima najstariji `WarehouseStockLotReceipt` sa `quantityRemaining > 0` i taj `(contractNumber, entryDate)` se dodjeljuje kreiranom `Equipment` komadu.
+
 ## Kolaudacija (evidentičar)
 
 `POST /stock-lots/:id/commission` — paralelna akcija uz issue, kad je lot `spremno_za_izdavanje` i `quantityOnHand > 0`.
@@ -67,6 +71,8 @@
 2. **Nema** `Transfer` zapisa ni generisanja prenosnice
 3. **Nema** zaduženja (`currentHolderId` null)
 4. `quantityOnHand -= 1`; lot `zatvoreno` kad `quantityOnHand = 0`
+
+**FIFO ugovor/datum:** pri `commission` se uzima najstariji `WarehouseStockLotReceipt` sa `quantityRemaining > 0` i taj `(contractNumber, entryDate)` se dodjeljuje kreiranom `Equipment` komadu.
 
 **UI:** na detail lota dugmad „Izdaj 1 komad" i „Kolaudiraj 1 komad"; zajednička forma za inventurni broj i unit polja (`lot-unit-action-section.tsx`).
 

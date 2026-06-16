@@ -7,13 +7,12 @@ interface StockLotIssueLotInput {
   warehouseId: string;
   categoryId: string;
   catalogItemId: string | null;
-  contractNumber: string | null;
-  entryDate: Date;
   specifications: Prisma.JsonValue;
 }
 
 interface StockLotIssueBaseInput {
   lot: StockLotIssueLotInput;
+  receipt: { contractNumber: string | null; entryDate: Date };
   employeeId: string;
   inventoryNumber: string;
   mergedSpecifications: Record<string, string>;
@@ -42,8 +41,8 @@ export const executeStockLotIssueDirectInTx = async (
       stockLotId: input.lot.id,
       inventoryNumber: input.inventoryNumber,
       specifications: input.mergedSpecifications,
-      contractNumber: input.lot.contractNumber,
-      entryDate: input.lot.entryDate,
+      contractNumber: input.receipt.contractNumber,
+      entryDate: input.receipt.entryDate,
       status: assignment.status,
       currentHolderId: assignment.currentHolderId,
       warehouseId: assignment.warehouseId,
@@ -65,8 +64,8 @@ export const executeStockLotIssueWithTransferInTx = async (
       inventoryNumber: input.inventoryNumber,
       specifications: input.mergedSpecifications,
       status: 'skladiste',
-      contractNumber: input.lot.contractNumber,
-      entryDate: input.lot.entryDate,
+      contractNumber: input.receipt.contractNumber,
+      entryDate: input.receipt.entryDate,
       warehouseId: input.lot.warehouseId,
       warehouseCondition: 'na_skladistu',
     },
