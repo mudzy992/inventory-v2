@@ -7,6 +7,14 @@ import {
   SETTINGS_REGISTRY,
   type SettingGroup,
 } from './settings.registry';
+import { getSettingUiMetadata } from './settings-ui-metadata';
+
+export interface SettingDependsOn {
+  key: string;
+  equals?: boolean | string | number;
+}
+
+export type SettingDisplay = 'default' | 'info' | 'deprecated';
 
 export interface SettingResponse {
   key: string;
@@ -15,8 +23,11 @@ export interface SettingResponse {
   value: string | number | boolean;
   label: string;
   description: string;
+  detail?: string;
   group: SettingGroup;
   adminEditable: boolean;
+  dependsOn?: SettingDependsOn;
+  display: SettingDisplay;
 }
 
 @Injectable()
@@ -140,6 +151,7 @@ export class SettingsService {
 
   private toResponse(row: Setting): SettingResponse {
     const definition = getSettingDefinition(row.key);
+    const ui = getSettingUiMetadata(row.key);
     return {
       key: row.key,
       scope: row.scope,
@@ -147,8 +159,11 @@ export class SettingsService {
       value: this.parseValue(row.value, row.valueType),
       label: definition?.label ?? row.key,
       description: definition?.description ?? row.description,
+      detail: ui?.detail,
       group: definition?.group ?? 'system',
       adminEditable: definition?.adminEditable ?? false,
+      dependsOn: ui?.dependsOn,
+      display: ui?.display ?? 'default',
     };
   }
 

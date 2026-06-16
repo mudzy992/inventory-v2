@@ -1,5 +1,10 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-16 (profesionalni admin UI)
+
+- `settings-ui-metadata.ts` — `dependsOn`, `display` (info/deprecated), `detail` za UI hijerarhiju.
+- Admin Postavke: pretraga po tabu, zavisne opcije disabled, info/deprecated redovi, save na blur za tekst/broj.
+
 ## 2026-06-15 (guard registry)
 
 - Dodani `INDEX.md` i `GUARDS_REGISTRY.md` — mapiranje feature flagova na BE/FE enforcement.

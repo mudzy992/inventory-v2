@@ -187,7 +187,7 @@ export const DisposalListPanel = ({ sessionId, sessionStatus }: DisposalListPane
         }
       />
       {withdrawTarget ? (
-        <ModalRoot open onClose={() => setWithdrawTarget(null)} size="md">
+        <ModalRoot open onClose={() => setWithdrawTarget(null)} size="md" enableEscape closeOnBackdrop>
           <div className="p-6 space-y-4">
             <h3 className="text-lg font-semibold">Vrati s liste za rashod</h3>
             <p className="text-sm text-gray-600">

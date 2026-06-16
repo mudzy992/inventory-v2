@@ -38,6 +38,12 @@ export class EmployeesController {
     return this.employeesService.search(user, query);
   }
 
+  @Get(':id/profile')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  getProfile(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.employeesService.getProfile(user, id);
+  }
+
   @Get(':id')
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {

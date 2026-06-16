@@ -346,7 +346,7 @@ export const LocationsPage = () => {
         </div>
       ) : null}
 
-      <ModalRoot open={Boolean(editTarget)} onClose={handleCloseEdit} size="md">
+      <ModalRoot open={Boolean(editTarget)} onClose={handleCloseEdit} size="md" enableEscape closeOnBackdrop>
         <div className="bg-white rounded-xl shadow-xl w-full p-6">
           <h3 className="text-lg font-semibold mb-4">
             {editTarget?.type === 'canton' ? 'Uredi kanton' : 'Uredi grad'}
@@ -391,7 +391,7 @@ export const LocationsPage = () => {
         </div>
       </ModalRoot>
 
-      <ModalRoot open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} size="sm">
+      <ModalRoot open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} size="sm" enableEscape closeOnBackdrop>
         <div className="bg-white rounded-xl shadow-xl w-full p-6">
           <h3 className="text-lg font-semibold mb-2">Potvrda brisanja</h3>
           <p className="text-sm text-gray-600 mb-4">

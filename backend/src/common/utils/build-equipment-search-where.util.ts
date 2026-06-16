@@ -34,17 +34,16 @@ export const buildEquipmentSearchWhere = (
       { inventoryNumber: { contains: searchTerm } },
       { contractNumber: { contains: searchTerm } },
       { notes: { contains: searchTerm } },
+      {
+        specifications: {
+          string_contains: searchTerm,
+        },
+      },
     ];
     if (input.categoryTextFieldIds && input.categoryTextFieldIds.length > 0) {
       for (const fieldId of input.categoryTextFieldIds) {
         textClauses.push(buildSpecificationTextFieldContainsFilter(fieldId, searchTerm));
       }
-    } else {
-      textClauses.push({
-        specifications: {
-          string_contains: searchTerm,
-        },
-      });
     }
     clauses.push({ OR: textClauses });
   }

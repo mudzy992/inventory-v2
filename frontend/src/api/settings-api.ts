@@ -1,5 +1,12 @@
 import { apiRequest } from './client';
 
+export interface SettingDependsOnDto {
+  key: string;
+  equals?: boolean | string | number;
+}
+
+export type SettingDisplayDto = 'default' | 'info' | 'deprecated';
+
 export interface SettingDto {
   key: string;
   scope: 'public' | 'private';
@@ -7,8 +14,11 @@ export interface SettingDto {
   value: string | number | boolean;
   label: string;
   description: string;
+  detail?: string;
   group: string;
   adminEditable: boolean;
+  dependsOn?: SettingDependsOnDto;
+  display: SettingDisplayDto;
 }
 
 export const fetchPrivateSettingsApi = (): Promise<SettingDto[]> =>

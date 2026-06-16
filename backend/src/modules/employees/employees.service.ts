@@ -47,6 +47,26 @@ export type EmployeeListItem = Employee & {
   openRelocationCount: number;
 };
 
+export interface EmployeeProfileHeldEquipment {
+  id: string;
+  inventoryNumber: string;
+  categoryName: string;
+  status: string;
+}
+
+export interface EmployeeProfileUser {
+  id: string;
+  email: string;
+  role: string;
+}
+
+export interface EmployeeProfile {
+  employee: EmployeeListItem;
+  user: EmployeeProfileUser | null;
+  heldEquipment: EmployeeProfileHeldEquipment[];
+  heldEquipmentTotal: number;
+}
+
 @Injectable()
 export class EmployeesService {
   constructor(
@@ -110,6 +130,65 @@ export class EmployeesService {
     }
     await this.assertCanReadEmployee(user, employee);
     return employee;
+  }
+
+  async getProfile(user: AuthenticatedUser, id: string): Promise<EmployeeProfile> {
+    await this.settingsService.assertFeatureEnabled('features.employees');
+    const row = await this.prisma.employee.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, email: true, role: true } },
+        _count: {
+          select: {
+            heldEquipment: { where: { status: 'zaduzeno' as const } },
+            signedTransfers: true,
+            signingOrgUnits: true,
+            relocationCases: { where: { status: 'open' as const } },
+          },
+        },
+      },
+    });
+    if (!row) {
+      throw new NotFoundException('Employee not found');
+    }
+    await this.assertCanReadEmployee(user, row);
+    const [heldEquipment, heldEquipmentTotal] = await Promise.all([
+      this.prisma.equipment.findMany({
+        where: { currentHolderId: id, status: 'zaduzeno' },
+        orderBy: { inventoryNumber: 'asc' },
+        take: 50,
+        select: {
+          id: true,
+          inventoryNumber: true,
+          status: true,
+          category: { select: { name: true } },
+        },
+      }),
+      this.prisma.equipment.count({
+        where: { currentHolderId: id, status: 'zaduzeno' },
+      }),
+    ]);
+    const { user: linkedUser, _count, ...employee } = row;
+    return {
+      employee: {
+        ...employee,
+        heldEquipmentCount: _count.heldEquipment,
+        hasUserAccount: Boolean(linkedUser),
+        isOrgSigner: _count.signingOrgUnits > 0,
+        signedTransferCount: _count.signedTransfers,
+        openRelocationCount: _count.relocationCases,
+      },
+      user: linkedUser
+        ? { id: linkedUser.id, email: linkedUser.email ?? '', role: linkedUser.role }
+        : null,
+      heldEquipment: heldEquipment.map((item) => ({
+        id: item.id,
+        inventoryNumber: item.inventoryNumber,
+        categoryName: item.category.name,
+        status: item.status,
+      })),
+      heldEquipmentTotal,
+    };
   }
 
   async create(dto: CreateEmployeeDto): Promise<Employee> {

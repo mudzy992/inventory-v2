@@ -460,7 +460,7 @@ export function CategoriesPage() {
         />
       ) : null}
       {showForm && !isAssetSubcategoryForm ? (
-        <ModalRoot open onClose={() => setShowForm(false)} size="xl" panelClassName="bg-white shadow-xl max-w-2xl">
+        <ModalRoot open onClose={() => setShowForm(false)} size="xl" panelClassName="bg-white shadow-xl max-w-2xl" enableEscape closeOnBackdrop>
           <div className="bg-white rounded-xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-semibold">{formTitle}</h2>

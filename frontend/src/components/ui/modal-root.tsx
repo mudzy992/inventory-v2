@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { MODAL_Z } from '../../constants/modal-z-index';
 import { cn } from '../../utils/cn';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
@@ -27,7 +28,7 @@ export const ModalRoot = ({
   open,
   onClose,
   children,
-  zIndex = 50,
+  zIndex = MODAL_Z.base,
   size = 'md',
   panelClassName,
   closeOnBackdrop = false,

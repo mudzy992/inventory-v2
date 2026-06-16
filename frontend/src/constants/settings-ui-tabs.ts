@@ -34,7 +34,7 @@ export const SETTINGS_TAB_META: Record<SettingsTabId, SettingsTabMeta> = {
     id: 'general',
     label: 'Opšte',
     icon: Building2,
-    description: 'Brending aplikacije i podaci preduzeća za štampu.',
+    description: 'Brending aplikacije i službeni podaci preduzeća koji se štampaju na prenosnicama i izvještajima.',
   },
   inventory: {
     id: 'inventory',
@@ -52,13 +52,13 @@ export const SETTINGS_TAB_META: Record<SettingsTabId, SettingsTabMeta> = {
     id: 'modules',
     label: 'Moduli',
     icon: LayoutGrid,
-    description: 'Uključivanje i isključivanje cjelina aplikacije (meni, API, pristup).',
+    description: 'Master prekidači za cijele module — isključen modul sakriva navigaciju i blokira pisanje na API-ju.',
   },
   transfers: {
     id: 'transfers',
     label: 'Prenosi',
     icon: ArrowLeftRight,
-    description: 'Pravila prenosnica, zaduženja i cross-service logike.',
+    description: 'Pravila kreiranja prenosnica, PDF-a i potpisanih dokumenata. Pod-opcije zahtijevaju uključeno globalno kreiranje.',
   },
   uploads: {
     id: 'uploads',

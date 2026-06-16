@@ -354,7 +354,7 @@ export const TransferDocumentsTab = () => {
 
       {/* Preview modal */}
       {viewTransfer && (
-        <ModalRoot open onClose={() => setViewDoc(null)} size="xl" panelClassName="bg-white shadow-xl max-w-3xl">
+        <ModalRoot open onClose={() => setViewDoc(null)} size="xl" panelClassName="bg-white shadow-xl max-w-3xl" enableEscape closeOnBackdrop>
           <div className="bg-white rounded-xl w-full max-h-[90vh] overflow-y-auto">
             {(() => {
               const t = viewTransfer;

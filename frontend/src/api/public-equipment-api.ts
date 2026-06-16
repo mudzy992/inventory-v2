@@ -35,6 +35,7 @@ export interface PublicEquipmentDto {
   currentHolder: PublicEquipmentHolderDto | null;
   warehouse: PublicEquipmentWarehouseDto | null;
   movements: PublicEquipmentMovementDto[];
+  disposalReason: string | null;
 }
 
 export const fetchPublicEquipmentApi = (id: string): Promise<PublicEquipmentDto> =>

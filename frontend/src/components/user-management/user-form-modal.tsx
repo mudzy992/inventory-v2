@@ -218,7 +218,7 @@ export const UserFormModal = ({
   const title = mode === 'create' ? 'Novi korisnik' : 'Uredi korisnika';
 
   return (
-    <ModalRoot open onClose={onClose} size="lg" panelClassName="bg-white shadow-xl max-w-lg">
+    <ModalRoot open onClose={onClose} size="lg" panelClassName="bg-white shadow-xl max-w-lg" enableEscape closeOnBackdrop>
       <div
         className="bg-white rounded-xl w-full max-h-[90vh] overflow-y-auto"
         aria-labelledby="user-form-title"

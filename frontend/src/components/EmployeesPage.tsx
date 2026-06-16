@@ -9,7 +9,7 @@ import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutatio
 import { canDeleteEmployee } from '../helpers/guards';
 import { useToast } from '../contexts/toast-context';
 import { isAdmin, isEvidenticar, getCurrentUser } from '../store';
-import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, Eye } from 'lucide-react';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
 import { EmployeeTitleAutocomplete } from './employee-title-autocomplete';
 import { resolveCanonicalEmployeeTitle } from './employee-title-suggestions';
@@ -19,6 +19,8 @@ import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
 import { PaginationControls } from './ui/pagination-controls';
 import { ModalRoot } from './ui/modal-root';
+import { EmployeeProfileDialog } from './employees/employee-profile-dialog';
+import { EquipmentCard } from './EquipmentCard';
 
 export function EmployeesPage() {
   const [state] = useStore();
@@ -39,6 +41,10 @@ export function EmployeesPage() {
   const [fPhone, setFPhone] = useState('');
   const [relocationPreview, setRelocationPreview] = useState<RelocationPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null);
+  const [viewEquipmentId, setViewEquipmentId] = useState<string | null>(null);
+
+  const canViewProfile = admin || evidenticar;
 
   const list = usePaginatedList<Employee, { orgUnitId?: string }>({
     fetchPage: fetchEmployeesPageApi,
@@ -64,6 +70,17 @@ export function EmployeesPage() {
     setFEmail('');
     setFPhone('');
     setShowForm(true);
+  }
+
+  function openProfile(emp: Employee) {
+    setProfileEmployeeId(emp.id);
+  }
+
+  function openEditFromProfile(employeeId: string) {
+    const emp = filtered.find((row) => row.id === employeeId) ?? list.items.find((row) => row.id === employeeId);
+    if (emp) {
+      openEdit(emp);
+    }
   }
 
   function openEdit(emp: Employee) {
@@ -217,15 +234,26 @@ export function EmployeesPage() {
                   <p className="text-sm text-gray-600">{emp.title}</p>
                 </div>
                 {eqCount > 0 ? (
-                  <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => openProfile(emp)}
+                    className="inline-flex items-center gap-1 shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 hover:bg-green-200"
+                    title="Pregled profila i opreme"
+                  >
                     <Package size={12} /> {eqCount}
-                  </span>
+                  </button>
                 ) : null}
               </div>
               <p className="text-xs text-gray-500">{orgUnit ? getOrgUnitPath(state.orgUnits, orgUnit.id) : '—'}</p>
               {emp.email ? <p className="text-xs text-gray-500">{emp.email}</p> : null}
-              {admin ? (
-                <div className="flex gap-2 pt-1">
+              <div className="flex gap-2 pt-1">
+                {canViewProfile ? (
+                  <button type="button" onClick={() => openProfile(emp)} className="text-gray-500 hover:text-blue-600 p-1" title="Profil">
+                    <Eye size={14} />
+                  </button>
+                ) : null}
+                {admin ? (
+                  <>
                   <button type="button" onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                     <Edit2 size={14} />
                   </button>
@@ -238,8 +266,9 @@ export function EmployeesPage() {
                   >
                     <Trash2 size={14} />
                   </button>
-                </div>
-              ) : null}
+                  </>
+                ) : null}
+              </div>
             </div>
           );
         })}
@@ -252,7 +281,7 @@ export function EmployeesPage() {
                 <th className="px-4 py-3 font-medium text-gray-600">Org. jedinica</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Email</th>
                 <th className="px-4 py-3 font-medium text-gray-600 text-center">Oprema</th>
-                {admin ? (
+                {canViewProfile || admin ? (
                   <th className="px-4 py-3 font-medium text-gray-600 text-right">Akcije</th>
                 ) : null}
               </tr>
@@ -273,16 +302,28 @@ export function EmployeesPage() {
                     <td className="px-4 py-3 text-gray-500">{emp.email || '—'}</td>
                     <td className="px-4 py-3 text-center">
                       {eqCount > 0 ? (
-                        <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                        <button
+                          type="button"
+                          onClick={() => openProfile(emp)}
+                          className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 hover:bg-green-200"
+                          title="Pregled profila i opreme"
+                        >
                           <Package size={12} /> {eqCount}
-                        </span>
+                        </button>
                       ) : (
                         <span className="text-xs text-gray-300">0</span>
                       )}
                     </td>
-                    {admin ? (
+                    {canViewProfile || admin ? (
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
+                          {canViewProfile ? (
+                            <button type="button" onClick={() => openProfile(emp)} className="text-gray-500 hover:text-blue-600 p-1" title="Profil">
+                              <Eye size={14} />
+                            </button>
+                          ) : null}
+                          {admin ? (
+                            <>
                           <button type="button" onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                             <Edit2 size={14} />
                           </button>
@@ -295,6 +336,8 @@ export function EmployeesPage() {
                           >
                             <Trash2 size={14} />
                           </button>
+                            </>
+                          ) : null}
                         </div>
                       </td>
                     ) : null}
@@ -326,6 +369,8 @@ export function EmployeesPage() {
         }}
         size="lg"
         panelClassName="bg-white shadow-xl"
+        enableEscape
+        closeOnBackdrop
       >
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold">{editing ? 'Uredi radnika' : 'Novi radnik'}</h2>
@@ -443,6 +488,26 @@ export function EmployeesPage() {
               )}
             </div>
       </ModalRoot>
+
+      <EmployeeProfileDialog
+        employeeId={profileEmployeeId}
+        orgUnits={state.orgUnits}
+        isAdmin={admin}
+        onClose={() => setProfileEmployeeId(null)}
+        onEdit={admin ? openEditFromProfile : undefined}
+        onOpenEquipment={(equipmentId) => {
+          setProfileEmployeeId(null);
+          setViewEquipmentId(equipmentId);
+        }}
+      />
+
+      {viewEquipmentId ? (
+        <EquipmentCard
+          equipmentId={viewEquipmentId}
+          onClose={() => setViewEquipmentId(null)}
+          showTransferActions={false}
+        />
+      ) : null}
     </div>
   );
 }

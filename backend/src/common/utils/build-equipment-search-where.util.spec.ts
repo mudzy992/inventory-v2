@@ -31,14 +31,15 @@ describe('buildEquipmentSearchWhere', () => {
     assert.deepEqual(or[3], { specifications: { string_contains: 'laptop' } });
   });
 
-  it('builds category-bound text field OR clauses', () => {
+  it('builds category-bound text field OR clauses with broad spec fallback', () => {
     const where = buildEquipmentSearchWhere({
       search: 'Dell',
       categoryTextFieldIds: ['f1', 'f2'],
     });
     assert.ok(where && 'OR' in where);
     const or = (where as { OR: unknown[] }).OR;
-    assert.equal(or.length, 5);
+    assert.equal(or.length, 6);
+    assert.deepEqual(or[3], { specifications: { string_contains: 'Dell' } });
   });
 });
 

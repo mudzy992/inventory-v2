@@ -7,6 +7,7 @@ import { useToast } from '../../contexts/toast-context';
 import { Button } from '../ui/button';
 import { inputClass, labelClass, selectClass } from '../ui/form-styles';
 import { ModalRoot } from '../ui/modal-root';
+import { MODAL_Z } from '../../constants/modal-z-index';
 
 interface EquipmentMarkDisposalDialogProps {
   equipmentId: string;
@@ -65,9 +66,14 @@ export const EquipmentMarkDisposalDialog = ({
       toastError('Odaberite sesiju popisa u nacrtu.');
       return;
     }
+    const trimmedNote = note.trim();
+    if (trimmedNote.length < 3) {
+      toastError('Unesite razlog rashoda (najmanje 3 znaka).');
+      return;
+    }
     setSubmitting(true);
     try {
-      await markDisposalListApi(sessionId, { equipmentId, note: note.trim() || undefined });
+      await markDisposalListApi(sessionId, { equipmentId, note: trimmedNote });
       toastSuccess(`Oprema ${inventoryNumber} je dodana na listu za rashod.`);
       onMarked();
       onClose();
@@ -83,7 +89,7 @@ export const EquipmentMarkDisposalDialog = ({
       open={open}
       onClose={onClose}
       size="md"
-      zIndex={70}
+      zIndex={MODAL_Z.destructive}
       enableEscape
       closeOnBackdrop
     >
@@ -129,13 +135,17 @@ export const EquipmentMarkDisposalDialog = ({
               </select>
             </div>
             <div>
-              <label className={labelClass}>Napomena (opcionalno)</label>
+              <label className={labelClass}>
+                Razlog rashoda <span className="text-red-500">*</span>
+              </label>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
                 className={inputClass}
-                placeholder="Razlog ili kontekst za rashod"
+                placeholder="Obrazložite zašto se oprema predlaže za rashod"
+                required
+                minLength={3}
               />
             </div>
           </div>
@@ -146,7 +156,7 @@ export const EquipmentMarkDisposalDialog = ({
           </Button>
           <Button
             onClick={() => void handleSubmit()}
-            disabled={submitting || !sessionId || sessions.length === 0}
+            disabled={submitting || !sessionId || sessions.length === 0 || note.trim().length < 3}
           >
             {submitting ? 'Snimam…' : 'Dodaj na listu'}
           </Button>

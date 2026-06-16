@@ -22,7 +22,7 @@ interface PublicEquipmentPageProps {
 
 type DetailTab = 'holder' | 'specs' | 'history';
 
-type EquipmentStatusKey = 'zaduzeno' | 'skladiste' | 'rashodovano';
+type EquipmentStatusKey = 'zaduzeno' | 'skladiste' | 'za_rashod' | 'rashodovano';
 
 interface StatusTheme {
   heroGradient: string;
@@ -56,6 +56,16 @@ const statusThemes: Record<EquipmentStatusKey | 'default', StatusTheme> = {
     spinnerBorder: 'border-blue-600',
     tabRing: 'ring-blue-200/80',
   },
+  za_rashod: {
+    heroGradient: 'from-orange-600 to-amber-600',
+    pageGradient: 'from-orange-200/80 via-amber-100/60 to-orange-50/35',
+    pageGlowTop: 'rgba(234, 88, 12, 0.38)',
+    pageGlowBottom: 'rgba(245, 158, 11, 0.22)',
+    pageOrb: 'bg-orange-400/20',
+    headerAccent: 'text-orange-950',
+    spinnerBorder: 'border-orange-600',
+    tabRing: 'ring-orange-200/80',
+  },
   rashodovano: {
     heroGradient: 'from-red-600 to-rose-600',
     pageGradient: 'from-red-200/80 via-rose-100/60 to-red-50/35',
@@ -79,7 +89,12 @@ const statusThemes: Record<EquipmentStatusKey | 'default', StatusTheme> = {
 };
 
 function resolveStatusTheme(status?: string): StatusTheme {
-  if (status === 'zaduzeno' || status === 'skladiste' || status === 'rashodovano') {
+  if (
+    status === 'zaduzeno' ||
+    status === 'skladiste' ||
+    status === 'za_rashod' ||
+    status === 'rashodovano'
+  ) {
     return statusThemes[status];
   }
   return statusThemes.default;
@@ -264,12 +279,34 @@ function AssignmentPanel({ equipment }: { equipment: PublicEquipmentDto }) {
     );
   }
 
+  if (equipment.status === 'za_rashod') {
+    return (
+      <div className="rounded-xl border border-orange-200/80 bg-orange-50/70 p-4 sm:p-5">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-orange-800">Status</h2>
+        <p className="text-lg font-semibold text-orange-950">Na listi za rashod</p>
+        <p className="mt-0.5 text-sm text-orange-700">Oprema čeka odluku komisije za rashod</p>
+        {equipment.disposalReason && (
+          <p className="mt-3 rounded-lg bg-orange-100/80 px-3 py-2 text-sm text-orange-900">
+            <span className="font-medium">Razlog: </span>
+            {equipment.disposalReason}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   if (equipment.status === 'rashodovano') {
     return (
       <div className="rounded-xl border border-red-200/80 bg-red-50/70 p-4 sm:p-5">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-800">Status</h2>
         <p className="text-lg font-semibold text-red-950">Rashodovano</p>
         <p className="mt-0.5 text-sm text-red-700">Oprema više nije u aktivnom inventaru</p>
+        {equipment.disposalReason && (
+          <p className="mt-3 rounded-lg bg-red-100/80 px-3 py-2 text-sm text-red-900">
+            <span className="font-medium">Razlog: </span>
+            {equipment.disposalReason}
+          </p>
+        )}
       </div>
     );
   }

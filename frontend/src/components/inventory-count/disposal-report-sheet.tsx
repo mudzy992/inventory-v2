@@ -3,6 +3,7 @@ import type { DisposalReportDto } from '../../api/inventory-api';
 import { formatDate } from '../../helpers';
 import { Button } from '../ui/button';
 import { ModalRoot } from '../ui/modal-root';
+import { MODAL_Z } from '../../constants/modal-z-index';
 
 interface DisposalReportSheetProps {
   report: DisposalReportDto;
@@ -85,7 +86,7 @@ export const DisposalReportSheet = ({ report, onClose }: DisposalReportSheetProp
     win.print();
   };
   return (
-    <ModalRoot open onClose={onClose} size="full" panelClassName="max-w-4xl print:hidden">
+    <ModalRoot open onClose={onClose} zIndex={MODAL_Z.destructive} size="full" panelClassName="max-w-4xl print:hidden" enableEscape closeOnBackdrop>
       <div className="bg-white rounded-xl shadow-xl w-full p-4 sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div>

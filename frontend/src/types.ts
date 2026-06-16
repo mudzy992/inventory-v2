@@ -158,6 +158,7 @@ export interface Equipment {
   warehouseId?: string | null;
   warehouseCondition?: WarehouseCondition | null;
   notes?: string;
+  disposalReason?: string | null;
   stockLot?: { id: string; productName: string } | null;
 }
 

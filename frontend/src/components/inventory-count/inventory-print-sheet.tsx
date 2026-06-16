@@ -7,6 +7,7 @@ import { buildCompanyAddressLine, companyHeaderFromSettings } from '../../helper
 import type { AppState } from '../../types';
 import { Button } from '../ui/button';
 import { ModalRoot } from '../ui/modal-root';
+import { MODAL_Z } from '../../constants/modal-z-index';
 
 interface InventoryPrintSheetProps {
   scope: InventoryPrintScopeDto;
@@ -145,7 +146,7 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
     window.print();
   };
   return (
-    <ModalRoot open onClose={onClose} zIndex={70} size="full" panelClassName="max-w-4xl print:max-w-none">
+    <ModalRoot open onClose={onClose} zIndex={MODAL_Z.destructive} size="full" panelClassName="max-w-4xl print:max-w-none" enableEscape closeOnBackdrop>
       <div className="bg-white rounded-xl shadow-xl w-full print:shadow-none">
         <div className="p-4 border-b flex justify-between items-center print:hidden">
           <h2 className="font-semibold text-gray-900">Popisna lista</h2>

@@ -280,7 +280,7 @@ export function EquipmentPage() {
         <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Pretraži po inv. broju, ugovoru, bilješkama ili specifikaciji..."
+            placeholder="Pretraži po inv. broju, bilješkama ili specifikaciji..."
             className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -342,7 +342,10 @@ export function EquipmentPage() {
                   <p className="text-sm font-medium text-gray-800">{eq.stockLot?.productName ?? '—'}</p>
                   <p className="font-mono text-xs text-gray-500">{eq.inventoryNumber}</p>
                   <p className="text-xs text-gray-500">
-                    {cat ? cat.fields.slice(0, 2).map(f => `${f.name}: ${eq.specifications[f.id] || '—'}`).join(' · ') : '—'}
+                    {cat ? (() => {
+                      const field = cat.fields[0];
+                      return field ? `${field.name}: ${eq.specifications[field.id] || '—'}` : '—';
+                    })() : '—'}
                   </p>
                   <p className="text-xs text-gray-600">{cat?.name || '—'}</p>
                 </div>
@@ -351,7 +354,6 @@ export function EquipmentPage() {
                 </span>
               </div>
               {holder ? <p className="text-xs text-gray-500">Zadužen: {getEmployeeFullName(holder)}</p> : null}
-              {eq.contractNumber ? <p className="text-xs text-gray-400">Ugovor: {eq.contractNumber}</p> : null}
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-blue-600 p-1" title="Detalji">
                   <Eye size={14} />
@@ -391,7 +393,6 @@ export function EquipmentPage() {
                 <th className="px-4 py-3 font-medium text-gray-600">Kategorija</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Zadužen na</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Ugovor</th>
                 <th className="px-4 py-3 font-medium text-gray-600 text-right">Akcije</th>
               </tr>
             </thead>
@@ -400,7 +401,9 @@ export function EquipmentPage() {
                 const cat = state.categories.find(c => c.id === eq.categoryId);
                 const holder = eq.currentHolder;
                 const holderOrg = holder ? state.orgUnits.find(o => o.id === holder.orgUnitId) : null;
-                const specPreviews = cat ? cat.fields.slice(0, 2).map(f => `${f.name}: ${eq.specifications[f.id] || '—'}`).join(' | ') : '';
+                const specPreviews = cat && cat.fields[0]
+                  ? `${cat.fields[0].name}: ${eq.specifications[cat.fields[0].id] || '—'}`
+                  : '';
 
                 return (
                   <tr key={eq.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
@@ -453,7 +456,6 @@ export function EquipmentPage() {
                         <span className="text-xs text-gray-300">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{eq.contractNumber || '—'}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
                         <button type="button" onClick={() => setViewItemId(eq.id)} className="text-gray-500 hover:text-blue-600 p-1" title="Pogledaj detalje / QR">
@@ -517,6 +519,8 @@ export function EquipmentPage() {
           }}
           size="xl"
           panelClassName="bg-white shadow-xl max-w-2xl"
+          enableEscape
+          closeOnBackdrop
         >
           <div className="bg-white rounded-t-xl sm:rounded-xl w-full max-h-[90dvh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100 sticky top-0 bg-white z-10">

@@ -11,6 +11,10 @@ import { InventoryFreezeService } from '../../common/services/inventory-freeze.s
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import {
+  resolveEquipmentDisposalReason,
+  resolveEquipmentDisposalReasonsBatch,
+} from '../../common/utils/resolve-equipment-disposal-reason.util';
 import { validateEquipmentSpecifications } from '../../common/utils/category-fields.util';
 import { resolveRegistrarEquipmentSpecifications } from '../../common/utils/registrar-equipment-spec.util';
 import { buildSpecificationFieldFilter } from '../../common/utils/json-specification-filter.util';
@@ -49,6 +53,10 @@ const EQUIPMENT_SORT_FIELDS: Record<string, string> = {
   createdAt: 'createdAt',
 };
 
+export interface EquipmentWithDisposalReason extends Equipment {
+  disposalReason?: string | null;
+}
+
 export interface EquipmentSummary {
   total: number;
   byStatus: Record<EquipmentStatus, number>;
@@ -75,7 +83,7 @@ export class EquipmentService {
   async findAll(
     user: AuthenticatedUser,
     query: ListEquipmentQueryDto,
-  ): Promise<PaginatedResponse<Equipment>> {
+  ): Promise<PaginatedResponse<EquipmentWithDisposalReason>> {
     await this.settingsService.assertFeatureEnabled('features.equipment');
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
     const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
@@ -86,7 +94,7 @@ export class EquipmentService {
       EQUIPMENT_SORT_FIELDS,
       'inventoryNumber',
     );
-    return paginate({
+    const result = await paginate({
       findMany: (args) =>
         this.prisma.equipment.findMany({
           ...args,
@@ -98,6 +106,14 @@ export class EquipmentService {
       page,
       pageSize: take,
     });
+    const disposalReasons = await resolveEquipmentDisposalReasonsBatch(this.prisma, result.items);
+    return {
+      items: result.items.map((item) => ({
+        ...item,
+        disposalReason: disposalReasons.get(item.id) ?? null,
+      })),
+      meta: result.meta,
+    };
   }
 
   async getSummary(user: AuthenticatedUser, categoryId?: string): Promise<EquipmentSummary> {
@@ -156,7 +172,7 @@ export class EquipmentService {
       .sort((a, b) => a.productName.localeCompare(b.productName, 'bs'));
   }
 
-  async findOne(user: AuthenticatedUser, id: string): Promise<Equipment> {
+  async findOne(user: AuthenticatedUser, id: string): Promise<EquipmentWithDisposalReason> {
     const equipment = await this.prisma.equipment.findUnique({
       where: { id },
       include: { currentHolder: true },
@@ -165,7 +181,13 @@ export class EquipmentService {
       throw new NotFoundException('Equipment not found');
     }
     await assertCanReadEquipment(user, equipment, equipment.currentHolder, this.registrarScope, this.prisma);
-    return equipment;
+    const disposalReason = await resolveEquipmentDisposalReason(
+      this.prisma,
+      equipment.id,
+      equipment.status,
+      equipment.notes,
+    );
+    return { ...equipment, disposalReason };
   }
 
   async create(_user: AuthenticatedUser, _dto: CreateEquipmentDto): Promise<Equipment> {

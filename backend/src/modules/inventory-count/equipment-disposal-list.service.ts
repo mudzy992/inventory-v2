@@ -92,6 +92,10 @@ export class EquipmentDisposalListService {
     if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
       throw new BadRequestException('Oprema je već označena ili rashodovana');
     }
+    const trimmedNote = input.note?.trim() ?? '';
+    if (trimmedNote.length < 3) {
+      throw new BadRequestException(DISPOSAL_MESSAGES.disposalReasonRequired);
+    }
     await assertCanWriteEquipment(
       user,
       equipment,
@@ -190,7 +194,7 @@ export class EquipmentDisposalListService {
             status: 'listed',
             warehouseId,
             categoryId: parentCategoryId,
-            note: input.note?.trim() ?? null,
+            note: trimmedNote,
             markedByUserId: user.id,
             markedAt: new Date(),
             withdrawnByUserId: null,
@@ -209,7 +213,7 @@ export class EquipmentDisposalListService {
             equipmentId: input.equipmentId,
             warehouseId,
             categoryId: parentCategoryId,
-            note: input.note?.trim() ?? null,
+            note: trimmedNote,
             markedByUserId: user.id,
             razduzenjeTransferId,
           },

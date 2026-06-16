@@ -22,3 +22,26 @@ export const searchEmployeesApi = (q: string, limit = 20) => {
 };
 
 export const fetchEmployeeApi = (id: string) => apiRequest<Employee>(`/employees/${id}`);
+
+export interface EmployeeProfileHeldEquipment {
+  id: string;
+  inventoryNumber: string;
+  categoryName: string;
+  status: string;
+}
+
+export interface EmployeeProfileUser {
+  id: string;
+  email: string;
+  role: string;
+}
+
+export interface EmployeeProfile {
+  employee: Employee;
+  user: EmployeeProfileUser | null;
+  heldEquipment: EmployeeProfileHeldEquipment[];
+  heldEquipmentTotal: number;
+}
+
+export const fetchEmployeeProfileApi = (id: string) =>
+  apiRequest<EmployeeProfile>(`/employees/${id}/profile`);

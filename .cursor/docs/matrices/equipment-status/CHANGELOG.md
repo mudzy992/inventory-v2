@@ -1,5 +1,11 @@
 # Changelog — equipment-status
 
+## 2026-06-16 (rashod UX + public)
+
+- Obavezan razlog pri označavanju za rashod (`MarkDisposalListDto.note`, min 3 znaka).
+- `disposalReason` na equipment API i public lookup za `za_rashod` / `rashodovano`.
+- Public QR stranica: tema i panel za `za_rashod`.
+
 ## 2026-06-15 (guardovi)
 
 - FE guard `canSaveEquipmentWarehouse` pri uređivanju opreme na skladištu.

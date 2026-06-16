@@ -6,6 +6,7 @@ import {
   getUniqueFieldsDisplay,
 } from '../helpers/equipment-display.util';
 import { ModalRoot } from './ui/modal-root';
+import { MODAL_Z } from '../constants/modal-z-index';
 
 interface LabelPrintSheetProps {
   items: Equipment[];
@@ -19,7 +20,7 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
   };
 
   return (
-    <ModalRoot open onClose={onClose} zIndex={70} size="full" panelClassName="max-w-4xl print:max-w-none">
+    <ModalRoot open onClose={onClose} zIndex={MODAL_Z.destructive} size="full" panelClassName="max-w-4xl print:max-w-none" enableEscape closeOnBackdrop>
       <div className="bg-white rounded-xl shadow-xl w-full print:shadow-none label-print-root">
         <div className="p-4 border-b flex justify-between items-center print:hidden">
           <h2 className="font-semibold">Štampa naljepnica ({items.length})</h2>

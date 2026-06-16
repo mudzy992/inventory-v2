@@ -12,6 +12,7 @@ import {
   type UniqueFieldDisplay,
 } from '../../common/utils/equipment-display.util';
 import { SettingsService } from '../settings/settings.service';
+import { resolveEquipmentDisposalReason } from '../../common/utils/resolve-equipment-disposal-reason.util';
 
 export interface PublicEquipmentHolder {
   fullName: string;
@@ -43,6 +44,7 @@ export interface PublicEquipmentResponse {
   currentHolder: PublicEquipmentHolder | null;
   warehouse: PublicEquipmentWarehouse | null;
   movements: PublicEquipmentMovement[];
+  disposalReason: string | null;
 }
 
 function employeeFullName(employee: Pick<Employee, 'firstName' | 'lastName'>): string {
@@ -166,6 +168,12 @@ export class PublicEquipmentService {
     }
 
     const specifications = (equipment.specifications ?? {}) as Record<string, string>;
+    const disposalReason = await resolveEquipmentDisposalReason(
+      this.prisma,
+      equipment.id,
+      equipment.status,
+      equipment.notes,
+    );
 
     return {
       id: equipment.id,
@@ -203,6 +211,7 @@ export class PublicEquipmentService {
         toLabel: resolveTransferPartyLabel('to', transfer, employeesById, warehousesById),
         documentNumber: transfer.documentNumber,
       })),
+      disposalReason,
     };
   }
 }

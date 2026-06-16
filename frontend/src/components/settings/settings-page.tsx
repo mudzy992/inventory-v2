@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import { fetchPublicSettingsApi } from '../../api/public-settings-api';
 import { fetchPrivateSettingsApi, patchSettingApi, type SettingDto } from '../../api/settings-api';
 import {
@@ -15,10 +16,14 @@ import {
 import { useAdminSettings } from '../../contexts/admin-settings-context';
 import { usePublicSettings } from '../../contexts/public-settings-context';
 import { useToast } from '../../contexts/toast-context';
-import { cardClass } from '../ui/form-styles';
+import { cardClass, inputClass } from '../ui/form-styles';
 import { PageHeader } from '../ui/page-header';
 import { PageTabs } from '../ui/page-tabs';
 import { SettingFieldRow } from './setting-field-row';
+import { isSettingDependencyMet } from './settings-field.util';
+
+const isVisibleSettingRow = (row: SettingDto): boolean =>
+  row.adminEditable || row.display === 'info' || row.display === 'deprecated';
 
 export const SettingsPage = () => {
   const { refresh: refreshPublic, patchLocal } = usePublicSettings();
@@ -28,6 +33,7 @@ export const SettingsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTabId>('general');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadRows = useCallback(async () => {
     setIsLoading(true);
@@ -36,7 +42,7 @@ export const SettingsPage = () => {
         fetchPublicSettingsApi() as Promise<SettingDto[]>,
         fetchPrivateSettingsApi(),
       ]);
-      const merged = [...publicRows, ...privateRows].filter((row) => row.adminEditable);
+      const merged = [...publicRows, ...privateRows].filter(isVisibleSettingRow);
       setRows(merged);
     } catch {
       setRows([]);
@@ -50,9 +56,18 @@ export const SettingsPage = () => {
     void loadRows();
   }, [loadRows]);
 
+  const valuesByKey = useMemo(() => new Map(rows.map((row) => [row.key, row.value])), [rows]);
+
   const tabbedContent = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
     const byTab = new Map<SettingsTabId, Map<SettingUiGroup, SettingDto[]>>();
     for (const row of rows) {
+      if (normalizedSearch) {
+        const haystack = `${row.label} ${row.description} ${row.detail ?? ''} ${row.key}`.toLowerCase();
+        if (!haystack.includes(normalizedSearch)) {
+          continue;
+        }
+      }
       const group = (SETTINGS_UI_GROUP_ORDER.includes(row.group as SettingUiGroup)
         ? row.group
         : 'modules') as SettingUiGroup;
@@ -72,7 +87,7 @@ export const SettingsPage = () => {
       }));
       return { tabId, sections };
     }).filter((entry) => entry.sections.length > 0);
-  }, [rows]);
+  }, [rows, searchQuery]);
 
   const visibleTabs = useMemo(
     () =>
@@ -126,44 +141,59 @@ export const SettingsPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Postavke"
-        description="Modularna konfiguracija aplikacije. Isključen modul sakriva meni i blokira API promjene."
+        description="Modularna konfiguracija aplikacije. Zavisne opcije se automatski onemogućavaju dok nadređena postavka nije uključena."
       />
       {isLoading ? (
         <p className="text-sm text-gray-500">Učitavanje...</p>
       ) : (
         <>
           <PageTabs tabs={visibleTabs} activeTab={activeTab} onChange={setActiveTab} />
-          <p className="text-sm text-gray-500">{activeTabMeta.description}</p>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">{activeTabMeta.description}</p>
+            <div className="relative max-w-md">
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Pretraži postavke u ovom tabu…"
+                className={`${inputClass} pl-9`}
+                aria-label="Pretraži postavke"
+              />
+            </div>
+          </div>
           {activeTab === 'transfers' ? (
             <div className={`${cardClass} border-gray-100 px-4 py-3 text-sm text-gray-600 space-y-2`}>
               <p className="font-medium text-gray-800">Word obrazac prenosnice</p>
               <p>
-                Upload .docx obrazca po skladištu (tab Kontekst na skladištu). U dokumentu koristite:
-              </p>
-              <p className="font-mono text-xs text-gray-700">
-                {'{broj_prenosnice}'} {'{predao}'} {'{preuzeo}'} {'{potpisnik}'} {'{inv_broj}'}{' '}
-                {'{naziv_opreme}'} {'{obrazlozenje}'}
+                Upload .docx obrazca po skladištu (tab Kontekst na skladištu). U dokumentu koristite placeholder-e
+                iz sekcije „Placeholderi u Word šablonu” ispod.
               </p>
             </div>
           ) : null}
           <div className="space-y-4">
-            {activeSections.map((section) => (
-              <section key={section.group} className={`${cardClass} border-gray-100`}>
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <h2 className="text-sm font-semibold text-gray-800">{section.label}</h2>
-                </div>
-                <div className="px-4">
-                  {section.items.map((row) => (
-                    <SettingFieldRow
-                      key={row.key}
-                      row={row}
-                      disabled={savingKey === row.key}
-                      onChange={(value) => void handleChange(row, value)}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+            {activeSections.length === 0 ? (
+              <p className="text-sm text-gray-500">Nema postavki za prikaz.</p>
+            ) : (
+              activeSections.map((section) => (
+                <section key={section.group} className={`${cardClass} border-gray-100`}>
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <h2 className="text-sm font-semibold text-gray-800">{section.label}</h2>
+                  </div>
+                  <div className="px-4">
+                    {section.items.map((row) => (
+                      <SettingFieldRow
+                        key={row.key}
+                        row={row}
+                        disabled={savingKey === row.key}
+                        dependencyDisabled={!isSettingDependencyMet(row, valuesByKey)}
+                        onChange={(value) => void handleChange(row, value)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))
+            )}
           </div>
         </>
       )}

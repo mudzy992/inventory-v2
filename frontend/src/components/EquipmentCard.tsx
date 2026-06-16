@@ -23,6 +23,7 @@ import type { Employee, Equipment, TransferRecord, TransferType } from '../types
 import { TransferDocumentPanel } from './TransferDocumentPanel';
 import { AlertBanner } from './ui/alert-banner';
 import { ModalRoot } from './ui/modal-root';
+import { MODAL_Z } from '../constants/modal-z-index';
 import { EquipmentInstalledPartsPanel } from './maintenance-parts/equipment-installed-parts-panel';
 import { EquipmentMarkDisposalDialog } from './equipment/equipment-mark-disposal-dialog';
 
@@ -144,7 +145,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
 
   if (loading) {
     return (
-      <ModalRoot open onClose={onClose} zIndex={50} size="xl" panelClassName="max-w-3xl">
+      <ModalRoot open onClose={onClose} zIndex={MODAL_Z.base} size="xl" panelClassName="max-w-3xl">
         <div className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full p-8 text-center text-gray-500">
           Učitavam opremu…
         </div>
@@ -154,7 +155,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
 
   if (loadError || !eq) {
     return (
-      <ModalRoot open onClose={onClose} zIndex={50} size="md">
+      <ModalRoot open onClose={onClose} zIndex={MODAL_Z.base} size="md">
         <div className="bg-white rounded-xl shadow-2xl w-full p-6">
           <AlertBanner tone="danger">{loadError ?? 'Oprema nije pronađena.'}</AlertBanner>
           <div className="mt-4 flex justify-end">
@@ -328,7 +329,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       <ModalRoot
         open
         onClose={onClose}
-        zIndex={50}
+        zIndex={MODAL_Z.base}
         size="xl"
         panelClassName="max-w-3xl"
       >
@@ -388,13 +389,27 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                 </div>
               )}
 
+              {eq.status === 'za_rashod' && (
+                <div className="bg-orange-50 rounded-xl p-4">
+                  <h3 className="text-xs font-semibold text-orange-800 uppercase mb-2 flex items-center gap-1">
+                    <AlertTriangle size={12} /> Status
+                  </h3>
+                  <p className="text-orange-900 font-medium">Na listi za rashod</p>
+                  {eq.disposalReason && (
+                    <p className="text-orange-700 text-sm mt-1">{eq.disposalReason}</p>
+                  )}
+                </div>
+              )}
+
               {eq.status === 'rashodovano' && (
                 <div className="bg-red-50 rounded-xl p-4">
                   <h3 className="text-xs font-semibold text-red-800 uppercase mb-2 flex items-center gap-1">
                     <AlertTriangle size={12} /> Status
                   </h3>
                   <p className="text-red-900 font-medium">Rashodovano</p>
-                  {eq.notes && <p className="text-red-700 text-sm mt-1">{eq.notes}</p>}
+                  {(eq.disposalReason || eq.notes) && (
+                    <p className="text-red-700 text-sm mt-1">{eq.disposalReason || eq.notes}</p>
+                  )}
                 </div>
               )}
 
@@ -601,7 +616,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
         </div>
       </ModalRoot>
 
-      <ModalRoot open={showTransferModal} onClose={handleCloseTransferModal} zIndex={60} size="md">
+      <ModalRoot open={showTransferModal} onClose={handleCloseTransferModal} zIndex={MODAL_Z.nested} size="md" enableEscape closeOnBackdrop>
         <div className="bg-white rounded-xl shadow-2xl w-full p-6">
           <h3 className="text-lg font-semibold mb-4">
             {transferType === 'zaduzenje' && 'Zaduženje opreme'}
@@ -676,7 +691,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
         onMarked={() => void loadEquipment({ silent: true })}
       />
 
-      <ModalRoot open={showReactivate} onClose={() => setShowReactivate(false)} zIndex={70} size="md">
+      <ModalRoot open={showReactivate} onClose={() => setShowReactivate(false)} zIndex={MODAL_Z.destructive} size="md" enableEscape closeOnBackdrop>
         <div className="bg-white rounded-xl shadow-2xl w-full p-6 space-y-4">
           <h3 className="text-lg font-semibold">Reaktiviraj opremu</h3>
           <p className="text-sm text-gray-600">
