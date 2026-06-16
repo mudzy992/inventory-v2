@@ -8,6 +8,7 @@ export type BuildEquipmentSearchWhereInput = {
   specValue?: string;
   categoryTextFieldIds?: string[];
   specMatchEquipmentIds?: string[];
+  holderMatchEmployeeIds?: string[];
 };
 
 export const buildSpecificationTextFieldContainsFilter = (
@@ -38,6 +39,9 @@ export const buildEquipmentSearchWhere = (
     ];
     if (input.specMatchEquipmentIds && input.specMatchEquipmentIds.length > 0) {
       textClauses.push({ id: { in: input.specMatchEquipmentIds } });
+    }
+    if (input.holderMatchEmployeeIds && input.holderMatchEmployeeIds.length > 0) {
+      textClauses.push({ currentHolderId: { in: input.holderMatchEmployeeIds } });
     }
     if (input.categoryTextFieldIds && input.categoryTextFieldIds.length > 0) {
       for (const fieldId of input.categoryTextFieldIds) {

@@ -23,15 +23,17 @@ describe('buildEquipmentSearchWhere', () => {
     });
   });
 
-  it('builds general search with spec match ids', () => {
+  it('builds general search with spec and holder match ids', () => {
     const where = buildEquipmentSearchWhere({
       search: 'laptop',
       specMatchEquipmentIds: ['eq-1', 'eq-2'],
+      holderMatchEmployeeIds: ['emp-1'],
     });
     assert.ok(where && 'OR' in where);
     const or = (where as { OR: unknown[] }).OR;
-    assert.equal(or.length, 4);
+    assert.equal(or.length, 5);
     assert.deepEqual(or[3], { id: { in: ['eq-1', 'eq-2'] } });
+    assert.deepEqual(or[4], { currentHolderId: { in: ['emp-1'] } });
   });
 
   it('builds category-bound text field OR clauses with spec match ids', () => {

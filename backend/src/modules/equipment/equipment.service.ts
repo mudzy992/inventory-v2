@@ -23,6 +23,7 @@ import {
   collectCategoryTextFieldIds,
 } from '../../common/utils/build-equipment-search-where.util';
 import { findEquipmentIdsBySpecificationSearch } from '../../common/utils/find-equipment-ids-by-specification-search.util';
+import { findEmployeeIdsByHolderSearch } from '../../common/utils/find-employee-ids-by-holder-search.util';
 import {
   buildOrderBy,
   paginate,
@@ -176,7 +177,11 @@ export class EquipmentService {
   async findOne(user: AuthenticatedUser, id: string): Promise<EquipmentWithDisposalReason> {
     const equipment = await this.prisma.equipment.findUnique({
       where: { id },
-      include: { currentHolder: true },
+      include: {
+        currentHolder: true,
+        category: { select: { id: true, name: true, parentId: true } },
+        stockLot: { select: { id: true, productName: true } },
+      },
     });
     if (!equipment) {
       throw new NotFoundException('Equipment not found');
@@ -389,12 +394,13 @@ export class EquipmentService {
     let categoryTextFieldIds: string[] | undefined;
     const trimmedSearch = query.search?.trim();
     let specMatchEquipmentIds: string[] | undefined;
+    let holderMatchEmployeeIds: string[] | undefined;
     if (trimmedSearch) {
-      specMatchEquipmentIds = await findEquipmentIdsBySpecificationSearch(
-        this.prisma,
-        trimmedSearch,
-        query.categoryId,
-      );
+      const employeeScope = await this.registrarScope.buildEmployeeWhere(user);
+      [specMatchEquipmentIds, holderMatchEmployeeIds] = await Promise.all([
+        findEquipmentIdsBySpecificationSearch(this.prisma, trimmedSearch, query.categoryId),
+        findEmployeeIdsByHolderSearch(this.prisma, trimmedSearch, employeeScope),
+      ]);
     }
     if (query.categoryId && trimmedSearch) {
       const category = await this.prisma.category.findUnique({ where: { id: query.categoryId } });
@@ -409,6 +415,7 @@ export class EquipmentService {
       specValue: query.specValue,
       categoryTextFieldIds,
       specMatchEquipmentIds,
+      holderMatchEmployeeIds,
     });
     const filters: Prisma.EquipmentWhereInput = {
       status: query.status,
@@ -426,6 +433,62 @@ export class EquipmentService {
       return parts[0]!;
     }
     return { AND: parts };
+  }
+
+  async exportCsv(user: AuthenticatedUser, query: ListEquipmentQueryDto): Promise<string> {
+    await this.settingsService.assertFeatureEnabled('features.equipment');
+    const where = await this.buildListWhere(user, query);
+    const rows = await this.prisma.equipment.findMany({
+      where,
+      include: {
+        currentHolder: { select: { firstName: true, lastName: true } },
+        category: { select: { name: true } },
+        stockLot: { select: { productName: true } },
+      },
+      orderBy: { inventoryNumber: 'asc' },
+    });
+    const headers = [
+      'Inv. broj',
+      'Kategorija',
+      'Naziv lota',
+      'Status',
+      'Zadužen na',
+      'Ugovor',
+      'Datum unosa',
+      'Bilješke',
+    ];
+    const escape = (v: string | null | undefined) => {
+      const s = v ?? '';
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const lines: string[] = [headers.map(escape).join(',')];
+    for (const row of rows) {
+      const holder = row.currentHolder
+        ? `${row.currentHolder.firstName} ${row.currentHolder.lastName}`.trim()
+        : '';
+      const specs = typeof row.specifications === 'object' && row.specifications !== null
+        ? Object.values(row.specifications as Record<string, string>).filter(Boolean).join('; ')
+        : '';
+      lines.push(
+        [
+          row.inventoryNumber,
+          row.category?.name ?? '',
+          row.stockLot?.productName ?? '',
+          row.status,
+          holder,
+          row.contractNumber ?? '',
+          row.entryDate ? row.entryDate.toISOString().slice(0, 10) : '',
+          row.notes ?? '',
+        ]
+          .map(escape)
+          .join(','),
+      );
+      void specs;
+    }
+    return lines.join('\r\n');
   }
 
   private async getEmployeeOrThrow(id: string) {

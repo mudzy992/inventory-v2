@@ -7,8 +7,10 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { UserRole } from '../../../generated/prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -46,6 +48,19 @@ export class EquipmentController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   getLotGroups(@CurrentUser() user: AuthenticatedUser, @Query() query: EquipmentLotGroupsQueryDto) {
     return this.equipmentService.getLotGroups(user, query.categoryId);
+  }
+
+  @Get('export/csv')
+  @Roles(UserRole.admin, UserRole.evidenticar)
+  async exportCsv(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListEquipmentQueryDto,
+    @Res() res: Response,
+  ) {
+    const csv = await this.equipmentService.exportCsv(user, query);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="oprema.csv"');
+    res.send('\uFEFF' + csv);
   }
 
   @Get('check/inventory-number')

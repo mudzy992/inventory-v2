@@ -341,7 +341,12 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
             </div>
             <div>
               <h2 className="text-lg font-bold text-white">{eq.inventoryNumber}</h2>
-              <p className="text-blue-100 text-sm">{cat?.name}</p>
+              <p className="text-blue-100 text-sm">
+                {cat?.name}
+                {eq.stockLot?.productName ? (
+                  <span className="ml-1 opacity-80">· {eq.stockLot.productName}</span>
+                ) : null}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">

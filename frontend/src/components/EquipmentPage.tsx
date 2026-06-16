@@ -1,12 +1,12 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore, useRefreshData } from '../useStore';
 import { updateEquipmentApi } from '../api/data-api';
-import { fetchEquipmentPageApi, fetchEquipmentSummaryApi, type EquipmentSummary } from '../api/equipment-api';
+import { fetchEquipmentPageApi, fetchEquipmentSummaryApi, exportEquipmentCsvApi, type EquipmentSummary } from '../api/equipment-api';
 import { usePaginatedList } from '../hooks/usePaginatedList';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
-import { Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon, Info } from 'lucide-react';
+import { Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon, Info, Download } from 'lucide-react';
 import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser } from '../store';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName, getEquipmentAffiliationLabel } from '../helpers';
@@ -54,6 +54,23 @@ export function EquipmentPage() {
   const { toastError } = useToast();
   const canManage = admin || evidenticar;
   const isFrozen = useInventoryFreezeActive();
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    try {
+      await exportEquipmentCsvApi({
+        search: list.search || undefined,
+        categoryId: filterCategory || undefined,
+        status: (filterStatus as EquipmentAffiliation) || undefined,
+        affiliation: (filterAffiliation as EquipmentAffiliation) || undefined,
+      });
+    } catch {
+      toastError('Export nije uspio. Pokušajte ponovo.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
   const [viewMode, setViewMode] = useState<'list' | 'warehouses'>('list');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
   const myWarehouseIds = useMemo(
@@ -204,15 +221,28 @@ export function EquipmentPage() {
             : 'Evidencija opreme.'
         }
         actions={
-          labelsEnabled && selectedIds.size > 0 ? (
-            <button
-              type="button"
-              onClick={() => setShowLabels(true)}
-              className="flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium"
-            >
-              <Printer size={16} /> Štampaj naljepnice ({selectedIds.size})
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => void handleExportCsv()}
+                disabled={isExporting}
+                className="flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium disabled:opacity-50"
+                aria-label="Izvoz u CSV"
+              >
+                <Download size={16} /> {isExporting ? 'Izvoz…' : 'CSV'}
+              </button>
+            )}
+            {labelsEnabled && selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowLabels(true)}
+                className="flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium"
+              >
+                <Printer size={16} /> Štampaj naljepnice ({selectedIds.size})
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -284,7 +314,7 @@ export function EquipmentPage() {
         <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Pretraži po inv. broju, bilješkama ili specifikaciji..."
+            placeholder="Pretraži po inv. broju, specifikaciji, bilješkama ili imenu radnika..."
             className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
         </div>
         <div className="flex flex-wrap items-center gap-2">

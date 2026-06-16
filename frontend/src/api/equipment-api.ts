@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, fetchAuthenticatedBlob } from './client';
 import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
 import { buildListQueryString } from '../types/pagination';
 import type { Equipment, EquipmentStatus, EquipmentAffiliation } from '../types';
@@ -65,3 +65,16 @@ export const reactivateEquipmentApi = (id: string, reason: string) =>
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
+
+export const exportEquipmentCsvApi = async (
+  filters: Omit<EquipmentListFilters, 'page' | 'pageSize' | 'sortBy' | 'sortDir'>,
+): Promise<void> => {
+  const query = buildListQueryString(filters as EquipmentListFilters);
+  const url = `/equipment/export/csv${query ? `?${query}` : ''}`;
+  const blob = await fetchAuthenticatedBlob(url);
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'oprema.csv';
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
