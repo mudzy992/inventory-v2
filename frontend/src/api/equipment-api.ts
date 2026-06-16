@@ -1,7 +1,7 @@
 import { apiRequest } from './client';
 import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
 import { buildListQueryString } from '../types/pagination';
-import type { Equipment, EquipmentStatus } from '../types';
+import type { Equipment, EquipmentStatus, EquipmentAffiliation } from '../types';
 
 export interface EquipmentSummary {
   total: number;
@@ -10,6 +10,7 @@ export interface EquipmentSummary {
 
 export interface EquipmentListFilters extends PaginatedListParams {
   status?: EquipmentStatus;
+  affiliation?: EquipmentAffiliation;
   categoryId?: string;
   currentHolderId?: string;
   /** UUID lota ili `none` za opremu bez lota */

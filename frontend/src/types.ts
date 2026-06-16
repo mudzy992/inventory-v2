@@ -135,6 +135,7 @@ export interface WarehouseStockLot {
   issuedUnits?: {
     id: string;
     inventoryNumber: string;
+    affiliation: EquipmentAffiliation;
     status: string;
     currentHolderId?: string | null;
     currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'> | null;
@@ -144,11 +145,14 @@ export interface WarehouseStockLot {
 
 export type EquipmentStatus = 'skladiste' | 'zaduzeno' | 'za_rashod' | 'rashodovano';
 
+export type EquipmentAffiliation = 'distribucija' | 'snabdjevanje';
+
 export interface Equipment {
   id: string;
   categoryId: string;
   stockLotId?: string | null;
   inventoryNumber: string;
+  affiliation: EquipmentAffiliation;
   specifications: Record<string, string>;
   status: EquipmentStatus;
   contractNumber?: string;

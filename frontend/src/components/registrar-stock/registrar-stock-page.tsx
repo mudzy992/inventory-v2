@@ -12,7 +12,7 @@ import {
 } from '../../api/warehouse-stock-api';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
-import { formatDate, getEmployeeFullName, getOrgUnitPath, getStatusLabel } from '../../helpers';
+import { formatDate, getEmployeeFullName, getEquipmentAffiliationLabel, getOrgUnitPath, getStatusLabel } from '../../helpers';
 import {
   useInventoryNumberAvailability,
   type AvailabilityStatus,
@@ -36,7 +36,7 @@ import { CategoryParentGrid } from '../shared/category-browse/category-parent-gr
 import { CategorySubGrid } from '../shared/category-browse/category-sub-grid';
 import { useAdminSettings } from '../../contexts/admin-settings-context';
 import { resolveEffectiveWarehouseForOrgUnit } from '../../helpers/org-warehouse.util';
-import type { Employee, WarehouseStockLot } from '../../types';
+import type { Employee, EquipmentAffiliation, WarehouseStockLot } from '../../types';
 import { PageHeaderRow } from '../ui/page-header-row';
 import { Button } from '../ui/button';
 import { PaginationControls } from '../ui/pagination-controls';
@@ -112,6 +112,7 @@ export const RegistrarStockPage = () => {
   const [unitActionMode, setUnitActionMode] = useState<LotUnitActionMode | null>(null);
   const [employeeId, setEmployeeId] = useState('');
   const [inventoryNumber, setInventoryNumber] = useState('');
+  const [affiliation, setAffiliation] = useState<EquipmentAffiliation>('distribucija');
   const [unitSpecs, setUnitSpecs] = useState<Record<string, string>>({});
   const [uniqueAvailability, setUniqueAvailability] = useState<Record<string, AvailabilityStatus>>({});
   const [saving, setSaving] = useState(false);
@@ -359,6 +360,7 @@ export const RegistrarStockPage = () => {
     setUniqueAvailability({});
     setUnitSpecs({});
     setInventoryNumber('');
+    setAffiliation('distribucija');
     setEmployeeId('');
   };
   const loadLotDetail = useCallback(async (id: string) => {
@@ -446,11 +448,13 @@ export const RegistrarStockPage = () => {
       const updated = await issueStockLotUnitApi(detail.id, {
         employeeId,
         inventoryNumber: inventoryNumber.trim(),
+        affiliation,
         uniqueSpecifications: unitSpecs,
       });
       setDetail(updated);
       setUnitActionMode(null);
       setInventoryNumber('');
+      setAffiliation('distribucija');
       setUnitSpecs({});
       setEmployeeId('');
       toastSuccess('Komad je izdat i zadužen');
@@ -481,11 +485,13 @@ export const RegistrarStockPage = () => {
     try {
       const updated = await commissionStockLotUnitApi(detail.id, {
         inventoryNumber: inventoryNumber.trim(),
+        affiliation,
         uniqueSpecifications: unitSpecs,
       });
       setDetail(updated);
       setUnitActionMode(null);
       setInventoryNumber('');
+      setAffiliation('distribucija');
       setUnitSpecs({});
       toastSuccess('Komad je kolaudiran i evidentiran na skladištu');
       await groupList.refresh();
@@ -568,6 +574,8 @@ export const RegistrarStockPage = () => {
               inventoryNumber={inventoryNumber}
               onInventoryNumberChange={setInventoryNumber}
               inventoryAvailability={inventoryAvailability}
+              affiliation={affiliation}
+              onAffiliationChange={setAffiliation}
               unitSpecs={unitSpecs}
               onUnitSpecsChange={setUnitSpecs}
               onUniqueAvailabilityChange={handleUniqueAvailabilityChange}
@@ -596,6 +604,7 @@ export const RegistrarStockPage = () => {
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">
                     <th className="px-3 py-2 font-medium">Inv. broj</th>
+                    <th className="px-3 py-2 font-medium">Pripadnost</th>
                     <th className="px-3 py-2 font-medium">Zadužen na</th>
                     <th className="px-3 py-2 font-medium">Status</th>
                     <th className="px-3 py-2 font-medium">Datum</th>
@@ -618,6 +627,9 @@ export const RegistrarStockPage = () => {
                           >
                             {unit.inventoryNumber}
                           </button>
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-600 text-xs">
+                          {getEquipmentAffiliationLabel(unit.affiliation)}
                         </td>
                         <td className="px-3 py-2.5 text-gray-600">
                           {holder ? (

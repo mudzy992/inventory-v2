@@ -27,8 +27,8 @@
 ## Validacija polja
 
 - **Lot spec** (`PATCH .../specifications`): polja iz `Category.optionalFields`; obavezna gdje `required = true`
-- **Issue** (`POST .../issue`): **sva** polja iz `Category.fields` (unit polja) + globalni `inventoryNumber`
-- **Kolaudacija** (`POST .../commission`): ista validacija kao issue (sva unit polja + `inventoryNumber`); **bez** `employeeId`
+- **Issue** (`POST .../issue`): **sva** polja iz `Category.fields` (unit polja) + globalni `inventoryNumber` + obavezni `affiliation`
+- **Kolaudacija** (`POST .../commission`): ista validacija kao issue (sva unit polja + `inventoryNumber` + `affiliation`); **bez** `employeeId`
 - Unit polja s `unique: true`: backend provjerava globalnu jedinstvenost pri izdavanju i kolaudaciji
 - Pri prijemu lota: ako kategorija nema obaveznih lot polja → status odmah `spremno_za_izdavanje`
 - Pri prijemu (po `catalogItemId`) u isto skladište: ako lot već postoji → **uvećava se postojeći lot** (`quantityOnHand/quantityReceived += qty`) i kreira se novi `WarehouseStockLotReceipt` (ugovor/datum važe samo za te komade)

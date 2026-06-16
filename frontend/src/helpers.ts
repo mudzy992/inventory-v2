@@ -135,6 +135,14 @@ export function getStatusLabel(status: string): string {
   return labels[status] || status;
 }
 
+export function getEquipmentAffiliationLabel(affiliation: string): string {
+  const labels: Record<string, string> = {
+    distribucija: 'Distribucija',
+    snabdjevanje: 'Snabdjevanje',
+  };
+  return labels[affiliation] || affiliation;
+}
+
 export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     skladiste: 'bg-blue-100 text-blue-800',

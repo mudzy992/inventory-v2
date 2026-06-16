@@ -9,10 +9,10 @@ import {
 } from '../helpers/registrar-scope';
 import { ChevronRight, Folder, Layers, Search, Filter, Download, X, Eye, QrCode, Printer, Package } from 'lucide-react';
 import { LabelPrintSheet } from './LabelPrintSheet';
-import { getStatusLabel, getStatusColor, getEmployeeFullName } from '../helpers';
+import { getStatusLabel, getStatusColor, getEmployeeFullName, getEquipmentAffiliationLabel } from '../helpers';
 import { EquipmentCard } from './EquipmentCard';
 import { AlertBanner } from './ui/alert-banner';
-import type { Equipment, FilterCondition } from '../types';
+import type { Equipment, EquipmentAffiliation, FilterCondition } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { ModalRoot } from './ui/modal-root';
 import { isAdmin, isEvidenticar, getCurrentUser } from '../store';
@@ -36,6 +36,7 @@ export function EquipmentByCategoryPage() {
   const [newFilterOperator, setNewFilterOperator] = useState<FilterCondition['operator']>('contains');
   const [newFilterValue, setNewFilterValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterAffiliation, setFilterAffiliation] = useState('');
   const [specFieldId, setSpecFieldId] = useState('');
   const [specValue, setSpecValue] = useState('');
   const [showAllStatuses, setShowAllStatuses] = useState(false);
@@ -107,10 +108,11 @@ export function EquipmentByCategoryPage() {
         categoryId: selectedSubId!,
         stockLotId: selectedLotKey === 'none' ? 'none' : selectedLotKey ?? undefined,
         status: showAllStatuses ? undefined : 'zaduzeno',
+        affiliation: (filterAffiliation as EquipmentAffiliation) || undefined,
         specFieldId: specFieldId || undefined,
         specValue: specValue.trim() || undefined,
       }),
-    [selectedSubId, selectedLotKey, showAllStatuses, specFieldId, specValue],
+    [selectedSubId, selectedLotKey, showAllStatuses, filterAffiliation, specFieldId, specValue],
   );
 
   const equipmentList = usePaginatedList({
@@ -133,6 +135,8 @@ export function EquipmentByCategoryPage() {
           value = e.status;
         } else if (filter.fieldId === 'inventoryNumber') {
           value = e.inventoryNumber;
+        } else if (filter.fieldId === 'affiliation') {
+          value = getEquipmentAffiliationLabel(e.affiliation);
         } else if (filter.fieldId === 'contractNumber') {
           value = e.contractNumber || '';
         } else if (filter.fieldId === 'currentHolder') {
@@ -170,6 +174,7 @@ export function EquipmentByCategoryPage() {
   const availableFilterFields = useMemo(() => {
     const fields: { id: string; name: string; type: string }[] = [
       { id: 'inventoryNumber', name: 'Inventurni broj', type: 'text' },
+      { id: 'affiliation', name: 'Pripadnost', type: 'select' },
       { id: 'status', name: 'Status', type: 'select' },
       { id: 'contractNumber', name: 'Broj ugovora', type: 'text' },
       { id: 'currentHolder', name: 'Zadužen na', type: 'text' },
@@ -257,7 +262,7 @@ export function EquipmentByCategoryPage() {
   function exportToCSV() {
     if (!selectedSub || filteredEquipment.length === 0) return;
     
-    const headers = ['Inventurni broj', 'Status', 'Zadužen na', 'Ugovor', 'Datum ulaza'];
+    const headers = ['Inventurni broj', 'Pripadnost', 'Status', 'Zadužen na', 'Ugovor', 'Datum ulaza'];
     selectedSub.fields.forEach(f => headers.push(f.name));
     selectedSub.optionalFields.forEach(f => headers.push(f.name));
     
@@ -265,6 +270,7 @@ export function EquipmentByCategoryPage() {
       const holder = e.currentHolder ?? null;
       const row = [
         e.inventoryNumber,
+        getEquipmentAffiliationLabel(e.affiliation),
         getStatusLabel(e.status),
         holder ? `${holder.firstName} ${holder.lastName}` : '',
         e.contractNumber || '',
@@ -517,6 +523,16 @@ export function EquipmentByCategoryPage() {
                   className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </div>
+              <select
+                value={filterAffiliation}
+                onChange={(event) => setFilterAffiliation(event.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-2 text-sm"
+                aria-label="Filter pripadnosti"
+              >
+                <option value="">Sva pripadnost</option>
+                <option value="distribucija">Distribucija</option>
+                <option value="snabdjevanje">Snabdjevanje</option>
+              </select>
               {selectedSub ? (
                 <div className="flex flex-wrap items-center gap-2 min-w-[240px]">
                   <select
@@ -644,6 +660,7 @@ export function EquipmentByCategoryPage() {
                       />
                     </th>
                     <th className="px-4 py-3 font-medium text-gray-600">Inv. broj</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Pripadnost</th>
                     <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                     <th className="px-4 py-3 font-medium text-gray-600">Zadužen na</th>
                     <th className="px-4 py-3 font-medium text-gray-600">Ugovor</th>
@@ -678,6 +695,9 @@ export function EquipmentByCategoryPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">
+                          {getEquipmentAffiliationLabel(eq.affiliation)}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(eq.status)}`}>
@@ -718,7 +738,7 @@ export function EquipmentByCategoryPage() {
                   })}
                   {filteredEquipment.length === 0 && (
                     <tr>
-                      <td colSpan={6 + Math.min(selectedSub.fields.length, 3)} className="text-center text-gray-400 py-12">
+                      <td colSpan={7 + Math.min(selectedSub.fields.length, 3)} className="text-center text-gray-400 py-12">
                         Nema rezultata
                       </td>
                     </tr>

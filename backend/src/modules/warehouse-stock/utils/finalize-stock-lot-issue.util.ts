@@ -1,4 +1,4 @@
-import type { Prisma } from '../../../../generated/prisma/client';
+import type { EquipmentAffiliation, Prisma } from '../../../../generated/prisma/client';
 import { allocateTransferDocumentNumberInTx } from '../../transfers/utils/allocate-transfer-document-number.util';
 import { buildEquipmentUpdateOnFinalize } from '../../transfers/transfer-validation.util';
 
@@ -15,6 +15,7 @@ interface StockLotIssueBaseInput {
   receipt: { contractNumber: string | null; entryDate: Date };
   employeeId: string;
   inventoryNumber: string;
+  affiliation: EquipmentAffiliation;
   mergedSpecifications: Record<string, string>;
 }
 
@@ -40,6 +41,7 @@ export const executeStockLotIssueDirectInTx = async (
       catalogItemId: input.lot.catalogItemId,
       stockLotId: input.lot.id,
       inventoryNumber: input.inventoryNumber,
+      affiliation: input.affiliation,
       specifications: input.mergedSpecifications,
       contractNumber: input.receipt.contractNumber,
       entryDate: input.receipt.entryDate,
@@ -62,6 +64,7 @@ export const executeStockLotIssueWithTransferInTx = async (
       catalogItemId: input.lot.catalogItemId,
       stockLotId: input.lot.id,
       inventoryNumber: input.inventoryNumber,
+      affiliation: input.affiliation,
       specifications: input.mergedSpecifications,
       status: 'skladiste',
       contractNumber: input.receipt.contractNumber,

@@ -1,4 +1,4 @@
-import type { Prisma } from '../../../../generated/prisma/client';
+import type { EquipmentAffiliation, Prisma } from '../../../../generated/prisma/client';
 
 interface StockLotCommissionLotInput {
   id: string;
@@ -11,6 +11,7 @@ interface StockLotCommissionInput {
   lot: StockLotCommissionLotInput;
   receipt: { contractNumber: string | null; entryDate: Date };
   inventoryNumber: string;
+  affiliation: EquipmentAffiliation;
   mergedSpecifications: Record<string, string>;
 }
 
@@ -28,6 +29,7 @@ export const executeStockLotCommissionInTx = async (
       catalogItemId: input.lot.catalogItemId,
       stockLotId: input.lot.id,
       inventoryNumber: input.inventoryNumber,
+      affiliation: input.affiliation,
       specifications: input.mergedSpecifications,
       contractNumber: input.receipt.contractNumber,
       entryDate: input.receipt.entryDate,

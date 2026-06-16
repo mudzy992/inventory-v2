@@ -1,5 +1,10 @@
 # Changelog — warehouse-stock
 
+## 2026-06-16 (pripadnost pri izdavanju)
+
+- Issue i commission payload uključuju obavezno polje `affiliation` (`distribucija` | `snabdjevanje`).
+- UI forma izdavanja/kolaudacije: select Pripadnost (default Distribucija).
+
 ## 2026-06-16
 
 - Prijem robe sada **uvećava postojeći lot** u istom skladištu po `catalogItemId` (umjesto kreiranja novog lota za svaki ulaz).

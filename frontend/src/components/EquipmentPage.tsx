@@ -9,8 +9,8 @@ import { usePublicSettings } from '../contexts/public-settings-context';
 import { Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon, Info } from 'lucide-react';
 import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser } from '../store';
 import { LabelPrintSheet } from './LabelPrintSheet';
-import { getStatusLabel, getStatusColor, getEmployeeFullName } from '../helpers';
-import type { Equipment } from '../types';
+import { getStatusLabel, getStatusColor, getEmployeeFullName, getEquipmentAffiliationLabel } from '../helpers';
+import type { CategoryField, Equipment, EquipmentAffiliation } from '../types';
 import { EquipmentCard } from './EquipmentCard';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
 import { getUserWarehouseIds } from '../helpers/org-warehouse.util';
@@ -20,7 +20,6 @@ import {
   isRegistrarLockedEquipmentSpecField,
   mergeRegistrarEquipmentSpecifications,
 } from '../helpers/registrar-equipment-spec.util';
-import type { CategoryField } from '../types';
 import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
@@ -41,6 +40,7 @@ export function EquipmentPage() {
   const refresh = useRefreshData();
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterAffiliation, setFilterAffiliation] = useState('');
   const [equipmentSummary, setEquipmentSummary] = useState<EquipmentSummary | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
@@ -79,6 +79,7 @@ export function EquipmentPage() {
   // Form state
   const [fCategoryId, setFCategoryId] = useState('');
   const [fInventoryNumber, setFInventoryNumber] = useState('');
+  const [fAffiliation, setFAffiliation] = useState<EquipmentAffiliation>('distribucija');
   const [fSpecs, setFSpecs] = useState<Record<string, string>>({});
   const [fContract, setFContract] = useState('');
   const [fEntryDate, setFEntryDate] = useState('');
@@ -97,9 +98,9 @@ export function EquipmentPage() {
     [],
   );
 
-  const list = usePaginatedList<Equipment, { categoryId?: string; status?: string }>({
+  const list = usePaginatedList<Equipment, { categoryId?: string; status?: string; affiliation?: EquipmentAffiliation }>({
     fetchPage,
-    initialFilters: { categoryId: undefined, status: undefined },
+    initialFilters: { categoryId: undefined, status: undefined, affiliation: undefined },
     enabled: viewMode === 'list',
   });
 
@@ -107,8 +108,9 @@ export function EquipmentPage() {
     list.setFilters({
       categoryId: filterCategory || undefined,
       status: filterStatus || undefined,
+      affiliation: (filterAffiliation as EquipmentAffiliation) || undefined,
     });
-  }, [filterCategory, filterStatus, list.setFilters]);
+  }, [filterCategory, filterStatus, filterAffiliation, list.setFilters]);
 
   useEffect(() => {
     void fetchEquipmentSummaryApi()
@@ -129,6 +131,7 @@ export function EquipmentPage() {
     setEditing(eq);
     setFCategoryId(eq.categoryId);
     setFInventoryNumber(eq.inventoryNumber);
+    setFAffiliation(eq.affiliation);
     setFSpecs({ ...eq.specifications });
     setFContract(eq.contractNumber || '');
     setFEntryDate(eq.entryDate);
@@ -159,6 +162,7 @@ export function EquipmentPage() {
     const payload = {
       categoryId: fCategoryId,
       inventoryNumber: fInventoryNumber.trim(),
+      affiliation: fAffiliation,
       specifications,
       status,
       contractNumber: fContract || undefined,
@@ -298,6 +302,13 @@ export function EquipmentPage() {
             <option value="za_rashod">Za rashod</option>
             <option value="rashodovano">Rashodovano</option>
           </select>
+          <select value={filterAffiliation} onChange={e => setFilterAffiliation(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            aria-label="Filter pripadnosti">
+            <option value="">Sva pripadnost</option>
+            <option value="distribucija">Distribucija</option>
+            <option value="snabdjevanje">Snabdjevanje</option>
+          </select>
         </div>
       </div>
 
@@ -341,6 +352,7 @@ export function EquipmentPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-800">{eq.stockLot?.productName ?? '—'}</p>
                   <p className="font-mono text-xs text-gray-500">{eq.inventoryNumber}</p>
+                  <p className="text-xs text-gray-500">{getEquipmentAffiliationLabel(eq.affiliation)}</p>
                   <p className="text-xs text-gray-500">
                     {cat ? (() => {
                       const field = cat.fields[0];
@@ -389,6 +401,7 @@ export function EquipmentPage() {
                 ) : null}
                 <th className="px-4 py-3 font-medium text-gray-600">Lot</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Inv. broj</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Pripadnost</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Ključne spec.</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Kategorija</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Status</th>
@@ -432,6 +445,9 @@ export function EquipmentPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs text-gray-600">{getEquipmentAffiliationLabel(eq.affiliation)}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs text-gray-500">{specPreviews}</span>
@@ -541,6 +557,18 @@ export function EquipmentPage() {
                   <input type="text" value={fInventoryNumber} onChange={e => setFInventoryNumber(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     placeholder="Npr. INV-RS-2024-0021" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pripadnost *</label>
+                  <select
+                    value={fAffiliation}
+                    onChange={(e) => setFAffiliation(e.target.value as EquipmentAffiliation)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    aria-label="Pripadnost"
+                  >
+                    <option value="distribucija">Distribucija</option>
+                    <option value="snabdjevanje">Snabdjevanje</option>
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

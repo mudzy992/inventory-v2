@@ -9,7 +9,7 @@ import { fetchTransfersPageApi } from '../api/transfers-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
-import { getOrgUnitPath, getEmployeeFullName, formatDate, getStatusLabel, getStatusColor } from '../helpers';
+import { getOrgUnitPath, getEmployeeFullName, formatDate, getStatusLabel, getStatusColor, getEquipmentAffiliationLabel } from '../helpers';
 import {
   buildEquipmentDisplayName,
   buildEquipmentQrUrl,
@@ -426,6 +426,10 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                       </div>
                     );
                   })}
+                  <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                    <span className="text-sm text-gray-500">Pripadnost</span>
+                    <span className="text-sm font-medium text-gray-800">{getEquipmentAffiliationLabel(eq.affiliation)}</span>
+                  </div>
                   <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
                     <span className="text-sm text-gray-500">Br. ugovora</span>
                     <span className="text-sm font-medium text-gray-800">{eq.contractNumber || '—'}</span>

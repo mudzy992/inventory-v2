@@ -91,6 +91,7 @@ const lotInclude = {
     select: {
       id: true,
       inventoryNumber: true,
+      affiliation: true,
       status: true,
       currentHolderId: true,
       createdAt: true,
@@ -592,6 +593,7 @@ export class WarehouseStockService {
       lot: lotInput,
       employeeId: dto.employeeId,
       inventoryNumber: dto.inventoryNumber.trim(),
+      affiliation: dto.affiliation,
       mergedSpecifications,
     };
     let transferIssueInput:
@@ -710,6 +712,7 @@ export class WarehouseStockService {
           lot: lotInput,
           receipt,
           inventoryNumber: dto.inventoryNumber.trim(),
+          affiliation: dto.affiliation,
           mergedSpecifications,
         });
         const nextOnHand = lot.quantityOnHand - 1;

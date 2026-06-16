@@ -2,7 +2,7 @@ import { apiRequest } from './client';
 import { fetchAllPaginatedItems } from './fetch-all-paginated';
 import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
 import { buildListQueryString } from '../types/pagination';
-import type { WarehouseStockLot } from '../types';
+import type { EquipmentAffiliation, WarehouseStockLot } from '../types';
 
 export type StockLotReceivePreview = {
   exists: boolean;
@@ -111,6 +111,7 @@ export const issueStockLotUnitApi = (
   body: {
     employeeId: string;
     inventoryNumber: string;
+    affiliation: EquipmentAffiliation;
     uniqueSpecifications: Record<string, string>;
     date?: string;
     signerId?: string;
@@ -125,6 +126,7 @@ export const commissionStockLotUnitApi = (
   id: string,
   body: {
     inventoryNumber: string;
+    affiliation: EquipmentAffiliation;
     uniqueSpecifications: Record<string, string>;
   },
 ) =>

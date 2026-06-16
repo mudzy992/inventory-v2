@@ -7,7 +7,7 @@ import {
   IsUUID,
   MaxLength,
 } from 'class-validator';
-import { EquipmentStatus, WarehouseCondition } from '../../../../generated/prisma/client';
+import { EquipmentStatus, WarehouseCondition, EquipmentAffiliation } from '../../../../generated/prisma/client';
 
 export class UpdateEquipmentDto {
   @IsOptional()
@@ -18,6 +18,10 @@ export class UpdateEquipmentDto {
   @IsString()
   @MaxLength(120)
   inventoryNumber?: string;
+
+  @IsOptional()
+  @IsEnum(EquipmentAffiliation)
+  affiliation?: EquipmentAffiliation;
 
   @IsOptional()
   @IsObject()

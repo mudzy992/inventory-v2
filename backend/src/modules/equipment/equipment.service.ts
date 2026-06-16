@@ -242,6 +242,7 @@ export class EquipmentService {
         data: {
           categoryId: dto.categoryId,
           inventoryNumber: dto.inventoryNumber,
+          affiliation: dto.affiliation,
           specifications,
           status: dto.status,
           contractNumber: dto.contractNumber,
@@ -411,6 +412,7 @@ export class EquipmentService {
     });
     const filters: Prisma.EquipmentWhereInput = {
       status: query.status,
+      affiliation: query.affiliation,
       categoryId: query.categoryId,
       currentHolderId: query.currentHolderId,
       ...stockLotFilter,

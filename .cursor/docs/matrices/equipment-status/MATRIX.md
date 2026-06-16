@@ -20,8 +20,20 @@
 ## Pretraga opreme
 
 - `GET /equipment?search=` — inv. broj, ugovor, bilješke + `contains` u JSON specifikaciji
+- `GET /equipment?affiliation=` — filter po pripadnosti (`distribucija` | `snabdjevanje`)
 - `specFieldId` + `specValue` — tačan match jednog polja specifikacije
 - uz `categoryId` + `search` — pretraga samo po text poljima te kategorije
+
+## Pripadnost (`affiliation`)
+
+| Vrijednost | UI label | Default |
+|------------|----------|---------|
+| `distribucija` | Distribucija | da (postojeća oprema + forma izdavanja) |
+| `snabdjevanje` | Snabdjevanje | — |
+
+- Obavezno pri **issue** i **commission** iz lota (uz `inventoryNumber`)
+- Izmjenjivo naknadno kroz `PATCH /equipment/:id` (admin/evidentičar u scope-u)
+- Prikaz i filter na listama opreme (`EquipmentPage`, `EquipmentByCategoryPage`)
 
 ## Reaktivacija (admin)
 

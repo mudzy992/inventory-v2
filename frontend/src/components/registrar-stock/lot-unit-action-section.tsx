@@ -1,4 +1,4 @@
-import type { CategoryField } from '../../types';
+import type { CategoryField, EquipmentAffiliation } from '../../types';
 import type { AvailabilityStatus } from '../../hooks/use-equipment-availability';
 import { SearchableAutocomplete, type SearchableOption } from '../searchable-autocomplete';
 import { AvailabilityHint } from './availability-hint';
@@ -16,6 +16,8 @@ interface LotUnitActionSectionProps {
   inventoryNumber: string;
   onInventoryNumberChange: (value: string) => void;
   inventoryAvailability: AvailabilityStatus;
+  affiliation: EquipmentAffiliation;
+  onAffiliationChange: (value: EquipmentAffiliation) => void;
   unitSpecs: Record<string, string>;
   onUnitSpecsChange: (next: Record<string, string>) => void;
   onUniqueAvailabilityChange: (fieldId: string, status: AvailabilityStatus) => void;
@@ -38,6 +40,8 @@ export const LotUnitActionSection = ({
   inventoryNumber,
   onInventoryNumberChange,
   inventoryAvailability,
+  affiliation,
+  onAffiliationChange,
   unitSpecs,
   onUnitSpecsChange,
   onUniqueAvailabilityChange,
@@ -104,6 +108,18 @@ export const LotUnitActionSection = ({
               className={inputClass}
             />
             <AvailabilityHint status={inventoryAvailability} />
+          </div>
+          <div>
+            <label className={labelClass}>Pripadnost *</label>
+            <select
+              value={affiliation}
+              onChange={(event) => onAffiliationChange(event.target.value as EquipmentAffiliation)}
+              className={inputClass}
+              aria-label="Pripadnost"
+            >
+              <option value="distribucija">Distribucija</option>
+              <option value="snabdjevanje">Snabdjevanje</option>
+            </select>
           </div>
           {issueFields.map((field) =>
             field.unique ? (

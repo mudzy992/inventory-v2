@@ -21,7 +21,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { LabelPrintSheet } from './LabelPrintSheet';
-import { getOrgUnitPath, formatDate, getStatusLabel, getStatusColor } from '../helpers';
+import { getOrgUnitPath, formatDate, getStatusLabel, getStatusColor, getEquipmentAffiliationLabel } from '../helpers';
 import { EquipmentCard } from './EquipmentCard';
 import { EmptyState } from './ui/empty-state';
 import { PaginationControls } from './ui/pagination-controls';
@@ -179,6 +179,7 @@ export function MyEquipmentPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-mono text-xs text-gray-500">{eq.inventoryNumber}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{getEquipmentAffiliationLabel(eq.affiliation)}</p>
                       <p className="text-sm font-medium text-gray-900 mt-1">
                         {eq.category?.name ?? 'Oprema'}
                       </p>

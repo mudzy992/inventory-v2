@@ -33,6 +33,11 @@ enum EquipmentStatus {
   rashodovano
 }
 
+enum EquipmentAffiliation {
+  distribucija
+  snabdjevanje
+}
+
 enum WarehouseCondition {
   na_skladistu
   spremno_za_unistenje
@@ -563,6 +568,7 @@ model Equipment {
   catalogItemId      String?
   stockLotId         String?
   inventoryNumber    String              @unique @db.VarChar(120)
+  affiliation        EquipmentAffiliation @default(distribucija)
   specifications     Json
   status             EquipmentStatus
   contractNumber     String?             @db.VarChar(120)
@@ -593,6 +599,7 @@ model Equipment {
   @@index([catalogItemId])
   @@index([stockLotId])
   @@index([status])
+  @@index([affiliation])
   @@index([currentHolderId])
   @@index([warehouseId])
   @@map("equipment")

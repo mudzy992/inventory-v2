@@ -1,5 +1,11 @@
 # Changelog — equipment-status
 
+## 2026-06-16 (pripadnost opreme)
+
+- Novo obavezno polje `Equipment.affiliation` (`distribucija` | `snabdjevanje`), default `distribucija` za postojeću opremu.
+- Postavlja se pri issue/commission iz lota; izmjenjivo kroz update opreme.
+- API filter `GET /equipment?affiliation=`; filter i kolona na listama opreme.
+
 ## 2026-06-16 (pretraga specifikacija)
 
 - Pretraga opreme po vrijednostima u JSON specifikacijama koristi `CAST(specifications AS CHAR) LIKE` (MySQL); Prisma `string_contains` na root JSON objektu nije pouzdan za serijski broj i ostala polja.
