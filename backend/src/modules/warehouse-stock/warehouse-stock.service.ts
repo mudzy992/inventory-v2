@@ -17,6 +17,7 @@ import {
   validateLotSpecifications,
 } from '../../common/utils/category-fields.util';
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
+import { WAREHOUSE_STOCK_MESSAGES } from '../../common/utils/warehouse-stock-messages.util';
 import {
   buildPaginatedResponse,
   type PaginatedResponse,
@@ -387,13 +388,14 @@ export class WarehouseStockService {
     lotId: string,
     dto: UpdateStockLotSpecDto,
   ) {
+    await this.settingsService.assertFeatureEnabled('features.registrar_stock');
     if (user.role !== 'evidenticar' && user.role !== 'admin') {
       throw new ForbiddenException('Only registrar can define stock specifications');
     }
     const lot = await this.getLotOrThrow(lotId);
     await this.registrarScope.assertCanAccessStockLot(user, lot);
     if (lot.status === 'zatvoreno') {
-      throw new BadRequestException('Stock lot is closed');
+      throw new BadRequestException(WAREHOUSE_STOCK_MESSAGES.lotClosed);
     }
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: lot.warehouseId },
@@ -463,11 +465,11 @@ export class WarehouseStockService {
       destWarehouseId !== null && destWarehouseId !== lot.warehouseId;
     if (isCrossWarehouse) {
       if (user.role !== 'admin') {
-        throw new ForbiddenException('Cross-warehouse issue is only available to administrator');
+        throw new ForbiddenException(WAREHOUSE_STOCK_MESSAGES.crossWarehouseAdminOnly);
       }
       await this.settingsService.assertFeatureEnabled('transfer.allow_admin_cross_warehouse_issue');
       if (!lot.catalogItemId) {
-        throw new BadRequestException('Source lot must have catalog item for cross-warehouse issue');
+        throw new BadRequestException(WAREHOUSE_STOCK_MESSAGES.catalogItemRequired);
       }
       const destWarehouse = await this.prisma.warehouse.findUnique({
         where: { id: destWarehouseId },

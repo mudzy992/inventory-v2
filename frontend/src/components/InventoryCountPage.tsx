@@ -26,9 +26,12 @@ import { fetchAllPaginatedItems } from '../api/fetch-all-paginated';
 import { ApiError } from '../api/client';
 import {
   canActivateInventorySession,
+  canCloseInventoryCommittee,
   canDeleteInventoryCommittee,
   canDeleteInventorySession,
+  INVENTORY_GUARD_MESSAGES,
 } from '../helpers/guards';
+import { findWarehousesBlockingInventoryActivate } from '../helpers/inventory-activate-readiness.util';
 import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { resolveRootDistributionOrgUnit } from '../helpers/resolve-root-distribution.util';
 import { isAdmin, isPopisKoordinator, getCurrentUser } from '../store';
@@ -312,6 +315,11 @@ export const InventoryCountPage = () => {
         toastError(guard.reason ?? 'Aktivacija nije dozvoljena.');
         return;
       }
+      if (activateWarehouseBlockers.length > 0) {
+        const names = activateWarehouseBlockers.map((row) => row.name).join(', ');
+        toastError(`${INVENTORY_GUARD_MESSAGES.activateKeeperMissingEmployeeId} (${names})`);
+        return;
+      }
     }
     try {
       await activateInventorySessionApi(id);
@@ -363,6 +371,15 @@ export const InventoryCountPage = () => {
     () => computeInventorySessionStats(selectedSession, committees, committeeLines),
     [committeeLines, committees, selectedSession],
   );
+  const activateWarehouseBlockers = useMemo(() => {
+    if (!selectedSession || selectedSession.status !== 'draft') {
+      return [];
+    }
+    const cityId =
+      selectedSession.orgUnit?.effectiveLocationCityId ??
+      selectedSession.orgUnit?.effectiveLocationCity?.id;
+    return findWarehousesBlockingInventoryActivate(state.warehouses, cityId);
+  }, [selectedSession, state.warehouses]);
   const editingCommittee =
     committees.find((row) => row.id === editingCommitteeId) ??
     (editingCommitteeId && committeeId === editingCommitteeId ? selectedCommittee : null) ??
@@ -373,6 +390,17 @@ export const InventoryCountPage = () => {
     }
     return selectedCommittee.members.find((m) => m.employeeId === user.employeeId) ?? null;
   }, [selectedCommittee, user?.employeeId]);
+  const closeCommitteeGuard = useMemo(() => {
+    if (!selectedSession || !selectedCommittee) {
+      return { allowed: false, reason: undefined };
+    }
+    return canCloseInventoryCommittee({
+      sessionStatus: selectedSession.status,
+      isCommitteeClosed: Boolean(selectedCommittee.isClosed),
+      memberRole: meOnCommittee?.role ?? null,
+      isAdmin: admin,
+    });
+  }, [admin, meOnCommittee?.role, selectedCommittee, selectedSession]);
   const handleDeleteSession = async (id: string) => {
     const target = sessions.find((row) => row.id === id);
     if (target) {
@@ -457,7 +485,7 @@ export const InventoryCountPage = () => {
     }
   };
   const canManageDraft = selectedSession?.status === 'draft';
-  const canCloseCommittee = Boolean(meOnCommittee?.role === 'predsjednik' && !selectedCommittee?.isClosed);
+  const canCloseCommittee = closeCommitteeGuard.allowed;
   const distributionName = rootDistribution?.name;
 
   return (
@@ -539,6 +567,9 @@ export const InventoryCountPage = () => {
                   scopeReady={scopeReady}
                   lines={committeeLines}
                   canCloseCommittee={canCloseCommittee}
+                  closeCommitteeBlockedReason={
+                    !closeCommitteeGuard.allowed ? closeCommitteeGuard.reason : undefined
+                  }
                   onPrint={() => void handlePrint()}
                   onReport={async () => {
                     if (!committeeId) {
@@ -554,6 +585,10 @@ export const InventoryCountPage = () => {
                   }}
                   onCloseCommittee={async () => {
                     if (!committeeId) {
+                      return;
+                    }
+                    if (!closeCommitteeGuard.allowed) {
+                      toastError(closeCommitteeGuard.reason ?? 'Zaključavanje nije dozvoljeno.');
                       return;
                     }
                     if (!confirm('Zaključati popisnu listu za ovu komisiju? Nakon zaključavanja unos nije moguć.')) {
@@ -637,6 +672,7 @@ export const InventoryCountPage = () => {
                         onReconcileSlots={(id) => void handleReconcileSlots(id)}
                         onRefresh={() => void refreshAll()}
                         canManageLifecycle={admin}
+                        activateWarehouseBlockers={activateWarehouseBlockers}
                       />
                     ) : (
                       <FormCard title="Command center">

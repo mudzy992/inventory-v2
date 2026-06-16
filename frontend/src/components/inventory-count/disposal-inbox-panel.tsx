@@ -7,6 +7,8 @@ import {
 import { ApiError } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/toast-context';
+import { canReviewDisposalApproval } from '../../helpers/guards';
+import { isAdmin } from '../../store';
 import { useInventorySocketEvents } from '../../hooks/use-inventory-socket-events';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -19,6 +21,11 @@ interface DisposalInboxPanelProps {
 
 export const DisposalInboxPanel = ({ sessionId, sessionStatus }: DisposalInboxPanelProps) => {
   const { user } = useAuth();
+  const admin = isAdmin();
+  const reviewGuard = canReviewDisposalApproval({
+    isAdmin: admin,
+    isPresident: !admin && Boolean(user?.employeeId),
+  });
   const { toastError, toastSuccess } = useToast();
   const [items, setItems] = useState<DisposalInventoryApprovalDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,6 +58,10 @@ export const DisposalInboxPanel = ({ sessionId, sessionStatus }: DisposalInboxPa
   });
 
   const handleReview = async (approvalId: string, approved: boolean) => {
+    if (!reviewGuard.allowed) {
+      toastError(reviewGuard.reason ?? 'Odluka nije dozvoljena.');
+      return;
+    }
     const rejectionNote = approved ? '' : (window.prompt('Razlog odbijanja:') ?? '');
     if (!approved && !rejectionNote.trim()) {
       return;
@@ -80,10 +91,12 @@ export const DisposalInboxPanel = ({ sessionId, sessionStatus }: DisposalInboxPa
         <Badge tone="info">Popisni rashod</Badge>
       </div>
       {loading ? <p className="text-xs text-gray-500">Učitavanje…</p> : null}
-      {!user?.employeeId ? (
+      {!user?.employeeId && !admin ? (
         <p className="text-xs text-gray-600">
           Inbox komisije rashoda dostupan je predsjedniku komisije (korisnik mora biti povezan s radnikom).
         </p>
+      ) : !reviewGuard.allowed ? (
+        <p className="text-xs text-amber-700">{reviewGuard.reason}</p>
       ) : null}
       {error ? <p className="text-xs text-red-700">{error}</p> : null}
       {!loading && items.length === 0 ? (
@@ -102,13 +115,21 @@ export const DisposalInboxPanel = ({ sessionId, sessionStatus }: DisposalInboxPa
               </p>
             </div>
             <div className="flex gap-2">
-              <Button type="button" className="text-xs h-8" onClick={() => void handleReview(item.id, true)}>
+              <Button
+                type="button"
+                className="text-xs h-8"
+                disabled={!reviewGuard.allowed}
+                title={reviewGuard.reason}
+                onClick={() => void handleReview(item.id, true)}
+              >
                 Odobri
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 className="text-xs h-8"
+                disabled={!reviewGuard.allowed}
+                title={reviewGuard.reason}
                 onClick={() => void handleReview(item.id, false)}
               >
                 Odbij

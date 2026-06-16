@@ -11,7 +11,12 @@ import {
   type InstalledPartDto,
   type MaintenanceStockLotDto,
 } from '../../api/maintenance-parts-api';
-import { ApiError } from '../../api/client';
+import {
+  canInstallMaintenancePart,
+  canMarkPartFaulty,
+  canRemoveMaintenancePart,
+  canReplaceMaintenancePart,
+} from '../../helpers/guards';
 import { useToast } from '../../contexts/toast-context';
 import { usePublicSettings } from '../../contexts/public-settings-context';
 import { formatDate } from '../../helpers';
@@ -127,6 +132,26 @@ export const EquipmentInstalledPartsPanel = ({
     if (Number.isNaN(qty) || qty < 1) {
       return;
     }
+    const selectedLot = availableLots.find((row) => row.id === selectedLotId);
+    const installGuard = canInstallMaintenancePart({
+      hostStatus: equipmentStatus,
+      hasCategoryLink: linkedCategories.some((row) => row.id === installCategoryId),
+      availableQuantity: selectedLot?.quantityOnHand ?? 0,
+      requestedQuantity: qty,
+    });
+    if (!installGuard.allowed) {
+      toastError(installGuard.reason ?? 'Ugradnja nije dozvoljena.');
+      return;
+    }
+    if (replacePartId) {
+      const replaceGuard = canReplaceMaintenancePart(
+        parts.find((row) => row.id === replacePartId)?.status ?? 'active',
+      );
+      if (!replaceGuard.allowed) {
+        toastError(replaceGuard.reason ?? 'Zamjena nije dozvoljena.');
+        return;
+      }
+    }
     try {
       const legacySpecs = buildLegacySpecsPayload(installLotSpecFields, legacySpecValues);
       const specsPayload =
@@ -157,6 +182,12 @@ export const EquipmentInstalledPartsPanel = ({
     }
   };
   const handleFaulty = async (partId: string) => {
+    const part = parts.find((row) => row.id === partId);
+    const guard = canMarkPartFaulty(part?.status ?? 'active');
+    if (!guard.allowed) {
+      toastError(guard.reason ?? 'Akcija nije dozvoljena.');
+      return;
+    }
     try {
       await markInstalledPartFaultyApi(partId);
       toastSuccess('Označeno kao u kvaru');
@@ -166,6 +197,12 @@ export const EquipmentInstalledPartsPanel = ({
     }
   };
   const handleRemove = async (partId: string) => {
+    const part = parts.find((row) => row.id === partId);
+    const guard = canRemoveMaintenancePart(part?.status ?? 'active');
+    if (!guard.allowed) {
+      toastError(guard.reason ?? 'Akcija nije dozvoljena.');
+      return;
+    }
     try {
       await removeInstalledPartApi(partId);
       toastSuccess('Dio uklonjen');

@@ -7,6 +7,7 @@ import {
   type InventorySessionStatus,
 } from '../../api/inventory-api';
 import { ApiError } from '../../api/client';
+import { canWithdrawDisposalList } from '../../helpers/guards';
 import { useToast } from '../../contexts/toast-context';
 import { isAdmin } from '../../store';
 import { AlertBanner } from '../ui/alert-banner';
@@ -57,6 +58,15 @@ export const DisposalListPanel = ({ sessionId, sessionStatus }: DisposalListPane
     if (!withdrawTarget) {
       return;
     }
+    const guard = canWithdrawDisposalList({
+      isAdmin: admin,
+      sessionStatus,
+      itemStatus: withdrawTarget.status,
+    });
+    if (!guard.allowed) {
+      toastError(guard.reason ?? 'Povrat nije dozvoljen.');
+      return;
+    }
     try {
       await withdrawDisposalListApi(sessionId, withdrawTarget.equipmentId, {
         note: withdrawNote.trim() || undefined,
@@ -96,7 +106,13 @@ export const DisposalListPanel = ({ sessionId, sessionStatus }: DisposalListPane
       <ResponsiveTable
         isEmpty={items.length === 0 && !loading}
         emptyMessage="Nema stavki na listi za rashod."
-        mobile={items.map((row) => (
+        mobile={items.map((row) => {
+          const withdrawGuard = canWithdrawDisposalList({
+            isAdmin: admin,
+            sessionStatus,
+            itemStatus: row.status,
+          });
+          return (
           <div key={row.id} className="p-4 space-y-2">
             <p className="font-medium">{row.equipment?.inventoryNumber ?? '—'}</p>
             <p className="text-sm text-gray-600">{row.category?.name ?? '—'}</p>
@@ -104,12 +120,19 @@ export const DisposalListPanel = ({ sessionId, sessionStatus }: DisposalListPane
               {statusLabel[row.status]}
             </Badge>
             {admin && sessionStatus === 'draft' && row.status === 'listed' ? (
-              <Button variant="ghost" size="sm" onClick={() => setWithdrawTarget(row)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!withdrawGuard.allowed}
+                title={withdrawGuard.reason}
+                onClick={() => setWithdrawTarget(row)}
+              >
                 Vrati s liste
               </Button>
             ) : null}
           </div>
-        ))}
+        );
+        })}
         desktop={
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-600">
@@ -122,7 +145,13 @@ export const DisposalListPanel = ({ sessionId, sessionStatus }: DisposalListPane
               </tr>
             </thead>
             <tbody>
-              {items.map((row) => (
+              {items.map((row) => {
+                const withdrawGuard = canWithdrawDisposalList({
+                  isAdmin: admin,
+                  sessionStatus,
+                  itemStatus: row.status,
+                });
+                return (
                 <tr key={row.id} className="border-b border-gray-50">
                   <td className="px-3 py-2">{row.equipment?.inventoryNumber ?? '—'}</td>
                   <td className="px-3 py-2 text-gray-600">
@@ -141,6 +170,8 @@ export const DisposalListPanel = ({ sessionId, sessionStatus }: DisposalListPane
                       <Button
                         variant="ghost"
                         size="sm"
+                        disabled={!withdrawGuard.allowed}
+                        title={withdrawGuard.reason}
                         onClick={() => setWithdrawTarget(row)}
                         aria-label="Vrati s liste"
                       >
@@ -149,7 +180,8 @@ export const DisposalListPanel = ({ sessionId, sessionStatus }: DisposalListPane
                     ) : null}
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         }

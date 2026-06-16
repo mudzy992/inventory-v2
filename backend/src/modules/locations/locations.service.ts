@@ -74,6 +74,7 @@ export class LocationsService {
   }
 
   async deleteCanton(id: string) {
+    await this.settingsService.assertFeatureEnabled('features.locations');
     await this.assertCantonExists(id);
     const cityCount = await this.prisma.city.count({ where: { cantonId: id } });
     if (cityCount > 0) {
@@ -86,7 +87,7 @@ export class LocationsService {
     await this.settingsService.assertFeatureEnabled('features.locations');
     const canton = await this.prisma.canton.findUnique({ where: { id: dto.cantonId } });
     if (!canton) {
-      throw new NotFoundException('Canton not found');
+      throw new NotFoundException(LOCATION_MESSAGES.cantonNotFound);
     }
     return this.prisma.city.create({
       data: { cantonId: dto.cantonId, name: dto.name },
@@ -95,10 +96,17 @@ export class LocationsService {
   }
 
   async findCities() {
-    return this.prisma.city.findMany({
-      include: { canton: true },
+    const rows = await this.prisma.city.findMany({
+      include: {
+        canton: true,
+        _count: { select: { disposalCommissions: true } },
+      },
       orderBy: [{ canton: { name: 'asc' } }, { name: 'asc' }],
     });
+    return rows.map(({ _count, ...city }) => ({
+      ...city,
+      disposalCommissionCount: _count.disposalCommissions,
+    }));
   }
 
   async updateCity(id: string, dto: UpdateCityDto) {
@@ -107,7 +115,7 @@ export class LocationsService {
     if (dto.cantonId) {
       const canton = await this.prisma.canton.findUnique({ where: { id: dto.cantonId } });
       if (!canton) {
-        throw new NotFoundException('Canton not found');
+        throw new NotFoundException(LOCATION_MESSAGES.cantonNotFound);
       }
     }
     return this.prisma.city.update({
@@ -140,14 +148,14 @@ export class LocationsService {
   private async assertCantonExists(id: string): Promise<void> {
     const row = await this.prisma.canton.findUnique({ where: { id } });
     if (!row) {
-      throw new NotFoundException('Canton not found');
+      throw new NotFoundException(LOCATION_MESSAGES.cantonNotFound);
     }
   }
 
   private async assertCityExists(id: string): Promise<void> {
     const row = await this.prisma.city.findUnique({ where: { id } });
     if (!row) {
-      throw new NotFoundException('City not found');
+      throw new NotFoundException(LOCATION_MESSAGES.cityNotFound);
     }
   }
 }

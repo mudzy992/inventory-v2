@@ -7,6 +7,7 @@ import {
 } from '../../api/equipment-catalog-api';
 import { ApiError } from '../../api/client';
 import { getApiErrorMessage, refreshAfterMutation } from '../../helpers/run-mutation-with-refresh.util';
+import { canDeleteCatalogItem } from '../../helpers/guards';
 import { useToast } from '../../contexts/toast-context';
 import { usePaginatedList } from '../../hooks/usePaginatedList';
 import { getAssetLeafCategories } from '../../helpers/warehouse-stock.util';
@@ -69,12 +70,17 @@ export const EquipmentCatalogPanel = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (item: EquipmentCatalogItem) => {
+    const guard = canDeleteCatalogItem(item.inUseCount ?? 0);
+    if (!guard.allowed) {
+      toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
+      return;
+    }
     if (!confirm('Obrisati stavku šifrarnika?')) {
       return;
     }
     try {
-      await deleteCatalogItemApi(id);
+      await deleteCatalogItemApi(item.id);
       toastSuccess('Stavka obrisana');
       await refreshAfterMutation([loadItems]);
     } catch (err) {
@@ -139,7 +145,9 @@ export const EquipmentCatalogPanel = () => {
               </tr>
             ) : null}
             {!list.isLoading &&
-              list.items.map((item) => (
+              list.items.map((item) => {
+                const deleteGuard = canDeleteCatalogItem(item.inUseCount ?? 0);
+                return (
                 <tr key={item.id} className="border-t">
                   <td className="px-4 py-2 font-mono text-xs">{item.code}</td>
                   <td className="px-4 py-2">{item.name}</td>
@@ -147,15 +155,18 @@ export const EquipmentCatalogPanel = () => {
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
-                      className="text-red-600 hover:text-red-800"
-                      onClick={() => void handleDelete(item.id)}
+                      className="text-red-600 hover:text-red-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                      disabled={!deleteGuard.allowed}
+                      title={deleteGuard.reason ?? 'Obriši'}
+                      onClick={() => void handleDelete(item)}
                       aria-label="Obriši"
                     >
                       <Trash2 size={16} />
                     </button>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             {!list.isLoading && list.items.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-gray-400">

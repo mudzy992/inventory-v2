@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma, Transfer } from '../../../generated/prisma/client';
+import { TRANSFER_MESSAGES } from '../../common/utils/transfer-messages.util';
 import { detectCrossServiceTransfer } from '../../common/utils/transfer-cross-service.util';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
@@ -220,9 +221,7 @@ export class TransfersService {
       null,
     );
     if (dto.type === 'rashodovanje') {
-      throw new BadRequestException(
-        'Rashod opreme ide preko liste za rashod u nacrtu sesije popisa, ne preko prenosnice rashodovanje',
-      );
+      throw new BadRequestException(TRANSFER_MESSAGES.rashodovanjeBlocked);
     }
     const isCrossService = await this.resolveCrossServiceFlag(user, dto);
     const signerId = await this.resolveSignerForCreate(dto);
@@ -278,7 +277,7 @@ export class TransfersService {
       throw new ForbiddenException('Transfer outside your scope');
     }
     if (transfer.status !== 'raw') {
-      throw new BadRequestException('Only raw transfers can be marked printed');
+      throw new BadRequestException(TRANSFER_MESSAGES.markPrintedNotAllowed);
     }
     return this.prisma.transfer.update({
       where: { id },
@@ -293,7 +292,7 @@ export class TransfersService {
       throw new ForbiddenException('Transfer outside your scope');
     }
     if (!['raw', 'printed', 'uploaded'].includes(transfer.status)) {
-      throw new BadRequestException('Transfer cannot be cancelled');
+      throw new BadRequestException(TRANSFER_MESSAGES.cancelNotAllowed);
     }
     return this.prisma.transfer.update({
       where: { id },

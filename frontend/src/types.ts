@@ -24,6 +24,7 @@ export interface City {
   cantonId: string;
   name: string;
   canton?: Canton;
+  disposalCommissionCount?: number;
 }
 
 export interface Warehouse {
@@ -35,7 +36,7 @@ export interface Warehouse {
   notes?: string | null;
   isActive: boolean;
   city?: City;
-  keepers?: { userId: string; user?: { id: string; username: string } }[];
+  keepers?: { userId: string; user?: { id: string; username: string; employeeId?: string | null } }[];
 }
 
 export interface RegistrarScopeAssignment {
@@ -81,6 +82,10 @@ export interface Employee {
   email?: string;
   phone?: string;
   heldEquipmentCount?: number;
+  hasUserAccount?: boolean;
+  isOrgSigner?: boolean;
+  signedTransferCount?: number;
+  openRelocationCount?: number;
 }
 
 export interface CategoryField {

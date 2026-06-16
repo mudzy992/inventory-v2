@@ -146,7 +146,12 @@ export const LocationsPage = () => {
         return;
       }
     } else {
-      const guard = canDeleteCity(deleteTarget.item.id, state.orgUnits, state.warehouses);
+      const guard = canDeleteCity(
+        deleteTarget.item.id,
+        state.orgUnits,
+        state.warehouses,
+        state.cities.find((row) => row.id === deleteTarget.item.id)?.disposalCommissionCount ?? 0,
+      );
       if (!guard.allowed) {
         toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
         return;

@@ -1,5 +1,11 @@
 # Changelog — warehouse-stock
 
+## 2026-06-15 (guard audit)
+
+- `defineSpecifications` sada poziva `assertFeatureEnabled('features.registrar_stock')`.
+- FE guardi: `canEditLotSpecifications`, `canIssueFromLot` u `warehouse-stock-guards.ts`.
+- BE poruke: `warehouse-stock-messages.util.ts`.
+
 ## 2026-06-13
 
 - **Cross-warehouse prikaz:** dest relocation lot auto-`zatvoreno` kad `onHand=0` i komadi izdati; grupna agregacija `totalReceived`/`warehouseCount` uključuje zatvorene lotove; UI filter „Zatvoreno"; badge „Sve izdato" za privremeno stanje.

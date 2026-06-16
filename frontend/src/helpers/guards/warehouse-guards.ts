@@ -3,6 +3,7 @@ export const WAREHOUSE_GUARD_MESSAGES = {
   missingOrgUnit: 'Odaberite organizacijsku jedinicu za skladište.',
   missingCity: 'Odaberite grad za skladište.',
   missingName: 'Unesite naziv skladišta.',
+  destroyNotReady: 'Oprema nije označena kao spremna za uništenje.',
 } as const;
 
 export interface WarehouseCreateGuardResult {
@@ -27,6 +28,15 @@ export const canCreateWarehouse = (input: {
   }
   if (input.keeperUserIds.length === 0) {
     return { allowed: false, reason: WAREHOUSE_GUARD_MESSAGES.missingKeepers };
+  }
+  return { allowed: true };
+};
+
+export const canDestroyEquipment = (input: {
+  isFrozen: boolean;
+}): WarehouseCreateGuardResult => {
+  if (input.isFrozen) {
+    return { allowed: false, reason: 'Aktivan popis blokira uništenje opreme.' };
   }
   return { allowed: true };
 };

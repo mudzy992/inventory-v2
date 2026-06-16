@@ -13,6 +13,9 @@ import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { getEmployeeFullName, getStatusLabel, formatDate, getOrgUnitPath, getStatusColor } from '../../helpers';
 import { usePublicSettings } from '../../contexts/public-settings-context';
+import { useAdminSettings } from '../../contexts/admin-settings-context';
+import { canSignTransfer } from '../../helpers/guards';
+import { refreshAfterMutation } from '../../helpers/run-mutation-with-refresh.util';
 import {
   buildCompanyHeaderHtml,
   companyHeaderFromSettings,
@@ -28,6 +31,7 @@ export const TransferDocumentsTab = () => {
   const refresh = useRefreshData();
   const { toastError } = useToast();
   const { settings } = usePublicSettings();
+  const { getBoolean: getAdminBoolean } = useAdminSettings();
   const companyHeader = companyHeaderFromSettings(settings);
   const [filterStatus, setFilterStatus] = useState('');
   const [viewDoc, setViewDoc] = useState<string | null>(null);
@@ -80,8 +84,7 @@ export const TransferDocumentsTab = () => {
     try {
       await uploadTransferDocumentApi(uploadingId, file);
       await signTransferApi(uploadingId, {});
-      await refresh();
-      await list.refresh();
+      await refreshAfterMutation([refresh, list.refresh]);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri uploadu';
       toastError(message);
@@ -94,10 +97,19 @@ export const TransferDocumentsTab = () => {
   };
 
   const handleMarkSigned = async (transferId: string) => {
+    const transfer = transfers.find((row) => row.id === transferId);
+    const signGuard = canSignTransfer({
+      hasUploadedPdf: Boolean(transfer?.scannedDocUrl),
+      requireSignedUpload: getAdminBoolean('transfer.require_signed_pdf_upload', true),
+      allowFinalizeWithoutUpload: getAdminBoolean('transfer.allow_finalize_without_upload', false),
+    });
+    if (!signGuard.allowed) {
+      toastError(signGuard.reason ?? 'Finalizacija nije dozvoljena.');
+      return;
+    }
     try {
       await signTransferApi(transferId, {});
-      await refresh();
-      await list.refresh();
+      await refreshAfterMutation([refresh, list.refresh]);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri potpisivanju';
       toastError(message);

@@ -9,6 +9,7 @@ import {
 } from './inventory-labels';
 import { Badge } from '../ui/badge';
 import type { InventorySessionStats } from './inventory-session-stats.util';
+import { INVENTORY_GUARD_MESSAGES } from '../../helpers/guards';
 
 interface SessionCommandCenterProps {
   session: InventorySessionDto;
@@ -16,6 +17,7 @@ interface SessionCommandCenterProps {
   scopeTotal?: number;
   closeJob: InventorySessionCloseJobDto | null;
   loading: boolean;
+  activateWarehouseBlockers?: { id: string; name: string }[];
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -30,6 +32,7 @@ export const SessionCommandCenter = ({
   scopeTotal,
   closeJob,
   loading,
+  activateWarehouseBlockers = [],
   onActivate,
   onClose,
   onDelete,
@@ -38,6 +41,10 @@ export const SessionCommandCenter = ({
   canManageLifecycle = true,
 }: SessionCommandCenterProps) => {
   const canDeleteSession = session.status === 'draft';
+  const canActivateSession =
+    session.status === 'draft' &&
+    stats.configuredCommittees >= stats.totalCommittees &&
+    activateWarehouseBlockers.length === 0;
   const period =
     session.startDate && session.endDate
       ? `${formatDate(session.startDate)} – ${formatDate(session.endDate)}`
@@ -126,7 +133,16 @@ export const SessionCommandCenter = ({
       ) : null}
       <div className="flex flex-wrap gap-2 mt-4">
         {canManageLifecycle && session.status === 'draft' ? (
-          <Button variant="secondary" onClick={() => onActivate(session.id)}>
+          <Button
+            variant="secondary"
+            onClick={() => onActivate(session.id)}
+            disabled={!canActivateSession}
+            title={
+              activateWarehouseBlockers.length > 0
+                ? INVENTORY_GUARD_MESSAGES.activateKeeperMissingEmployeeId
+                : undefined
+            }
+          >
             <Play size={14} />
             Aktiviraj sesiju
           </Button>
@@ -150,6 +166,12 @@ export const SessionCommandCenter = ({
         {session.status === 'draft' && stats.configuredCommittees < stats.totalCommittees ? (
           <p className="text-xs text-amber-700 self-center">
             {stats.totalCommittees - stats.configuredCommittees} slotova čeka dodjelu članova prije aktivacije.
+          </p>
+        ) : null}
+        {session.status === 'draft' && activateWarehouseBlockers.length > 0 ? (
+          <p className="text-xs text-amber-700 self-center w-full">
+            {INVENTORY_GUARD_MESSAGES.activateKeeperMissingEmployeeId}{' '}
+            ({activateWarehouseBlockers.map((row) => row.name).join(', ')})
           </p>
         ) : null}
         {canManageLifecycle && session.status === 'active' ? (

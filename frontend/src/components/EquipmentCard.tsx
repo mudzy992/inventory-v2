@@ -17,6 +17,7 @@ import {
 } from '../helpers/equipment-display.util';
 import { buildTransferCreatePayload } from '../helpers/create-transfer-payload.util';
 import { canRegistrarCreateTransfer } from '../helpers/registrar-scope';
+import { canReactivateEquipment, EQUIPMENT_GUARD_MESSAGES } from '../helpers/guards';
 import { X, Package, QrCode, History, ArrowRight, Download, Printer, User, Building2, FileText, AlertTriangle, CheckCircle, Warehouse, Trash2 } from 'lucide-react';
 import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
@@ -187,8 +188,12 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     disposalPreListEnabled &&
     eq.status !== 'rashodovano' &&
     eq.status !== 'za_rashod';
-  const canReactivate =
-    admin && eq.status === 'rashodovano' && eq.warehouseCondition === 'unisteno';
+  const reactivateGuard = canReactivateEquipment({
+    isAdmin: admin,
+    status: eq.status,
+    warehouseCondition: eq.warehouseCondition,
+  });
+  const canReactivate = reactivateGuard.allowed;
 
   const handleDownloadQR = () => {
     const canvas = document.createElement('canvas');
@@ -291,8 +296,20 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   };
 
   const handleReactivate = async () => {
-    if (!eq || !reactivateReason.trim()) {
-      toastError('Unesite obrazloženje reaktivacije.');
+    if (!eq) {
+      return;
+    }
+    const guard = canReactivateEquipment({
+      isAdmin: admin,
+      status: eq.status,
+      warehouseCondition: eq.warehouseCondition,
+    });
+    if (!guard.allowed) {
+      toastError(guard.reason ?? 'Reaktivacija nije dozvoljena.');
+      return;
+    }
+    if (!reactivateReason.trim()) {
+      toastError(EQUIPMENT_GUARD_MESSAGES.reactivateReasonRequired);
       return;
     }
     try {
@@ -564,7 +581,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   <Trash2 size={14} /> Za rashod
                 </button>
               )}
-              {canReactivate && (
+              {canReactivate ? (
                 <button
                   type="button"
                   onClick={() => setShowReactivate(true)}
@@ -572,7 +589,11 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                 >
                   Reaktiviraj
                 </button>
-              )}
+              ) : reactivateGuard.reason && eq.status === 'rashodovano' && admin ? (
+                <span className="text-xs text-gray-500 self-center" title={reactivateGuard.reason}>
+                  Reaktivacija nije dostupna
+                </span>
+              ) : null}
             </div>
           </div>
         )}

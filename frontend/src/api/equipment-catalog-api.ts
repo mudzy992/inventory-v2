@@ -8,6 +8,7 @@ export interface EquipmentCatalogItem {
   name: string;
   categoryId: string;
   isActive: boolean;
+  inUseCount?: number;
   category?: { id: string; name: string; parentId?: string | null };
 }
 

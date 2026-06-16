@@ -26,6 +26,11 @@ import {
   getCatalogDisplayLabel,
   isRelocationLineMissingCatalog,
 } from '../../helpers/relocation-catalog.util';
+import {
+  canResolveRelocationWhileFrozen,
+  canTransferRelocationLine,
+  EMPLOYEE_RELOCATION_GUARD_MESSAGES,
+} from '../../helpers/guards';
 import { inputClass } from '../ui/form-styles';
 import { ModalRoot } from '../ui/modal-root';
 
@@ -209,12 +214,27 @@ const RelocationLineRow = ({
   const [mapOpen, setMapOpen] = useState(false);
   const employeeName = `${line.case.employee.firstName} ${line.case.employee.lastName}`;
   const missingCatalog = isRelocationLineMissingCatalog(line);
-  const transferBlocked = mode === 'source' && missingCatalog;
-  const transferTitle = transferBlocked
+  const transferGuard = canTransferRelocationLine({
+    catalogItemId: line.equipment.catalogItemId,
+    effectiveCatalogItemId: line.equipment.catalogItem?.id,
+  });
+  const transferBlocked = mode === 'source' && (missingCatalog || !transferGuard.allowed);
+  const transferTitle = missingCatalog
     ? 'Administrator mora mapirati tip u šifrarniku prije transfera.'
-    : undefined;
+    : transferGuard.reason;
 
   const runSource = async (action: 'transfer' | 'discharge') => {
+    const freezeGuard = canResolveRelocationWhileFrozen({ isFrozen: frozen, isAdmin: admin });
+    if (!freezeGuard.allowed) {
+      toastError(freezeGuard.reason ?? EMPLOYEE_RELOCATION_GUARD_MESSAGES.freezeBlocked);
+      return;
+    }
+    if (action === 'transfer') {
+      if (!transferGuard.allowed) {
+        toastError(transferGuard.reason ?? EMPLOYEE_RELOCATION_GUARD_MESSAGES.catalogRequiredForTransfer);
+        return;
+      }
+    }
     setBusy(true);
     try {
       await resolveRelocationSourceApi(line.id, action);
@@ -228,6 +248,11 @@ const RelocationLineRow = ({
   };
 
   const runDest = async (action: 'accept' | 'reject') => {
+    const freezeGuard = canResolveRelocationWhileFrozen({ isFrozen: frozen, isAdmin: admin });
+    if (!freezeGuard.allowed) {
+      toastError(freezeGuard.reason ?? EMPLOYEE_RELOCATION_GUARD_MESSAGES.freezeBlocked);
+      return;
+    }
     setBusy(true);
     try {
       await resolveRelocationDestApi(line.id, action);

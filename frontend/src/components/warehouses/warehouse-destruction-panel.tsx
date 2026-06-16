@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { destroyEquipmentApi, fetchReadyForDestructionApi } from '../../api/warehouses-api';
 import { ApiError } from '../../api/client';
+import { canDestroyEquipment } from '../../helpers/guards';
+import { getApiErrorMessage, refreshAfterMutation } from '../../helpers/run-mutation-with-refresh.util';
+import { useInventoryFreezeActive } from '../inventory-count/inventory-freeze-action-hint';
 import { Button } from '../ui/button';
 
 interface ReadyItem {
@@ -17,6 +20,7 @@ export const WarehouseDestructionPanel = ({
   warehouseId,
   warehouseName,
 }: WarehouseDestructionPanelProps) => {
+  const isFrozen = useInventoryFreezeActive();
   const [items, setItems] = useState<ReadyItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,14 +44,19 @@ export const WarehouseDestructionPanel = ({
   }, [loadItems]);
 
   const handleDestroy = async (equipmentId: string, inventoryNumber: string) => {
+    const guard = canDestroyEquipment({ isFrozen });
+    if (!guard.allowed) {
+      setError(guard.reason ?? 'Uništenje nije dozvoljeno.');
+      return;
+    }
     if (!window.confirm(`Potvrdite uništenje opreme ${inventoryNumber}?`)) {
       return;
     }
     try {
       await destroyEquipmentApi(warehouseId, equipmentId);
-      await loadItems();
+      await refreshAfterMutation([loadItems]);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Greška pri uništenju');
+      setError(getApiErrorMessage(err, 'Greška pri uništenju'));
     }
   };
 
@@ -67,6 +76,8 @@ export const WarehouseDestructionPanel = ({
               type="button"
               variant="outline"
               className="text-xs h-7"
+              disabled={isFrozen}
+              title={isFrozen ? 'Aktivan popis blokira uništenje opreme.' : undefined}
               onClick={() => void handleDestroy(item.id, item.inventoryNumber)}
             >
               Potvrdi uništenje

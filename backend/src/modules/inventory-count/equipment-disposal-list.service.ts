@@ -12,6 +12,7 @@ import { WarehouseResolutionService } from '../../common/services/warehouse-reso
 import { assertCanWriteEquipment } from '../equipment/equipment-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { DISPOSAL_MESSAGES } from '../../common/utils/disposal-messages.util';
 import { isTransferCreationAllowed } from '../transfers/utils/transfer-generation-policy.util';
 import { assignListedDisposalItemsToCommissionInTx } from './utils/assign-disposal-list-to-commission.util';
 import { executeRazduzenjeForDisposalMarkInTx } from './utils/execute-disposal-mark-razduzenje.util';
@@ -235,11 +236,11 @@ export class EquipmentDisposalListService {
   ) {
     await this.assertPreListEnabled();
     if (user.role !== 'admin') {
-      throw new ForbiddenException('Only admin can withdraw equipment from disposal list');
+      throw new ForbiddenException(DISPOSAL_MESSAGES.removeAdminOnly);
     }
     const session = await this.getSessionOrThrow(sessionId);
     if (session.status !== 'draft') {
-      throw new BadRequestException('Povrat s liste je moguć samo dok je sesija u nacrtu');
+      throw new BadRequestException(DISPOSAL_MESSAGES.sessionNotDraft);
     }
     const item = await this.prisma.equipmentDisposalListItem.findUnique({
       where: { sessionId_equipmentId: { sessionId, equipmentId } },
@@ -248,7 +249,7 @@ export class EquipmentDisposalListService {
       throw new NotFoundException('Stavka nije na listi za rashod');
     }
     if (item.status !== 'listed') {
-      throw new BadRequestException('Samo stavke na listi (prije dodjele komisiji) se mogu vratiti');
+      throw new BadRequestException(DISPOSAL_MESSAGES.removeListedOnly);
     }
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.equipmentDisposalListItem.update({

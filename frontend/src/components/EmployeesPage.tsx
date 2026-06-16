@@ -6,6 +6,7 @@ import { usePaginatedList } from '../hooks/usePaginatedList';
 import { previewRelocationApi, type RelocationPreview } from '../api/employee-relocation-api';
 import { ApiError } from '../api/client';
 import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
+import { canDeleteEmployee } from '../helpers/guards';
 import { useToast } from '../contexts/toast-context';
 import { isAdmin, isEvidenticar, getCurrentUser } from '../store';
 import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
@@ -129,17 +130,39 @@ export function EmployeesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (emp: Employee) => {
     if (!admin) return;
+    const guard = canDeleteEmployee({
+      employeeId: emp.id,
+      hasUserAccount: emp.hasUserAccount ?? false,
+      isOrgSigner: emp.isOrgSigner ?? false,
+      signedTransferCount: emp.signedTransferCount ?? 0,
+      heldEquipmentCount: emp.heldEquipmentCount ?? 0,
+      openRelocationCount: emp.openRelocationCount ?? 0,
+    });
+    if (!guard.allowed) {
+      toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
+      return;
+    }
     if (!confirm('Da li ste sigurni?')) return;
     try {
-      await deleteEmployeeApi(id);
+      await deleteEmployeeApi(emp.id);
       toastSuccess('Radnik je obrisan.');
       await refreshAfterMutation([refresh, list.refresh]);
     } catch (err) {
       toastError(getApiErrorMessage(err, 'Greška pri brisanju'));
     }
   };
+
+  const getEmployeeDeleteGuard = (emp: Employee) =>
+    canDeleteEmployee({
+      employeeId: emp.id,
+      hasUserAccount: emp.hasUserAccount ?? false,
+      isOrgSigner: emp.isOrgSigner ?? false,
+      signedTransferCount: emp.signedTransferCount ?? 0,
+      heldEquipmentCount: emp.heldEquipmentCount ?? 0,
+      openRelocationCount: emp.openRelocationCount ?? 0,
+    });
 
   return (
     <div>
@@ -206,7 +229,13 @@ export function EmployeesPage() {
                   <button type="button" onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                     <Edit2 size={14} />
                   </button>
-                  <button type="button" onClick={() => handleDelete(emp.id)} className="text-red-500 hover:text-red-700 p-1" title="Obriši">
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete(emp)}
+                    disabled={!getEmployeeDeleteGuard(emp).allowed}
+                    title={getEmployeeDeleteGuard(emp).reason ?? 'Obriši'}
+                    className="text-red-500 hover:text-red-700 p-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -257,7 +286,13 @@ export function EmployeesPage() {
                           <button type="button" onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                             <Edit2 size={14} />
                           </button>
-                          <button type="button" onClick={() => handleDelete(emp.id)} className="text-red-500 hover:text-red-700 p-1" title="Obriši">
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(emp)}
+                            disabled={!getEmployeeDeleteGuard(emp).allowed}
+                            title={getEmployeeDeleteGuard(emp).reason ?? 'Obriši'}
+                            className="text-red-500 hover:text-red-700 p-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
                             <Trash2 size={14} />
                           </button>
                         </div>

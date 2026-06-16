@@ -27,11 +27,25 @@ const EMPLOYEE_SORT_FIELDS: Record<string, string> = {
   createdAt: 'createdAt',
 };
 
-const HELD_EQUIPMENT_COUNT_SELECT = {
-  heldEquipment: { where: { status: 'zaduzeno' as const } },
+const EMPLOYEE_LIST_INCLUDE = {
+  user: { select: { id: true } },
+  _count: {
+    select: {
+      heldEquipment: { where: { status: 'zaduzeno' as const } },
+      signedTransfers: true,
+      signingOrgUnits: true,
+      relocationCases: { where: { status: 'open' as const } },
+    },
+  },
 } as const;
 
-export type EmployeeListItem = Employee & { heldEquipmentCount: number };
+export type EmployeeListItem = Employee & {
+  heldEquipmentCount: number;
+  hasUserAccount: boolean;
+  isOrgSigner: boolean;
+  signedTransferCount: number;
+  openRelocationCount: number;
+};
 
 @Injectable()
 export class EmployeesService {
@@ -55,7 +69,7 @@ export class EmployeesService {
         this.prisma.employee.findMany({
           ...args,
           orderBy: [orderBy, { firstName: 'asc' }],
-          include: { _count: { select: HELD_EQUIPMENT_COUNT_SELECT } },
+          include: EMPLOYEE_LIST_INCLUDE,
         }),
       count: (args) => this.prisma.employee.count(args),
       where,
@@ -211,12 +225,24 @@ export class EmployeesService {
   }
 
   private toListItem(
-    row: Employee & { _count: { heldEquipment: number } },
+    row: Employee & {
+      user: { id: string } | null;
+      _count: {
+        heldEquipment: number;
+        signedTransfers: number;
+        signingOrgUnits: number;
+        relocationCases: number;
+      };
+    },
   ): EmployeeListItem {
-    const { _count, ...employee } = row;
+    const { _count, user, ...employee } = row;
     return {
       ...employee,
       heldEquipmentCount: _count.heldEquipment,
+      hasUserAccount: Boolean(user),
+      isOrgSigner: _count.signingOrgUnits > 0,
+      signedTransferCount: _count.signedTransfers,
+      openRelocationCount: _count.relocationCases,
     };
   }
 }

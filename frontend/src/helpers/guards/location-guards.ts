@@ -23,12 +23,13 @@ export const canDeleteCity = (
   cityId: string,
   orgUnits: OrgUnit[],
   warehouses: Warehouse[],
+  disposalCommissionCount = 0,
 ): LocationDeleteGuardResult => {
   const referencedByOrg = orgUnits.some(
     (row) => row.locationCityId === cityId || row.effectiveLocationCityId === cityId,
   );
   const referencedByWarehouse = warehouses.some((row) => row.cityId === cityId);
-  if (referencedByOrg || referencedByWarehouse) {
+  if (referencedByOrg || referencedByWarehouse || disposalCommissionCount > 0) {
     return { allowed: false, reason: LOCATION_GUARD_MESSAGES.deleteCityReferenced };
   }
   return { allowed: true };

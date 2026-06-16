@@ -27,6 +27,13 @@ import { Search, Filter, ArrowRight, ArrowLeftRight, Package, Warehouse, UserX, 
 import { PageHeaderRow } from './ui/page-header-row';
 import { PageTabs } from './ui/page-tabs';
 import { usePublicSettings } from '../contexts/public-settings-context';
+import { useAdminSettings } from '../contexts/admin-settings-context';
+import {
+  canCreateTransferType,
+  canCreateCrossServiceTransfer,
+  TRANSFER_GUARD_MESSAGES,
+} from '../helpers/guards';
+import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import type { TransferModuleTab } from './transfers/transfer-module-tab';
 import { CurrentAssignmentsTab } from './transfers/current-assignments-tab';
 import { TransferDocumentsTab } from './transfers/transfer-documents-tab';
@@ -45,6 +52,7 @@ interface TransfersPageProps {
 
 export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const { getBoolean } = usePublicSettings();
+  const { settings: adminSettings } = useAdminSettings();
   const documentsEnabled = getBoolean('features.documents', true);
   const [activeTab, setActiveTab] = useState<TransferModuleTab>(initialTab);
   const [state] = useStore();
@@ -207,6 +215,24 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     const eq = selectedEquipment;
     if (!eq) return;
 
+    const typeGuard = canCreateTransferType(fType, adminSettings);
+    if (!typeGuard.allowed) {
+      toastError(typeGuard.reason ?? TRANSFER_GUARD_MESSAGES.generationDisabled);
+      return;
+    }
+
+    if (fType === 'prenos' && wouldBeCrossService) {
+      const crossGuard = canCreateCrossServiceTransfer({
+        isCrossService: true,
+        isAdmin: admin,
+        crossServiceEnabled: adminSettings['features.cross_service_transfer'] !== false,
+      });
+      if (!crossGuard.allowed) {
+        toastError(crossGuard.reason ?? TRANSFER_GUARD_MESSAGES.crossServiceEvidenticar);
+        return;
+      }
+    }
+
     const result = buildTransferCreatePayload({
       state,
       user,
@@ -227,12 +253,10 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     }
     try {
       await createTransferApi(result.payload!);
-      await refresh();
-      await list.refresh();
+      await refreshAfterMutation([refresh, list.refresh]);
       setShowForm(false);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Greška pri kreiranju transfera';
-      toastError(message);
+      toastError(getApiErrorMessage(err, 'Greška pri kreiranju transfera'));
     }
   };
 
@@ -265,9 +289,9 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
         </button>
         <button
           type="button"
-          onClick={() => openForm('rashodovanje')}
-          disabled={isFrozen}
-          className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+          disabled
+          title={TRANSFER_GUARD_MESSAGES.rashodovanjeBlocked}
+          className="flex items-center gap-2 bg-red-600/50 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-not-allowed opacity-60"
         >
           <Trash2 size={16} /> Rashod
         </button>

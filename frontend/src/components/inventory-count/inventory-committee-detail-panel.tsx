@@ -21,6 +21,7 @@ interface InventoryCommitteeDetailPanelProps {
   scopeReady?: boolean;
   lines: InventoryLineDto[];
   canCloseCommittee: boolean;
+  closeCommitteeBlockedReason?: string;
   canManage?: boolean;
   showAdminLines?: boolean;
   onPrint: () => void;
@@ -40,6 +41,7 @@ export const InventoryCommitteeDetailPanel = ({
   scopeReady = false,
   lines,
   canCloseCommittee,
+  closeCommitteeBlockedReason,
   canManage = false,
   showAdminLines = false,
   onPrint,
@@ -127,6 +129,9 @@ export const InventoryCommitteeDetailPanel = ({
           </Button>
         ) : null}
       </div>
+      {closeCommitteeBlockedReason ? (
+        <AlertBanner tone="info">{closeCommitteeBlockedReason}</AlertBanner>
+      ) : null}
       {scopeReady || printScope ? (
         <>
           <p className="text-xs text-gray-500 mt-3">

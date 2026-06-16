@@ -48,11 +48,14 @@ export class EquipmentCatalogService {
         : {}),
     };
     const orderBy = buildOrderBy(query.sortBy, query.sortDir, CATALOG_SORT_FIELDS, 'name');
-    return paginate({
+    const result = await paginate({
       findMany: (args) =>
         this.prisma.equipmentCatalogItem.findMany({
           ...args,
-          include: { category: { select: { id: true, name: true, parentId: true } } },
+          include: {
+            category: { select: { id: true, name: true, parentId: true } },
+            _count: { select: { equipment: true } },
+          },
         }),
       count: (args) => this.prisma.equipmentCatalogItem.count(args),
       where,
@@ -60,6 +63,13 @@ export class EquipmentCatalogService {
       page,
       pageSize: take,
     });
+    return {
+      items: result.items.map((row) => {
+        const { _count, ...item } = row;
+        return { ...item, inUseCount: _count.equipment };
+      }),
+      meta: result.meta,
+    };
   }
 
   async findOne(id: string) {

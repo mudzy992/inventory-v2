@@ -1,5 +1,11 @@
 # Changelog — locations
 
+## 2026-06-15 (guard audit)
+
+- `deleteCanton` sada poziva `assertFeatureEnabled('features.locations')`.
+- `GET /locations/cities` vraća `disposalCommissionCount` po gradu za FE `canDeleteCity`.
+- GUARDS_REGISTRY: puni audit redovi.
+
 ## 2026-06-15
 
 - BS poruke brisanja (`location-messages.util.ts`); FE guard `canDeleteCanton` / `canDeleteCity`.

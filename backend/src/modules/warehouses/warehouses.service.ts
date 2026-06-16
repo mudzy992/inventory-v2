@@ -25,7 +25,7 @@ import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 
 const WAREHOUSE_LIST_INCLUDE = {
   city: { include: { canton: true } },
-  keepers: { include: { user: { select: { id: true, username: true } } } },
+  keepers: { include: { user: { select: { id: true, username: true, employeeId: true } } } },
 } satisfies Prisma.WarehouseInclude;
 
 const WAREHOUSE_SORT_FIELDS: Record<string, string> = {
@@ -246,7 +246,7 @@ export class WarehousesService {
       where: { id },
       include: {
         city: { include: { canton: true } },
-        keepers: { include: { user: { select: { id: true, username: true } } } },
+        keepers: { include: { user: { select: { id: true, username: true, employeeId: true } } } },
       },
     });
     if (!warehouse) {

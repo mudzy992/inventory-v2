@@ -52,6 +52,11 @@ import { pageIdToPath, registrarStockLotPath } from '../../routes/app-routes';
 import { LotSpecificationSection } from './lot-specification-section';
 import { LotUnitActionSection, type LotUnitActionMode } from './lot-unit-action-section';
 import {
+  canEditLotSpecifications,
+  canIssueFromLot,
+  canCrossWarehouseIssue,
+} from '../../helpers/guards';
+import {
   getLotSpecFieldsForCategory,
   getUnitSpecFieldsForCategory,
 } from '../../helpers/category-lot-spec-fields.util';
@@ -96,7 +101,7 @@ export const RegistrarStockPage = () => {
   const refresh = useRefreshData();
   const admin = isAdmin();
   const { getBoolean } = useAdminSettings();
-  const crossWarehouseIssueEnabled = admin && getBoolean('transfer.allow_admin_cross_warehouse_issue', false);
+  const crossWarehouseIssueEnabled = getBoolean('transfer.allow_admin_cross_warehouse_issue', false);
   const { toastError, toastSuccess } = useToast();
   const [scopedEmployees, setScopedEmployees] = useState<Employee[]>([]);
   const isFrozen = useInventoryFreezeActive();
@@ -227,7 +232,7 @@ export const RegistrarStockPage = () => {
   const lotFields = useMemo(() => getLotSpecFieldsForCategory(category), [category]);
   const issueFields = useMemo(() => getUnitSpecFieldsForCategory(category), [category]);
   const crossWarehouseIssueHint = useMemo(() => {
-    if (!crossWarehouseIssueEnabled || !detail || !employeeId) {
+    if (!admin || !crossWarehouseIssueEnabled || !detail || !employeeId) {
       return null;
     }
     const employee = scopedEmployees.find((row) => row.id === employeeId);
@@ -286,8 +291,25 @@ export const RegistrarStockPage = () => {
     if (!employeeId) {
       return false;
     }
-    return canSubmitUnitSpecs;
-  }, [canSubmitUnitSpecs, employeeId]);
+    if (!canSubmitUnitSpecs) {
+      return false;
+    }
+    if (!detail || !crossWarehouseIssueHint) {
+      return true;
+    }
+    return canCrossWarehouseIssue({
+      isAdmin: admin,
+      allowSetting: crossWarehouseIssueEnabled,
+      catalogItemId: detail.catalogItemId,
+    }).allowed;
+  }, [
+    admin,
+    canSubmitUnitSpecs,
+    crossWarehouseIssueEnabled,
+    crossWarehouseIssueHint,
+    detail,
+    employeeId,
+  ]);
   const canSubmitCommission = canSubmitUnitSpecs;
   const handleUniqueAvailabilityChange = useCallback((fieldId: string, status: AvailabilityStatus) => {
     setUniqueAvailability((prev) => ({ ...prev, [fieldId]: status }));
@@ -370,6 +392,11 @@ export const RegistrarStockPage = () => {
     if (!detail) {
       return;
     }
+    const specGuard = canEditLotSpecifications(detail.status);
+    if (!specGuard.allowed) {
+      toastError(specGuard.reason ?? 'Izmjena nije dozvoljena.');
+      return;
+    }
     const wasInitialSpec = detail.status === 'ceka_specifikaciju';
     setSaving(true);
     try {
@@ -389,6 +416,25 @@ export const RegistrarStockPage = () => {
   const handleIssue = async () => {
     if (!detail || !employeeId || !inventoryNumber.trim()) {
       return;
+    }
+    const issueGuard = canIssueFromLot({
+      status: detail.status,
+      quantityOnHand: detail.quantityOnHand,
+    });
+    if (!issueGuard.allowed) {
+      toastError(issueGuard.reason ?? 'Izdavanje nije dozvoljeno.');
+      return;
+    }
+    if (crossWarehouseIssueHint) {
+      const crossGuard = canCrossWarehouseIssue({
+        isAdmin: admin,
+        allowSetting: crossWarehouseIssueEnabled,
+        catalogItemId: detail.catalogItemId,
+      });
+      if (!crossGuard.allowed) {
+        toastError(crossGuard.reason ?? 'Cross-warehouse izdavanje nije dozvoljeno.');
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -416,6 +462,14 @@ export const RegistrarStockPage = () => {
   };
   const handleCommission = async () => {
     if (!detail || !inventoryNumber.trim()) {
+      return;
+    }
+    const issueGuard = canIssueFromLot({
+      status: detail.status,
+      quantityOnHand: detail.quantityOnHand,
+    });
+    if (!issueGuard.allowed) {
+      toastError(issueGuard.reason ?? 'Kolaudacija nije dozvoljena.');
       return;
     }
     setSaving(true);

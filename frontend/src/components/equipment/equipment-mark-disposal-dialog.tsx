@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { fetchEligibleDisposalSessionsApi, markDisposalListApi } from '../../api/inventory-api';
 import { ApiError } from '../../api/client';
+import { canMarkDisposalList } from '../../helpers/guards';
 import { useToast } from '../../contexts/toast-context';
 import { Button } from '../ui/button';
 import { inputClass, labelClass, selectClass } from '../ui/form-styles';
@@ -55,6 +56,11 @@ export const EquipmentMarkDisposalDialog = ({
   }, [open, loadSessions]);
 
   const handleSubmit = async () => {
+    const markGuard = canMarkDisposalList('draft');
+    if (!markGuard.allowed) {
+      toastError(markGuard.reason ?? 'Označavanje nije dozvoljeno.');
+      return;
+    }
     if (!sessionId) {
       toastError('Odaberite sesiju popisa u nacrtu.');
       return;
