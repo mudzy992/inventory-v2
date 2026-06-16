@@ -88,10 +88,11 @@ Kad admin izda komad iz lota skladišta **W1** na radnika čije efektivno skladi
 
 1. Standardni issue (`zaduzenje` prenosnica iz W1 ako je uključena generacija)
 2. Izvorni lot: `quantityOnHand -= 1`, `quantityReceived -= 1`
-3. Ciljni lot na W2: pronađi otvoreni lot po `catalogItemId` ili kreiraj `incomingRelocation` lot
+3. Ciljni lot na W2: **kanonski** lot po `catalogItemId` (`resolveCanonicalDestLotInTx`: otvoren → zadnji zatvoren reopen → create)
 4. Ciljni lot: `quantityReceived += 1` (za `zaduzeno` bez `quantityOnHand` promjene → izdato +1)
 5. `equipment.stockLotId` prelazi na ciljni lot; spec nasljeđivanje kao kod relocation dest-accept
 6. Destinacijski lot: ako `quantityOnHand = 0` i `quantityReceived > 0` → `status = zatvoreno` (`maybeCloseDispatchedRelocationLotInTx`)
+7. Sljedeći dispatch na isto skladište + isti tip: **isti kanonski lot** se reopen-uje i `quantityReceived += 1` (bez duplikata)
 
 **Ograničenja:**
 
@@ -99,7 +100,7 @@ Kad admin izda komad iz lota skladišta **W1** na radnika čije efektivno skladi
 - Obavezan `catalogItemId` na izvornom lotu
 - Freeze provjera za grad izvornog i ciljnog skladišta
 
-Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/modules/warehouse-stock/utils/cross-warehouse-issue.util.ts).
+Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/modules/warehouse-stock/utils/cross-warehouse-issue.util.ts), [`resolve-canonical-dest-lot.util.ts`](../../../../backend/src/modules/warehouse-stock/utils/resolve-canonical-dest-lot.util.ts).
 
 ## Notifikacije
 

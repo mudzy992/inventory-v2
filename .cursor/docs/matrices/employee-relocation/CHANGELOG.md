@@ -1,5 +1,9 @@
 # CHANGELOG — employee-relocation
 
+## 2026-06-16
+
+- Source transfer **Prebaci** koristi `resolveCanonicalDestLotInTx` (isti kanonski lot po `catalogItemId` na cilju; reopen zatvorenog umjesto duplikata).
+
 ## 2026-06-05 (spec inheritance)
 
 - Dest relocation lot nasljeđuje lot-specifikaciju sa izvornog lota ili postojećeg lota istog `catalogItemId` na cilju.

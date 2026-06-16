@@ -35,6 +35,7 @@ import { applyDestAcceptLotUpdatesInTx } from './utils/relocation-lot-accounting
 import {
   inheritDestLotSpecificationsInTx,
 } from './utils/inherit-dest-lot-specifications.util';
+import { resolveCanonicalDestLotInTx } from '../warehouse-stock/utils/resolve-canonical-dest-lot.util';
 
 const RELOCATION_LINE_SORT_FIELDS: Record<string, string> = {
   createdAt: 'createdAt',
@@ -622,31 +623,13 @@ export class EmployeeRelocationService {
     const category = await this.categoriesService.assertLeafCategory(line.categoryId);
     const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
     await this.prisma.$transaction(async (tx) => {
-      let lot = await tx.warehouseStockLot.findFirst({
-        where: {
-          warehouseId: caseRow.toWarehouseId,
-          catalogItemId,
-          incomingRelocation: true,
-          status: { not: 'zatvoreno' },
-        },
+      const { lot } = await resolveCanonicalDestLotInTx(tx, {
+        destWarehouseId: caseRow.toWarehouseId,
+        categoryId: line.categoryId,
+        catalogItemId,
+        catalogItemName: catalogItem.name,
+        actorUserId: user.id,
       });
-      if (!lot) {
-        lot = await tx.warehouseStockLot.create({
-          data: {
-            warehouseId: caseRow.toWarehouseId,
-            categoryId: line.categoryId,
-            catalogItemId,
-            lotKind: 'ISSUABLE',
-            productName: catalogItem.name,
-            quantityReceived: 0,
-            quantityOnHand: 0,
-            status: 'ceka_specifikaciju',
-            incomingRelocation: true,
-            receivedByUserId: user.id,
-            entryDate: new Date(),
-          },
-        });
-      }
       const specResult = await inheritDestLotSpecificationsInTx(tx, {
         destLotId: lot.id,
         sourceStockLotId: equipment.stockLotId,

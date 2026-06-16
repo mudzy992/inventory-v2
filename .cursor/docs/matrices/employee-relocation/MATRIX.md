@@ -62,7 +62,8 @@ Admin mijenja `Employee.orgUnitId`. Ako efektivno skladište (`resolveEffectiveW
 ## Lot na cilju (auto-kreiranje)
 
 - Transfer **ne zahtijeva** postojeći lot na ciljnom skladištu.
-- Pri uspješnom **Prebaci** backend kreira pending lot na B (`incomingRelocation=true`, `quantityOnHand=0`) ako ne postoji.
+- Pri uspješnom **Prebaci** backend koristi **kanonski** lot resolver (`resolveCanonicalDestLotInTx`): otvoren lot → reuse; zatvoren lot → reopen; inače create (`incomingRelocation=true`, `quantityOnHand=0`).
+- Više transfera istog tipa na isto skladište ide na **isti** kanonski lot (nema duplikata po `catalogItemId`).
 - Admin **ne** kreira lot ručno — samo mapira šifrarnik ako legacy oprema nema `catalogItemId`.
 
 ## Spec nasljeđivanje

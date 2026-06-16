@@ -18,6 +18,8 @@ type LotRow = {
   status: string;
   specifications: unknown;
   specDefinedAt: Date | null;
+  lotKind: 'ISSUABLE' | 'MAINTENANCE';
+  createdAt: Date;
 };
 
 type EquipmentRow = {
@@ -40,19 +42,32 @@ const createTx = (
       warehouseStockLot: {
         findFirst: async ({
           where,
+          orderBy,
         }: {
           where: {
             warehouseId: string;
             catalogItemId: string;
-            status: { not: string };
+            lotKind?: 'ISSUABLE';
+            status: { not: string } | string;
           };
-        }) =>
-          Object.values(lots).find(
-            (row) =>
-              row.warehouseId === where.warehouseId &&
-              row.catalogItemId === where.catalogItemId &&
-              row.status !== where.status.not,
-          ) ?? null,
+          orderBy?: { createdAt: 'asc' | 'desc' };
+        }) => {
+          let matches = Object.values(lots).filter((row) => {
+            if (row.warehouseId !== where.warehouseId) return false;
+            if (row.catalogItemId !== where.catalogItemId) return false;
+            if (where.lotKind && row.lotKind !== where.lotKind) return false;
+            if (typeof where.status === 'string') return row.status === where.status;
+            return row.status !== where.status.not;
+          });
+          if (orderBy) {
+            matches = matches.sort((a, b) =>
+              orderBy.createdAt === 'asc'
+                ? a.createdAt.getTime() - b.createdAt.getTime()
+                : b.createdAt.getTime() - a.createdAt.getTime(),
+            );
+          }
+          return matches[0] ?? null;
+        },
         findMany: async () => [],
         findUnique: async ({ where }: { where: { id: string } }) => lots[where.id] ?? null,
         create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -70,6 +85,8 @@ const createTx = (
             status: data.status as string,
             specifications: {},
             specDefinedAt: null,
+            lotKind: 'ISSUABLE',
+            createdAt: new Date(),
           };
           lots[id] = row;
           return row;
@@ -87,6 +104,9 @@ const createTx = (
           }
           if (data.incomingRelocation === false) {
             lot.incomingRelocation = false;
+          }
+          if (data.incomingRelocation === true) {
+            lot.incomingRelocation = true;
           }
           const received = data.quantityReceived as
             | { increment?: number; decrement?: number }
@@ -107,6 +127,12 @@ const createTx = (
           }
           if (data.status === 'zatvoreno') {
             lot.status = 'zatvoreno';
+          }
+          if (data.status === 'spremno_za_izdavanje') {
+            lot.status = 'spremno_za_izdavanje';
+          }
+          if (data.status === 'ceka_specifikaciju') {
+            lot.status = 'ceka_specifikaciju';
           }
           return lot;
         },
@@ -151,6 +177,8 @@ describe('findOrCreateDestLotInTx', () => {
         status: 'spremno_za_izdavanje',
         specifications: { f1: 'x' },
         specDefinedAt: new Date(),
+        lotKind: 'ISSUABLE',
+        createdAt: new Date('2026-01-01'),
       },
     };
     const { tx, lotCreates } = createTx(lots, {});
@@ -183,6 +211,40 @@ describe('findOrCreateDestLotInTx', () => {
     assert.equal(result.incomingRelocation, true);
     assert.equal(result.quantityReceived, 0);
   });
+
+  it('reopens closed canonical lot instead of creating duplicate', async () => {
+    const lots: Record<string, LotRow> = {
+      'lot-closed': {
+        id: 'lot-closed',
+        warehouseId: 'wh-b',
+        categoryId: 'cat-leaf',
+        catalogItemId: 'catalog-1',
+        productName: 'Laptop',
+        quantityReceived: 1,
+        quantityOnHand: 0,
+        incomingRelocation: false,
+        status: 'zatvoreno',
+        specifications: { f1: 'x' },
+        specDefinedAt: new Date(),
+        lotKind: 'ISSUABLE',
+        createdAt: new Date('2026-01-01'),
+      },
+    };
+    const { tx, lotCreates } = createTx(lots, {});
+
+    const result = await findOrCreateDestLotInTx(tx as never, {
+      destWarehouseId: 'wh-b',
+      categoryId: 'cat-leaf',
+      catalogItemId: 'catalog-1',
+      catalogItemName: 'Laptop',
+      actorUserId: 'user-1',
+    });
+
+    assert.equal(result.id, 'lot-closed');
+    assert.equal(lotCreates.length, 0);
+    assert.equal(result.status, 'spremno_za_izdavanje');
+    assert.equal(result.incomingRelocation, true);
+  });
 });
 
 describe('applyCrossWarehouseIssueLotUpdatesInTx', () => {
@@ -200,6 +262,8 @@ describe('applyCrossWarehouseIssueLotUpdatesInTx', () => {
         status: 'spremno_za_izdavanje',
         specifications: { field1: 'shared' },
         specDefinedAt: new Date(),
+        lotKind: 'ISSUABLE',
+        createdAt: new Date('2026-01-01'),
       },
     };
     const equipment: Record<string, EquipmentRow> = {
@@ -207,8 +271,7 @@ describe('applyCrossWarehouseIssueLotUpdatesInTx', () => {
     };
     const { tx } = createTx(lots, equipment);
 
-    const result = await applyCrossWarehouseIssueLotUpdatesInTx(tx as never, {
-      equipmentId: 'eq-1',
+    const issueInput = {
       sourceLotId: 'lot-a',
       sourceWarehouseId: 'wh-a',
       destWarehouseId: 'wh-b',
@@ -218,6 +281,11 @@ describe('applyCrossWarehouseIssueLotUpdatesInTx', () => {
       actorUserId: 'user-1',
       fields: [{ id: 'field1', label: 'Field', type: 'text', unique: false, required: true }],
       optionalFields: [],
+    };
+
+    const result = await applyCrossWarehouseIssueLotUpdatesInTx(tx as never, {
+      equipmentId: 'eq-1',
+      ...issueInput,
     });
 
     assert.ok(result.destStockLotId.startsWith('lot-new-'));
@@ -226,6 +294,57 @@ describe('applyCrossWarehouseIssueLotUpdatesInTx', () => {
     assert.equal(lots[result.destStockLotId].quantityOnHand, 0);
     assert.equal(lots[result.destStockLotId].status, 'zatvoreno');
     assert.equal(equipment['eq-1'].stockLotId, result.destStockLotId);
+  });
+
+  it('second dispatch reuses closed dest lot and increments received', async () => {
+    const lots: Record<string, LotRow> = {
+      'lot-a': {
+        id: 'lot-a',
+        warehouseId: 'wh-a',
+        categoryId: 'cat-leaf',
+        catalogItemId: 'catalog-1',
+        productName: 'Laptop',
+        quantityReceived: 5,
+        quantityOnHand: 4,
+        incomingRelocation: false,
+        status: 'spremno_za_izdavanje',
+        specifications: { field1: 'shared' },
+        specDefinedAt: new Date(),
+        lotKind: 'ISSUABLE',
+        createdAt: new Date('2026-01-01'),
+      },
+    };
+    const equipment: Record<string, EquipmentRow> = {
+      'eq-1': { id: 'eq-1', stockLotId: 'lot-a', catalogItemId: 'catalog-1' },
+      'eq-2': { id: 'eq-2', stockLotId: 'lot-a', catalogItemId: 'catalog-1' },
+    };
+    const { tx, lotCreates } = createTx(lots, equipment);
+    const issueInput = {
+      sourceLotId: 'lot-a',
+      sourceWarehouseId: 'wh-a',
+      destWarehouseId: 'wh-b',
+      categoryId: 'cat-leaf',
+      catalogItemId: 'catalog-1',
+      catalogItemName: 'Laptop',
+      actorUserId: 'user-1',
+      fields: [{ id: 'field1', label: 'Field', type: 'text', unique: false, required: true }],
+      optionalFields: [],
+    };
+
+    const first = await applyCrossWarehouseIssueLotUpdatesInTx(tx as never, {
+      equipmentId: 'eq-1',
+      ...issueInput,
+    });
+    const second = await applyCrossWarehouseIssueLotUpdatesInTx(tx as never, {
+      equipmentId: 'eq-2',
+      ...issueInput,
+    });
+
+    assert.equal(lotCreates.length, 1);
+    assert.equal(first.destStockLotId, second.destStockLotId);
+    assert.equal(lots[first.destStockLotId].quantityReceived, 2);
+    assert.equal(lots[first.destStockLotId].quantityOnHand, 0);
+    assert.equal(lots[first.destStockLotId].status, 'zatvoreno');
   });
 
   it('rejects when catalog item is missing', async () => {

@@ -4,6 +4,7 @@ import type { CategoryFieldDefinition } from '../../../common/utils/category-fie
 import { inheritDestLotSpecificationsInTx } from '../../employee-relocation/utils/inherit-dest-lot-specifications.util';
 import { applyDestAcceptLotUpdatesInTx } from '../../employee-relocation/utils/relocation-lot-accounting.util';
 import { maybeCloseDispatchedRelocationLotInTx } from './maybe-close-dispatched-relocation-lot.util';
+import { resolveCanonicalDestLotInTx } from './resolve-canonical-dest-lot.util';
 
 export type FindOrCreateDestLotInput = {
   destWarehouseId: string;
@@ -25,32 +26,8 @@ export const findOrCreateDestLotInTx = async (
   tx: Prisma.TransactionClient,
   input: FindOrCreateDestLotInput,
 ) => {
-  const existing = await tx.warehouseStockLot.findFirst({
-    where: {
-      warehouseId: input.destWarehouseId,
-      catalogItemId: input.catalogItemId,
-      status: { not: 'zatvoreno' },
-    },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (existing) {
-    return existing;
-  }
-  return tx.warehouseStockLot.create({
-    data: {
-      warehouseId: input.destWarehouseId,
-      categoryId: input.categoryId,
-      catalogItemId: input.catalogItemId,
-      lotKind: 'ISSUABLE',
-      productName: input.catalogItemName,
-      quantityReceived: 0,
-      quantityOnHand: 0,
-      status: 'ceka_specifikaciju',
-      incomingRelocation: true,
-      receivedByUserId: input.actorUserId,
-      entryDate: new Date(),
-    },
-  });
+  const resolved = await resolveCanonicalDestLotInTx(tx, input);
+  return resolved.lot;
 };
 
 export const applyCrossWarehouseIssueLotUpdatesInTx = async (
