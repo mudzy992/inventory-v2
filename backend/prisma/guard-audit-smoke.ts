@@ -27,7 +27,7 @@ const request = async (
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await response.text();
-  let json: Json = {};
+  let json: Json;
   try {
     json = JSON.parse(text) as Json;
   } catch {

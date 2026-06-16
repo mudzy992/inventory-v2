@@ -20,7 +20,7 @@ const createTx = (input: { receipts: ReceiptRow[]; lotExists: boolean }) => {
       warehouseStockLotReceipt: {
         findFirst: async ({
           where,
-          orderBy,
+          orderBy: _orderBy,
         }: {
           where: { stockLotId: string; quantityRemaining: { gt: number } };
           orderBy: Array<{ createdAt: 'asc' } | { id: 'asc' }>;

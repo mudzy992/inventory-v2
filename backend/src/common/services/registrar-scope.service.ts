@@ -1,6 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type {
-  Category,
   Employee,
   Equipment,
   Prisma,

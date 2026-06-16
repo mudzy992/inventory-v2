@@ -122,7 +122,7 @@ const main = async (): Promise<void> => {
   const prisma = createPrismaClient();
   const cleanupLotIds: string[] = [];
   const cleanupEquipmentIds: string[] = [];
-  let cleanupWarehouseId: string | null = null;
+  const cleanupWarehouseId: string | null = null;
   let cleanupSessionId: string | null = null;
 
   const adminUser = await prisma.user.findFirst({
@@ -189,7 +189,6 @@ const main = async (): Promise<void> => {
 
   const categoryFields = (leafCategory.fields as CategoryField[]) ?? [];
   const categoryOptionalFields = (leafCategory.optionalFields as CategoryField[]) ?? [];
-  const allCategoryFields = [...categoryFields, ...categoryOptionalFields];
   const lotFieldId = getLotFields(leafCategory).find(
     (field) => field.required !== false && field.type === 'text',
   )?.id ?? getLotFields(leafCategory)[0]?.id;
@@ -288,7 +287,6 @@ const main = async (): Promise<void> => {
         year: 2099,
       },
     });
-    cleanupSessionId = session.id;
     const freezeSave = await patchSpec(registrarAuth.token, freezeLotId, buildSpec({ [lotFieldId]: 'Dell' }));
     assert('A5 active inventory freeze → 400', freezeSave.status === 400, String(freezeSave.status));
     await prisma.inventorySession.delete({ where: { id: session.id } });

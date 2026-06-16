@@ -37,7 +37,7 @@ export class EquipmentCatalogService {
     await this.settingsService.assertFeatureEnabled('features.equipment_catalog');
     const searchTerm = (query.search ?? query.q)?.trim();
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
-    const { page, skip, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
+    const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
     const where: Prisma.EquipmentCatalogItemWhereInput = {
       isActive: true,
       ...(query.categoryId ? { categoryId: query.categoryId } : {}),

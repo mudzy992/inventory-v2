@@ -205,7 +205,7 @@ describe('applyCrossWarehouseIssueLotUpdatesInTx', () => {
     const equipment: Record<string, EquipmentRow> = {
       'eq-1': { id: 'eq-1', stockLotId: 'lot-a', catalogItemId: 'catalog-1' },
     };
-    const { tx, equipmentUpdates } = createTx(lots, equipment);
+    const { tx } = createTx(lots, equipment);
 
     const result = await applyCrossWarehouseIssueLotUpdatesInTx(tx as never, {
       equipmentId: 'eq-1',

@@ -23,7 +23,6 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import {
-  assertCanReadEquipment,
   assertCanWriteEquipment,
 } from '../equipment/equipment-access.util';
 import { PrismaService } from '../../prisma/prisma.service';

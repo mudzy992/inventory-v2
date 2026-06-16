@@ -185,17 +185,17 @@ export class MaintenancePartsService {
       Object.entries(specsInput).map(([key, value]) => [key, String(value)]),
     );
     const { optionalFields } = this.categoriesService.getFieldDefinitions(category);
-    let status: 'ceka_specifikaciju' | 'spremno_za_izdavanje' = 'ceka_specifikaciju';
-    if (optionalFields.length === 0) {
-      status = 'spremno_za_izdavanje';
-    } else {
-      try {
-        validateLotSpecifications(specs, optionalFields);
-        status = 'spremno_za_izdavanje';
-      } catch {
-        status = 'ceka_specifikaciju';
-      }
-    }
+    const status: 'ceka_specifikaciju' | 'spremno_za_izdavanje' =
+      optionalFields.length === 0
+        ? 'spremno_za_izdavanje'
+        : (() => {
+            try {
+              validateLotSpecifications(specs, optionalFields);
+              return 'spremno_za_izdavanje' as const;
+            } catch {
+              return 'ceka_specifikaciju' as const;
+            }
+          })();
     return this.prisma.warehouseStockLot.create({
       data: {
         warehouseId,

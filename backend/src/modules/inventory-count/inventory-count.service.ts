@@ -10,7 +10,6 @@ import type {
   InventoryWarehouseLineStatus,
   Prisma,
 } from '../../../generated/prisma/client';
-import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import {
   buildContainsSearchWhere,

@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import type {
   EmployeeRelocationEventAction,
-  EmployeeRelocationLineStatus,
   Prisma,
 } from '../../../generated/prisma/client';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
@@ -622,7 +621,7 @@ export class EmployeeRelocationService {
     }
     const category = await this.categoriesService.assertLeafCategory(line.categoryId);
     const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
-    const destLot = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       let lot = await tx.warehouseStockLot.findFirst({
         where: {
           warehouseId: caseRow.toWarehouseId,
