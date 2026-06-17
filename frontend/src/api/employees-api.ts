@@ -27,6 +27,8 @@ export interface EmployeeProfileHeldEquipment {
   id: string;
   inventoryNumber: string;
   categoryName: string;
+  lotName: string | null;
+  serialNumber: string | null;
   status: string;
 }
 

@@ -27,3 +27,14 @@ export const buildLegacySpecsPayload = (
   }
   return payload;
 };
+
+export const pickLotSpecificationValues = (
+  values: Record<string, string>,
+  fields: CategoryField[],
+): Record<string, string> => {
+  const payload: Record<string, string> = {};
+  for (const field of fields) {
+    payload[field.id] = values[field.id]?.trim() ?? '';
+  }
+  return payload;
+};

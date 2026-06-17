@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useStore, useRefreshData } from '../useStore';
 import { getCurrentUser, isAdmin, isEvidenticar } from '../store';
@@ -31,16 +31,15 @@ interface EquipmentCardProps {
   equipmentId: string;
   onClose: () => void;
   showTransferActions?: boolean;
-  initialShowQR?: boolean;
 }
 
-export function EquipmentCard({ equipmentId, onClose, showTransferActions = true, initialShowQR = false }: EquipmentCardProps) {
+export function EquipmentCard({ equipmentId, onClose, showTransferActions = true }: EquipmentCardProps) {
   const [state] = useStore();
   const refresh = useRefreshData();
   const { toastError, toastSuccess } = useToast();
   const { getBoolean } = usePublicSettings();
   const disposalPreListEnabled = getBoolean('features.disposal_pre_list', true);
-  const [showQR, setShowQR] = useState(initialShowQR);
+  const qrContainerRef = useRef<HTMLDivElement>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<TransferType>('prenos');
   const [toPersonId, setToPersonId] = useState('');
@@ -127,10 +126,6 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   }, [loadEquipment]);
 
   useEffect(() => {
-    setShowQR(initialShowQR);
-  }, [equipmentId, initialShowQR]);
-
-  useEffect(() => {
     if (!showTransferModal || !eq) {
       return;
     }
@@ -198,7 +193,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
 
   const handleDownloadQR = () => {
     const canvas = document.createElement('canvas');
-    const svg = document.querySelector('#equipment-qr-code svg');
+    const svg = qrContainerRef.current?.querySelector('svg');
     if (!svg) return;
     const svgData = new XMLSerializer().serializeToString(svg);
     const img = new Image();
@@ -231,6 +226,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const handlePrintQR = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+    const qrHtml = qrContainerRef.current?.innerHTML ?? '';
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -246,7 +242,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       </head>
       <body>
         <div class="qr-container">
-          ${document.querySelector('#equipment-qr-code')?.innerHTML || ''}
+          ${qrHtml}
           <div style="font-size:13px;font-weight:bold;margin-top:12px;">${displayName}</div>
           ${uniqueFieldsSummary ? `<div style="font-size:11px;margin-top:4px;">${uniqueFieldsSummary}</div>` : ''}
           <div class="inv-number">${eq.inventoryNumber}</div>
@@ -449,44 +445,30 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
 
             <div className="space-y-5">
               <div className="bg-gray-50 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <QrCode size={16} /> QR Kod
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowQR(!showQR)}
-                    className="text-xs text-blue-600 hover:text-blue-800"
-                  >
-                    {showQR ? 'Sakrij' : 'Prikaži'}
-                  </button>
-                </div>
-                {showQR && (
-                  <div className="text-center">
-                    <div id="equipment-qr-code" className="inline-block bg-white p-4 rounded-xl shadow-sm">
-                      <QRCodeSVG value={qrData} size={180} level="H" />
-                    </div>
-                    <div className="mt-3 flex justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleDownloadQR}
-                        className="flex items-center gap-1.5 text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors"
-                      >
-                        <Download size={12} /> Preuzmi
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handlePrintQR}
-                        className="flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
-                      >
-                        <Printer size={12} /> Štampaj
-                      </button>
-                    </div>
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
+                  <QrCode size={16} /> QR Kod
+                </h3>
+                <div className="text-center">
+                  <div ref={qrContainerRef} className="inline-block bg-white p-4 rounded-xl shadow-sm">
+                    <QRCodeSVG value={qrData} size={180} level="H" />
                   </div>
-                )}
-                {!showQR && (
-                  <p className="text-xs text-gray-400 text-center">Klikni &quot;Prikaži&quot; za QR kod opreme</p>
-                )}
+                  <div className="mt-3 flex justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleDownloadQR}
+                      className="flex items-center gap-1.5 text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors"
+                    >
+                      <Download size={12} /> Preuzmi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePrintQR}
+                      className="flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <Printer size={12} /> Štampaj
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {eq.status !== 'rashodovano' && cat ? (
@@ -541,7 +523,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                             <div className="mt-2">
                               <TransferDocumentPanel
                                 transfer={t}
-                                allowSign={canManage && canSignDisposalTransfer(t)}
+                                allowSign={canManage && canSignDisposalTransfer(t) && t.status !== 'potpisan' && t.status !== 'cancelled'}
                                 onSigned={() => void refresh().then(() => loadEquipment())}
                               />
                             </div>

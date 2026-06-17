@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Download, Eye, FileText, Upload } from 'lucide-react';
+import { CheckCircle, Download, Eye, FileText, Upload } from 'lucide-react';
 import type { InventorySessionStatus } from '../api/inventory-api';
 import { fetchAuthenticatedBlob, getApiBaseUrl } from '../api/client';
 import { apiRequest } from '../api/client';
-import { uploadTransferDocumentApi } from '../api/data-api';
+import { signTransferApi, uploadTransferDocumentApi } from '../api/data-api';
 import type { TransferRecord } from '../types';
 import {
   buildInventoryTransferSteps,
@@ -14,6 +14,8 @@ import { cn } from '../utils/cn';
 import { useAdminSettings } from '../contexts/admin-settings-context';
 import { isAdmin } from '../store';
 import { useToast } from '../contexts/toast-context';
+import { canFinalizeTransfer, canSignTransfer } from '../helpers/guards';
+import { ApiError } from '../api/client';
 
 interface UploadMeta {
   id: string;
@@ -175,13 +177,55 @@ export const TransferDocumentPanel = ({
     await uploadTransferDocumentApi(transfer.id, file);
     onSigned?.();
   };
+  const handleFinalize = async () => {
+    const finalizeGuard = canFinalizeTransfer(transfer.status);
+    if (!finalizeGuard.allowed) {
+      toastError(finalizeGuard.reason ?? 'Finalizacija nije dozvoljena.');
+      return;
+    }
+    const signGuard = canSignTransfer({
+      hasUploadedPdf: Boolean(transfer.scannedDocUrl),
+      requireSignedUpload: requireSignedPdf,
+      allowFinalizeWithoutUpload,
+    });
+    if (!signGuard.allowed) {
+      toastError(signGuard.reason ?? 'Finalizacija nije dozvoljena.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await signTransferApi(transfer.id, {});
+      onSigned?.();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri finalizaciji';
+      toastError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const isRaw = transfer.status === 'raw' || transfer.status === 'printed';
+  const isAwaitingFinalize = transfer.status === 'uploaded' || transfer.status === 'printed';
   const canPrintPreview =
     !inventoryMode &&
     (transfer.status === 'raw' ||
       transfer.status === 'printed' ||
       transfer.status === 'uploaded');
-  const canUpload = allowSign && isRaw && !transfer.scannedDocUrl;
+  const canUpload =
+    allowSign &&
+    !inventoryMode &&
+    transfer.status !== 'potpisan' &&
+    transfer.status !== 'cancelled';
+  const canFinalize =
+    allowSign &&
+    !inventoryMode &&
+    !finalizeBlocked &&
+    canFinalizeTransfer(transfer.status).allowed &&
+    canSignTransfer({
+      hasUploadedPdf: Boolean(transfer.scannedDocUrl),
+      requireSignedUpload: requireSignedPdf,
+      allowFinalizeWithoutUpload,
+    }).allowed &&
+    (Boolean(transfer.scannedDocUrl) || allowFinalizeWithoutUpload);
   const badgeClass =
     inventoryBadge?.tone === 'success'
       ? 'bg-green-100 text-green-800'
@@ -214,10 +258,14 @@ export const TransferDocumentPanel = ({
           <span
             className={cn(
               'text-xs px-2 py-0.5 rounded-full',
-              isRaw ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800',
+              isRaw
+                ? 'bg-amber-100 text-amber-800'
+                : isAwaitingFinalize
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-green-100 text-green-800',
             )}
           >
-            {isRaw ? 'RAW' : 'Potpisana'}
+            {isRaw ? 'RAW' : isAwaitingFinalize ? 'Upload OK' : 'Potpisana'}
           </span>
         )}
       </div>
@@ -336,7 +384,7 @@ export const TransferDocumentPanel = ({
         )}
         {canUpload && (
           <label className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700">
-            <Upload size={14} /> Upload potpisane
+            <Upload size={14} /> {transfer.scannedDocUrl ? 'Zamijeni PDF' : 'Upload potpisane'}
             <input
               type="file"
               accept="application/pdf"
@@ -350,8 +398,18 @@ export const TransferDocumentPanel = ({
             />
           </label>
         )}
-        {!inventoryMode && allowSign && isRaw && (
-          <label className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700">
+        {canFinalize && (isAwaitingFinalize || (isRaw && allowFinalizeWithoutUpload)) ? (
+          <button
+            type="button"
+            onClick={() => void handleFinalize()}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+          >
+            <CheckCircle size={14} /> Finalizuj prenosnicu
+          </button>
+        ) : null}
+        {!inventoryMode && allowSign && isRaw && !transfer.scannedDocUrl ? (
+          <label className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-green-700 text-white rounded-lg cursor-pointer hover:bg-green-800">
             <Upload size={14} /> Upload + potpis
             <input
               type="file"
@@ -360,12 +418,15 @@ export const TransferDocumentPanel = ({
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) {
-                  void handleUpload(file);
+                  void (async () => {
+                    await handleUpload(file);
+                    await handleFinalize();
+                  })();
                 }
               }}
             />
           </label>
-        )}
+        ) : null}
       </div>
       {finalizeBlocked ? (
         <p className="text-xs text-amber-800" title="Finalizacija je blokirana dok je sesija popisa aktivna">

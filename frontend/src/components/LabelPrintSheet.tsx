@@ -1,9 +1,8 @@
 import { QRCodeSVG } from 'qrcode.react';
 import type { Category, Equipment } from '../types';
 import {
-  buildEquipmentDisplayName,
   buildEquipmentQrUrl,
-  getUniqueFieldsDisplay,
+  getSerialNumberDisplay,
 } from '../helpers/equipment-display.util';
 import { ModalRoot } from './ui/modal-root';
 import { MODAL_Z } from '../constants/modal-z-index';
@@ -41,8 +40,8 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
           {items.map((item) => {
             const category = categories.find((row) => row.id === item.categoryId);
             const qrData = buildEquipmentQrUrl(item);
-            const displayName = buildEquipmentDisplayName(category, item.specifications);
-            const uniqueFields = getUniqueFieldsDisplay(category, item.specifications);
+            const lotName = item.stockLot?.productName?.trim();
+            const serial = getSerialNumberDisplay(category, item.specifications);
             return (
               <div
                 key={item.id}
@@ -51,19 +50,21 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
                 <div className="shrink-0 flex items-center justify-center">
                   <QRCodeSVG value={qrData} size={88} />
                 </div>
-                <div className="flex-1 min-w-0 text-left flex flex-col justify-center">
-                  <p className="text-xs font-semibold text-gray-900 line-clamp-2 leading-tight">
-                    {displayName || category?.name}
-                  </p>
-                  {uniqueFields.map((uniqueField) => (
-                    <p key={uniqueField.label} className="text-[10px] text-gray-700 mt-1 truncate">
-                      <span className="text-gray-500">{uniqueField.label}:</span> {uniqueField.value}
+                <div className="flex-1 min-w-0 text-left flex flex-col justify-center gap-0.5">
+                  {lotName ? (
+                    <p className="text-xs font-semibold text-gray-900 line-clamp-2 leading-tight">
+                      {lotName}
                     </p>
-                  ))}
-                  <p className="font-mono text-[11px] font-bold text-gray-900 mt-1">
+                  ) : null}
+                  <p className="text-[10px] text-gray-600 truncate">{category?.name ?? ''}</p>
+                  {serial ? (
+                    <p className="text-[10px] text-gray-700 truncate">
+                      <span className="text-gray-500">{serial.label}:</span> {serial.value}
+                    </p>
+                  ) : null}
+                  <p className="font-mono text-sm font-bold text-gray-900 mt-0.5 tracking-tight">
                     {item.inventoryNumber}
                   </p>
-                  <p className="text-[10px] text-gray-500 truncate">{category?.name ?? ''}</p>
                 </div>
               </div>
             );

@@ -5,6 +5,7 @@ import type { PaginatedResponse } from '../../common/types/paginated-response.ty
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { EMPLOYEE_MESSAGES } from '../../common/utils/employee-messages.util';
 import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
+import { parseCategoryFields, resolveSerialNumberFromSpecifications } from '../../common/utils/category-fields.util';
 import {
   buildContainsSearchWhere,
   buildOrderBy,
@@ -51,6 +52,8 @@ export interface EmployeeProfileHeldEquipment {
   id: string;
   inventoryNumber: string;
   categoryName: string;
+  lotName: string | null;
+  serialNumber: string | null;
   status: string;
 }
 
@@ -161,7 +164,9 @@ export class EmployeesService {
           id: true,
           inventoryNumber: true,
           status: true,
-          category: { select: { name: true } },
+          specifications: true,
+          category: { select: { name: true, fields: true, optionalFields: true } },
+          stockLot: { select: { productName: true } },
         },
       }),
       this.prisma.equipment.count({
@@ -181,12 +186,23 @@ export class EmployeesService {
       user: linkedUser
         ? { id: linkedUser.id, email: linkedUser.email ?? '', role: linkedUser.role }
         : null,
-      heldEquipment: heldEquipment.map((item) => ({
-        id: item.id,
-        inventoryNumber: item.inventoryNumber,
-        categoryName: item.category.name,
-        status: item.status,
-      })),
+      heldEquipment: heldEquipment.map((item) => {
+        const fields = parseCategoryFields(item.category.fields);
+        const optionalFields = parseCategoryFields(item.category.optionalFields);
+        const specifications = (item.specifications ?? {}) as Record<string, string>;
+        return {
+          id: item.id,
+          inventoryNumber: item.inventoryNumber,
+          categoryName: item.category.name,
+          lotName: item.stockLot?.productName?.trim() || null,
+          serialNumber: resolveSerialNumberFromSpecifications(
+            fields,
+            optionalFields,
+            specifications,
+          ),
+          status: item.status,
+        };
+      }),
       heldEquipmentTotal,
     };
   }

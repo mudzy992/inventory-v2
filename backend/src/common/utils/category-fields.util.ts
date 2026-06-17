@@ -49,6 +49,31 @@ export const normalizeLotCategoryFields = (
 export const hasRequiredLotSpecFields = (optionalFields: CategoryFieldDefinition[]): boolean =>
   optionalFields.some((field) => field.required);
 
+const isSerialFieldName = (name: string): boolean => /serijsk/i.test(name);
+
+export const resolveSerialNumberFromSpecifications = (
+  fields: CategoryFieldDefinition[],
+  optionalFields: CategoryFieldDefinition[],
+  specifications: Record<string, string>,
+): string | null => {
+  const allFields = [...fields, ...optionalFields];
+  const serialField = allFields.find((field) => isSerialFieldName(field.name));
+  if (serialField) {
+    const value = specifications[serialField.id]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+  const uniqueField = allFields.find((field) => field.unique);
+  if (uniqueField) {
+    const value = specifications[uniqueField.id]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+  return null;
+};
+
 const validateFieldValues = (
   specifications: Record<string, string>,
   allowedFields: CategoryFieldDefinition[],
@@ -83,6 +108,21 @@ const validateFieldValues = (
       throw new BadRequestException(`${definition.name} must be a valid date`);
     }
   }
+};
+
+export const sanitizeLotSpecifications = (
+  specifications: Record<string, string>,
+  optionalFields: CategoryFieldDefinition[],
+): Record<string, string> => {
+  const lotFields = getLotSpecFields(optionalFields);
+  const allowedIds = new Set(lotFields.map((field) => field.id));
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(specifications)) {
+    if (allowedIds.has(key)) {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
 };
 
 export const validateLotSpecifications = (

@@ -4,6 +4,7 @@ import {
   hasRequiredLotSpecFields,
   normalizeLotCategoryFields,
   normalizeUnitCategoryFields,
+  sanitizeLotSpecifications,
   validateEquipmentSpecifications,
   validateIssueSpecifications,
   validateLotSpecifications,
@@ -80,5 +81,14 @@ describe('category-fields.util', () => {
       hasRequiredLotSpecFields([{ id: 'n', name: 'N', type: 'text', required: false, unique: false }]),
       false,
     );
+  });
+
+  it('sanitizes lot specs by dropping unknown field keys', () => {
+    const actual = sanitizeLotSpecifications(
+      { brand: 'HP', removedField: 'x', note: 'ok' },
+      lotFields,
+    );
+    assert.deepEqual(actual, { brand: 'HP', note: 'ok' });
+    assert.doesNotThrow(() => validateLotSpecifications(actual, lotFields));
   });
 });

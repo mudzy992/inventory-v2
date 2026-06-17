@@ -1,9 +1,18 @@
-import type { Category, Equipment } from '../types';
+import type { Category, CategoryField, Equipment } from '../types';
 
 export interface UniqueFieldDisplay {
   label: string;
   value: string;
 }
+
+const isSerialFieldName = (name: string): boolean => /serijsk/i.test(name);
+
+const getAllCategorySpecFields = (category: Category | undefined): CategoryField[] => {
+  if (!category) {
+    return [];
+  }
+  return [...category.fields, ...category.optionalFields];
+};
 
 export const buildEquipmentDisplayName = (
   category: Category | undefined,
@@ -40,6 +49,31 @@ export const getUniqueFieldDisplay = (
   category: Category | undefined,
   specifications: Record<string, string> | undefined,
 ): UniqueFieldDisplay | null => getUniqueFieldsDisplay(category, specifications)[0] ?? null;
+
+export const getSerialNumberDisplay = (
+  category: Category | undefined,
+  specifications: Record<string, string> | undefined,
+): UniqueFieldDisplay | null => {
+  if (!category) {
+    return null;
+  }
+  const fields = getAllCategorySpecFields(category);
+  const serialField = fields.find((field) => isSerialFieldName(field.name));
+  if (serialField) {
+    const value = specifications?.[serialField.id]?.trim();
+    if (value) {
+      return { label: serialField.name, value };
+    }
+  }
+  const uniqueField = fields.find((field) => field.unique);
+  if (uniqueField) {
+    const value = specifications?.[uniqueField.id]?.trim();
+    if (value) {
+      return { label: uniqueField.name, value };
+    }
+  }
+  return null;
+};
 
 export const buildEquipmentQrUrl = (equipment: Pick<Equipment, 'id'>): string => {
   const configured = import.meta.env.VITE_APP_URL as string | undefined;

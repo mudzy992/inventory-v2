@@ -1,5 +1,9 @@
 # Changelog — labels
 
+## 2026-06-17
+
+- Naljepnica: lot naziv, kategorija, serijski (ako postoji), bold inventurni broj, QR.
+
 ## 2026-06-03
 
 - QR URL format; horizontalni layout naljepnice; javna stranica `/equipment/:id`.

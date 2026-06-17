@@ -60,6 +60,7 @@ import {
 import {
   getLotSpecFieldsForCategory,
   getUnitSpecFieldsForCategory,
+  pickLotSpecificationValues,
 } from '../../helpers/category-lot-spec-fields.util';
 
 const LotSectionCard = ({
@@ -368,7 +369,14 @@ export const RegistrarStockPage = () => {
     try {
       const row = await fetchStockLotApi(id);
       setDetail(row);
-      setSpecs((row.specifications ?? {}) as Record<string, string>);
+      const rowCategory = state.categories.find((item) => item.id === row.categoryId);
+      const rowLotFields = getLotSpecFieldsForCategory(rowCategory);
+      setSpecs(
+        pickLotSpecificationValues(
+          (row.specifications ?? {}) as Record<string, string>,
+          rowLotFields,
+        ),
+      );
       setUnitActionMode(null);
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Greška');
@@ -376,7 +384,7 @@ export const RegistrarStockPage = () => {
       setSelectedId(null);
       setDetail(null);
     }
-  }, [navigate, toastError]);
+  }, [navigate, state.categories, toastError]);
   useEffect(() => {
     if (!routeLotId) {
       setSelectedId(null);
@@ -407,7 +415,10 @@ export const RegistrarStockPage = () => {
     const wasInitialSpec = detail.status === 'ceka_specifikaciju';
     setSaving(true);
     try {
-      const updated = await updateStockLotSpecApi(detail.id, specs);
+      const updated = await updateStockLotSpecApi(
+        detail.id,
+        pickLotSpecificationValues(specs, lotFields),
+      );
       setDetail(updated);
       toastSuccess(wasInitialSpec ? 'Specifikacija lota je sačuvana' : 'Izmjene specifikacije su sačuvane');
       await groupList.refresh();

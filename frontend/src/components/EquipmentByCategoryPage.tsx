@@ -23,7 +23,6 @@ export function EquipmentByCategoryPage() {
   const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
   const [selectedLotKey, setSelectedLotKey] = useState<string | null>(null);
   const [viewItemId, setViewItemId] = useState<string | null>(null);
-  const [viewShowQR, setViewShowQR] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showLabels, setShowLabels] = useState(false);
   const [labelItems, setLabelItems] = useState<Equipment[]>([]);
@@ -294,21 +293,18 @@ export function EquipmentByCategoryPage() {
 
   useEffect(() => {
     setViewItemId(null);
-    setViewShowQR(false);
   }, [selectedSubId, selectedLotKey]);
 
   useEffect(() => {
     setShowAllStatuses(false);
   }, [selectedLotKey]);
 
-  const handleOpenEquipment = (equipmentId: string, showQR = false) => {
+  const handleOpenEquipment = (equipmentId: string) => {
     setViewItemId(equipmentId);
-    setViewShowQR(showQR);
   };
 
   const handleCloseEquipment = () => {
     setViewItemId(null);
-    setViewShowQR(false);
   };
 
   return (
@@ -717,7 +713,7 @@ export function EquipmentByCategoryPage() {
                           <div className="flex justify-end gap-1">
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); handleOpenEquipment(eq.id, true); }}
+                              onClick={(e) => { e.stopPropagation(); handleOpenEquipment(eq.id); }}
                               className="text-gray-500 hover:text-blue-600 p-1"
                               title="QR kod"
                             >
@@ -725,7 +721,7 @@ export function EquipmentByCategoryPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); handleOpenEquipment(eq.id, false); }}
+                              onClick={(e) => { e.stopPropagation(); handleOpenEquipment(eq.id); }}
                               className="text-gray-500 hover:text-gray-700 p-1"
                               title="Detalji"
                             >
@@ -858,7 +854,6 @@ export function EquipmentByCategoryPage() {
           equipmentId={viewItemId}
           onClose={handleCloseEquipment}
           showTransferActions={admin || evidenticar}
-          initialShowQR={viewShowQR}
         />
       )}
     </div>

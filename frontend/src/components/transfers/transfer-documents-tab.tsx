@@ -14,7 +14,8 @@ import { useToast } from '../../contexts/toast-context';
 import { getEmployeeFullName, getStatusLabel, formatDate, getOrgUnitPath, getStatusColor } from '../../helpers';
 import { usePublicSettings } from '../../contexts/public-settings-context';
 import { useAdminSettings } from '../../contexts/admin-settings-context';
-import { canSignTransfer } from '../../helpers/guards';
+import { canSignTransfer, canFinalizeTransfer, isTransferAwaitingFinalize } from '../../helpers/guards';
+import { getTransferStepBadge } from './transfer-step.util';
 import { refreshAfterMutation } from '../../helpers/run-mutation-with-refresh.util';
 import {
   buildCompanyHeaderHtml,
@@ -257,9 +258,14 @@ export const TransferDocumentsTab = () => {
           const fromName = getTransferFromPersonName(t);
           const toName = getTransferToPersonName(t);
           const signerName = getTransferSignerName(t);
+          const stepBadge = getTransferStepBadge(t);
+          const canManageActions =
+            t.status !== 'potpisan' &&
+            t.status !== 'cancelled' &&
+            canFinalizeTransfer(t.status).allowed;
 
           return (
-            <div key={t.id} className={`bg-white rounded-xl shadow-sm border ${t.status === 'raw' ? 'border-yellow-200' : 'border-gray-100'} overflow-hidden`}>
+            <div key={t.id} className={`bg-white rounded-xl shadow-sm border ${t.status === 'raw' ? 'border-yellow-200' : t.status === 'uploaded' ? 'border-blue-200' : 'border-gray-100'} overflow-hidden`}>
               <div className="p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -267,8 +273,14 @@ export const TransferDocumentsTab = () => {
                     <span className="font-mono text-sm font-bold text-gray-800">{t.documentNumber}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(t.status)}`}>
-                      {t.status === 'raw' ? '⏳ RAW' : '✅ Potpisan'}
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      stepBadge.tone === 'success'
+                        ? 'bg-green-100 text-green-800'
+                        : stepBadge.tone === 'info'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {stepBadge.label}
                     </span>
                   </div>
                 </div>
@@ -316,16 +328,20 @@ export const TransferDocumentsTab = () => {
                     className="flex items-center gap-1.5 text-xs bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">
                     <Eye size={13} /> Pregled
                   </button>
-                  {t.status === 'raw' && (
+                  {canManageActions && (
                     <>
-                      <button onClick={() => handleSignDoc(t.id)}
-                        className="flex items-center gap-1.5 text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors">
-                        <Upload size={13} /> Priloži sken
-                      </button>
-                      <button onClick={() => void handleMarkSigned(t.id)}
-                        className="flex items-center gap-1.5 text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors">
-                        <CheckCircle size={13} /> Potpiši
-                      </button>
+                      {t.status === 'raw' && (
+                        <button onClick={() => handleSignDoc(t.id)}
+                          className="flex items-center gap-1.5 text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors">
+                          <Upload size={13} /> Priloži sken
+                        </button>
+                      )}
+                      {(t.status === 'raw' || isTransferAwaitingFinalize(t.status)) && (
+                        <button onClick={() => void handleMarkSigned(t.id)}
+                          className="flex items-center gap-1.5 text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors">
+                          <CheckCircle size={13} /> {isTransferAwaitingFinalize(t.status) ? 'Finalizuj' : 'Potpiši'}
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -466,7 +482,7 @@ export const TransferDocumentsTab = () => {
                   <div className="mt-6">
                     <TransferDocumentPanel
                       transfer={t}
-                      allowSign={t.status === 'raw'}
+                      allowSign={t.status !== 'potpisan' && t.status !== 'cancelled'}
                       onSigned={() => {
                         void refresh();
                         void list.refresh();

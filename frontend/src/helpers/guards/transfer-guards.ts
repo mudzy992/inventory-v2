@@ -61,3 +61,16 @@ export const canSignTransfer = (input: {
   }
   return { allowed: true };
 };
+
+export const canFinalizeTransfer = (status: string): TransferGuardResult => {
+  if (status === 'potpisan' || status === 'cancelled') {
+    return { allowed: false, reason: 'Prenosnica je već završena ili otkazana.' };
+  }
+  if (status === 'raw' || status === 'uploaded' || status === 'printed') {
+    return { allowed: true };
+  }
+  return { allowed: false, reason: 'Nepoznat status prenosnice.' };
+};
+
+export const isTransferAwaitingFinalize = (status: string): boolean =>
+  status === 'uploaded' || status === 'printed';

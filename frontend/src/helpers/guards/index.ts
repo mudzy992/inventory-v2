@@ -43,6 +43,8 @@ export {
   canCreateTransferType,
   canCreateCrossServiceTransfer,
   canSignTransfer,
+  canFinalizeTransfer,
+  isTransferAwaitingFinalize,
   TRANSFER_GUARD_MESSAGES,
   type TransferGuardResult,
 } from './transfer-guards';

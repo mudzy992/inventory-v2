@@ -1,3 +1,8 @@
+## 2026-06-17 — Finalizacija nakon uploada
+
+- UI: `uploaded` / `printed` status prikazuje „Finalizuj prenosnicu" kad postoji `scannedDocUrl` i `transfer.require_signed_pdf_upload` je ispunjen.
+- `TransferDocumentPanel`, `transfer-documents-tab`, `TransfersPage`, `EquipmentCard`: `allowSign` za sve nefinalizirane statuse.
+
 ## 2026-06-15 — FE guard transfer generation
 
 - `canCreateTransferType` + `TRANSFER_GUARD_MESSAGES` za provjeru postavki generisanja prenosnica.

@@ -7,6 +7,7 @@ import {
 import type { Prisma } from '../../../generated/prisma/client';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
+import { OrgScopeService } from '../../common/services/org-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { assertCanWriteEquipment } from '../equipment/equipment-access.util';
@@ -18,6 +19,8 @@ import { assignListedDisposalItemsToCommissionInTx } from './utils/assign-dispos
 import { executeRazduzenjeForDisposalMarkInTx } from './utils/execute-disposal-mark-razduzenje.util';
 import { resolveParentAssetCategoryIdInTx } from './utils/resolve-parent-asset-category.util';
 import { resolveDisposalTargetWarehouseId } from './utils/resolve-disposal-target-warehouse.util';
+import { buildCommitteeScopeDeps } from './utils/build-committee-scope-deps.util';
+import { isEquipmentInDisposalSessionScope } from './utils/disposal-session-scope.util';
 
 const LIST_ITEM_INCLUDE = {
   equipment: {
@@ -49,6 +52,7 @@ export class EquipmentDisposalListService {
     private readonly prisma: PrismaService,
     private readonly registrarScope: RegistrarScopeService,
     private readonly locationResolutionService: LocationResolutionService,
+    private readonly orgScopeService: OrgScopeService,
     private readonly warehouseResolutionService: WarehouseResolutionService,
     private readonly settingsService: SettingsService,
   ) {}
@@ -132,18 +136,17 @@ export class EquipmentDisposalListService {
         'Nema definisanog opsega popisa za ovo skladište i kategoriju u odabranoj sesiji',
       );
     }
-    if (equipment.status === 'zaduzeno') {
-      const sessionCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
-        session.orgUnitId,
-      );
-      const equipmentCityId = equipment.currentHolder
-        ? await this.locationResolutionService.getEffectiveLocationForOrgUnit(
-            equipment.currentHolder.orgUnitId,
-          )
-        : null;
-      if (!sessionCityId || equipmentCityId !== sessionCityId) {
-        throw new BadRequestException('Oprema nije u opsegu sesije popisa');
-      }
+    const inScope = await isEquipmentInDisposalSessionScope(
+      this.buildCommitteeScopeDeps(),
+      {
+        sessionOrgUnitId: session.orgUnitId,
+        warehouseId,
+        parentCategoryId,
+      },
+      equipment,
+    );
+    if (!inScope) {
+      throw new BadRequestException('Oprema nije u opsegu sesije popisa');
     }
     const createTransfer = await isTransferCreationAllowed(
       this.settingsService,
@@ -339,6 +342,18 @@ export class EquipmentDisposalListService {
       if (!slot) {
         continue;
       }
+      const inScope = await isEquipmentInDisposalSessionScope(
+        this.buildCommitteeScopeDeps(),
+        {
+          sessionOrgUnitId: session.orgUnitId,
+          warehouseId,
+          parentCategoryId,
+        },
+        equipment,
+      );
+      if (!inScope) {
+        continue;
+      }
       eligible.push({
         id: session.id,
         name: session.name,
@@ -488,6 +503,39 @@ export class EquipmentDisposalListService {
           this.warehouseResolutionService.resolveForEmployee(employeeId),
       },
     );
+  }
+
+  private buildCommitteeScopeDeps() {
+    return buildCommitteeScopeDeps(
+      this.prisma,
+      this.locationResolutionService,
+      this.registrarScope,
+      this.orgScopeService,
+      (equipment) => this.resolveEquipmentCityId(equipment),
+    );
+  }
+
+  private async resolveEquipmentCityId(equipment: {
+    currentHolder: { orgUnitId: string } | null;
+    warehouse?: { cityId: string } | null;
+    warehouseId?: string | null;
+  }): Promise<string | null> {
+    if (equipment.currentHolder) {
+      return this.locationResolutionService.getEffectiveLocationForOrgUnit(
+        equipment.currentHolder.orgUnitId,
+      );
+    }
+    if (equipment.warehouse) {
+      return equipment.warehouse.cityId;
+    }
+    if (equipment.warehouseId) {
+      const warehouse = await this.prisma.warehouse.findUnique({
+        where: { id: equipment.warehouseId },
+        select: { cityId: true },
+      });
+      return warehouse?.cityId ?? null;
+    }
+    return null;
   }
 
   private async getDefaultSignerId(): Promise<string> {

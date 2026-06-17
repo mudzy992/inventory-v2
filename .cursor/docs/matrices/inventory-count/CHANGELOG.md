@@ -1,5 +1,9 @@
 # Changelog — inventory-count
 
+## 2026-06-17 (disposal scope evaluator)
+
+- `markForDisposal` i `findEligibleSessionsForEquipment` koriste `evaluateEquipmentInCommitteeScope` (grad skladišta komisije + warehouse coverage za `zaduzeno`), umjesto poređenja session.orgUnit vs holder.orgUnit grada.
+
 ## 2026-06-15 (guardovi + toast)
 
 - FE guardovi: `canDeleteInventorySession`, `canDeleteInventoryCommittee`, `canActivateInventorySession`.

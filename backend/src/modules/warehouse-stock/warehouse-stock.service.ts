@@ -13,6 +13,7 @@ import { WarehouseResolutionService } from '../../common/services/warehouse-reso
 import { assertUniqueUnitSpecificationValues } from '../../common/utils/assert-unique-spec-values.util';
 import {
   hasRequiredLotSpecFields,
+  sanitizeLotSpecifications,
   validateIssueSpecifications,
   validateLotSpecifications,
 } from '../../common/utils/category-fields.util';
@@ -492,11 +493,12 @@ export class WarehouseStockService {
     }
     const category = await this.categoriesService.assertLeafCategory(lot.categoryId);
     const { optionalFields } = this.categoriesService.getFieldDefinitions(category);
-    validateLotSpecifications(dto.specifications, optionalFields);
+    const sanitizedSpecifications = sanitizeLotSpecifications(dto.specifications, optionalFields);
+    validateLotSpecifications(sanitizedSpecifications, optionalFields);
     const updated = await this.prisma.warehouseStockLot.update({
       where: { id: lotId },
       data: {
-        specifications: dto.specifications,
+        specifications: sanitizedSpecifications,
         status: 'spremno_za_izdavanje',
         specDefinedByUserId: user.id,
         specDefinedAt: new Date(),

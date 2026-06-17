@@ -469,7 +469,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
         <div className="mt-4">
           <TransferDocumentPanel
             transfer={selectedTransfer}
-            allowSign={selectedTransfer.status === 'raw'}
+            allowSign={selectedTransfer.status !== 'potpisan' && selectedTransfer.status !== 'cancelled'}
             onSigned={() => {
               void refresh();
               void list.refresh();
