@@ -40,8 +40,8 @@ export function Layout({ onLogout, children }: LayoutProps) {
     Boolean(currentEmployee) && inventoryCountEnabled,
   );
   const { getString: getPublicString } = usePublicSettings();
-  const appName = getPublicString('app.name', 'Inventar');
-  const appSubtitle = getPublicString('app.subtitle', 'Upravljanje opremom');
+  const appName = getPublicString('app.name', 'Evidens');
+  const appSubtitle = getPublicString('app.subtitle', 'Evidencija i zaduženje opreme');
 
   const handleLogout = () => {
     onLogout();

@@ -430,7 +430,7 @@ function PublicPageShell({
           ) : (
             <p className={`flex items-center justify-center gap-2 text-sm font-semibold ${statusTheme.headerAccent}`}>
               <QrCode size={16} />
-              Inventar
+              Evidens
             </p>
           )}
         </header>

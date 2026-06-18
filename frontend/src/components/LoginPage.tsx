@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { buildCompanyAddressLine, companyHeaderFromSettings } from '../helpers/company-header.util';
 import { ApiError } from '../api/client';
+import { AppBrand, EVIDENS_APP_NAME, EVIDENS_APP_SUBTITLE } from './ui/app-brand';
 import { PremiumAuthLayout } from './ui/premium-auth-layout';
 
 interface LoginPageProps {
@@ -18,7 +19,9 @@ export function LoginPage({ onLoginSuccess, setupSuccessMessage }: LoginPageProp
   const appName =
     (typeof settings['app.name'] === 'string' && settings['app.name']) ||
     (import.meta.env.VITE_APP_NAME as string) ||
-    'Inventar';
+    EVIDENS_APP_NAME;
+  const appSubtitle =
+    (typeof settings['app.subtitle'] === 'string' && settings['app.subtitle']) || EVIDENS_APP_SUBTITLE;
   const displayTitle = company.name?.trim() || appName;
   const addressLine = buildCompanyAddressLine(company);
   const [username, setUsername] = useState('');
@@ -43,18 +46,8 @@ export function LoginPage({ onLoginSuccess, setupSuccessMessage }: LoginPageProp
 
   return (
     <PremiumAuthLayout>
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 border border-white/20 rounded-2xl mb-4 shadow-lg shadow-blue-900/30 backdrop-blur-md">
-          <span className="text-white text-xl font-bold tracking-tight">
-            {displayTitle.slice(0, 2).toUpperCase()}
-          </span>
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">{displayTitle}</h1>
-        {addressLine ? (
-          <p className="text-blue-200/80 text-sm mt-2 max-w-xs mx-auto">{addressLine}</p>
-        ) : (
-          <p className="text-blue-200/80 text-sm mt-2">Sistem za upravljanje opremom</p>
-        )}
+      <div className="mb-8">
+        <AppBrand name={displayTitle} subtitle={addressLine || appSubtitle} />
       </div>
 
       <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl shadow-slate-950/50 p-8">

@@ -9,7 +9,7 @@ alwaysApply: true
 - Monorepo: `backend/` + `frontend/` only (no mobile).
 - Stack: NestJS, TypeScript strict, Prisma 7, MySQL (external server via env).
 - Frontend: React 19, Vite, Tailwind 4, BS default i18n.
-- Deploy: `inventory-v2.ba101.top`, API prefix `/backend`, Traefik `web` + `websecure` + `le`.
+- Deploy: `evidens.ba101.top`, API prefix `/backend`, Traefik `web` + `websecure` + `le`.
 - Plan: `.cursor/plans/inventory-v2/` — plan-first for multi-phase work.
 - Matrices: `.cursor/docs/matrices/*/MATRIX.md` — update on logic changes.
 - Settings: novi modul/feature ⇒ registry + enforcement + matrica (vidi `settings-registry.mdc`).

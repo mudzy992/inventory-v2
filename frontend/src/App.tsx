@@ -23,7 +23,7 @@ function AppShell() {
   const { isLoading: dataLoading, error: dataError } = useData();
   const navigate = useNavigate();
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
-  const [setupJustFinished, setSetupJustFinished] = useState(false);
+  const [setupSuccessMessage, setSetupSuccessMessage] = useState<string | undefined>();
 
   useEffect(() => {
     const loadSetupStatus = async () => {
@@ -57,9 +57,9 @@ function AppShell() {
   if (needsSetup) {
     return (
       <SetupWizardPage
-        onComplete={() => {
+        onComplete={(message) => {
           setNeedsSetup(false);
-          setSetupJustFinished(true);
+          setSetupSuccessMessage(message);
         }}
       />
     );
@@ -69,9 +69,7 @@ function AppShell() {
     return (
       <LoginPage
         onLoginSuccess={handleLoginSuccess}
-        setupSuccessMessage={
-          setupJustFinished ? 'Instalacija je završena. Prijavite se sa administratorskim nalogom.' : undefined
-        }
+        setupSuccessMessage={setupSuccessMessage}
       />
     );
   }

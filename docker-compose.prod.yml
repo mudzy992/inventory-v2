@@ -1,4 +1,4 @@
-# Produkcija — Traefik (mreža web), TLS le, host inventory-v2.ba101.top
+# Produkcija — Traefik (mreža web), TLS le, host evidens.ba101.top
 # Prije build/up: root .env sa DATABASE_URL, JWT_SECRET, UPLOAD_DIR=/app/uploads
 # Host upload: mkdir -p /mnt/shared-app-files/inventory-v2 && chown prema `docker compose run --rm backend id app`
 # Build: ./scripts/docker-prod-build.sh  (build + uklanjanje dangling image-a)
@@ -22,12 +22,12 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=web
-      - traefik.http.routers.inventory-v2-api.rule=Host(`inventory.ba101.top`) && PathPrefix(`/backend`)
-      - traefik.http.routers.inventory-v2-api.entrypoints=websecure
-      - traefik.http.routers.inventory-v2-api.tls=true
-      - traefik.http.routers.inventory-v2-api.tls.certresolver=le
-      - traefik.http.routers.inventory-v2-api.priority=100
-      - traefik.http.services.inventory-v2-api.loadbalancer.server.port=3000
+      - traefik.http.routers.evidens-api.rule=Host(`evidens.ba101.top`) && PathPrefix(`/backend`)
+      - traefik.http.routers.evidens-api.entrypoints=websecure
+      - traefik.http.routers.evidens-api.tls=true
+      - traefik.http.routers.evidens-api.tls.certresolver=le
+      - traefik.http.routers.evidens-api.priority=100
+      - traefik.http.services.evidens-api.loadbalancer.server.port=3000
 
   frontend:
     image: inventory-v2-frontend:prod
@@ -35,20 +35,20 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: https://inventory.ba101.top/backend
-        VITE_APP_NAME: Inventory v2
-        VITE_APP_URL: https://inventory.ba101.top
+        VITE_API_URL: https://evidens.ba101.top/backend
+        VITE_APP_NAME: Evidens
+        VITE_APP_URL: https://evidens.ba101.top
     networks:
       - web
     restart: unless-stopped
     labels:
       - traefik.enable=true
       - traefik.docker.network=web
-      - traefik.http.routers.inventory-v2-web.rule=Host(`inventory.ba101.top`)
-      - traefik.http.routers.inventory-v2-web.entrypoints=websecure
-      - traefik.http.routers.inventory-v2-web.tls=true
-      - traefik.http.routers.inventory-v2-web.tls.certresolver=le
-      - traefik.http.services.inventory-v2-web.loadbalancer.server.port=3000
+      - traefik.http.routers.evidens-web.rule=Host(`evidens.ba101.top`)
+      - traefik.http.routers.evidens-web.entrypoints=websecure
+      - traefik.http.routers.evidens-web.tls=true
+      - traefik.http.routers.evidens-web.tls.certresolver=le
+      - traefik.http.services.evidens-web.loadbalancer.server.port=3000
 
 networks:
   web:

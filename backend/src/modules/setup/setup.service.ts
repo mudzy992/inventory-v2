@@ -4,10 +4,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { InitializeSetupDto } from './dto/initialize-setup.dto';
+import { SetupBootstrapService } from './setup-bootstrap.service';
 
 export interface SetupStatusResponse {
   needsSetup: boolean;
@@ -15,6 +15,7 @@ export interface SetupStatusResponse {
 
 export interface SetupInitializeResponse {
   success: boolean;
+  usernames: string[];
 }
 
 @Injectable()
@@ -23,6 +24,7 @@ export class SetupService {
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     private readonly configService: ConfigService,
+    private readonly bootstrapService: SetupBootstrapService,
   ) {}
 
   async getStatus(): Promise<SetupStatusResponse> {
@@ -41,44 +43,8 @@ export class SetupService {
     if (userCount > 0) {
       throw new ConflictException('Application is already initialized');
     }
-    const passwordHash = await bcrypt.hash(dto.adminPassword, 10);
-    await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.user.count();
-      if (existing > 0) {
-        throw new ConflictException('Application is already initialized');
-      }
-      await tx.user.create({
-        data: {
-          username: dto.adminUsername.trim(),
-          passwordHash,
-          role: 'admin',
-          firstName: dto.adminFirstName.trim(),
-          lastName: dto.adminLastName.trim(),
-          email: dto.adminEmail?.trim() || null,
-          isActive: true,
-        },
-      });
-    });
-    const companyEntries: { key: string; value: string | boolean }[] = [
-      { key: 'company.name', value: dto.companyName.trim() },
-      { key: 'company.address', value: dto.companyAddress.trim() },
-      { key: 'company.city', value: dto.companyCity.trim() },
-      { key: 'app.name', value: dto.companyName.trim() },
-      { key: 'app.initialized', value: true },
-    ];
-    if (dto.companyPostalCode?.trim()) {
-      companyEntries.push({ key: 'company.postalCode', value: dto.companyPostalCode.trim() });
-    }
-    if (dto.companyPhone?.trim()) {
-      companyEntries.push({ key: 'company.phone', value: dto.companyPhone.trim() });
-    }
-    if (dto.companyEmail?.trim()) {
-      companyEntries.push({ key: 'company.email', value: dto.companyEmail.trim() });
-    }
-    if (dto.companyTaxId?.trim()) {
-      companyEntries.push({ key: 'company.taxId', value: dto.companyTaxId.trim() });
-    }
-    await this.settingsService.upsertValues(companyEntries);
-    return { success: true };
+    const result = await this.bootstrapService.bootstrap(dto);
+    await this.settingsService.upsertValues(this.bootstrapService.buildCompanySettingsEntries(dto));
+    return { success: true, usernames: result.usernames };
   }
 }

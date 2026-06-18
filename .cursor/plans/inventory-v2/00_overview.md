@@ -4,11 +4,11 @@
 
 | Polje | Vrijednost |
 |-------|------------|
-| **Naziv** | Inventory v2 |
-| **Sub-naslov** | Hijerarhijska evidencija i zaduženje opreme |
-| **Slug** | `inventory-v2` |
-| **Subdomen** | `inventory-v2.ba101.top` |
-| **API** | `https://inventory-v2.ba101.top/backend` |
+| **Naziv (produkt)** | Evidens |
+| **Sub-naslov** | Evidencija i zaduženje opreme |
+| **Slug (repo)** | `inventory-v2` |
+| **Subdomen** | `evidens.ba101.top` |
+| **API** | `https://evidens.ba101.top/backend` |
 | **GitHub** | `mudzy992/inventory-v2` |
 | **Lokalni repo** | `C:\Users\m.ceric\Documents\GitHub\inventory-v2` |
 

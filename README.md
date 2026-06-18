@@ -1,13 +1,13 @@
-# Inventory v2
+# Evidens
 
-**Sub-naslov:** Hijerarhijska evidencija i zaduženje opreme
+**Sub-naslov:** Evidencija i zaduženje opreme
 
 Web aplikacija za evidenciju opreme po organizacionoj hijerarhiji — zaduženja, prenosi, dokumenti, QR.
 
 | | |
 |---|---|
-| **Produkcija** | https://inventory-v2.ba101.top |
-| **API** | https://inventory-v2.ba101.top/backend |
+| **Produkcija** | https://evidens.ba101.top |
+| **API** | https://evidens.ba101.top/backend |
 | **GitHub** | [mudzy992/inventory-v2](https://github.com/mudzy992/inventory-v2) |
 
 ## Struktura
@@ -40,7 +40,7 @@ npm run dev
 Frontend u dev modu šalje requeste na **`/backend`** (Vite proxy → `http://localhost:3000`).  
 U Network tabu vidiš `localhost:5173/backend/...` — to je ispravno; Vite prosljeđuje na backend.
 
-Produkcijski build koristi `VITE_API_URL` (npr. `https://inventory-v2.ba101.top/backend`).
+Produkcijski build koristi `VITE_API_URL` (npr. `https://evidens.ba101.top/backend`).
 
 Provjera: `GET http://localhost:3000/backend/health` · prvi start → setup wizard u browseru.
 

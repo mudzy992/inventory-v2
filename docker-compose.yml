@@ -22,7 +22,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/backend}
-        VITE_APP_NAME: ${VITE_APP_NAME:-Inventory v2}
+        VITE_APP_NAME: ${VITE_APP_NAME:-Evidens}
     ports:
       - "8080:3000"
     depends_on:

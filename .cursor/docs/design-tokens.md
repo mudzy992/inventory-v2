@@ -1,4 +1,4 @@
-# Design tokens — Inventory v2
+# Design tokens — Evidens
 
 Apple-linear, minimal. Primijenjeno u `frontend/src/index.css` (`@theme` + `:root`).
 
@@ -7,7 +7,7 @@ Apple-linear, minimal. Primijenjeno u `frontend/src/index.css` (`@theme` + `:roo
 | **primary** | `#1d4ed8` | CTA, linkovi, aktivna navigacija |
 | **background** | `#f8fafc` | Stranica, canvas |
 | **text** | `#0f172a` | Naslovi, body |
-| **accent** | `#0d9488` | Sekundarni akcenti, badge |
+| **accent** | `#0d9488` | Sekundarni akcenti, badge, auth gradient |
 | **success** | `#16a34a` | Potvrde, aktivni statusi |
 | **danger** | `#dc2626` | Brisanje, greške, rashod |
 | surface | `#ffffff` | Kartice, paneli |

@@ -1,5 +1,10 @@
 # Changelog — deploy-traefik
 
+## 2026-06-18
+
+- Rebrand host: `evidens.ba101.top`; Traefik routeri `evidens-web` / `evidens-api`.
+- Repo slug, image tagovi i upload volume path ostaju `inventory-v2`.
+
 ## 2026-06-15
 
 - Eksplicitni image tagovi `inventory-v2-backend:prod` / `inventory-v2-frontend:prod` u `docker-compose.prod.yml`.

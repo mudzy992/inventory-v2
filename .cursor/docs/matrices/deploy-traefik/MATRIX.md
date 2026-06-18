@@ -2,9 +2,9 @@
 
 | Parametar | Vrijednost |
 |-----------|------------|
-| Host | `inventory-v2.ba101.top` |
-| Frontend router | `inventory-v2-web` |
-| API router | `inventory-v2-api` + `PathPrefix(\`/backend\`)` |
+| Host | `evidens.ba101.top` |
+| Frontend router | `evidens-web` |
+| API router | `evidens-api` + `PathPrefix(\`/backend\`)` |
 | Entrypoint | `websecure` |
 | Cert resolver | `le` |
 | Docker network | `web` (external) |
@@ -13,8 +13,8 @@
 
 ## URL
 
-- App: `https://inventory-v2.ba101.top/`
-- API: `https://inventory-v2.ba101.top/backend/...`
+- App: `https://evidens.ba101.top/`
+- API: `https://evidens.ba101.top/backend/...`
 
 ## Prefix
 
@@ -24,7 +24,7 @@ NestJS `setGlobalPrefix('backend')` — bez Traefik StripPrefix.
 
 - Path: `/backend/socket.io`
 - Namespace: `/notifications`
-- Isti Traefik router (`inventory-v2-api`) — WS upgrade na backend servis
+- Isti Traefik router (`evidens-api`) — WS upgrade na backend servis
 
 ## Frontend kontejner
 
@@ -53,3 +53,8 @@ docker compose -f docker-compose.prod.yml up -d
 ```
 
 Skripta pokreće `docker compose build` pa `docker image prune -f` (samo dangling, ne dira tagged image-e drugih projekata).
+
+## Napomena (rebrand)
+
+- Produktni naziv: **Evidens**; Git repo i DB ime ostaju `inventory-v2` / `inventory_v2`.
+- Stari host (`inventory*.ba101.top`) može ostati kao privremeni Traefik alias tokom migracije.

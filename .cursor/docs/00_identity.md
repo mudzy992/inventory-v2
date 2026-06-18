@@ -1,10 +1,11 @@
-# Inventory v2 — identitet
+# Evidens — identitet
 
 | Polje | Vrijednost |
 |-------|------------|
-| **Naziv** | Inventory v2 |
-| **Slug** | `inventory-v2` |
-| **Sub-naslov** | Hijerarhijska evidencija i zaduženje opreme |
-| **URL** | https://inventory-v2.ba101.top |
-| **API** | https://inventory-v2.ba101.top/backend |
+| **Naziv (produkt)** | Evidens |
+| **Repo slug** | `inventory-v2` |
+| **Sub-naslov** | Evidencija i zaduženje opreme |
+| **URL** | https://evidens.ba101.top |
+| **API** | https://evidens.ba101.top/backend |
 | **GitHub** | mudzy992/inventory-v2 |
+| **Baza** | `inventory_v2` (bez rename) |

@@ -1,53 +1,51 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsOptional, IsString, MinLength, ValidateNested } from 'class-validator';
+import { SetupAdminDto } from './setup-admin.dto';
+import { SetupCatalogDto } from './setup-catalog-item.dto';
+import { SetupCategoryDto } from './setup-catalog.dto';
+import { SetupCompanyDto } from './setup-company.dto';
+import { SetupDirectorDto } from './setup-director.dto';
+import { SetupLocationDto } from './setup-location.dto';
+import { SetupOrganizationDto } from './setup-organization.dto';
+import { SetupRolesDto } from './setup-role-account.dto';
+import { SetupWarehouseDto } from './setup-warehouse.dto';
 
 export class InitializeSetupDto {
-  @IsString()
-  @MinLength(1)
-  companyName!: string;
+  @ValidateNested()
+  @Type(() => SetupCompanyDto)
+  company!: SetupCompanyDto;
 
-  @IsString()
-  @MinLength(1)
-  companyAddress!: string;
+  @ValidateNested()
+  @Type(() => SetupLocationDto)
+  location!: SetupLocationDto;
 
-  @IsString()
-  @MinLength(1)
-  companyCity!: string;
+  @ValidateNested()
+  @Type(() => SetupOrganizationDto)
+  organization!: SetupOrganizationDto;
 
-  @IsOptional()
-  @IsString()
-  companyPostalCode?: string;
+  @ValidateNested()
+  @Type(() => SetupWarehouseDto)
+  warehouse!: SetupWarehouseDto;
 
-  @IsOptional()
-  @IsString()
-  companyPhone?: string;
+  @ValidateNested()
+  @Type(() => SetupCategoryDto)
+  category!: SetupCategoryDto;
 
-  @IsOptional()
-  @IsEmail()
-  companyEmail?: string;
+  @ValidateNested()
+  @Type(() => SetupCatalogDto)
+  catalog!: SetupCatalogDto;
 
-  @IsOptional()
-  @IsString()
-  companyTaxId?: string;
+  @ValidateNested()
+  @Type(() => SetupAdminDto)
+  admin!: SetupAdminDto;
 
-  @IsString()
-  @MinLength(1)
-  adminFirstName!: string;
+  @ValidateNested()
+  @Type(() => SetupRolesDto)
+  roles!: SetupRolesDto;
 
-  @IsString()
-  @MinLength(1)
-  adminLastName!: string;
-
-  @IsOptional()
-  @IsEmail()
-  adminEmail?: string;
-
-  @IsString()
-  @MinLength(3)
-  adminUsername!: string;
-
-  @IsString()
-  @MinLength(8)
-  adminPassword!: string;
+  @ValidateNested()
+  @Type(() => SetupDirectorDto)
+  director!: SetupDirectorDto;
 
   @IsOptional()
   @IsString()

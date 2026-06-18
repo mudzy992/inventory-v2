@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional, IsString, IsUUID, IsEnum } from 'class-validator';
 import { EquipmentAffiliation, EquipmentStatus } from '../../../../generated/prisma/client';
 import { PaginatedQueryDto } from '../../../common/dto/paginated-query.dto';
@@ -12,6 +13,7 @@ export class ListEquipmentQueryDto extends PaginatedQueryDto {
   affiliation?: EquipmentAffiliation;
 
   @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   isAccountingTracked?: boolean;
 

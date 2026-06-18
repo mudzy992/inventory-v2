@@ -15,6 +15,7 @@ import { useCurrentEmployee } from '../hooks/use-current-employee';
 import { useModuleBadges } from '../hooks/use-module-badges';
 import { pathToPageId } from '../routes/app-routes';
 import { SidebarNavButton } from './sidebar-nav-button';
+import { AppBrand } from './ui/app-brand';
 import type { PageId } from './page-id';
 
 const NavSection = ({
@@ -61,8 +62,8 @@ export const AppSidebarNav = ({
   showCollapseToggle = false,
   onToggleCollapse,
   showUserInfo = true,
-  appName = 'Inventar',
-  appSubtitle = 'Upravljanje opremom',
+  appName = 'Evidens',
+  appSubtitle = 'Evidencija i zaduženje opreme',
 }: AppSidebarNavProps) => {
   const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(true);
   const location = useLocation();
@@ -134,15 +135,13 @@ export const AppSidebarNav = ({
 
   return (
     <>
-      <div className="p-4 border-b border-slate-700 flex items-center gap-3">
-        <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0">
-          IN
-        </div>
-        {!collapsed && (
-          <div className="min-w-0">
-            <h1 className="font-bold text-sm leading-tight truncate">{appName}</h1>
-            <p className="text-xs text-slate-400 leading-tight truncate">{appSubtitle}</p>
+      <div className="p-4 border-b border-slate-700">
+        {collapsed ? (
+          <div className="flex justify-center">
+            <AppBrand variant="compact" iconOnly name={appName} showSubtitle={false} />
           </div>
+        ) : (
+          <AppBrand variant="sidebar" name={appName} subtitle={appSubtitle} />
         )}
       </div>
 
