@@ -216,7 +216,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     valueType: 'boolean',
     defaultValue: true,
     label: 'Zaduženja i prenosi',
-    description: 'Kreiranje prenosnica, zaduženja, razduženja i rashod.',
+    description:
+      'Master modula prenosa opreme. Isključeno: blokira zaduženja, razduženja, prenose i izdavanje iz lota (bez obzira na postavke prenosnica).',
     group: 'modules',
   }),
   def({
@@ -394,7 +395,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     defaultValue: true,
     label: 'Promjena org. jedinice i oprema',
     description:
-      'Workflow kada radnik mijenja org. jedinicu između skladišta — akcije evidentičara i međuskladišni transfer.',
+      'Strukturirani workflow promjene org. jedinice radnika između skladišta (bulk transfer opreme uz relocation case). Za ručni prenos osoba→osoba između gradova koristite postavku „Prenos između gradova (evidentičar)”.',
     group: 'modules',
   }),
   def({
@@ -421,7 +422,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     valueType: 'boolean',
     defaultValue: false,
     label: 'Prenos između gradova (evidentičar)',
-    description: 'Evidentičar može prenos između radnika u različitim gradovima.',
+    description:
+      'Ručni prenos opreme (osoba→osoba) između radnika u različitim gradovima. Za promjenu org. jedinice radnika koristite modul Relocation.',
     group: 'transfers',
   }),
   def({
@@ -435,23 +437,13 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'transfers',
   }),
   def({
-    key: 'transfer.require_upload_before_sign',
-    scope: 'private',
-    valueType: 'boolean',
-    defaultValue: false,
-    label: 'Obavezan upload prije potpisa (legacy)',
-    description: 'Zastarjelo — koristite „Obavezan potpisani PDF”. Ostaje za kompatibilnost.',
-    group: 'transfers',
-    adminEditable: false,
-  }),
-  def({
     key: 'transfer.generation.enabled',
     scope: 'private',
     valueType: 'boolean',
     defaultValue: true,
     label: 'Kreiranje prenosnica (uključeno)',
     description:
-      'Master prekidač. Isključeno blokira API prenosa, izdavanje iz lota i draft prenose na popisu. Za inicijalno zaduživanje iz lota bez prenosnica ostavite uključeno i isključite samo „Prenosnica pri izdavanju iz lota“.',
+      'Master prekidač za generisanje prenosnica. Isključeno: prenosi opreme i dalje rade, ali bez dokumenata, štampe i potpisanog PDF-a.',
     group: 'transfers',
   }),
   def({
@@ -461,7 +453,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     defaultValue: true,
     label: 'Prenosnica pri izdavanju iz lota',
     description:
-      'Uključeno: pri izdavanju iz lota kreira se transfer i prenosnica. Isključeno: oprema se direktno zadužuje radniku bez transfera i dokumenta (init / masovno punjenje). Zahtijeva uključeno globalno kreiranje prenosnica.',
+      'Uključeno: pri izdavanju iz lota kreira se transfer i prenosnica. Isključeno: oprema se direktno zadužuje radniku bez transfera i dokumenta (init / masovno punjenje).',
     group: 'transfers',
   }),
   def({
@@ -470,7 +462,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     valueType: 'boolean',
     defaultValue: true,
     label: 'Prenosnica: skladište → osoba',
-    description: 'Zaduženje opreme koja je na skladištu (već u sistemu).',
+    description:
+      'Uključeno: zaduženje sa skladišta kreira prenosnicu i workflow potpisa. Isključeno: oprema se odmah zadužuje bez dokumenta.',
     group: 'transfers',
   }),
   def({
@@ -479,7 +472,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     valueType: 'boolean',
     defaultValue: true,
     label: 'Prenosnica: osoba → osoba',
-    description: 'Prenos zaduženja između radnika.',
+    description:
+      'Uključeno: prenos između radnika kreira prenosnicu. Isključeno: holder se mijenja odmah bez dokumenta.',
     group: 'transfers',
   }),
   def({
@@ -488,16 +482,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     valueType: 'boolean',
     defaultValue: true,
     label: 'Prenosnica: osoba → skladište',
-    description: 'Razduženje opreme na skladište.',
-    group: 'transfers',
-  }),
-  def({
-    key: 'transfer.generation.on_rashodovanje',
-    scope: 'private',
-    valueType: 'boolean',
-    defaultValue: true,
-    label: 'Prenosnica: rashodovanje',
-    description: 'Dokument prenosnice za rashod opreme.',
+    description:
+      'Uključeno: razduženje kreira prenosnicu. Isključeno: oprema odmah prelazi na skladište bez dokumenta.',
     group: 'transfers',
   }),
   def({

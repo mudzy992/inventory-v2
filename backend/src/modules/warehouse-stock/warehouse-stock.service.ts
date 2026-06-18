@@ -510,6 +510,7 @@ export class WarehouseStockService {
 
   async issueUnit(user: AuthenticatedUser, lotId: string, dto: IssueStockLotDto) {
     await this.settingsService.assertFeatureEnabled('features.registrar_stock');
+    await this.settingsService.assertFeatureEnabled('features.transfers');
     if (user.role !== 'evidenticar' && user.role !== 'admin') {
       throw new ForbiddenException('Only registrar can issue stock');
     }

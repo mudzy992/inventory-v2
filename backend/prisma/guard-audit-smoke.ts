@@ -140,20 +140,35 @@ const main = async (): Promise<void> => {
 
     const genWasOn = await patchSetting(token, 'transfer.generation.enabled', false);
     if (genWasOn) {
-      const zad = await request('POST', '/transfers', token, {
-        equipmentId: equipment.id,
-        type: 'zaduzenje',
-        fromType: 'warehouse',
-        toType: 'person',
-        toPersonId: equipment.currentHolderId ?? undefined,
-        warehouseId: equipment.warehouseId ?? undefined,
+      const skladisteEq = await prisma.equipment.findFirst({
+        where: { status: 'skladiste', warehouseId: { not: null } },
+        select: { id: true, warehouseId: true },
       });
-      const zadMsg = getMessage(zad.json);
-      assert(
-        'transfers zaduzenje when generation off → 400 + BS',
-        zad.status === 400 && /isključeno/i.test(zadMsg),
-        `${zad.status}: ${zadMsg.slice(0, 80)}`,
-      );
+      const holder = await prisma.employee.findFirst({ select: { id: true } });
+      if (skladisteEq && holder) {
+        const zad = await request('POST', '/transfers', token, {
+          equipmentId: skladisteEq.id,
+          type: 'zaduzenje',
+          fromType: 'skladiste',
+          toType: 'osoba',
+          toPersonId: holder.id,
+          fromWarehouseId: skladisteEq.warehouseId ?? undefined,
+          date: new Date().toISOString().slice(0, 10),
+        });
+        const zadMsg = getMessage(zad.json);
+        const directOk =
+          zad.status === 201 &&
+          typeof zad.json === 'object' &&
+          zad.json !== null &&
+          (zad.json as { mode?: string }).mode === 'direct';
+        assert(
+          'transfers zaduzenje when generation off → direct apply (201, mode=direct)',
+          directOk,
+          `${zad.status}: ${zadMsg.slice(0, 80)}`,
+        );
+      } else {
+        console.log('SKIP transfer generation off — no skladiste equipment or employee');
+      }
       await patchSetting(token, 'transfer.generation.enabled', true);
     } else {
       console.log('SKIP transfer generation off — could not patch setting');

@@ -19,20 +19,29 @@
 | potpisan | Finalizovan; dodijeljen `documentNumber`; equipment ažuriran |
 | cancelled | Otkazan |
 
+## Prenos opreme vs. prenosnica (postavke)
+
+| Sloj | Ključ | Isključeno = |
+|------|-------|--------------|
+| Modul | `features.transfers` | Blokira sve prenose opreme (API, lot issue, popis relocation) |
+| Dokument | `transfer.generation.enabled` | Nema prenosnica nigdje; prenosi opreme i dalje rade (direktno) |
+| Dokument po tipu | `transfer.generation.on_*` | Nema prenosnice za taj tip; prenos opreme direktno |
+
+`POST /transfers` vraća `{ mode: 'document', transfer }` ili `{ mode: 'direct', equipment }`.
+
 ## Generisanje prenosnica (postavke)
 
 | Ključ | Default | Efekat |
 |-------|---------|--------|
-| `transfer.generation.enabled` | true | Master: isključeno → blok `POST /transfers`, izdavanje iz lota i draft na popisu |
-| `transfer.generation.on_stock_lot_issue` | true | Izdavanje iz lota: uključeno = transfer + prenosnica; isključeno = direktno zaduženje bez transfera (init) |
-| `transfer.generation.on_zaduzenje` | true | Skladište → osoba |
-| `transfer.generation.on_prenos` | true | Osoba → osoba |
-| `transfer.generation.on_razduzenje` | true | Osoba → skladište |
-| `transfer.generation.on_rashodovanje` | true | **Zastarjelo** — novi rashod ide preko liste/komisije; `POST /transfers` tip `rashodovanje` blokiran |
+| `transfer.generation.enabled` | true | Master dokumenta: isključeno → svi tipovi bez prenosnice (direktan prenos opreme) |
+| `transfer.generation.on_stock_lot_issue` | true | Lot: uključeno = transfer + prenosnica; isključeno = direktno zaduženje |
+| `transfer.generation.on_zaduzenje` | true | Skladište → osoba: dokument ili direktno |
+| `transfer.generation.on_prenos` | true | Osoba → osoba: dokument ili direktno |
+| `transfer.generation.on_razduzenje` | true | Osoba → skladište: dokument ili direktno |
 | `transfer.generate_print_pdf` | true | DOCX → PDF (LibreOffice `soffice` na serveru) |
-| `transfer.require_signed_pdf_upload` | true | Obavezan upload potpisanog PDF prije `sign` |
+| `transfer.require_signed_pdf_upload` | true | Obavezan upload potpisanog PDF prije `sign` (samo dokument flow) |
 
-Init / masovno zaduživanje iz lota bez prenosnica: `transfer.generation.enabled=true`, `transfer.generation.on_stock_lot_issue=false`. Potpuno blokiranje prenosa: `transfer.generation.enabled=false`.
+Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosnica iz lota: `on_stock_lot_issue=false` (master može ostati uključen).
 
 ## Word obrazac (po skladištu)
 
@@ -74,8 +83,8 @@ Init / masovno zaduživanje iz lota bez prenosnica: `transfer.generation.enabled
 |----------|---------|
 | Štampa | `GET /transfers/:id/generated-document?format=docx\|pdf` (fallback HTML: `raw-document`) |
 | Upload | `POST /uploads` (samo PDF) → `uploaded` |
-| Čeka zatvaranje | upload OK + sesija `active` — finalize **blokiran** |
-| Primijenjeno | close job finalize ili `potpisan` nakon zatvaranja sesije |
+| Čeka zatvaranje | upload OK + sesija `active` — finalize **blokiran** (samo dokument flow) |
+| Primijenjeno | close job finalize (dokument) ili direktna promjena opreme (bez dokumenta) |
 
 ## Cross-service
 

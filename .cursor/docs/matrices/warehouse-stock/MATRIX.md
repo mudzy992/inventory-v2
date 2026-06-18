@@ -55,7 +55,7 @@
 3. Generiše DOCX/PDF prenosnice (ako postoji template)
 4. `quantityOnHand -= 1`
 
-**Bez prenosnice** (`on_stock_lot_issue=false`, globalno uključeno):
+**Bez prenosnice** (`transfer.generation.enabled=false` ili `on_stock_lot_issue=false`):
 
 1. Kreira `Equipment` direktno kao `zaduzeno` s `currentHolderId`
 2. Nema `Transfer` zapisa ni generisanja dokumenta

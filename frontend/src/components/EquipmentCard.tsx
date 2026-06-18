@@ -17,7 +17,7 @@ import {
 } from '../helpers/equipment-display.util';
 import { buildTransferCreatePayload } from '../helpers/create-transfer-payload.util';
 import { canRegistrarCreateTransfer } from '../helpers/registrar-scope';
-import { canReactivateEquipment, EQUIPMENT_GUARD_MESSAGES } from '../helpers/guards';
+import { canPerformEquipmentTransfer, canReactivateEquipment, EQUIPMENT_GUARD_MESSAGES, TRANSFER_GUARD_MESSAGES } from '../helpers/guards';
 import { X, Package, QrCode, History, ArrowRight, Download, Printer, User, Building2, FileText, AlertTriangle, CheckCircle, Warehouse, Trash2 } from 'lucide-react';
 import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
@@ -39,6 +39,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const { toastError, toastSuccess } = useToast();
   const { getBoolean } = usePublicSettings();
   const disposalPreListEnabled = getBoolean('features.disposal_pre_list', true);
+  const transfersEnabled = getBoolean('features.transfers', true);
   const qrContainerRef = useRef<HTMLDivElement>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<TransferType>('prenos');
@@ -175,7 +176,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const canManage = admin || evidenticar;
   const canRegistrarAct = (type: TransferType): boolean =>
     admin || (evidenticar && currentUser ? canRegistrarCreateTransfer(eq, currentUser, state, type) : false);
-  const canTransfer = canManage && eq.status !== 'rashodovano' && eq.status !== 'za_rashod';
+  const canTransfer = canManage && transfersEnabled && eq.status !== 'rashodovano' && eq.status !== 'za_rashod';
   const canAssign = canManage && eq.status === 'skladiste' && canRegistrarAct('zaduzenje');
   const canPrenos = canManage && eq.status === 'zaduzeno' && canRegistrarAct('prenos');
   const canRazduzenje = canManage && eq.status === 'zaduzeno' && canRegistrarAct('razduzenje');
@@ -264,6 +265,13 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
 
   const handleTransfer = async () => {
     if (!currentUser || !eq) return;
+    const transferGuard = canPerformEquipmentTransfer(transferType, {
+      'features.transfers': transfersEnabled,
+    });
+    if (!transferGuard.allowed) {
+      toastError(transferGuard.reason ?? TRANSFER_GUARD_MESSAGES.transfersDisabled);
+      return;
+    }
     const toEmployee = availableEmployees.find((row) => row.id === toPersonId);
     const result = buildTransferCreatePayload({
       state,
@@ -285,7 +293,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       await refresh();
       await loadEquipment();
       handleCloseTransferModal();
-      toastSuccess('Transfer je kreiran.');
+      toastSuccess('Prenos opreme je izvršen.');
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Greška pri transferu';
       toastError(message);

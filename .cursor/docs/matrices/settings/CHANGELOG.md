@@ -1,8 +1,12 @@
 # Settings matrica — CHANGELOG
 
-## 2026-06-17
+## 2026-06-18
 
-- `transfer.generation.on_rashodovanje` označen deprecated u UI metadata — novi rashod ne koristi prenosnicu.
+- Prenos opreme vs. prenosnica: `features.transfers` = blok modula; `transfer.generation.*` = samo dokumenti.
+- Uklonjeni ključevi: `transfer.generation.on_rashodovanje`, `transfer.require_upload_before_sign`.
+- Ažurirani opisi registry-ja i UI metadata za transfers tab.
+
+## 2026-06-17
 
 ## 2026-06-16 (profesionalni admin UI)
 

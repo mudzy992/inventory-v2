@@ -29,7 +29,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { buildDisposalReportPayload } from './utils/build-disposal-report.util';
-import { assertTransferCreationAllowed } from '../transfers/utils/transfer-generation-policy.util';
+import { executeDirectEquipmentTransferInTx } from '../transfers/utils/execute-direct-equipment-transfer.util';
+import { isTransferDocumentEnabled } from '../transfers/utils/transfer-generation-policy.util';
 import { resolveDocumentWarehouseId } from '../transfers/utils/resolve-document-warehouse.util';
 import { finalizeInventoryTransferInTx } from './utils/finalize-inventory-transfer.util';
 import { buildWarehouseCommitteeMembers } from './utils/inventory-warehouse-committees.util';
@@ -1727,6 +1728,7 @@ export class InventoryCountService {
         },
       });
       if (status === 'promjena_lokacije' && relocation) {
+        await this.settingsService.assertFeatureEnabled('features.transfers');
         await this.ensureRelocationDraftTransfer(
           committee.session,
           equipment,
@@ -1918,6 +1920,7 @@ export class InventoryCountService {
     }
     const payload = action.payload as { relocationToPersonId?: string | null };
     if (action.kind === 'relocate_to_warehouse' || action.kind === 'relocate_to_person') {
+      await this.settingsService.assertFeatureEnabled('features.transfers');
       const actorUserId = await this.resolveCloseJobActorUserId();
       const line = action.inventoryLineId
         ? await this.prisma.inventoryLine.findUnique({
@@ -1936,8 +1939,9 @@ export class InventoryCountService {
             undefined,
             action.inventoryLineId,
             committee.warehouseId,
+            'apply',
           );
-          transferId = created.id;
+          transferId = created?.id ?? null;
         } else {
           const toPersonId = payload.relocationToPersonId ?? null;
           if (!toPersonId) {
@@ -1951,9 +1955,13 @@ export class InventoryCountService {
             toPersonId,
             action.inventoryLineId,
             committee.warehouseId,
+            'apply',
           );
-          transferId = created.id;
+          transferId = created?.id ?? null;
         }
+      }
+      if (!transferId) {
+        return;
       }
       await this.prisma.$transaction(async (tx) => {
         await finalizeInventoryTransferInTx(tx, transferId!, actorUserId);
@@ -2262,6 +2270,7 @@ export class InventoryCountService {
         undefined,
         inventoryLineId,
         committeeWarehouseId,
+        'draft',
         tx,
       );
       return;
@@ -2274,6 +2283,7 @@ export class InventoryCountService {
       relocation.relocationToPersonId,
       inventoryLineId,
       committeeWarehouseId,
+      'draft',
       tx,
     );
   }
@@ -2501,7 +2511,8 @@ export class InventoryCountService {
     toPersonId: string | undefined,
     inventoryLineId: string | undefined,
     committeeWarehouseId: string | null,
-    tx?: Pick<PrismaService, 'transfer' | 'employee'>,
+    phase: 'draft' | 'apply',
+    tx?: Pick<PrismaService, 'transfer' | 'employee' | 'equipment'>,
   ) {
     const db = tx ?? this.prisma;
     const committeeWarehouse = committeeWarehouseId
@@ -2512,13 +2523,35 @@ export class InventoryCountService {
       : null;
     const signerId = equipment.currentHolderId ?? (await this.getDefaultSignerId());
     if (targetType === 'skladiste') {
-      await assertTransferCreationAllowed(this.settingsService, 'razduzenje', 'inventory');
       const resolvedWarehouseId = await this.resolveRelocationWarehouseId({
         sessionOrgUnitId: session.orgUnitId,
         committeeWarehouseId,
         requestedWarehouseId: warehouseId,
       });
       if (equipment.status === 'zaduzeno' && equipment.currentHolderId) {
+        const documentEnabled = await isTransferDocumentEnabled(
+          this.settingsService,
+          'razduzenje',
+          'inventory',
+        );
+        if (!documentEnabled) {
+          if (phase === 'draft') {
+            return null;
+          }
+          const applyDirect = async (client: Pick<PrismaService, 'equipment'>) => {
+            await executeDirectEquipmentTransferInTx(client as never, {
+              equipmentId: equipment.id,
+              type: 'razduzenje',
+              toWarehouseId: resolvedWarehouseId,
+            });
+          };
+          if (tx) {
+            await applyDirect(db);
+          } else {
+            await this.prisma.$transaction(async (trx) => applyDirect(trx));
+          }
+          return null;
+        }
         const documentWarehouseId = resolveDocumentWarehouseId({
           type: 'razduzenje',
           fromWarehouseId: null,
@@ -2569,7 +2602,29 @@ export class InventoryCountService {
       }
     }
     if (equipment.status === 'skladiste') {
-      await assertTransferCreationAllowed(this.settingsService, 'zaduzenje', 'inventory');
+      const documentEnabled = await isTransferDocumentEnabled(
+        this.settingsService,
+        'zaduzenje',
+        'inventory',
+      );
+      if (!documentEnabled) {
+        if (phase === 'draft') {
+          return null;
+        }
+        const applyDirect = async (client: Pick<PrismaService, 'equipment'>) => {
+          await executeDirectEquipmentTransferInTx(client as never, {
+            equipmentId: equipment.id,
+            type: 'zaduzenje',
+            toPersonId,
+          });
+        };
+        if (tx) {
+          await applyDirect(db);
+        } else {
+          await this.prisma.$transaction(async (trx) => applyDirect(trx));
+        }
+        return null;
+      }
       const fromWarehouseId = await this.resolveRelocationWarehouseId({
         sessionOrgUnitId: session.orgUnitId,
         committeeWarehouseId,
@@ -2599,7 +2654,29 @@ export class InventoryCountService {
       });
     }
     if (equipment.status === 'zaduzeno' && equipment.currentHolderId) {
-      await assertTransferCreationAllowed(this.settingsService, 'prenos', 'inventory');
+      const documentEnabled = await isTransferDocumentEnabled(
+        this.settingsService,
+        'prenos',
+        'inventory',
+      );
+      if (!documentEnabled) {
+        if (phase === 'draft') {
+          return null;
+        }
+        const applyDirect = async (client: Pick<PrismaService, 'equipment'>) => {
+          await executeDirectEquipmentTransferInTx(client as never, {
+            equipmentId: equipment.id,
+            type: 'prenos',
+            toPersonId,
+          });
+        };
+        if (tx) {
+          await applyDirect(db);
+        } else {
+          await this.prisma.$transaction(async (trx) => applyDirect(trx));
+        }
+        return null;
+      }
       const holderWarehouseId = await this.warehouseResolutionService.resolveForEmployee(
         equipment.currentHolderId,
       );

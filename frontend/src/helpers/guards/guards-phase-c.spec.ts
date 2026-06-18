@@ -31,15 +31,15 @@ describe('Phase C guard smoke — FE helpers', () => {
   });
 
   it('transfers: rashodovanje always blocked', () => {
-    const result = canCreateTransferType('rashodovanje', { 'transfer.generation.enabled': true });
+    const result = canCreateTransferType('rashodovanje', { 'features.transfers': true });
     assert.equal(result.allowed, false);
     assert.equal(result.reason, TRANSFER_GUARD_MESSAGES.rashodovanjeBlocked);
   });
 
-  it('transfers: zaduzenje blocked when generation disabled', () => {
-    const result = canCreateTransferType('zaduzenje', { 'transfer.generation.enabled': false });
+  it('transfers: blocked when module disabled', () => {
+    const result = canCreateTransferType('zaduzenje', { 'features.transfers': false });
     assert.equal(result.allowed, false);
-    assert.match(result.reason ?? '', /isključeno/i);
+    assert.equal(result.reason, TRANSFER_GUARD_MESSAGES.transfersDisabled);
   });
 
   it('registrar stock: blocks spec edit on zatvoreno lot', () => {

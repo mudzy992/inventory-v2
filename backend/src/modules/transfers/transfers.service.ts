@@ -41,7 +41,8 @@ import {
 } from './transfer-validation.util';
 import { resolveTransferSignerId } from './utils/resolve-transfer-signer.util';
 import { allocateTransferDocumentNumberInTx } from './utils/allocate-transfer-document-number.util';
-import { assertTransferCreationAllowed } from './utils/transfer-generation-policy.util';
+import { executeDirectEquipmentTransferInTx } from './utils/execute-direct-equipment-transfer.util';
+import { isTransferDocumentEnabled } from './utils/transfer-generation-policy.util';
 import { resolveDocumentWarehouseId } from './utils/resolve-document-warehouse.util';
 import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { buildTransferRawDocumentHtml } from './utils/transfer-raw-document.util';
@@ -183,7 +184,6 @@ export class TransfersService {
 
   async create(user: AuthenticatedUser, dto: CreateTransferDto) {
     await this.settingsService.assertFeatureEnabled('features.transfers');
-    await assertTransferCreationAllowed(this.settingsService, dto.type, 'api');
     if (user.role === 'user') {
       throw new ForbiddenException('Users cannot create transfers');
     }
@@ -220,8 +220,6 @@ export class TransfersService {
       throw new BadRequestException(TRANSFER_MESSAGES.rashodovanjeBlocked);
     }
     const isCrossService = await this.resolveCrossServiceFlag(user, dto);
-    const signerId = await this.resolveSignerForCreate(dto);
-    await this.assertSignerExists(signerId);
     await this.assertWarehouseIds(dto);
     await this.assertWarehouseCoverageForTransfer(dto);
     if (dto.fromPersonId) {
@@ -230,6 +228,28 @@ export class TransfersService {
     if (dto.toPersonId) {
       await this.assertEmployeeInScope(user, dto.toPersonId);
     }
+    const documentEnabled = await isTransferDocumentEnabled(
+      this.settingsService,
+      dto.type,
+      'api',
+    );
+    if (!documentEnabled) {
+      const updatedEquipment = await this.prisma.$transaction(async (tx) => {
+        await executeDirectEquipmentTransferInTx(tx, {
+          equipmentId: dto.equipmentId,
+          type: dto.type,
+          toPersonId: dto.toPersonId,
+          toWarehouseId: dto.toWarehouseId,
+        });
+        return tx.equipment.findUnique({
+          where: { id: dto.equipmentId },
+          include: { currentHolder: true, warehouse: true },
+        });
+      });
+      return { mode: 'direct' as const, equipment: updatedEquipment };
+    }
+    const signerId = await this.resolveSignerForCreate(dto);
+    await this.assertSignerExists(signerId);
     const draftNumber = `DRAFT-${Date.now()}`;
     const documentWarehouseId = await this.resolveDocumentWarehouseForCreate(dto, equipment);
     await this.assertWarehouseReadyForDocuments(documentWarehouseId);
@@ -264,7 +284,8 @@ export class TransfersService {
       await this.notificationsService.notifyTransferSignedUploadPending(created.id);
     }
     await this.transferDocumentGeneration.generateForTransfer(created.id).catch(() => undefined);
-    return this.getTransferOrThrow(created.id);
+    const transfer = await this.getTransferOrThrow(created.id);
+    return { mode: 'document' as const, transfer };
   }
 
   async markPrinted(user: AuthenticatedUser, id: string) {
@@ -390,11 +411,7 @@ export class TransfersService {
       'transfer.require_signed_pdf_upload',
       true,
     );
-    const legacyRequireUpload = await this.settingsService.getBooleanValue(
-      'transfer.require_upload_before_sign',
-      false,
-    );
-    if (requireSignedPdf || legacyRequireUpload) {
+    if (requireSignedPdf) {
       throw new BadRequestException('Upload potpisane prenosnice (PDF) prije finalizacije');
     }
   }

@@ -3,7 +3,7 @@ export const TRANSFER_GUARD_MESSAGES = {
   crossServiceEvidenticar:
     'Prenos izvan vašeg opsega (grad/kategorija) može izvršiti samo administrator.',
   missingSigner: 'Nije konfigurisan potpisnik u hijerarhiji za ovu operaciju.',
-  generationDisabled: 'Generisanje prenosnica je isključeno u postavkama.',
+  transfersDisabled: 'Prenos opreme je isključen u postavkama.',
   rashodovanjeBlocked:
     'Rashod opreme ide preko liste za rashod u nacrtu sesije popisa, ne preko prenosnice rashodovanje.',
   uploadRequiredBeforeSign: 'Upload potpisane prenosnice (PDF) prije finalizacije.',
@@ -14,22 +14,38 @@ export interface TransferGuardResult {
   reason?: string;
 }
 
-export const canCreateTransferType = (
+export const canPerformEquipmentTransfer = (
   type: string,
   settings: Record<string, unknown>,
 ): TransferGuardResult => {
   if (type === 'rashodovanje') {
     return { allowed: false, reason: TRANSFER_GUARD_MESSAGES.rashodovanjeBlocked };
   }
-  if (settings['transfer.generation.enabled'] === false) {
-    return { allowed: false, reason: TRANSFER_GUARD_MESSAGES.generationDisabled };
-  }
-  const typeKey = `transfer.generation.on_${type}` as const;
-  if (settings[typeKey] === false) {
-    return { allowed: false, reason: TRANSFER_GUARD_MESSAGES.generationDisabled };
+  if (settings['features.transfers'] === false) {
+    return { allowed: false, reason: TRANSFER_GUARD_MESSAGES.transfersDisabled };
   }
   return { allowed: true };
 };
+
+export const willGenerateTransferDocument = (
+  type: string,
+  settings: Record<string, unknown>,
+): boolean => {
+  if (type === 'rashodovanje') {
+    return false;
+  }
+  if (settings['transfer.generation.enabled'] === false) {
+    return false;
+  }
+  const typeKey = `transfer.generation.on_${type}` as const;
+  if (settings[typeKey] === false) {
+    return false;
+  }
+  return true;
+};
+
+/** @deprecated Use canPerformEquipmentTransfer */
+export const canCreateTransferType = canPerformEquipmentTransfer;
 
 export const canCreateCrossServiceTransfer = (input: {
   isCrossService: boolean;

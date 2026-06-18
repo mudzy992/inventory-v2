@@ -40,7 +40,9 @@ export {
   type InventoryGuardResult,
 } from './inventory-guards';
 export {
+  canPerformEquipmentTransfer,
   canCreateTransferType,
+  willGenerateTransferDocument,
   canCreateCrossServiceTransfer,
   canSignTransfer,
   canFinalizeTransfer,

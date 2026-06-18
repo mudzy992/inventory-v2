@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { BadRequestException } from '@nestjs/common';
 import {
-  assertMasterTransferGenerationEnabled,
-  assertTransferCreationAllowed,
   isStockLotTransferDocumentEnabled,
+  isTransferDocumentEnabled,
 } from './transfer-generation-policy.util';
 
 const createSettings = (values: Record<string, boolean>) => ({
@@ -13,11 +11,13 @@ const createSettings = (values: Record<string, boolean>) => ({
 });
 
 describe('transfer-generation-policy.util', () => {
-  it('assertMasterTransferGenerationEnabled throws when master is off', async () => {
-    await assert.rejects(
-      () => assertMasterTransferGenerationEnabled(createSettings({ 'transfer.generation.enabled': false })),
-      BadRequestException,
+  it('isTransferDocumentEnabled returns false when master is off', async () => {
+    const enabled = await isTransferDocumentEnabled(
+      createSettings({ 'transfer.generation.enabled': false }),
+      'prenos',
+      'api',
     );
+    assert.equal(enabled, false);
   });
 
   it('isStockLotTransferDocumentEnabled returns false when lot setting is off', async () => {
@@ -27,20 +27,24 @@ describe('transfer-generation-policy.util', () => {
     assert.equal(enabled, false);
   });
 
+  it('isStockLotTransferDocumentEnabled returns false when master is off', async () => {
+    const enabled = await isStockLotTransferDocumentEnabled(
+      createSettings({ 'transfer.generation.enabled': false }),
+    );
+    assert.equal(enabled, false);
+  });
+
   it('isStockLotTransferDocumentEnabled returns true when master and lot are on', async () => {
     const enabled = await isStockLotTransferDocumentEnabled(createSettings({}));
     assert.equal(enabled, true);
   });
 
-  it('assertTransferCreationAllowed still blocks stock_lot when lot setting is off', async () => {
-    await assert.rejects(
-      () =>
-        assertTransferCreationAllowed(
-          createSettings({ 'transfer.generation.on_stock_lot_issue': false }),
-          'zaduzenje',
-          'stock_lot',
-        ),
-      BadRequestException,
+  it('isTransferDocumentEnabled returns false when per-type setting is off', async () => {
+    const enabled = await isTransferDocumentEnabled(
+      createSettings({ 'transfer.generation.on_prenos': false }),
+      'prenos',
+      'api',
     );
+    assert.equal(enabled, false);
   });
 });

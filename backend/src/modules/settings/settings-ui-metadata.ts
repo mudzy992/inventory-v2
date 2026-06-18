@@ -12,27 +12,25 @@ export interface SettingUiMetadata {
 }
 
 export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
+  'transfer.generation.enabled': {
+    detail:
+      'Samo generisanje prenosnica. Isključeno: prenosi opreme i dalje rade bez dokumenata. Za potpuni blok prenosa isključite modul „Zaduženja i prenosi”.',
+  },
   'transfer.generation.on_stock_lot_issue': {
     dependsOn: { key: 'transfer.generation.enabled', equals: true },
-    detail: 'Kontroliše da li izdavanje iz skladišnog lota kreira transfer i prenosnicu.',
+    detail: 'Isključeno: direktno zaduženje iz lota bez transfer zapisa i prenosnice.',
   },
   'transfer.generation.on_zaduzenje': {
     dependsOn: { key: 'transfer.generation.enabled', equals: true },
-    detail: 'Zaduženje opreme koja je već evidentirana na skladištu.',
+    detail: 'Isključeno: zaduženje sa skladišta odmah mijenja holdera bez prenosnice.',
   },
   'transfer.generation.on_prenos': {
     dependsOn: { key: 'transfer.generation.enabled', equals: true },
-    detail: 'Prenos zaduženja između dvije osobe.',
+    detail: 'Isključeno: prenos osoba→osoba odmah mijenja holdera bez prenosnice.',
   },
   'transfer.generation.on_razduzenje': {
     dependsOn: { key: 'transfer.generation.enabled', equals: true },
-    detail: 'Vraćanje opreme sa radnika na skladište.',
-  },
-  'transfer.generation.on_rashodovanje': {
-    dependsOn: { key: 'transfer.generation.enabled', equals: true },
-    display: 'deprecated',
-    detail:
-      'Zastarjelo — novi rashod ide preko liste za rashod i komisije popisa (DisposalInventoryApproval), ne prenosnice.',
+    detail: 'Isključeno: razduženje odmah vraća opremu na skladište bez prenosnice.',
   },
   'transfer.generate_print_pdf': {
     dependsOn: { key: 'transfer.generation.enabled', equals: true },
@@ -40,7 +38,10 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
   },
   'transfer.require_signed_pdf_upload': {
     dependsOn: { key: 'transfer.generation.enabled', equals: true },
-    detail: 'Bez uploadovanog potpisanog PDF-a transfer se ne može finalizirati.',
+    detail: 'Primjenjuje se samo kad se kreira prenosnica. Bez uploada transfer se ne može finalizirati.',
+  },
+  'transfer.allow_evidenticar_cross_city': {
+    detail: 'Ručni prenos opreme između gradova. Za promjenu org. jedinice radnika koristite modul Relocation.',
   },
   'inventory.lock_date': {
     dependsOn: { key: 'inventory.production_mode', equals: true },
@@ -73,10 +74,6 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
   'notifications.realtime': {
     dependsOn: { key: 'notifications.enabled', equals: true },
     detail: 'Socket.IO push za notifikacije i postavke. Isključeno = samo polling.',
-  },
-  'transfer.require_upload_before_sign': {
-    display: 'deprecated',
-    detail: 'Zastarjela postavka — koristite „Obavezan potpisani PDF”.',
   },
   'transfer.template_placeholders_help': {
     display: 'info',

@@ -277,10 +277,10 @@ Izvor istine za preconditions, backend/frontend guardove i UX poruke po akciji.
 ## transfers
 
 ### transfers.create_transfer
-- **Opis:** Kreiranje prenosnice
-- **Preconditions:** `features.transfers`; generation flags; scope; freeze; signer
+- **Opis:** Prenos opreme (dokument ili direktno)
+- **Preconditions:** `features.transfers`; scope; freeze; `isTransferDocumentEnabled` za dokument flow; signer samo za dokument
 - **Backend guard:** `transfers.service.ts:create` — ✓
-- **Frontend guard:** `canCreateTransferType`, `canCreateCrossServiceTransfer` — ✓
+- **Frontend guard:** `canPerformEquipmentTransfer`, `canCreateCrossServiceTransfer` — ✓
 - **UX poruka (BS):** `TRANSFER_GUARD_MESSAGES`
 - **Gap:** —
 - **Prioritet:** —
@@ -327,7 +327,7 @@ Izvor istine za preconditions, backend/frontend guardove i UX poruke po akciji.
 
 ### warehouse-stock.issue_unit / commission_unit
 - **Opis:** Izdavanje / kolaudacija komada
-- **Preconditions:** `spremno_za_izdavanje`; qty>0; freeze; unit polja
+- **Preconditions:** `features.registrar_stock`, `features.transfers`; `spremno_za_izdavanje`; qty>0; freeze; `isTransferDocumentEnabled` za prenosnicu
 - **Backend guard:** `warehouse-stock.service.ts` — ✓
 - **Frontend guard:** `canIssueFromLot` — ✓
 - **UX poruka (BS):** `WAREHOUSE_STOCK_GUARD_MESSAGES`

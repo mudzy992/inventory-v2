@@ -1,5 +1,9 @@
 # Changelog — warehouse-stock
 
+## 2026-06-18
+
+- `issueUnit` zahtijeva `features.transfers`; `transfer.generation.enabled=false` više ne blokira izdavanje — direktno zaduženje bez prenosnice.
+
 ## 2026-06-17 (freeze po skladištu)
 
 - `stock_lot_create` / `stock_lot_issue` koriste `assertNoMutationInWarehouse(warehouse.id)` umjesto gradske provjere.

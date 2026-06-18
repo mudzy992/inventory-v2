@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import type { TransferType } from '../../../../generated/prisma/client';
 
 export type TransferCreationContext = 'api' | 'stock_lot' | 'inventory';
@@ -7,11 +6,10 @@ export interface TransferGenerationSettingsReader {
   getBooleanValue(key: string, defaultValue: boolean): Promise<boolean>;
 }
 
-const TYPE_SETTING_KEY: Record<TransferType, string> = {
+const TYPE_SETTING_KEY: Partial<Record<TransferType, string>> = {
   zaduzenje: 'transfer.generation.on_zaduzenje',
   prenos: 'transfer.generation.on_prenos',
   razduzenje: 'transfer.generation.on_razduzenje',
-  rashodovanje: 'transfer.generation.on_rashodovanje',
 };
 
 export const resolveTransferGenerationSettingKey = (
@@ -21,54 +19,29 @@ export const resolveTransferGenerationSettingKey = (
   if (context === 'stock_lot' && type === 'zaduzenje') {
     return 'transfer.generation.on_stock_lot_issue';
   }
-  return TYPE_SETTING_KEY[type];
+  const typeKey = TYPE_SETTING_KEY[type];
+  if (!typeKey) {
+    return `transfer.generation.on_${type}`;
+  }
+  return typeKey;
 };
 
-export const assertMasterTransferGenerationEnabled = async (
+export const isTransferDocumentEnabled = async (
   settings: TransferGenerationSettingsReader,
-): Promise<void> => {
+  type: TransferType,
+  context: TransferCreationContext,
+): Promise<boolean> => {
   const masterEnabled = await settings.getBooleanValue('transfer.generation.enabled', true);
   if (!masterEnabled) {
-    throw new BadRequestException(
-      'Kreiranje prenosnica je isključeno (inicijalizacija / postavke).',
-    );
+    return false;
   }
+  const typeKey = resolveTransferGenerationSettingKey(type, context);
+  return settings.getBooleanValue(typeKey, true);
 };
 
 export const isStockLotTransferDocumentEnabled = async (
   settings: TransferGenerationSettingsReader,
-): Promise<boolean> => {
-  await assertMasterTransferGenerationEnabled(settings);
-  return settings.getBooleanValue('transfer.generation.on_stock_lot_issue', true);
-};
+): Promise<boolean> => isTransferDocumentEnabled(settings, 'zaduzenje', 'stock_lot');
 
-export const assertTransferCreationAllowed = async (
-  settings: TransferGenerationSettingsReader,
-  type: TransferType,
-  context: TransferCreationContext,
-): Promise<void> => {
-  const masterEnabled = await settings.getBooleanValue('transfer.generation.enabled', true);
-  if (!masterEnabled) {
-    throw new BadRequestException(
-      'Kreiranje prenosnica je isključeno (inicijalizacija / postavke).',
-    );
-  }
-  const typeKey = resolveTransferGenerationSettingKey(type, context);
-  const typeEnabled = await settings.getBooleanValue(typeKey, true);
-  if (!typeEnabled) {
-    throw new BadRequestException(`Kreiranje prenosnice za tip "${type}" je isključeno u postavkama.`);
-  }
-};
-
-export const isTransferCreationAllowed = async (
-  settings: TransferGenerationSettingsReader,
-  type: TransferType,
-  context: TransferCreationContext,
-): Promise<boolean> => {
-  try {
-    await assertTransferCreationAllowed(settings, type, context);
-    return true;
-  } catch {
-    return false;
-  }
-};
+/** @deprecated Use isTransferDocumentEnabled — kept for callers that expected boolean query */
+export const isTransferCreationAllowed = isTransferDocumentEnabled;

@@ -50,13 +50,11 @@
 | `transfer.generation.on_zaduzenje` | boolean | private | true |
 | `transfer.generation.on_prenos` | boolean | private | true |
 | `transfer.generation.on_razduzenje` | boolean | private | true |
-| `transfer.generation.on_rashodovanje` | boolean | private | true |
 | `transfer.generate_print_pdf` | boolean | private | true |
 | `transfer.require_signed_pdf_upload` | boolean | private | true |
 | `transfer.allow_finalize_without_upload` | boolean | private | false |
 | `transfer.allow_evidenticar_cross_city` | boolean | private | false |
 | `transfer.allow_admin_cross_warehouse_issue` | boolean | private | false |
-| `transfer.require_upload_before_sign` | boolean | private | false (legacy, ne u UI) |
 | `transfer.template_placeholders_help` | string | public | placeholder lista (read-only) |
 
 ### Upload (tab: Upload)
@@ -99,7 +97,8 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 | Ključ | Modul / servis |
 |-------|----------------|
 | `upload.max_mb` | `UploadsService` |
-| `features.transfers` + `transfer.generation.*` + upload PDF | `TransfersService`, `WarehouseStockService`, `InventoryCountService`, `UploadsService` |
+| `features.transfers` | `TransfersService`, `WarehouseStockService.issueUnit`, `InventoryCountService` (relocation) |
+| `transfer.generation.*` + upload PDF | `TransfersService`, `WarehouseStockService`, `InventoryCountService`, `UploadsService` |
 | `features.disposal_commissions` | `DisposalCommissionsService` (sve javne metode, uklj. read) |
 | `features.inventory_count` | `InventoryCountService` (sesije, komiteti, freeze banner, izvještaji) |
 | `features.warehouse_inventory` | `InventoryCountService` (warehouse committees, record/close warehouse lines) |

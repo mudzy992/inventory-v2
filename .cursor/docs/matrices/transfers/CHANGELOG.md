@@ -1,3 +1,10 @@
+## 2026-06-18 — Prenos opreme vs. prenosnica
+
+- Dvoslojni model: `features.transfers` blokira prenos opreme; `transfer.generation.*` kontroliše samo dokumente.
+- `POST /transfers`: `mode: direct` (odmah ažurira opremu) ili `mode: document` (postojeći workflow).
+- Lot issue i popis relocation: direktan prenos kad dokument isključen; master `generation.enabled=false` više ne blokira izdavanje.
+- Uklonjeni registry ključevi: `transfer.generation.on_rashodovanje`, `transfer.require_upload_before_sign`.
+
 ## 2026-06-17 — Rashod samo sa skladišta
 
 - `transfer.generation.on_rashodovanje` deprecated u postavkama; novi rashod preko liste/komisije popisa.

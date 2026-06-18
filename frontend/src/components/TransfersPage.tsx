@@ -27,7 +27,8 @@ import { PageTabs } from './ui/page-tabs';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { useAdminSettings } from '../contexts/admin-settings-context';
 import {
-  canCreateTransferType,
+  canPerformEquipmentTransfer,
+  willGenerateTransferDocument,
   canCreateCrossServiceTransfer,
   TRANSFER_GUARD_MESSAGES,
 } from '../helpers/guards';
@@ -52,6 +53,13 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const { getBoolean } = usePublicSettings();
   const { settings: adminSettings } = useAdminSettings();
   const documentsEnabled = getBoolean('features.documents', true);
+  const transferSettings = useMemo(
+    () => ({
+      'features.transfers': getBoolean('features.transfers', true),
+      ...adminSettings,
+    }),
+    [adminSettings, getBoolean],
+  );
   const [activeTab, setActiveTab] = useState<TransferModuleTab>(initialTab);
   const [state] = useStore();
   const refresh = useRefreshData();
@@ -188,9 +196,9 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     const eq = selectedEquipment;
     if (!eq) return;
 
-    const typeGuard = canCreateTransferType(fType, adminSettings);
+    const typeGuard = canPerformEquipmentTransfer(fType, transferSettings);
     if (!typeGuard.allowed) {
-      toastError(typeGuard.reason ?? TRANSFER_GUARD_MESSAGES.generationDisabled);
+      toastError(typeGuard.reason ?? TRANSFER_GUARD_MESSAGES.transfersDisabled);
       return;
     }
 
@@ -468,6 +476,11 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
               </h2>
             </div>
             <div className="p-6 space-y-4">
+              {!willGenerateTransferDocument(fType, transferSettings) && (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Prenosnica se neće generisati — oprema se prenosi odmah bez dokumenta i potpisa.
+                </p>
+              )}
               {/* Transfer type selector */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tip operacije</label>

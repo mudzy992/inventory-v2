@@ -58,7 +58,7 @@ export const SETTINGS_TAB_META: Record<SettingsTabId, SettingsTabMeta> = {
     id: 'transfers',
     label: 'Prenosi',
     icon: ArrowLeftRight,
-    description: 'Pravila kreiranja prenosnica, PDF-a i potpisanih dokumenata. Pod-opcije zahtijevaju uključeno globalno kreiranje.',
+    description: 'Pravila generisanja prenosnica, PDF-a i potpisanih dokumenata. Prenos opreme blokira modul „Zaduženja i prenosi”.',
   },
   uploads: {
     id: 'uploads',
