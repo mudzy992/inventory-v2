@@ -1,4 +1,6 @@
-export const SETUP_WIZARD_STEP_COUNT = 9;
+import { SETUP_INSTALL_STEP_COUNT } from './setup-step-meta';
+
+export { SETUP_INSTALL_STEP_COUNT };
 
 export interface SetupEmployeeFields {
   firstName: string;

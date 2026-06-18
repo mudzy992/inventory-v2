@@ -4,7 +4,7 @@ export const EVIDENS_APP_NAME = 'Evidens';
 export const EVIDENS_APP_SUBTITLE = 'Evidencija i zaduženje opreme';
 
 interface AppBrandProps {
-  variant?: 'auth' | 'sidebar' | 'compact';
+  variant?: 'auth' | 'sidebar' | 'compact' | 'light';
   name?: string;
   subtitle?: string;
   showSubtitle?: boolean;
@@ -41,6 +41,17 @@ export const AppBrand = ({
   iconOnly = false,
   className,
 }: AppBrandProps) => {
+  if (variant === 'light') {
+    return (
+      <div className={cn('text-center', className)}>
+        <div className="inline-flex mb-3">
+          <BrandMark size="md" />
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{name}</h1>
+        {showSubtitle ? <p className="text-teal-700/80 text-sm mt-2 font-medium">{subtitle}</p> : null}
+      </div>
+    );
+  }
   if (variant === 'compact') {
     if (iconOnly) {
       return (

@@ -2,12 +2,14 @@ import { useEffect, type ReactNode } from 'react';
 
 interface PremiumAuthLayoutProps {
   children: ReactNode;
-  maxWidth?: 'md' | 'lg';
+  maxWidth?: 'md' | 'lg' | 'xl' | '2xl';
 }
 
 const maxWidthClass: Record<NonNullable<PremiumAuthLayoutProps['maxWidth']>, string> = {
   md: 'max-w-md',
   lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
 };
 
 export const PremiumAuthLayout = ({ children, maxWidth = 'md' }: PremiumAuthLayoutProps) => {

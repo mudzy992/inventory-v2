@@ -1,29 +1,21 @@
 import { useState } from 'react';
-import {
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  FolderTree,
-  MapPin,
-  Package,
-  Shield,
-  User,
-  Users,
-  Warehouse,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { ApiError } from '../../api/client';
 import { initializeSetupApi, type InitializeSetupPayload } from '../../api/setup-api';
 import { usePublicSettings } from '../../contexts/public-settings-context';
-import { AppBrand, EVIDENS_APP_NAME } from '../ui/app-brand';
+import { EVIDENS_APP_NAME } from '../ui/app-brand';
 import { PremiumAuthLayout } from '../ui/premium-auth-layout';
+import { getSetupStepMeta, SETUP_INSTALL_STEP_COUNT } from './setup-step-meta';
 import {
-  SETUP_WIZARD_STEP_COUNT,
   canProceedSetupStep,
   createInitialSetupWizardState,
   setupInputClass,
   type SetupWizardState,
 } from './setup-wizard-state';
+import { SetupWizardProgress } from './setup-wizard-progress';
+import { SetupPresentationScroll } from './steps/setup-presentation-scroll';
 import { SetupRoleAccountForm } from './steps/setup-role-account-form';
+import { SetupStepHeader } from './steps/setup-step-header';
 
 interface SetupWizardPageProps {
   onComplete: (message: string) => void;
@@ -122,11 +114,22 @@ const buildPayload = (state: SetupWizardState): InitializeSetupPayload => {
 
 export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
   const { refresh: refreshSettings } = usePublicSettings();
+  const [phase, setPhase] = useState<'presentation' | 'install'>('presentation');
   const [step, setStep] = useState(1);
   const [state, setState] = useState<SetupWizardState>(createInitialSetupWizardState);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const appName = (import.meta.env.VITE_APP_NAME as string) || EVIDENS_APP_NAME;
+  const stepMeta = getSetupStepMeta(step);
+
+  const handleStartInstall = () => {
+    setPhase('install');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  if (phase === 'presentation') {
+    return <SetupPresentationScroll appName={appName} onStartInstall={handleStartInstall} />;
+  }
 
   const patch = (partial: Partial<SetupWizardState>) => setState((prev) => ({ ...prev, ...partial }));
 
@@ -166,48 +169,39 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
     setStep((s) => s + 1);
   };
 
+  const handleFormSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (step < SETUP_INSTALL_STEP_COUNT) {
+      if (!canProceedSetupStep(step, state)) return;
+      if (step === 6) {
+        handleAdminStepNext();
+        return;
+      }
+      setStep((s) => s + 1);
+      return;
+    }
+    void handleSubmit();
+  };
+
   return (
     <PremiumAuthLayout maxWidth="lg">
-      <div className="mb-6">
-        <AppBrand name={appName} subtitle={`Inicijalizacija · korak ${step} od ${SETUP_WIZARD_STEP_COUNT}`} />
-      </div>
-
       <form
-        className="w-full bg-white rounded-2xl border border-slate-200 shadow-2xl shadow-slate-950/40"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (step < SETUP_WIZARD_STEP_COUNT) {
-            if (!canProceedSetupStep(step, state)) return;
-            if (step === 6) {
-              handleAdminStepNext();
-              return;
-            }
-            setStep((s) => s + 1);
-            return;
-          }
-          void handleSubmit();
-        }}
+        className="w-full bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200/80 shadow-2xl shadow-slate-950/30 overflow-hidden"
+        onSubmit={handleFormSubmit}
       >
-        <div className="px-6 py-4 border-b border-slate-100">
-          <div className="flex gap-1">
-            {Array.from({ length: SETUP_WIZARD_STEP_COUNT }, (_, i) => i + 1).map((n) => (
-              <div
-                key={n}
-                className={`h-1.5 flex-1 rounded-full transition-colors ${
-                  n <= step ? 'bg-teal-600' : 'bg-slate-200'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
+        <SetupWizardProgress currentStep={step} />
 
-        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+        <div
+          key={step}
+          className="p-6 space-y-4 setup-animate-in max-h-[min(60vh,32rem)] overflow-y-auto"
+        >
           {step === 1 && (
             <>
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <Building2 size={18} className="text-teal-600" />
-                Podaci o preduzeću
-              </div>
+              <SetupStepHeader
+                icon={stepMeta.icon}
+                title={stepMeta.label}
+                description={stepMeta.description}
+              />
               <label className="block text-sm font-medium text-slate-700">
                 Naziv *
                 <input value={state.companyName} onChange={(e) => patch({ companyName: e.target.value })} onBlur={handleCompanyCityBlur} className={setupInputClass} />
@@ -243,10 +237,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
 
           {step === 2 && (
             <>
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <MapPin size={18} className="text-teal-600" />
-                Lokacije
-              </div>
+              <SetupStepHeader icon={stepMeta.icon} title={stepMeta.label} description={stepMeta.description} />
               <label className="block text-sm font-medium text-slate-700">
                 Kanton *
                 <input value={state.cantonName} onChange={(e) => patch({ cantonName: e.target.value })} className={setupInputClass} />
@@ -260,13 +251,10 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
 
           {step === 3 && (
             <>
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <FolderTree size={18} className="text-teal-600" />
-                Organizacija
-              </div>
-              <div className="rounded-xl bg-slate-50 p-4 text-sm">
-                <p className="text-slate-500">Direkcija (vrh hijerarhije)</p>
-                <p className="font-medium text-slate-900">{state.companyName || '—'}</p>
+              <SetupStepHeader icon={stepMeta.icon} title={stepMeta.label} description={stepMeta.description} />
+              <div className="rounded-xl bg-gradient-to-br from-slate-50 to-teal-50/30 border border-slate-200 p-4 text-sm">
+                <p className="text-slate-500 text-xs uppercase tracking-wide font-medium">Direkcija (vrh hijerarhije)</p>
+                <p className="font-semibold text-slate-900 mt-1">{state.companyName || '—'}</p>
               </div>
               <label className="block text-sm font-medium text-slate-700">
                 Opcionalna podjedinica
@@ -288,10 +276,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
 
           {step === 4 && (
             <>
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <Warehouse size={18} className="text-teal-600" />
-                Skladište
-              </div>
+              <SetupStepHeader icon={stepMeta.icon} title={stepMeta.label} description={stepMeta.description} />
               <label className="block text-sm font-medium text-slate-700">
                 Naziv skladišta *
                 <input value={state.warehouseName} onChange={(e) => patch({ warehouseName: e.target.value })} className={setupInputClass} />
@@ -305,10 +290,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
 
           {step === 5 && (
             <>
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <Package size={18} className="text-teal-600" />
-                Kategorija i šifrarnik
-              </div>
+              <SetupStepHeader icon={stepMeta.icon} title={stepMeta.label} description={stepMeta.description} />
               <label className="block text-sm font-medium text-slate-700">
                 Roditeljska kategorija *
                 <input value={state.categoryParentName} onChange={(e) => patch({ categoryParentName: e.target.value })} className={setupInputClass} />
@@ -330,10 +312,7 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
 
           {step === 6 && (
             <>
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <User size={18} className="text-teal-600" />
-                Administrator
-              </div>
+              <SetupStepHeader icon={stepMeta.icon} title={stepMeta.label} description={stepMeta.description} />
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-sm font-medium text-slate-700">
                   Ime *
@@ -371,23 +350,17 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
 
           {step === 7 && (
             <>
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <Users size={18} className="text-teal-600" />
-                Tim po ulogama
-              </div>
-              <SetupRoleAccountForm title="Evidentičar" account={state.evidenticar} onChange={(evidenticar) => patch({ evidenticar })} />
-              <SetupRoleAccountForm title="Skladištar" account={state.skladistar} onChange={(skladistar) => patch({ skladistar })} />
-              <SetupRoleAccountForm title="Koordinator popisa" account={state.popisKoordinator} onChange={(popisKoordinator) => patch({ popisKoordinator })} />
-              <SetupRoleAccountForm title="Korisnik" account={state.user} onChange={(user) => patch({ user })} />
+              <SetupStepHeader icon={stepMeta.icon} title={stepMeta.label} description={stepMeta.description} />
+              <SetupRoleAccountForm variant="evidenticar" account={state.evidenticar} onChange={(evidenticar) => patch({ evidenticar })} />
+              <SetupRoleAccountForm variant="skladistar" account={state.skladistar} onChange={(skladistar) => patch({ skladistar })} />
+              <SetupRoleAccountForm variant="koordinator" account={state.popisKoordinator} onChange={(popisKoordinator) => patch({ popisKoordinator })} />
+              <SetupRoleAccountForm variant="user" account={state.user} onChange={(user) => patch({ user })} />
             </>
           )}
 
           {step === 8 && (
             <>
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <Shield size={18} className="text-teal-600" />
-                Direktor (potpis prenosnica)
-              </div>
+              <SetupStepHeader icon={stepMeta.icon} title={stepMeta.label} description={stepMeta.description} />
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-sm font-medium text-slate-700">
                   Ime *
@@ -407,27 +380,24 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
 
           {step === 9 && (
             <>
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <Shield size={18} className="text-teal-600" />
-                Pregled instalacije
-              </div>
-              <dl className="text-sm space-y-3 bg-slate-50 rounded-xl p-4">
+              <SetupStepHeader icon={stepMeta.icon} title={stepMeta.label} description={stepMeta.description} />
+              <dl className="text-sm space-y-3 bg-slate-50 rounded-xl p-4 border border-slate-100">
                 <div>
-                  <dt className="text-slate-500">Preduzeće</dt>
-                  <dd className="font-medium">{state.companyName}</dd>
+                  <dt className="text-slate-500 text-xs uppercase tracking-wide">Preduzeće</dt>
+                  <dd className="font-medium text-slate-900 mt-0.5">{state.companyName}</dd>
                   <dd className="text-slate-600">{state.companyAddress}, {state.companyCity}</dd>
                 </div>
                 <div>
-                  <dt className="text-slate-500">Lokacije</dt>
-                  <dd>{state.cantonName} · {state.cities}</dd>
+                  <dt className="text-slate-500 text-xs uppercase tracking-wide">Lokacije</dt>
+                  <dd className="text-slate-800">{state.cantonName} · {state.cities}</dd>
                 </div>
                 <div>
-                  <dt className="text-slate-500">Skladište / kategorija</dt>
-                  <dd>{state.warehouseName} · {state.categoryParentName} → {state.categoryLeafName}</dd>
+                  <dt className="text-slate-500 text-xs uppercase tracking-wide">Skladište / kategorija</dt>
+                  <dd className="text-slate-800">{state.warehouseName} · {state.categoryParentName} → {state.categoryLeafName}</dd>
                 </div>
                 <div>
-                  <dt className="text-slate-500">Korisnici</dt>
-                  <dd>@{state.adminUsername}, @{state.evidenticar.username}, @{state.skladistar.username}, @{state.popisKoordinator.username}, @{state.user.username}</dd>
+                  <dt className="text-slate-500 text-xs uppercase tracking-wide">Korisnici</dt>
+                  <dd className="text-slate-800">@{state.adminUsername}, @{state.evidenticar.username}, @{state.skladistar.username}, @{state.popisKoordinator.username}, @{state.user.username}</dd>
                 </div>
               </dl>
             </>
@@ -438,24 +408,32 @@ export const SetupWizardPage = ({ onComplete }: SetupWizardPageProps) => {
           ) : null}
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-between gap-2">
+        <div className="px-6 py-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-white flex justify-between gap-2">
           {step > 1 ? (
-            <button type="button" onClick={() => setStep((s) => s - 1)} className="inline-flex items-center gap-1 px-4 py-2 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50">
+            <button
+              type="button"
+              onClick={() => setStep((s) => s - 1)}
+              className="inline-flex items-center gap-1 px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition-colors"
+            >
               <ChevronLeft size={16} /> Nazad
             </button>
           ) : (
             <span />
           )}
-          {step < SETUP_WIZARD_STEP_COUNT ? (
+          {step < SETUP_INSTALL_STEP_COUNT ? (
             <button
               type="submit"
               disabled={!canProceedSetupStep(step, state)}
-              className="inline-flex items-center gap-1 px-4 py-2 text-sm bg-teal-600 text-white rounded-xl disabled:opacity-50 hover:bg-teal-500"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-teal-600 text-white rounded-xl disabled:opacity-50 hover:bg-teal-500 transition-all shadow-md shadow-teal-600/20 hover:shadow-lg hover:shadow-teal-600/25"
             >
               Dalje <ChevronRight size={16} />
             </button>
           ) : (
-            <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm bg-teal-600 text-white rounded-xl disabled:opacity-50 hover:bg-teal-500">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-teal-600 text-white rounded-xl disabled:opacity-50 hover:bg-teal-500 transition-all shadow-md shadow-teal-600/20"
+            >
               {isSubmitting ? 'Inicijalizacija...' : 'Završi instalaciju'}
             </button>
           )}

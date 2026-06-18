@@ -2,7 +2,28 @@
 
 ## Cilj
 
-Jednokratni setup wizard (`POST /backend/setup/initialize`) kreira minimalne entitete da aplikacija odmah podrži puni tok: prijem lota → izdavanje → zaduženje, sa svih 5 uloga.
+Jednokratni setup wizard (`POST /backend/setup/initialize`) — **scroll prezentacija** + **9 instalacijskih koraka** kreira minimalne entitete da aplikacija odmah podrži puni tok: prijem lota → izdavanje → zaduženje, sa svih 5 uloga.
+
+## Faze UI-a
+
+| Faza | Sadržaj |
+|------|---------|
+| **Prezentacija** | Full-page scroll: hero → 8 modula (reveal na scroll) → pregled + CTA „Započni instalaciju” |
+| **Instalacija** | Forma u kartici, progress bar, 9 koraka (preduzeće → … → pregled → submit) |
+
+## Koraci instalacije (forma)
+
+| # | Korak |
+|---|--------|
+| 1 | Preduzeće |
+| 2 | Lokacije |
+| 3 | Organizacija |
+| 4 | Skladište |
+| 5 | Kategorije + šifrarnik |
+| 6 | Administrator |
+| 7 | Tim (4 uloge) |
+| 8 | Direktor / signer |
+| 9 | Pregled + završetak |
 
 ## Gate
 
