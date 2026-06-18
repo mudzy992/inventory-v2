@@ -31,6 +31,11 @@ import { SettingsService } from '../settings/settings.service';
 import { buildDisposalReportPayload } from './utils/build-disposal-report.util';
 import { executeDirectEquipmentTransferInTx } from '../transfers/utils/execute-direct-equipment-transfer.util';
 import { isTransferDocumentEnabled } from '../transfers/utils/transfer-generation-policy.util';
+import {
+  ACCOUNTING_TRACKED_EXCLUSION_MESSAGE,
+  isInventoryCountable,
+  requiresTransferDocument,
+} from '../../common/utils/equipment-accounting-tracked.util';
 import { resolveDocumentWarehouseId } from '../transfers/utils/resolve-document-warehouse.util';
 import { finalizeInventoryTransferInTx } from './utils/finalize-inventory-transfer.util';
 import { buildWarehouseCommitteeMembers } from './utils/inventory-warehouse-committees.util';
@@ -48,6 +53,7 @@ import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 import { provisionSessionCommitteeSlots } from './utils/provision-session-committee-slots.util';
 import { deleteInventorySessionCascadeInTx } from './utils/delete-inventory-session-cascade.util';
+import { getEquipmentInventoryLabel } from '../../common/utils/equipment-accounting-tracked.util';
 
 const OPEN_INVENTORY_SESSION_STATUSES = ['draft', 'active', 'closing'] as const;
 
@@ -1164,6 +1170,8 @@ export class InventoryCountService {
       status: INVENTORY_COUNTABLE_EQUIPMENT_STATUS,
       category: { categoryKind: 'ASSET' },
       categoryId: { in: categoryIds },
+      isAccountingTracked: true,
+      inventoryNumber: { not: null },
     };
     if (!committee.warehouseId) {
       const warehousesInCity = await this.prisma.warehouse.findMany({
@@ -1640,6 +1648,9 @@ export class InventoryCountService {
     });
     if (!equipment) {
       throw new NotFoundException('Equipment not found');
+    }
+    if (!isInventoryCountable(equipment)) {
+      throw new BadRequestException(ACCOUNTING_TRACKED_EXCLUSION_MESSAGE);
     }
     const inScope = await this.isEquipmentInCommitteeScope(committee, equipment);
     if (!inScope) {
@@ -2163,7 +2174,7 @@ export class InventoryCountService {
     void this.notificationsService.notifyDisposalApprovalPending(
       approval.id,
       committee.disposalCommissionId,
-      approval.equipment.inventoryNumber,
+      getEquipmentInventoryLabel(approval.equipment),
     );
     void this.notificationsService.emitInventoryDisposalInboxRefresh(committee.session.id);
   }
@@ -2243,6 +2254,8 @@ export class InventoryCountService {
       status: string;
       warehouseId: string | null;
       currentHolderId: string | null;
+      isAccountingTracked: boolean;
+      inventoryNumber: string | null;
       currentHolder: { id: string; orgUnitId: string } | null;
     },
     relocation: {
@@ -2504,6 +2517,8 @@ export class InventoryCountService {
       status: string;
       warehouseId: string | null;
       currentHolderId: string | null;
+      isAccountingTracked: boolean;
+      inventoryNumber: string | null;
       currentHolder: { id: string; orgUnitId: string } | null;
     },
     targetType: InventoryRelocationTarget,
@@ -2515,6 +2530,7 @@ export class InventoryCountService {
     tx?: Pick<PrismaService, 'transfer' | 'employee' | 'equipment'>,
   ) {
     const db = tx ?? this.prisma;
+    const accountingTracked = requiresTransferDocument(equipment);
     const committeeWarehouse = committeeWarehouseId
       ? await this.prisma.warehouse.findUnique({
           where: { id: committeeWarehouseId },
@@ -2529,11 +2545,9 @@ export class InventoryCountService {
         requestedWarehouseId: warehouseId,
       });
       if (equipment.status === 'zaduzeno' && equipment.currentHolderId) {
-        const documentEnabled = await isTransferDocumentEnabled(
-          this.settingsService,
-          'razduzenje',
-          'inventory',
-        );
+        const documentEnabled =
+          accountingTracked &&
+          (await isTransferDocumentEnabled(this.settingsService, 'razduzenje', 'inventory'));
         if (!documentEnabled) {
           if (phase === 'draft') {
             return null;
@@ -2602,11 +2616,9 @@ export class InventoryCountService {
       }
     }
     if (equipment.status === 'skladiste') {
-      const documentEnabled = await isTransferDocumentEnabled(
-        this.settingsService,
-        'zaduzenje',
-        'inventory',
-      );
+      const documentEnabled =
+        accountingTracked &&
+        (await isTransferDocumentEnabled(this.settingsService, 'zaduzenje', 'inventory'));
       if (!documentEnabled) {
         if (phase === 'draft') {
           return null;
@@ -2654,11 +2666,9 @@ export class InventoryCountService {
       });
     }
     if (equipment.status === 'zaduzeno' && equipment.currentHolderId) {
-      const documentEnabled = await isTransferDocumentEnabled(
-        this.settingsService,
-        'prenos',
-        'inventory',
-      );
+      const documentEnabled =
+        accountingTracked &&
+        (await isTransferDocumentEnabled(this.settingsService, 'prenos', 'inventory'));
       if (!documentEnabled) {
         if (phase === 'draft') {
           return null;

@@ -35,7 +35,8 @@ export interface PublicEquipmentMovement {
 
 export interface PublicEquipmentResponse {
   id: string;
-  inventoryNumber: string;
+  inventoryNumber: string | null;
+  isAccountingTracked: boolean;
   status: string;
   categoryName: string;
   productName: string | null;
@@ -178,6 +179,7 @@ export class PublicEquipmentService {
     return {
       id: equipment.id,
       inventoryNumber: equipment.inventoryNumber,
+      isAccountingTracked: equipment.isAccountingTracked,
       status: equipment.status,
       categoryName: equipment.category.name,
       productName: equipment.stockLot?.productName?.trim() || null,

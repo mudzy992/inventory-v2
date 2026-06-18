@@ -20,6 +20,10 @@ import {
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
 import { WAREHOUSE_STOCK_MESSAGES } from '../../common/utils/warehouse-stock-messages.util';
 import {
+  assertEquipmentAccountingFields,
+  resolveIssueAccountingFields,
+} from '../../common/utils/equipment-accounting-tracked.util';
+import {
   buildPaginatedResponse,
   type PaginatedResponse,
 } from '../../common/types/paginated-response.type';
@@ -92,6 +96,7 @@ const lotInclude = {
     select: {
       id: true,
       inventoryNumber: true,
+      isAccountingTracked: true,
       affiliation: true,
       status: true,
       currentHolderId: true,
@@ -584,7 +589,14 @@ export class WarehouseStockService {
     }
     const lotSpecs = (lot.specifications ?? {}) as Record<string, string>;
     const mergedSpecifications = { ...lotSpecs, ...dto.uniqueSpecifications };
-    const transferDocumentEnabled = await isStockLotTransferDocumentEnabled(this.settingsService);
+    const accountingFields = resolveIssueAccountingFields({
+      isAccountingTracked: dto.isAccountingTracked,
+      inventoryNumber: dto.inventoryNumber,
+    });
+    assertEquipmentAccountingFields(accountingFields);
+    const useTransferDocument =
+      accountingFields.isAccountingTracked &&
+      (await isStockLotTransferDocumentEnabled(this.settingsService));
     const lotInput = {
       id: lot.id,
       warehouseId: lot.warehouseId,
@@ -595,7 +607,8 @@ export class WarehouseStockService {
     const issueBase = {
       lot: lotInput,
       employeeId: dto.employeeId,
-      inventoryNumber: dto.inventoryNumber.trim(),
+      inventoryNumber: accountingFields.inventoryNumber,
+      isAccountingTracked: accountingFields.isAccountingTracked,
       affiliation: dto.affiliation,
       mergedSpecifications,
     };
@@ -606,7 +619,7 @@ export class WarehouseStockService {
           transferDate: Date;
         }
       | undefined;
-    if (transferDocumentEnabled) {
+    if (useTransferDocument) {
       const signerResolved = dto.signerId
         ? dto.signerId
         : await resolveTransferSignerId(this.signerResolutionService, {
@@ -702,6 +715,11 @@ export class WarehouseStockService {
     );
     const lotSpecs = (lot.specifications ?? {}) as Record<string, string>;
     const mergedSpecifications = { ...lotSpecs, ...dto.uniqueSpecifications };
+    const accountingFields = resolveIssueAccountingFields({
+      isAccountingTracked: dto.isAccountingTracked,
+      inventoryNumber: dto.inventoryNumber,
+    });
+    assertEquipmentAccountingFields(accountingFields);
     const lotInput = {
       id: lot.id,
       warehouseId: lot.warehouseId,
@@ -714,7 +732,8 @@ export class WarehouseStockService {
         await executeStockLotCommissionInTx(tx, {
           lot: lotInput,
           receipt,
-          inventoryNumber: dto.inventoryNumber.trim(),
+          inventoryNumber: accountingFields.inventoryNumber,
+          isAccountingTracked: accountingFields.isAccountingTracked,
           affiliation: dto.affiliation,
           mergedSpecifications,
         });

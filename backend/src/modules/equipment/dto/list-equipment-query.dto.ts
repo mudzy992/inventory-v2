@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, IsEnum } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID, IsEnum } from 'class-validator';
 import { EquipmentAffiliation, EquipmentStatus } from '../../../../generated/prisma/client';
 import { PaginatedQueryDto } from '../../../common/dto/paginated-query.dto';
 
@@ -10,6 +10,10 @@ export class ListEquipmentQueryDto extends PaginatedQueryDto {
   @IsOptional()
   @IsEnum(EquipmentAffiliation)
   affiliation?: EquipmentAffiliation;
+
+  @IsOptional()
+  @IsBoolean()
+  isAccountingTracked?: boolean;
 
   @IsOptional()
   @IsUUID()

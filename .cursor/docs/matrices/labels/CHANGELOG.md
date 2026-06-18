@@ -1,5 +1,9 @@
 # Changelog — labels
 
+## 2026-06-16
+
+- Evidencijska oprema: na naljepnici prazna podcrtana linija umjesto štampanog inv. broja (QR ostaje isti).
+
 ## 2026-06-17
 
 - Naljepnica: lot naziv, kategorija, serijski (ako postoji), bold inventurni broj, QR.

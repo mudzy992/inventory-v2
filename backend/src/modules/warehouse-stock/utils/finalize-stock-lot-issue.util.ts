@@ -14,7 +14,8 @@ interface StockLotIssueBaseInput {
   lot: StockLotIssueLotInput;
   receipt: { contractNumber: string | null; entryDate: Date };
   employeeId: string;
-  inventoryNumber: string;
+  inventoryNumber: string | null;
+  isAccountingTracked: boolean;
   affiliation: EquipmentAffiliation;
   mergedSpecifications: Record<string, string>;
 }
@@ -41,6 +42,7 @@ export const executeStockLotIssueDirectInTx = async (
       catalogItemId: input.lot.catalogItemId,
       stockLotId: input.lot.id,
       inventoryNumber: input.inventoryNumber,
+      isAccountingTracked: input.isAccountingTracked,
       affiliation: input.affiliation,
       specifications: input.mergedSpecifications,
       contractNumber: input.receipt.contractNumber,
@@ -64,6 +66,7 @@ export const executeStockLotIssueWithTransferInTx = async (
       catalogItemId: input.lot.catalogItemId,
       stockLotId: input.lot.id,
       inventoryNumber: input.inventoryNumber,
+      isAccountingTracked: input.isAccountingTracked,
       affiliation: input.affiliation,
       specifications: input.mergedSpecifications,
       status: 'skladiste',

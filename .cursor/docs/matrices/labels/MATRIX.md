@@ -4,7 +4,7 @@
 
 - Komponenta `LabelPrintSheet`: horizontalna kartica — QR lijevo, tekst desno
 - QR payload: puni URL `{APP_URL|origin}/equipment/{equipmentId}`
-- Prikaz: naziv lota (`stockLot.productName`), kategorija, serijski broj (ako postoji u specifikaciji), inventurni broj (bold), QR
+- Prikaz: naziv lota (`stockLot.productName`), kategorija, serijski broj (ako postoji u specifikaciji), inventurni broj (bold) ili **prazna podcrtana linija** za ručni upis kad je oprema evidencijska (`!isAccountingTracked`), QR
 - `window.print()` + `@media print` CSS
 
 ## Javni QR pregled

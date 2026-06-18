@@ -1,5 +1,12 @@
 # Changelog — equipment-status
 
+## 2026-06-16 (knjigovodstveno vođena oprema)
+
+- Novo polje `Equipment.isAccountingTracked` (default `true`); `inventoryNumber` postaje nullable (`String? @unique`).
+- Evidencijska oprema: bez inv. broja; zaduženja/prenosi rade direct; isključena s popisa, rashoda i prenosnica.
+- Samo nadogradnja evidencijska → knjigovodstvena (dodaj inv. broj); downgrade zabranjen.
+- Filter `GET /equipment?isAccountingTracked=`; UI toggle pri izdavanju, badge i upgrade u edit modalu.
+
 ## 2026-06-16 (pripadnost opreme)
 
 - Novo obavezno polje `Equipment.affiliation` (`distribucija` | `snabdjevanje`), default `distribucija` za postojeću opremu.

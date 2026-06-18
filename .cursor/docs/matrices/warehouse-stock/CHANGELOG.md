@@ -1,5 +1,11 @@
 # Changelog — warehouse-stock
 
+## 2026-06-16 (evidencijska oprema pri izdavanju)
+
+- Issue/commission DTO: opcionalno `isAccountingTracked`; `inventoryNumber` obavezan samo kad tracked.
+- Evidencijska oprema pri issue uvijek ide kroz direct zaduženje (bez prenosnice), neovisno o postavci `transfer.generation.on_stock_lot_issue`.
+- UI: toggle „Oprema se vodi“ na formi izdavanja/kolaudacije.
+
 ## 2026-06-18
 
 - `issueUnit` zahtijeva `features.transfers`; `transfer.generation.enabled=false` više ne blokira izdavanje — direktno zaduženje bez prenosnice.

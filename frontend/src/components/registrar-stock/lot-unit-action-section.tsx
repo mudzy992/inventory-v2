@@ -5,6 +5,7 @@ import { AvailabilityHint } from './availability-hint';
 import { IssueUniqueFieldInput } from './issue-unique-field-input';
 import { CategoryFieldControl } from './category-field-control';
 import { Button } from '../ui/button';
+import { Switch } from '../ui/switch';
 import { cardClass, inputClass, labelClass } from '../ui/form-styles';
 
 export type LotUnitActionMode = 'issue' | 'commission';
@@ -13,6 +14,8 @@ interface LotUnitActionSectionProps {
   mode: LotUnitActionMode;
   categoryId: string;
   issueFields: CategoryField[];
+  isAccountingTracked: boolean;
+  onIsAccountingTrackedChange: (value: boolean) => void;
   inventoryNumber: string;
   onInventoryNumberChange: (value: string) => void;
   inventoryAvailability: AvailabilityStatus;
@@ -37,6 +40,8 @@ export const LotUnitActionSection = ({
   mode,
   categoryId,
   issueFields,
+  isAccountingTracked,
+  onIsAccountingTrackedChange,
   inventoryNumber,
   onInventoryNumberChange,
   inventoryAvailability,
@@ -70,6 +75,20 @@ export const LotUnitActionSection = ({
         <p className="text-xs text-gray-500 mt-1">{description}</p>
       </div>
       <div className="p-5">
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900">Oprema se vodi</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Isključite za opremu koja se ne vodi knjigovodstveno (bez inv. broja, bez prenosnica,
+              bez popisa/rashoda).
+            </p>
+          </div>
+          <Switch
+            checked={isAccountingTracked}
+            onCheckedChange={onIsAccountingTrackedChange}
+            aria-label="Oprema se vodi knjigovodstveno"
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {isIssue ? (
             <div>
@@ -99,16 +118,18 @@ export const LotUnitActionSection = ({
               ) : null}
             </div>
           ) : null}
-          <div>
-            <label className={labelClass}>Inventurni broj *</label>
-            <input
-              type="text"
-              value={inventoryNumber}
-              onChange={(event) => onInventoryNumberChange(event.target.value)}
-              className={inputClass}
-            />
-            <AvailabilityHint status={inventoryAvailability} />
-          </div>
+          {isAccountingTracked ? (
+            <div>
+              <label className={labelClass}>Inventurni broj *</label>
+              <input
+                type="text"
+                value={inventoryNumber}
+                onChange={(event) => onInventoryNumberChange(event.target.value)}
+                className={inputClass}
+              />
+              <AvailabilityHint status={inventoryAvailability} />
+            </div>
+          ) : null}
           <div>
             <label className={labelClass}>Pripadnost *</label>
             <select

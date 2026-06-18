@@ -1,3 +1,7 @@
+## 2026-06-16 — Evidencijska oprema bez prenosnice
+
+- `POST /transfers`: oprema bez inv. broja (`isAccountingTracked=false`) uvijek `mode: direct`, neovisno o `transfer.generation.*`.
+
 ## 2026-06-18 — Prenos opreme vs. prenosnica
 
 - Dvoslojni model: `features.transfers` blokira prenos opreme; `transfer.generation.*` kontroliše samo dokumente.

@@ -134,7 +134,8 @@ export interface WarehouseStockLot {
   notes?: string | null;
   issuedUnits?: {
     id: string;
-    inventoryNumber: string;
+    inventoryNumber: string | null;
+    isAccountingTracked: boolean;
     affiliation: EquipmentAffiliation;
     status: string;
     currentHolderId?: string | null;
@@ -151,7 +152,8 @@ export interface Equipment {
   id: string;
   categoryId: string;
   stockLotId?: string | null;
-  inventoryNumber: string;
+  inventoryNumber: string | null;
+  isAccountingTracked: boolean;
   affiliation: EquipmentAffiliation;
   specifications: Record<string, string>;
   status: EquipmentStatus;

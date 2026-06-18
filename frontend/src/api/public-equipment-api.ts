@@ -26,7 +26,8 @@ export interface PublicEquipmentMovementDto {
 
 export interface PublicEquipmentDto {
   id: string;
-  inventoryNumber: string;
+  inventoryNumber: string | null;
+  isAccountingTracked: boolean;
   status: string;
   categoryName: string;
   productName: string | null;

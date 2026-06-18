@@ -12,7 +12,7 @@ type TransferForTemplate = {
   fromWarehouse: { name: string } | null;
   toWarehouse: { name: string } | null;
   equipment: {
-    inventoryNumber: string;
+    inventoryNumber: string | null;
     category: { name: string };
     specifications: Prisma.JsonValue;
   };
@@ -52,7 +52,7 @@ export const buildTransferTemplateData = (
     predao: formatParty(transfer.fromType, transfer.fromPerson, transfer.fromWarehouse),
     preuzeo: formatParty(transfer.toType, transfer.toPerson, transfer.toWarehouse),
     potpisnik: formatPerson(transfer.signer),
-    inv_broj: transfer.equipment.inventoryNumber,
+    inv_broj: transfer.equipment.inventoryNumber ?? '',
     naziv_opreme: buildEquipmentLabel(transfer),
     obrazlozenje: obrazlozenje || '—',
   };

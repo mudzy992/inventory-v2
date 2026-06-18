@@ -1,4 +1,5 @@
 import type { Prisma } from '../../../../generated/prisma/client';
+import { getEquipmentInventoryLabel } from '../../../common/utils/equipment-accounting-tracked.util';
 
 type DisposalApprovalRow = Prisma.DisposalInventoryApprovalGetPayload<{
   include: {
@@ -61,7 +62,7 @@ export interface DisposalReportPayload {
 const mapApprovalItem = (row: DisposalApprovalRow): DisposalReportItem => ({
   id: row.id,
   status: row.status,
-  inventoryNumber: row.equipment.inventoryNumber,
+  inventoryNumber: getEquipmentInventoryLabel(row.equipment),
   categoryName: row.equipment.category?.name ?? null,
   warehouseName: row.equipment.warehouse?.name ?? null,
   lineStatus: row.inventoryLine?.status ?? null,

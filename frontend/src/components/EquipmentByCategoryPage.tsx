@@ -10,6 +10,10 @@ import {
 import { ChevronRight, Folder, Layers, Search, Filter, Download, X, Eye, QrCode, Printer, Package } from 'lucide-react';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName, getEquipmentAffiliationLabel } from '../helpers';
+import {
+  getEquipmentPrimaryLabel,
+  getEquipmentTrackingBadge,
+} from '../helpers/equipment-accounting-tracked.util';
 import { EquipmentCard } from './EquipmentCard';
 import { AlertBanner } from './ui/alert-banner';
 import type { Equipment, EquipmentAffiliation, FilterCondition } from '../types';
@@ -36,6 +40,7 @@ export function EquipmentByCategoryPage() {
   const [newFilterValue, setNewFilterValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterAffiliation, setFilterAffiliation] = useState('');
+  const [filterAccountingTracked, setFilterAccountingTracked] = useState('');
   const [specFieldId, setSpecFieldId] = useState('');
   const [specValue, setSpecValue] = useState('');
   const [showAllStatuses, setShowAllStatuses] = useState(false);
@@ -108,10 +113,12 @@ export function EquipmentByCategoryPage() {
         stockLotId: selectedLotKey === 'none' ? 'none' : selectedLotKey ?? undefined,
         status: showAllStatuses ? undefined : 'zaduzeno',
         affiliation: (filterAffiliation as EquipmentAffiliation) || undefined,
+        isAccountingTracked:
+          filterAccountingTracked === '' ? undefined : filterAccountingTracked === 'true',
         specFieldId: specFieldId || undefined,
         specValue: specValue.trim() || undefined,
       }),
-    [selectedSubId, selectedLotKey, showAllStatuses, filterAffiliation, specFieldId, specValue],
+    [selectedSubId, selectedLotKey, showAllStatuses, filterAffiliation, filterAccountingTracked, specFieldId, specValue],
   );
 
   const equipmentList = usePaginatedList({
@@ -133,7 +140,7 @@ export function EquipmentByCategoryPage() {
         if (filter.fieldId === 'status') {
           value = e.status;
         } else if (filter.fieldId === 'inventoryNumber') {
-          value = e.inventoryNumber;
+          value = getEquipmentPrimaryLabel(e);
         } else if (filter.fieldId === 'affiliation') {
           value = getEquipmentAffiliationLabel(e.affiliation);
         } else if (filter.fieldId === 'contractNumber') {
@@ -268,7 +275,7 @@ export function EquipmentByCategoryPage() {
     const rows = filteredEquipment.map(e => {
       const holder = e.currentHolder ?? null;
       const row = [
-        e.inventoryNumber,
+        getEquipmentPrimaryLabel(e),
         getEquipmentAffiliationLabel(e.affiliation),
         getStatusLabel(e.status),
         holder ? `${holder.firstName} ${holder.lastName}` : '',
@@ -529,6 +536,16 @@ export function EquipmentByCategoryPage() {
                 <option value="distribucija">Distribucija</option>
                 <option value="snabdjevanje">Snabdjevanje</option>
               </select>
+              <select
+                value={filterAccountingTracked}
+                onChange={(event) => setFilterAccountingTracked(event.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-2 text-sm"
+                aria-label="Filter vođenja"
+              >
+                <option value="">Sva oprema</option>
+                <option value="true">Knjigovodstveno vođena</option>
+                <option value="false">Evidencijska</option>
+              </select>
               {selectedSub ? (
                 <div className="flex flex-wrap items-center gap-2 min-w-[240px]">
                   <select
@@ -686,11 +703,18 @@ export function EquipmentByCategoryPage() {
                                 return next;
                               });
                             }}
-                            aria-label={`Odaberi ${eq.inventoryNumber}`}
+                            aria-label={`Odaberi ${getEquipmentPrimaryLabel(eq)}`}
                           />
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</span>
+                          <span className="font-mono text-xs font-medium text-gray-800">
+                            {getEquipmentPrimaryLabel(eq)}
+                          </span>
+                          {getEquipmentTrackingBadge(eq) ? (
+                            <span className="block mt-0.5 text-[10px] text-amber-700">
+                              {getEquipmentTrackingBadge(eq)}
+                            </span>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-600">
                           {getEquipmentAffiliationLabel(eq.affiliation)}

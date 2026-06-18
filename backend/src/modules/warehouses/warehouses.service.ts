@@ -14,6 +14,10 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
+import {
+  ACCOUNTING_TRACKED_EXCLUSION_MESSAGE,
+  isDisposalEligible,
+} from '../../common/utils/equipment-accounting-tracked.util';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
 import { WAREHOUSE_MESSAGES } from '../../common/utils/warehouse-messages.util';
@@ -108,6 +112,8 @@ export class WarehousesService {
         warehouseId,
         status: 'rashodovano',
         warehouseCondition: 'spremno_za_unistenje',
+        isAccountingTracked: true,
+        inventoryNumber: { not: null },
       },
       orderBy: { inventoryNumber: 'asc' },
     });
@@ -125,6 +131,9 @@ export class WarehousesService {
     const equipment = await this.prisma.equipment.findUnique({ where: { id: equipmentId } });
     if (!equipment) {
       throw new NotFoundException('Equipment not found');
+    }
+    if (!isDisposalEligible(equipment)) {
+      throw new BadRequestException(ACCOUNTING_TRACKED_EXCLUSION_MESSAGE);
     }
     if (equipment.warehouseId !== warehouseId) {
       throw new BadRequestException('Equipment is not in this warehouse');

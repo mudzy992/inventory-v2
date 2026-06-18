@@ -12,6 +12,7 @@ import { InventoryFreezeService } from '../../common/services/inventory-freeze.s
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
+import { getEquipmentInventoryLabel } from '../../common/utils/equipment-accounting-tracked.util';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { isRegistrarModeA } from '../../common/types/registrar-scope.type';
 import {
@@ -662,7 +663,7 @@ export class EmployeeRelocationService {
       await this.notifications.notifyEmployeeRelocationIncoming({
         userId,
         employeeName: `${employee.firstName} ${employee.lastName}`,
-        inventoryNumber: equipment.inventoryNumber,
+        inventoryNumber: getEquipmentInventoryLabel(equipment),
         lineId: line.id,
       });
     }

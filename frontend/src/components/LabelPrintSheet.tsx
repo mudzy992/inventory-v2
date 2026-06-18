@@ -4,6 +4,7 @@ import {
   buildEquipmentQrUrl,
   getSerialNumberDisplay,
 } from '../helpers/equipment-display.util';
+import { isAccountingTrackedEquipment } from '../helpers/equipment-accounting-tracked.util';
 import { ModalRoot } from './ui/modal-root';
 import { MODAL_Z } from '../constants/modal-z-index';
 
@@ -42,6 +43,7 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
             const qrData = buildEquipmentQrUrl(item);
             const lotName = item.stockLot?.productName?.trim();
             const serial = getSerialNumberDisplay(category, item.specifications);
+            const isTracked = isAccountingTrackedEquipment(item);
             return (
               <div
                 key={item.id}
@@ -62,9 +64,18 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
                       <span className="text-gray-500">{serial.label}:</span> {serial.value}
                     </p>
                   ) : null}
-                  <p className="font-mono text-sm font-bold text-gray-900 mt-0.5 tracking-tight">
-                    {item.inventoryNumber}
-                  </p>
+                  {isTracked ? (
+                    <p className="font-mono text-sm font-bold text-gray-900 mt-0.5 tracking-tight">
+                      {item.inventoryNumber}
+                    </p>
+                  ) : (
+                    <p
+                      className="font-mono text-sm font-bold text-gray-900 mt-0.5 tracking-tight border-b border-gray-900 min-h-[1.25rem]"
+                      aria-label="Prazna linija za ručni upis inventurnog broja"
+                    >
+                      {'\u00A0'}
+                    </p>
+                  )}
                 </div>
               </div>
             );

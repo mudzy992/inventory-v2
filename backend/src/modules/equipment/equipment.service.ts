@@ -25,6 +25,10 @@ import {
 import { findEquipmentIdsBySpecificationSearch } from '../../common/utils/find-equipment-ids-by-specification-search.util';
 import { findEmployeeIdsByHolderSearch } from '../../common/utils/find-employee-ids-by-holder-search.util';
 import {
+  assertEquipmentAccountingUpgrade,
+  normalizeInventoryNumber,
+} from '../../common/utils/equipment-accounting-tracked.util';
+import {
   buildOrderBy,
   paginate,
   parsePagination,
@@ -241,12 +245,28 @@ export class EquipmentService {
       const draft = { ...existing, categoryId, currentHolderId: dto.currentHolderId };
       await this.registrarScope.assertCanAccessEquipment(user, draft, holder);
     }
+    const nextIsAccountingTracked = dto.isAccountingTracked ?? existing.isAccountingTracked;
+    const nextInventoryNumber =
+      dto.inventoryNumber !== undefined
+        ? normalizeInventoryNumber(dto.inventoryNumber)
+        : existing.inventoryNumber;
+    assertEquipmentAccountingUpgrade({
+      existing: {
+        isAccountingTracked: existing.isAccountingTracked,
+        inventoryNumber: existing.inventoryNumber,
+      },
+      next: {
+        isAccountingTracked: nextIsAccountingTracked,
+        inventoryNumber: nextInventoryNumber,
+      },
+    });
     try {
       return await this.prisma.equipment.update({
         where: { id },
         data: {
           categoryId: dto.categoryId,
-          inventoryNumber: dto.inventoryNumber,
+          inventoryNumber: nextInventoryNumber,
+          isAccountingTracked: nextIsAccountingTracked,
           affiliation: dto.affiliation,
           specifications,
           status: dto.status,
@@ -368,7 +388,7 @@ export class EquipmentService {
 
   async getQrPayload(user: AuthenticatedUser, id: string): Promise<{
     id: string;
-    inventoryNumber: string;
+    inventoryNumber: string | null;
     url: string;
   }> {
     const equipment = await this.findOne(user, id);
@@ -420,6 +440,7 @@ export class EquipmentService {
     const filters: Prisma.EquipmentWhereInput = {
       status: query.status,
       affiliation: query.affiliation,
+      isAccountingTracked: query.isAccountingTracked,
       categoryId: query.categoryId,
       currentHolderId: query.currentHolderId,
       ...stockLotFilter,

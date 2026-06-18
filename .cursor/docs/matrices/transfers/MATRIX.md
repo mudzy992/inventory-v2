@@ -29,6 +29,11 @@
 
 `POST /transfers` vraća `{ mode: 'document', transfer }` ili `{ mode: 'direct', equipment }`.
 
+## Evidencijska oprema (bez inv. broja)
+
+- `requiresTransferDocument(equipment)` mora biti `true` da bi se kreirao dokument; inače **uvijek direct** (isti tok kao kad je `transfer.generation.enabled=false`).
+- Vrijedi za `POST /transfers`, lot issue (evidencijska) i popis relocation (defense-in-depth).
+
 ## Generisanje prenosnica (postavke)
 
 | Ključ | Default | Efekat |

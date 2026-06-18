@@ -15,6 +15,10 @@ import { SettingsService } from '../settings/settings.service';
 import { DISPOSAL_MESSAGES } from '../../common/utils/disposal-messages.util';
 import { assignListedDisposalItemsToCommissionInTx } from './utils/assign-disposal-list-to-commission.util';
 import { isEquipmentEligibleForDisposalMark } from './utils/assert-disposal-warehouse-eligibility.util';
+import {
+  ACCOUNTING_TRACKED_EXCLUSION_MESSAGE,
+  isDisposalEligible,
+} from '../../common/utils/equipment-accounting-tracked.util';
 import { resolveParentAssetCategoryIdInTx } from './utils/resolve-parent-asset-category.util';
 import { buildCommitteeScopeDeps } from './utils/build-committee-scope-deps.util';
 import { isEquipmentInDisposalSessionScope } from './utils/disposal-session-scope.util';
@@ -87,6 +91,9 @@ export class EquipmentDisposalListService {
     });
     if (!equipment) {
       throw new NotFoundException('Equipment not found');
+    }
+    if (!isDisposalEligible(equipment)) {
+      throw new BadRequestException(ACCOUNTING_TRACKED_EXCLUSION_MESSAGE);
     }
     if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
       throw new BadRequestException('Oprema je već označena ili rashodovana');

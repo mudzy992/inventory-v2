@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getOrgUnitPath, formatDate, getStatusLabel, getStatusColor, getEquipmentAffiliationLabel } from '../helpers';
+import { getEquipmentPrimaryLabel, getEquipmentTrackingBadge } from '../helpers/equipment-accounting-tracked.util';
 import { EquipmentCard } from './EquipmentCard';
 import { EmptyState } from './ui/empty-state';
 import { PaginationControls } from './ui/pagination-controls';
@@ -178,7 +179,12 @@ export function MyEquipmentPage() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-mono text-xs text-gray-500">{eq.inventoryNumber}</p>
+                      <p className="font-mono text-xs text-gray-500">{getEquipmentPrimaryLabel(eq)}</p>
+                      {getEquipmentTrackingBadge(eq) ? (
+                        <span className="inline-flex mt-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                          {getEquipmentTrackingBadge(eq)}
+                        </span>
+                      ) : null}
                       <p className="text-xs text-gray-500 mt-0.5">{getEquipmentAffiliationLabel(eq.affiliation)}</p>
                       <p className="text-sm font-medium text-gray-900 mt-1">
                         {eq.category?.name ?? 'Oprema'}
@@ -224,7 +230,7 @@ export function MyEquipmentPage() {
                 <div>
                   <p className="font-medium text-gray-800">{t.documentNumber || t.type}</p>
                   <p className="text-xs text-gray-500">
-                    {t.equipment?.inventoryNumber ?? '—'} · {formatDate(t.date)}
+                    {t.equipment ? getEquipmentPrimaryLabel(t.equipment) : '—'} · {formatDate(t.date)}
                   </p>
                 </div>
                 <span className="text-xs text-gray-400 flex items-center gap-1">

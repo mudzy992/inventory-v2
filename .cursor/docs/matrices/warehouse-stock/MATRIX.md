@@ -153,7 +153,15 @@ Kad su svi lotovi u grupi `zatvoreno`, grupa **ne ulazi** u default pregled.
 - Form modali koriste `ModalRoot` sa default `closeOnBackdrop=false` i `enableEscape=false`.
 - Zatvaranje isključivo eksplicitnim dugmetom (Odustani / Zatvori / X).
 
+## Issue / commission payload
+
+| Polje | Tracked (default) | Evidencijska (`isAccountingTracked: false`) |
+|-------|-------------------|---------------------------------------------|
+| `inventoryNumber` | obavezan, unique | ne šalje se; u bazi `null` |
+| `affiliation` | obavezan | obavezan |
+| Transfer pri issue | prema `transfer.generation.on_stock_lot_issue` | **uvijek direct** (bez `Transfer` zapisa) |
+
 ## Izdata oprema (detail lota)
 
-- `issuedUnits` uključuje `currentHolder` (ime, org jedinica) za prikaz zaduženja i link na detalj opreme.
+- `issuedUnits` uključuje `isAccountingTracked`, nullable `inventoryNumber` i `currentHolder` (ime, org jedinica) za prikaz zaduženja i link na detalj opreme; evidencijska prikazuje „Bez inv. broja“.
 - Kolaudirani komadi (`status: skladiste`, bez `currentHolder`): u koloni nosioca prikazuje se ime skladišta lota.

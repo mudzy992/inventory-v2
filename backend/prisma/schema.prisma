@@ -560,7 +560,8 @@ model Equipment {
   categoryId         String
   catalogItemId      String?
   stockLotId         String?
-  inventoryNumber    String              @unique @db.VarChar(120)
+  inventoryNumber    String?             @unique @db.VarChar(120)
+  isAccountingTracked Boolean            @default(true)
   affiliation        EquipmentAffiliation @default(distribucija)
   specifications     Json
   status             EquipmentStatus
@@ -593,6 +594,7 @@ model Equipment {
   @@index([stockLotId])
   @@index([status])
   @@index([affiliation])
+  @@index([isAccountingTracked])
   @@index([currentHolderId])
   @@index([warehouseId])
   @@map("equipment")

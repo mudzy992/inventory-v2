@@ -10,6 +10,14 @@ import { Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as Warehou
 import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser } from '../store';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName, getEquipmentAffiliationLabel } from '../helpers';
+import {
+  getEquipmentPrimaryLabel,
+  getEquipmentTrackingBadge,
+} from '../helpers/equipment-accounting-tracked.util';
+import {
+  useInventoryNumberAvailability,
+  isAvailabilityBlocking,
+} from '../hooks/use-equipment-availability';
 import type { CategoryField, Equipment, EquipmentAffiliation } from '../types';
 import { EquipmentCard } from './EquipmentCard';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
@@ -31,6 +39,7 @@ import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
 import { PaginationControls } from './ui/pagination-controls';
 import { ModalRoot } from './ui/modal-root';
+import { AvailabilityHint } from './registrar-stock/availability-hint';
 
 export function EquipmentPage() {
   const navigate = useNavigate();
@@ -41,6 +50,7 @@ export function EquipmentPage() {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterAffiliation, setFilterAffiliation] = useState('');
+  const [filterAccountingTracked, setFilterAccountingTracked] = useState('');
   const [equipmentSummary, setEquipmentSummary] = useState<EquipmentSummary | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
@@ -64,6 +74,10 @@ export function EquipmentPage() {
         categoryId: filterCategory || undefined,
         status: (filterStatus as EquipmentAffiliation) || undefined,
         affiliation: (filterAffiliation as EquipmentAffiliation) || undefined,
+        isAccountingTracked:
+          filterAccountingTracked === ''
+            ? undefined
+            : filterAccountingTracked === 'true',
       });
     } catch {
       toastError('Export nije uspio. Pokušajte ponovo.');
@@ -102,6 +116,9 @@ export function EquipmentPage() {
   const [fEntryDate, setFEntryDate] = useState('');
   const [fNotes, setFNotes] = useState('');
   const [fWarehouseId, setFWarehouseId] = useState('');
+  const upgradeAvailability = useInventoryNumberAvailability(
+    editing && !editing.isAccountingTracked ? fInventoryNumber : '',
+  );
 
   const formWarehouses = useMemo(() => {
     if (skladistar && !admin) {
@@ -115,9 +132,12 @@ export function EquipmentPage() {
     [],
   );
 
-  const list = usePaginatedList<Equipment, { categoryId?: string; status?: string; affiliation?: EquipmentAffiliation }>({
+  const list = usePaginatedList<
+    Equipment,
+    { categoryId?: string; status?: string; affiliation?: EquipmentAffiliation; isAccountingTracked?: boolean }
+  >({
     fetchPage,
-    initialFilters: { categoryId: undefined, status: undefined, affiliation: undefined },
+    initialFilters: { categoryId: undefined, status: undefined, affiliation: undefined, isAccountingTracked: undefined },
     enabled: viewMode === 'list',
   });
 
@@ -126,8 +146,10 @@ export function EquipmentPage() {
       categoryId: filterCategory || undefined,
       status: filterStatus || undefined,
       affiliation: (filterAffiliation as EquipmentAffiliation) || undefined,
+      isAccountingTracked:
+        filterAccountingTracked === '' ? undefined : filterAccountingTracked === 'true',
     });
-  }, [filterCategory, filterStatus, filterAffiliation, list.setFilters]);
+  }, [filterCategory, filterStatus, filterAffiliation, filterAccountingTracked, list.setFilters]);
 
   useEffect(() => {
     void fetchEquipmentSummaryApi()
@@ -147,7 +169,7 @@ export function EquipmentPage() {
   function openEdit(eq: Equipment) {
     setEditing(eq);
     setFCategoryId(eq.categoryId);
-    setFInventoryNumber(eq.inventoryNumber);
+    setFInventoryNumber(eq.inventoryNumber ?? '');
     setFAffiliation(eq.affiliation);
     setFSpecs({ ...eq.specifications });
     setFContract(eq.contractNumber || '');
@@ -158,8 +180,17 @@ export function EquipmentPage() {
   }
 
   const handleSave = async () => {
-    if (!editing || !fCategoryId || !fInventoryNumber.trim()) {
+    if (!editing || !fCategoryId) {
       return;
+    }
+    const isUpgrading = !editing.isAccountingTracked;
+    if (editing.isAccountingTracked && !fInventoryNumber.trim()) {
+      return;
+    }
+    if (isUpgrading) {
+      if (!fInventoryNumber.trim() || isAvailabilityBlocking(upgradeAvailability)) {
+        return;
+      }
     }
     const status = editing.status;
     const warehouseGuard = canSaveEquipmentWarehouse(status, fWarehouseId);
@@ -178,7 +209,9 @@ export function EquipmentPage() {
         : fSpecs;
     const payload = {
       categoryId: fCategoryId,
-      inventoryNumber: fInventoryNumber.trim(),
+      ...(isUpgrading
+        ? { isAccountingTracked: true, inventoryNumber: fInventoryNumber.trim() }
+        : { inventoryNumber: fInventoryNumber.trim() }),
       affiliation: fAffiliation,
       specifications,
       status,
@@ -339,6 +372,16 @@ export function EquipmentPage() {
             <option value="distribucija">Distribucija</option>
             <option value="snabdjevanje">Snabdjevanje</option>
           </select>
+          <select
+            value={filterAccountingTracked}
+            onChange={(e) => setFilterAccountingTracked(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            aria-label="Filter vođenja"
+          >
+            <option value="">Sva oprema</option>
+            <option value="true">Knjigovodstveno vođena</option>
+            <option value="false">Evidencijska</option>
+          </select>
         </div>
       </div>
 
@@ -381,7 +424,12 @@ export function EquipmentPage() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{eq.stockLot?.productName ?? '—'}</p>
-                  <p className="font-mono text-xs text-gray-500">{eq.inventoryNumber}</p>
+                  <p className="font-mono text-xs text-gray-500">{getEquipmentPrimaryLabel(eq)}</p>
+                  {getEquipmentTrackingBadge(eq) ? (
+                    <span className="inline-flex mt-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                      {getEquipmentTrackingBadge(eq)}
+                    </span>
+                  ) : null}
                   <p className="text-xs text-gray-500">{getEquipmentAffiliationLabel(eq.affiliation)}</p>
                   <p className="text-xs text-gray-500">
                     {cat ? (() => {
@@ -466,7 +514,7 @@ export function EquipmentPage() {
                               return next;
                             });
                           }}
-                          aria-label={`Odaberi ${eq.inventoryNumber}`}
+                          aria-label={`Odaberi ${getEquipmentPrimaryLabel(eq)}`}
                         />
                       </td>
                     ) : null}
@@ -474,7 +522,16 @@ export function EquipmentPage() {
                       <span className="text-sm text-gray-800">{eq.stockLot?.productName ?? '—'}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="font-mono text-xs font-medium text-gray-800">{eq.inventoryNumber}</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono text-xs font-medium text-gray-800">
+                          {getEquipmentPrimaryLabel(eq)}
+                        </span>
+                        {getEquipmentTrackingBadge(eq) ? (
+                          <span className="inline-flex w-fit text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                            {getEquipmentTrackingBadge(eq)}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs text-gray-600">{getEquipmentAffiliationLabel(eq.affiliation)}</span>
@@ -582,12 +639,14 @@ export function EquipmentPage() {
                     {filterCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Inventurni broj *</label>
-                  <input type="text" value={fInventoryNumber} onChange={e => setFInventoryNumber(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    placeholder="Npr. INV-RS-2024-0021" />
-                </div>
+                {editing.isAccountingTracked ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Inventurni broj *</label>
+                    <input type="text" value={fInventoryNumber} onChange={e => setFInventoryNumber(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="Npr. INV-RS-2024-0021" />
+                  </div>
+                ) : null}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Pripadnost *</label>
                   <select
@@ -601,6 +660,23 @@ export function EquipmentPage() {
                   </select>
                 </div>
               </div>
+              {!editing.isAccountingTracked ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+                  <h3 className="text-sm font-semibold text-amber-950">Dodaj inventurni broj</h3>
+                  <p className="text-xs text-amber-800">
+                    Nadogradnja na knjigovodstveno vođenu opremu (ulazi u popis, prenosnice i rashod).
+                  </p>
+                  <input
+                    type="text"
+                    value={fInventoryNumber}
+                    onChange={(e) => setFInventoryNumber(e.target.value)}
+                    className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
+                    placeholder="Npr. INV-RS-2024-0021"
+                    aria-label="Novi inventurni broj"
+                  />
+                  <AvailabilityHint status={upgradeAvailability} />
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Broj ugovora</label>

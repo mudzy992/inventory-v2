@@ -13,6 +13,7 @@ import {
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { formatDate, getEmployeeFullName, getEquipmentAffiliationLabel, getOrgUnitPath, getStatusLabel } from '../../helpers';
+import { getEquipmentPrimaryLabel } from '../../helpers/equipment-accounting-tracked.util';
 import {
   useInventoryNumberAvailability,
   type AvailabilityStatus,
@@ -113,6 +114,7 @@ export const RegistrarStockPage = () => {
   const [unitActionMode, setUnitActionMode] = useState<LotUnitActionMode | null>(null);
   const [employeeId, setEmployeeId] = useState('');
   const [inventoryNumber, setInventoryNumber] = useState('');
+  const [isAccountingTracked, setIsAccountingTracked] = useState(true);
   const [affiliation, setAffiliation] = useState<EquipmentAffiliation>('distribucija');
   const [unitSpecs, setUnitSpecs] = useState<Record<string, string>>({});
   const [uniqueAvailability, setUniqueAvailability] = useState<Record<string, AvailabilityStatus>>({});
@@ -128,7 +130,9 @@ export const RegistrarStockPage = () => {
   const [subCategoryId, setSubCategoryId] = useState<string | null>(null);
   const [statsGroups, setStatsGroups] = useState<StockLotProductGroup[]>([]);
   const user = getCurrentUser();
-  const inventoryAvailability = useInventoryNumberAvailability(inventoryNumber);
+  const inventoryAvailability = useInventoryNumberAvailability(
+    isAccountingTracked ? inventoryNumber : '',
+  );
   const groupsEnabled = browseLevel === 'groups' && Boolean(subCategoryId);
   const groupList = usePaginatedList<
     StockLotProductGroup,
@@ -277,11 +281,13 @@ export const RegistrarStockPage = () => {
     });
   }, [scopedEmployees, state.orgUnits]);
   const canSubmitUnitSpecs = useMemo(() => {
-    if (!inventoryNumber.trim()) {
-      return false;
-    }
-    if (!isValueAvailabilityValid(inventoryNumber, inventoryAvailability)) {
-      return false;
+    if (isAccountingTracked) {
+      if (!inventoryNumber.trim()) {
+        return false;
+      }
+      if (!isValueAvailabilityValid(inventoryNumber, inventoryAvailability)) {
+        return false;
+      }
     }
     for (const field of issueFields) {
       const value = unitSpecs[field.id] ?? '';
@@ -293,7 +299,7 @@ export const RegistrarStockPage = () => {
       }
     }
     return true;
-  }, [inventoryAvailability, inventoryNumber, issueFields, uniqueAvailability, unitSpecs]);
+  }, [inventoryAvailability, inventoryNumber, isAccountingTracked, issueFields, uniqueAvailability, unitSpecs]);
   const canSubmitIssue = useMemo(() => {
     if (!employeeId) {
       return false;
@@ -361,6 +367,7 @@ export const RegistrarStockPage = () => {
     setUniqueAvailability({});
     setUnitSpecs({});
     setInventoryNumber('');
+    setIsAccountingTracked(true);
     setAffiliation('distribucija');
     setEmployeeId('');
   };
@@ -432,7 +439,10 @@ export const RegistrarStockPage = () => {
     }
   };
   const handleIssue = async () => {
-    if (!detail || !employeeId || !inventoryNumber.trim()) {
+    if (!detail || !employeeId) {
+      return;
+    }
+    if (isAccountingTracked && !inventoryNumber.trim()) {
       return;
     }
     const issueGuard = canIssueFromLot({
@@ -458,13 +468,15 @@ export const RegistrarStockPage = () => {
     try {
       const updated = await issueStockLotUnitApi(detail.id, {
         employeeId,
-        inventoryNumber: inventoryNumber.trim(),
+        isAccountingTracked,
+        ...(isAccountingTracked ? { inventoryNumber: inventoryNumber.trim() } : {}),
         affiliation,
         uniqueSpecifications: unitSpecs,
       });
       setDetail(updated);
       setUnitActionMode(null);
       setInventoryNumber('');
+      setIsAccountingTracked(true);
       setAffiliation('distribucija');
       setUnitSpecs({});
       setEmployeeId('');
@@ -481,7 +493,10 @@ export const RegistrarStockPage = () => {
     }
   };
   const handleCommission = async () => {
-    if (!detail || !inventoryNumber.trim()) {
+    if (!detail) {
+      return;
+    }
+    if (isAccountingTracked && !inventoryNumber.trim()) {
       return;
     }
     const issueGuard = canIssueFromLot({
@@ -495,13 +510,15 @@ export const RegistrarStockPage = () => {
     setSaving(true);
     try {
       const updated = await commissionStockLotUnitApi(detail.id, {
-        inventoryNumber: inventoryNumber.trim(),
+        isAccountingTracked,
+        ...(isAccountingTracked ? { inventoryNumber: inventoryNumber.trim() } : {}),
         affiliation,
         uniqueSpecifications: unitSpecs,
       });
       setDetail(updated);
       setUnitActionMode(null);
       setInventoryNumber('');
+      setIsAccountingTracked(true);
       setAffiliation('distribucija');
       setUnitSpecs({});
       toastSuccess('Komad je kolaudiran i evidentiran na skladištu');
@@ -582,6 +599,8 @@ export const RegistrarStockPage = () => {
               mode={unitActionMode}
               categoryId={detail.categoryId}
               issueFields={issueFields}
+              isAccountingTracked={isAccountingTracked}
+              onIsAccountingTrackedChange={setIsAccountingTracked}
               inventoryNumber={inventoryNumber}
               onInventoryNumberChange={setInventoryNumber}
               inventoryAvailability={inventoryAvailability}
@@ -636,7 +655,7 @@ export const RegistrarStockPage = () => {
                             onClick={() => setViewItemId(unit.id)}
                             className="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline"
                           >
-                            {unit.inventoryNumber}
+                            {getEquipmentPrimaryLabel(unit)}
                           </button>
                         </td>
                         <td className="px-3 py-2.5 text-gray-600 text-xs">
@@ -664,7 +683,7 @@ export const RegistrarStockPage = () => {
                             onClick={() => setViewItemId(unit.id)}
                             className="inline-flex items-center justify-center p-1 text-gray-500 hover:text-blue-600"
                             title="Pogledaj opremu"
-                            aria-label={`Pogledaj opremu ${unit.inventoryNumber}`}
+                            aria-label={`Pogledaj opremu ${getEquipmentPrimaryLabel(unit)}`}
                           >
                             <Eye size={14} />
                           </button>

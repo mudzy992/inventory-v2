@@ -1,5 +1,12 @@
 # Changelog — inventory-count
 
+## 2026-06-16 (isključenje evidencijske opreme)
+
+- `buildCommitteeEquipmentWhere`: filter `isAccountingTracked=true` + `inventoryNumber not null`.
+- `recordLine`: guard za opremu izvan knjigovodstvenog opsega.
+- Relocation transferi: evidencijska oprema → direct (defense-in-depth).
+- `markForDisposal`: blokirano za evidencijsku opremu.
+
 ## 2026-06-17 (pre-lista rashoda samo sa skladišta)
 
 - `markForDisposal` i `eligible-for-equipment`: samo `skladiste` + `warehouseId`; usklađeno s `predlozen_rashod` na popisu.

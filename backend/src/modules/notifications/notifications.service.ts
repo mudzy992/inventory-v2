@@ -49,7 +49,7 @@ interface TransferRecipientSource {
   id: string;
   documentNumber: string;
   equipment: {
-    inventoryNumber: string;
+    inventoryNumber: string | null;
     categoryId: string;
     currentHolder: { orgUnitId: string } | null;
     warehouse?: { cityId: string } | null;

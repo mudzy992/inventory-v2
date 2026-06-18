@@ -110,7 +110,8 @@ export const issueStockLotUnitApi = (
   id: string,
   body: {
     employeeId: string;
-    inventoryNumber: string;
+    isAccountingTracked?: boolean;
+    inventoryNumber?: string;
     affiliation: EquipmentAffiliation;
     uniqueSpecifications: Record<string, string>;
     date?: string;
@@ -125,7 +126,8 @@ export const issueStockLotUnitApi = (
 export const commissionStockLotUnitApi = (
   id: string,
   body: {
-    inventoryNumber: string;
+    isAccountingTracked?: boolean;
+    inventoryNumber?: string;
     affiliation: EquipmentAffiliation;
     uniqueSpecifications: Record<string, string>;
   },

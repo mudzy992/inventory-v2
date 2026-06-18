@@ -105,11 +105,17 @@ Napomena: pri aktivaciji, ako nema perioda, postavlja se 01.12–31.12 za tu god
 
 ## Opseg opreme (scope)
 
+- Uključena je samo **knjigovodstveno vođena** oprema: `isAccountingTracked = true` i `inventoryNumber IS NOT NULL`.
+- Evidencijska oprema (`isAccountingTracked = false`) automatski ispadne iz popisnih lista, print sheet-a, CSV exporta i pretrage po inv. broju unutar popisa.
+- `recordLine` i rashod: eksplicitni guard ako oprema nije u opsegu.
+
 ### Komisija sa skladištem (`warehouseId` postavljen)
 
 ```
 equipment je u opsegu komisije ako:
-  equipment.status ∉ { rashodovano, za_rashod }
+  equipment.isAccountingTracked = true
+  AND equipment.inventoryNumber IS NOT NULL
+  AND equipment.status ∉ { rashodovano, za_rashod }
   AND category.categoryKind = ASSET
   AND equipment.categoryId ∈ expand(committee.categoryId)
   AND (

@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsObject,
@@ -18,6 +19,10 @@ export class UpdateEquipmentDto {
   @IsString()
   @MaxLength(120)
   inventoryNumber?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isAccountingTracked?: boolean;
 
   @IsOptional()
   @IsEnum(EquipmentAffiliation)

@@ -50,7 +50,7 @@ export type EmployeeListItem = Employee & {
 
 export interface EmployeeProfileHeldEquipment {
   id: string;
-  inventoryNumber: string;
+  inventoryNumber: string | null;
   categoryName: string;
   lotName: string | null;
   serialNumber: string | null;

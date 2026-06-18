@@ -43,6 +43,7 @@ import { resolveTransferSignerId } from './utils/resolve-transfer-signer.util';
 import { allocateTransferDocumentNumberInTx } from './utils/allocate-transfer-document-number.util';
 import { executeDirectEquipmentTransferInTx } from './utils/execute-direct-equipment-transfer.util';
 import { isTransferDocumentEnabled } from './utils/transfer-generation-policy.util';
+import { requiresTransferDocument } from '../../common/utils/equipment-accounting-tracked.util';
 import { resolveDocumentWarehouseId } from './utils/resolve-document-warehouse.util';
 import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { buildTransferRawDocumentHtml } from './utils/transfer-raw-document.util';
@@ -228,11 +229,9 @@ export class TransfersService {
     if (dto.toPersonId) {
       await this.assertEmployeeInScope(user, dto.toPersonId);
     }
-    const documentEnabled = await isTransferDocumentEnabled(
-      this.settingsService,
-      dto.type,
-      'api',
-    );
+    const documentEnabled =
+      requiresTransferDocument(equipment) &&
+      (await isTransferDocumentEnabled(this.settingsService, dto.type, 'api'));
     if (!documentEnabled) {
       const updatedEquipment = await this.prisma.$transaction(async (tx) => {
         await executeDirectEquipmentTransferInTx(tx, {

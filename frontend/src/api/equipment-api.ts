@@ -11,6 +11,7 @@ export interface EquipmentSummary {
 export interface EquipmentListFilters extends PaginatedListParams {
   status?: EquipmentStatus;
   affiliation?: EquipmentAffiliation;
+  isAccountingTracked?: boolean;
   categoryId?: string;
   currentHolderId?: string;
   /** UUID lota ili `none` za opremu bez lota */

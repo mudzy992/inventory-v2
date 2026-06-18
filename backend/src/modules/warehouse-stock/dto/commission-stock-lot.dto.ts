@@ -1,10 +1,15 @@
-import { IsEnum, IsObject, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { EquipmentAffiliation } from '../../../../generated/prisma/client';
 
 export class CommissionStockLotDto {
+  @IsOptional()
+  @IsBoolean()
+  isAccountingTracked?: boolean;
+
+  @IsOptional()
   @IsString()
   @MaxLength(120)
-  inventoryNumber!: string;
+  inventoryNumber?: string;
 
   @IsEnum(EquipmentAffiliation)
   affiliation!: EquipmentAffiliation;

@@ -14,6 +14,7 @@ import { fetchPublicEquipmentApi, type PublicEquipmentDto } from '../api/public-
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { buildCompanyAddressLine, companyHeaderFromSettings } from '../helpers/company-header.util';
 import { formatDate, getStatusColor, getStatusLabel } from '../helpers';
+import { getEquipmentPrimaryLabel } from '../helpers/equipment-accounting-tracked.util';
 import { SegmentTabs } from './ui/segment-tabs';
 
 interface PublicEquipmentPageProps {
@@ -217,8 +218,13 @@ function EquipmentSummaryCard({
             </h1>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="rounded-lg bg-white/15 px-2.5 py-1 font-mono text-sm text-white/95 backdrop-blur-sm">
-                {equipment.inventoryNumber}
+                {getEquipmentPrimaryLabel(equipment)}
               </span>
+              {!equipment.isAccountingTracked ? (
+                <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-medium backdrop-blur-sm">
+                  Evidencijska
+                </span>
+              ) : null}
               <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-medium backdrop-blur-sm">
                 {getStatusLabel(equipment.status)}
               </span>

@@ -61,8 +61,33 @@
 - `POST /equipment` — zabranjen za sve uloge (403); prijem robe = stock lot, ne direktan unos opreme
 - UI modul **Oprema**: samo pregled i uređivanje postojećih stavki; nova oprema preko Skladišta → prijem → lot → izdavanje ili kolaudacija
 
+## Knjigovodstveno vođena oprema (`isAccountingTracked`)
+
+| Vrijednost | `inventoryNumber` | Prenosnice | Popis | Rashod |
+|------------|-------------------|------------|-------|--------|
+| `true` (default) | obavezan, unique | prema postavci | u opsegu | dozvoljeno |
+| `false` (evidencijska) | `null` | uvijek direct, bez dokumenta | isključeno | isključeno |
+
+**Invarijante (backend):**
+
+- Samo **nadogradnja**: `false → true` uz novi unique `inventoryNumber`; zabranjeno uklanjanje broja / `true → false`
+- Helper: `requiresTransferDocument` = `isInventoryCountable` = `isDisposalEligible` = `isAccountingTracked && inventoryNumber != null`
+- Izvor: `equipment-accounting-tracked.util.ts` (BE + FE mirror)
+
+**API:**
+
+- Issue/commission: `isAccountingTracked?` (default true); `inventoryNumber` obavezan samo kad tracked
+- `PATCH /equipment/:id` — upgrade-only za accounting polja
+- `GET /equipment?isAccountingTracked=` — filter
+
+**UI:**
+
+- Izdavanje iz lota: toggle „Oprema se vodi“
+- Liste: badge „Evidencijska“, filter knjigovodstveno/evidencijska
+- Edit: sekcija „Dodaj inventurni broj“ za evidencijsku opremu
+
 ## Ostalo
 
-- `inventoryNumber` — unique u bazi
-- `GET /backend/equipment/:id/qr` — `{ id, inventoryNumber, url }`
+- `inventoryNumber` — unique u bazi kad postoji; više `NULL` dozvoljeno (evidencijska)
+- `GET /backend/equipment/:id/qr` — `{ id, inventoryNumber, url }` (`inventoryNumber` može biti `null`)
 - Oprema samo na **leaf** kategoriji

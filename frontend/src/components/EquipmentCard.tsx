@@ -11,6 +11,12 @@ import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { getOrgUnitPath, getEmployeeFullName, formatDate, getStatusLabel, getStatusColor, getEquipmentAffiliationLabel } from '../helpers';
 import {
+  getEquipmentPrimaryLabel,
+  getEquipmentQrFilenameLabel,
+  getEquipmentTrackingBadge,
+  isAccountingTrackedEquipment,
+} from '../helpers/equipment-accounting-tracked.util';
+import {
   buildEquipmentDisplayName,
   buildEquipmentQrUrl,
   getUniqueFieldsDisplay,
@@ -169,6 +175,9 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   }
 
   const qrData = buildEquipmentQrUrl(eq);
+  const equipmentLabel = getEquipmentPrimaryLabel(eq);
+  const qrFilenameLabel = getEquipmentQrFilenameLabel(eq);
+  const trackingBadge = getEquipmentTrackingBadge(eq);
   const displayName = buildEquipmentDisplayName(cat, eq.specifications);
   const uniqueFields = getUniqueFieldsDisplay(cat, eq.specifications);
   const uniqueFieldsSummary = uniqueFields.map((row) => `${row.label}: ${row.value}`).join(' · ');
@@ -183,6 +192,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const canMarkForDisposal =
     canManage &&
     disposalPreListEnabled &&
+    isAccountingTrackedEquipment(eq) &&
     eq.status === 'skladiste' &&
     !!eq.warehouseId;
   const reactivateGuard = canReactivateEquipment({
@@ -211,13 +221,13 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       ctx.textAlign = 'center';
       ctx.fillText(displayName.slice(0, 40), 150, 290);
       ctx.font = '12px Arial';
-      ctx.fillText(eq.inventoryNumber, 150, 310);
+      ctx.fillText(qrFilenameLabel, 150, 310);
       if (uniqueFieldsSummary) {
         ctx.fillText(uniqueFieldsSummary.slice(0, 42), 150, 328);
       }
       ctx.fillText('Skeniraj za detalje', 150, 346);
       const link = document.createElement('a');
-      link.download = `QR-${eq.inventoryNumber}.png`;
+      link.download = `QR-${qrFilenameLabel}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     };
@@ -232,7 +242,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       <!DOCTYPE html>
       <html>
       <head>
-        <title>QR - ${eq.inventoryNumber}</title>
+        <title>QR - ${qrFilenameLabel}</title>
         <style>
           body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
           .qr-container { display: inline-block; border: 2px solid #333; padding: 20px; border-radius: 12px; }
@@ -246,7 +256,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
           ${qrHtml}
           <div style="font-size:13px;font-weight:bold;margin-top:12px;">${displayName}</div>
           ${uniqueFieldsSummary ? `<div style="font-size:11px;margin-top:4px;">${uniqueFieldsSummary}</div>` : ''}
-          <div class="inv-number">${eq.inventoryNumber}</div>
+          <div class="inv-number">${equipmentLabel}</div>
           <div class="category">${cat?.name || ''}</div>
           <div class="instruction">Skeniraj za detalje opreme</div>
         </div>
@@ -344,7 +354,12 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
               <Package size={20} className="text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">{eq.inventoryNumber}</h2>
+              <h2 className="text-lg font-bold text-white">{equipmentLabel}</h2>
+              {trackingBadge ? (
+                <span className="inline-flex mt-1 text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white">
+                  {trackingBadge}
+                </span>
+              ) : null}
               <p className="text-blue-100 text-sm">
                 {cat?.name}
                 {eq.stockLot?.productName ? (
@@ -679,7 +694,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
 
       <EquipmentMarkDisposalDialog
         equipmentId={eq.id}
-        inventoryNumber={eq.inventoryNumber}
+        inventoryNumber={equipmentLabel}
         equipmentStatus={eq.status}
         warehouseId={eq.warehouseId}
         open={showMarkDisposal}
@@ -691,7 +706,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
         <div className="bg-white rounded-xl shadow-2xl w-full p-6 space-y-4">
           <h3 className="text-lg font-semibold">Reaktiviraj opremu</h3>
           <p className="text-sm text-gray-600">
-            Oprema {eq.inventoryNumber} vraća se na skladište kao aktivna.
+            Oprema {equipmentLabel} vraća se na skladište kao aktivna.
           </p>
           <textarea
             value={reactivateReason}
