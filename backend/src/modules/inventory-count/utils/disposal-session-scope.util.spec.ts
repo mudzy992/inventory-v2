@@ -84,4 +84,25 @@ describe('disposal-session-scope.util', () => {
     assert.equal(inScope, true);
     assert.equal(outOfScope, false);
   });
+
+  it('allows PJ Maglaj holder when warehouse city differs from holder location city', async () => {
+    const actual = await isEquipmentInDisposalSessionScope(
+      buildDeps({
+        resolveEquipmentCityId: async () => 'city-maglaj',
+        getWarehouseCityId: async () => 'city-zenica',
+        expandOrgUnitIds: async () => ['ou-ed-zenica', 'ou-maglaj'],
+        getWarehouseOrgUnitId: async () => 'ou-ed-zenica',
+      }),
+      scope,
+      {
+        id: 'eq-maglaj',
+        categoryId: 'cat-leaf',
+        status: 'zaduzeno',
+        warehouseId: null,
+        currentHolder: { orgUnitId: 'ou-maglaj' },
+        category: { categoryKind: 'ASSET' },
+      },
+    );
+    assert.equal(actual, true);
+  });
 });

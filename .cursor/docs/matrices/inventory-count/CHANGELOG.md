@@ -1,5 +1,11 @@
 # Changelog — inventory-count
 
+## 2026-06-17 (warehouse opseg bez grada)
+
+- `evaluateEquipmentInCommitteeScope`: komisija sa `warehouseId` koristi samo warehouse coverage / `warehouseId` (bez usporedbe grada nosioca i `Warehouse.cityId`).
+- Popravka: PJ Maglaj / poslovne jedinice pod ED Zenica u opsegu Skladišta ED Zenica (rashod, wizard brojači, linije popisa).
+- Legacy komisije bez `warehouseId`: city-wide opseg nepromijenjen.
+
 ## 2026-06-17 (disposal scope evaluator)
 
 - `markForDisposal` i `findEligibleSessionsForEquipment` koriste `evaluateEquipmentInCommitteeScope` (grad skladišta komisije + warehouse coverage za `zaduzeno`), umjesto poređenja session.orgUnit vs holder.orgUnit grada.

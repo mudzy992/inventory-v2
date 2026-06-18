@@ -105,22 +105,27 @@ Napomena: pri aktivaciji, ako nema perioda, postavlja se 01.12–31.12 za tu god
 
 ## Opseg opreme (scope)
 
-```
-sessionCityId = effectiveLocationCityId(session.orgUnitId)
+### Komisija sa skladištem (`warehouseId` postavljen)
 
+```
 equipment je u opsegu komisije ako:
   equipment.status ∉ { rashodovano, za_rashod }
   AND category.categoryKind = ASSET
   AND equipment.categoryId ∈ expand(committee.categoryId)
-  AND resolveEquipmentCityId(equipment) == sessionCityId
   AND (
     (status == skladiste AND equipment.warehouseId == committee.warehouseId)
     OR
-    (status == zaduzeno AND holder u warehouse coverage)
+    (status == zaduzeno AND holder.orgUnitId u podstablu warehouse.orgUnitId)
   )
 ```
 
-Legacy (`warehouseId IS NULL` na starim komisijama): opseg ostaje city-wide (read-only).
+Grad nosioca i `Warehouse.cityId` **nisu** kriterij opsega — bitno je samo warehouse coverage (nasljeđivanje efektivnog skladišta u org hijerarhiji).
+
+### Legacy komisija (`warehouseId IS NULL`, read-only)
+
+```
+resolveEquipmentCityId(equipment) == effectiveLocationCityId(session.orgUnitId)
+```
 
 U Popisu, za unos linija važi: **članstvo komisije** je dovoljno (bez registrar-scope blokade), jer se promjene vode kao `pending` dok je sesija aktivna.
 

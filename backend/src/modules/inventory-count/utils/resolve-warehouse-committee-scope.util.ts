@@ -71,25 +71,15 @@ export async function evaluateEquipmentInCommitteeScope(
   if (!committeeCategoryIds.has(equipment.categoryId)) {
     return false;
   }
-  let scopeCityId = await deps.getEffectiveLocationForOrgUnit(committee.sessionOrgUnitId);
   if (committee.warehouseId) {
-    const warehouseCityId = await deps.getWarehouseCityId(committee.warehouseId);
-    if (!warehouseCityId) {
-      return false;
-    }
-    scopeCityId = warehouseCityId;
+    return matchesWarehouseEquipmentScope(deps, committee.warehouseId, equipment);
   }
-  if (!scopeCityId) {
+  const sessionCityId = await deps.getEffectiveLocationForOrgUnit(committee.sessionOrgUnitId);
+  if (!sessionCityId) {
     return false;
   }
   const equipmentCityId = await deps.resolveEquipmentCityId(equipment);
-  if (equipmentCityId !== scopeCityId) {
-    return false;
-  }
-  if (!committee.warehouseId) {
-    return true;
-  }
-  return matchesWarehouseEquipmentScope(deps, committee.warehouseId, equipment);
+  return equipmentCityId === sessionCityId;
 }
 
 export async function filterEquipmentInCommitteeScope<T extends WarehouseScopeEquipment>(
