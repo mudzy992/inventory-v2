@@ -123,6 +123,7 @@ export interface PrintScopeEquipmentDto {
   category?: { name: string };
   currentHolder?: { id: string; firstName: string; lastName: string; title: string; orgUnitId: string };
   warehouse?: { id: string; name: string; cityId: string };
+  stockLot?: { id: string; productName: string } | null;
 }
 
 export interface InventoryPrintScopeDto {

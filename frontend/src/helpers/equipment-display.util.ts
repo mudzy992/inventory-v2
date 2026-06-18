@@ -75,6 +75,35 @@ export const getSerialNumberDisplay = (
   return null;
 };
 
+export const categoryHasSerialField = (category: Category | undefined): boolean => {
+  if (!category) {
+    return false;
+  }
+  return getAllCategorySpecFields(category).some((field) => isSerialFieldName(field.name));
+};
+
+export const buildInventoryPrintEquipmentName = (
+  category: Category | undefined,
+  stockLot: { productName: string } | null | undefined,
+  specifications: Record<string, string> | undefined,
+): string => {
+  const lotName = stockLot?.productName?.trim();
+  if (!lotName) {
+    return '—';
+  }
+  const categoryName = category?.name ?? '';
+  if (categoryHasSerialField(category)) {
+    const serialField = getAllCategorySpecFields(category!).find((field) =>
+      isSerialFieldName(field.name),
+    );
+    const serialValue = serialField ? specifications?.[serialField.id]?.trim() : undefined;
+    if (serialValue) {
+      return [lotName, serialValue, categoryName].filter(Boolean).join(' — ');
+    }
+  }
+  return [lotName, categoryName].filter(Boolean).join(' — ');
+};
+
 export const buildEquipmentQrUrl = (equipment: Pick<Equipment, 'id'>): string => {
   const configured = import.meta.env.VITE_APP_URL as string | undefined;
   const base = configured?.replace(/\/$/, '') || window.location.origin;

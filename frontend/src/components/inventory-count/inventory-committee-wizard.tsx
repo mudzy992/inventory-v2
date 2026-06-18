@@ -77,6 +77,21 @@ export const InventoryCommitteeWizard = ({
     availableCategories.find((row) => row.id === categoryId) ??
     setupOptions?.categories.find((row) => row.id === categoryId) ??
     null;
+  const editWarehouseLabel =
+    selectedWarehouse?.name ?? editCommittee?.warehouse?.name ?? warehouseId;
+  const editCategoryLabel =
+    selectedCategory?.name ?? editCommittee?.category?.name ?? categoryId;
+  const wizardTitle = isEdit
+    ? editCommittee?.membersConfigured === false
+      ? 'Dodaj članove komisije'
+      : 'Uredi članove komisije'
+    : 'Dodijeli članove komisiji';
+  const stepHint = isEdit
+    ? step === 3
+      ? 'Korak 1 / 2 — popisna komisija'
+      : 'Korak 2 / 2 — komisija rashoda'
+    : `Korak ${step} / 4 — odaberite slot (skladište + kategorija) i dodijelite članove.`;
+  const minStep = isEdit ? 3 : 1;
 
   useEffect(() => {
     if (!editCommittee) {
@@ -96,7 +111,7 @@ export const InventoryCommitteeWizard = ({
     setDisposalPresidentId(disposalPresident?.employeeId ?? '');
     setDisposalMemberIds(disposalClerks.map((row) => row.employeeId));
     setSelectedCommitteeId(editCommittee.id);
-    setStep(1);
+    setStep(3);
     setError(null);
   }, [editCommittee]);
 
@@ -266,12 +281,25 @@ export const InventoryCommitteeWizard = ({
   };
 
   return (
-    <FormCard title={isEdit ? 'Uredi popisnu komisiju' : 'Dodijeli članove komisiji'}>
-      <p className="text-xs text-gray-500 mb-4">
-        Korak {step} / 4 — odaberite slot (skladište + kategorija) i dodijelite članove.
-      </p>
+    <FormCard title={wizardTitle}>
+      <p className="text-xs text-gray-500 mb-4">{stepHint}</p>
       {loading ? <p className="text-xs text-gray-500 mb-3">Učitavam…</p> : null}
-      {step === 1 ? (
+      {isEdit ? (
+        <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 space-y-1">
+          <p>
+            <span className="text-gray-500">Skladište:</span> {editWarehouseLabel || '—'}
+          </p>
+          <p>
+            <span className="text-gray-500">Kategorija:</span> {editCategoryLabel || '—'}
+          </p>
+          {name.trim() ? (
+            <p>
+              <span className="text-gray-500">Naziv:</span> {name.trim()}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {!isEdit && step === 1 ? (
         <div className="space-y-3">
           <div>
             <label className={labelClass}>Skladište</label>
@@ -300,7 +328,7 @@ export const InventoryCommitteeWizard = ({
           </AlertBanner>
         </div>
       ) : null}
-      {step === 2 ? (
+      {!isEdit && step === 2 ? (
         <div className="space-y-3">
           <div>
             <label className={labelClass}>Kategorija opreme</label>
@@ -428,8 +456,8 @@ export const InventoryCommitteeWizard = ({
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            onClick={() => setStep((value) => Math.max(1, value - 1))}
-            disabled={step === 1 || saving}
+            onClick={() => setStep((value) => Math.max(minStep, value - 1))}
+            disabled={step === minStep || saving}
           >
             <ChevronLeft size={14} />
             Nazad

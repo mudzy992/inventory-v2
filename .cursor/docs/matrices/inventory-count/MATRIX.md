@@ -146,7 +146,9 @@ U Popisu, za unos linija važi: **članstvo komisije** je dovoljno (bez registra
 | Empty state | bez sesija → centrirana poruka + forma kreiranja |
 | Sesije | lista sa statusom; command center za odabranu |
 | Komisije | grupisane po skladištu; detalj s članovima i rashod komisijom |
-| Wizard | 4 koraka: slot (skladište+kategorija) → popis → rashod → potvrda |
+| Wizard (create) | 4 koraka: slot (skladište+kategorija) → popis → rashod → potvrda |
+| Wizard (edit) | 2 koraka: samo članovi popisne i rashod komisije; slot (skladište/kategorija) read-only |
+| Popisna lista (štampa) | Naziv opreme: `{lot.productName} — {serijski}? — {kategorija}`; bez lota `—`; Kol. prazna; footer 3 potpisne linije na svakoj stranici; bez Grad/Godina u zaglavlju |
 
 ## API
 

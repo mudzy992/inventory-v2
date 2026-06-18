@@ -86,6 +86,11 @@ const EQUIPMENT_SCOPE_INCLUDE = {
   warehouse: { select: { id: true, name: true, cityId: true } },
 } satisfies Prisma.EquipmentInclude;
 
+const PRINT_SCOPE_EQUIPMENT_INCLUDE = {
+  ...EQUIPMENT_SCOPE_INCLUDE,
+  stockLot: { select: { id: true, productName: true } },
+} satisfies Prisma.EquipmentInclude;
+
 const SESSION_SORT_FIELDS: Record<string, string> = {
   year: 'year',
   createdAt: 'createdAt',
@@ -807,7 +812,7 @@ export class InventoryCountService {
         throw new ForbiddenException('Only committee members can access inventory scope');
       }
     }
-    const equipment = await this.resolveCommitteeEquipment(committeeId);
+    const equipment = await this.resolveCommitteeEquipmentForPrint(committeeId);
     return { committee, equipment };
   }
 
@@ -889,6 +894,16 @@ export class InventoryCountService {
     return this.prisma.equipment.findMany({
       where,
       include: EQUIPMENT_SCOPE_INCLUDE,
+      orderBy: { inventoryNumber: 'asc' },
+    });
+  }
+
+  async resolveCommitteeEquipmentForPrint(committeeId: string) {
+    await this.assertInventoryCountEnabled();
+    const where = await this.buildCommitteeEquipmentWhere(committeeId);
+    return this.prisma.equipment.findMany({
+      where,
+      include: PRINT_SCOPE_EQUIPMENT_INCLUDE,
       orderBy: { inventoryNumber: 'asc' },
     });
   }

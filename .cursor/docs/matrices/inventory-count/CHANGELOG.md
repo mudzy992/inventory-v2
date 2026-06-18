@@ -1,5 +1,11 @@
 # Changelog — inventory-count
 
+## 2026-06-18 (uređivanje komisije + popisna lista)
+
+- Wizard edit: preskače korake skladište/kategorija; samo dodavanje/izmjena članova (2 koraka).
+- Print-scope API: uključuje `stockLot.productName` za naziv opreme na popisnoj listi.
+- Popisna lista: format naziva `{lot} — {serijski}? — {kategorija}`; prazna kolona Kol.; uklonjen Grad/Godina; 3 potpisne linije na svakoj stranici.
+
 ## 2026-06-17 (relokacija i warehouse scope cleanup)
 
 - `createRelocationTransfer`: ciljna osoba validirana warehouse coverage / efektivnim skladištem komisije, ne gradom sesije.

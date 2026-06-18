@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Printer, X } from 'lucide-react';
 import type { InventoryPrintScopeDto } from '../../api/inventory-api';
 import { getEmployeeFullName, getOrgUnitPath } from '../../helpers';
+import { buildInventoryPrintEquipmentName } from '../../helpers/equipment-display.util';
 import { usePublicSettings } from '../../contexts/public-settings-context';
 import { buildCompanyAddressLine, companyHeaderFromSettings } from '../../helpers/company-header.util';
 import type { AppState } from '../../types';
@@ -18,7 +19,6 @@ interface InventoryPrintSheetProps {
 interface PrintRow {
   inventoryNumber: string;
   name: string;
-  quantity: number;
 }
 
 interface PrintGroup {
@@ -40,19 +40,7 @@ interface PrintPage {
   blocks: PrintPageBlock[];
 }
 
-const ROWS_PER_PAGE = 18;
-
-const buildEquipmentName = (
-  state: AppState,
-  item: InventoryPrintScopeDto['equipment'][number],
-): string => {
-  const category = item.category?.name ?? state.categories.find((row) => row.id === item.categoryId)?.name ?? '';
-  const spec = Object.values(item.specifications ?? {})
-    .filter(Boolean)
-    .slice(0, 2)
-    .join(', ');
-  return [category, spec].filter(Boolean).join(' — ');
-};
+const ROWS_PER_PAGE = 14;
 
 const paginateGroups = (groups: PrintGroup[]): PrintPage[] => {
   const pages: PrintPage[] = [];
@@ -89,6 +77,17 @@ const paginateGroups = (groups: PrintGroup[]): PrintPage[] => {
   return pages.length > 0 ? pages : [{ pageNumber: 1, blocks: [] }];
 };
 
+const PrintPageFooter = () => (
+  <footer className="inventory-print-footer mt-6 pt-4 border-t border-gray-300">
+    <p className="text-xs text-gray-500 mb-3">Potpisi komisije:</p>
+    <div className="space-y-6">
+      <div className="border-b border-gray-400 h-8" />
+      <div className="border-b border-gray-400 h-8" />
+      <div className="border-b border-gray-400 h-8" />
+    </div>
+  </footer>
+);
+
 export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintSheetProps) => {
   const { settings } = usePublicSettings();
   const company = companyHeaderFromSettings(settings);
@@ -96,11 +95,6 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
   const { committee, equipment } = scope;
   const categoryLabels = committee.category?.name ?? '';
   const warehouseLabel = committee.warehouse?.name ?? '';
-  const year = committee.session?.year ?? new Date().getFullYear();
-  const cityLabel =
-    committee.session?.orgUnit?.effectiveLocationCity?.name ??
-    committee.session?.orgUnit?.effectiveLocationCityId ??
-    '—';
   const groups = useMemo(() => {
     const byHolder = new Map<string, PrintGroup>();
     const warehouseGroup: PrintGroup = {
@@ -109,10 +103,10 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
       rows: [],
     };
     for (const item of equipment) {
+      const category = state.categories.find((row) => row.id === item.categoryId);
       const row: PrintRow = {
         inventoryNumber: item.inventoryNumber,
-        name: buildEquipmentName(state, item),
-        quantity: 1,
+        name: buildInventoryPrintEquipmentName(category, item.stockLot, item.specifications),
       };
       if (item.currentHolder) {
         const holderId = item.currentHolder.id;
@@ -137,11 +131,9 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
       result.push(warehouseGroup);
     }
     return result;
-  }, [equipment, state]);
+  }, [equipment, state.categories, state.orgUnits]);
   const pages = useMemo(() => paginateGroups(groups), [groups]);
   const totalPages = pages.length;
-  const president = committee.members.find((member) => member.role === 'predsjednik');
-  const clerks = committee.members.filter((member) => member.role === 'clan');
   const handlePrint = () => {
     window.print();
   };
@@ -162,7 +154,7 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
         </div>
         <div id="inventory-print-root" className="p-6 text-sm text-gray-900">
           {pages.map((page) => (
-            <div key={page.pageNumber} className="inventory-print-page mb-8">
+            <div key={page.pageNumber} className="inventory-print-page mb-8 flex flex-col">
               <header className="border-b border-gray-300 pb-3 mb-4">
                 {company.name ? (
                   <div className="mb-2 text-center">
@@ -171,79 +163,54 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
                   </div>
                 ) : null}
                 <h1 className="text-lg font-bold">{committee.name ?? `Popis — ${warehouseLabel || categoryLabels}`}</h1>
-                <p className="text-gray-600 mt-1">
-                  Grad: {cityLabel} · Godina: {year}
-                </p>
-                {warehouseLabel ? <p className="text-gray-600">Skladište: {warehouseLabel}</p> : null}
+                {warehouseLabel ? <p className="text-gray-600 mt-1">Skladište: {warehouseLabel}</p> : null}
                 <p className="text-gray-600">Popisuje se: {categoryLabels || '—'}</p>
               </header>
-              {page.blocks.map((block, blockIndex) => (
-                <section
-                  key={`${page.pageNumber}-${block.groupTitle}-${blockIndex}`}
-                  className="mb-6 break-inside-avoid"
-                >
-                  {block.showGroupHeader ? (
-                    <>
-                      <h2 className="font-semibold text-gray-800 border-b border-gray-200 pb-1 mb-2">
-                        {block.groupTitle}
-                      </h2>
-                      {block.groupSubtitle ? (
-                        <p className="text-xs text-gray-500 mb-2">{block.groupSubtitle}</p>
-                      ) : null}
-                    </>
-                  ) : (
-                    <p className="text-xs text-gray-500 mb-2 italic">Nastavak: {block.groupTitle}</p>
-                  )}
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="border border-gray-300 px-2 py-1 text-left w-28">Inv. broj</th>
-                        <th className="border border-gray-300 px-2 py-1 text-left">Naziv opreme</th>
-                        <th className="border border-gray-300 px-2 py-1 text-center w-12">Kol.</th>
-                        <th className="border border-gray-300 px-2 py-1 text-left w-24">Potpis</th>
-                        <th className="border border-gray-300 px-2 py-1 text-left w-32">Napomena</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {block.rows.map((row) => (
-                        <tr key={row.inventoryNumber}>
-                          <td className="border border-gray-300 px-2 py-1 font-mono">{row.inventoryNumber}</td>
-                          <td className="border border-gray-300 px-2 py-1">{row.name}</td>
-                          <td className="border border-gray-300 px-2 py-1 text-center">{row.quantity}</td>
-                          <td className="border border-gray-300 px-2 py-1" />
-                          <td className="border border-gray-300 px-2 py-1" />
+              <div className="flex-1">
+                {page.blocks.map((block, blockIndex) => (
+                  <section
+                    key={`${page.pageNumber}-${block.groupTitle}-${blockIndex}`}
+                    className="mb-6 break-inside-avoid"
+                  >
+                    {block.showGroupHeader ? (
+                      <>
+                        <h2 className="font-semibold text-gray-800 border-b border-gray-200 pb-1 mb-2">
+                          {block.groupTitle}
+                        </h2>
+                        {block.groupSubtitle ? (
+                          <p className="text-xs text-gray-500 mb-2">{block.groupSubtitle}</p>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-500 mb-2 italic">Nastavak: {block.groupTitle}</p>
+                    )}
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-300 px-2 py-1 text-left w-28">Inv. broj</th>
+                          <th className="border border-gray-300 px-2 py-1 text-left">Naziv opreme</th>
+                          <th className="border border-gray-300 px-2 py-1 text-center w-12">Kol.</th>
+                          <th className="border border-gray-300 px-2 py-1 text-left w-24">Potpis</th>
+                          <th className="border border-gray-300 px-2 py-1 text-left w-32">Napomena</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </section>
-              ))}
-              {page.pageNumber === totalPages ? (
-                <footer className="inventory-print-footer mt-8 pt-4 border-t border-gray-300">
-                  <p className="text-xs text-gray-500 mb-4">Potpisi komisije:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                    <div>
-                      <p className="text-xs font-medium">Predsjednik</p>
-                      <p className="text-xs text-gray-600 mb-6">
-                        {president?.employee
-                          ? getEmployeeFullName(president.employee)
-                          : president?.employeeId}
-                      </p>
-                      <div className="border-b border-gray-400 h-8" />
-                    </div>
-                    {clerks.map((member) => (
-                      <div key={member.employeeId}>
-                        <p className="text-xs font-medium">Član komisije</p>
-                        <p className="text-xs text-gray-600 mb-6">
-                          {member.employee ? getEmployeeFullName(member.employee) : member.employeeId}
-                        </p>
-                        <div className="border-b border-gray-400 h-8" />
-                      </div>
-                    ))}
-                  </div>
-                </footer>
-              ) : null}
-              <p className="text-xs text-gray-400 text-right mt-6">
+                      </thead>
+                      <tbody>
+                        {block.rows.map((row) => (
+                          <tr key={row.inventoryNumber}>
+                            <td className="border border-gray-300 px-2 py-1 font-mono">{row.inventoryNumber}</td>
+                            <td className="border border-gray-300 px-2 py-1">{row.name}</td>
+                            <td className="border border-gray-300 px-2 py-1 text-center" />
+                            <td className="border border-gray-300 px-2 py-1" />
+                            <td className="border border-gray-300 px-2 py-1" />
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </section>
+                ))}
+              </div>
+              <PrintPageFooter />
+              <p className="text-xs text-gray-400 text-right mt-4">
                 Stranica {page.pageNumber} / {totalPages}
               </p>
             </div>
