@@ -56,10 +56,10 @@ Ograničenja:
 
 | Akcija | Ko | Pravilo |
 |--------|-----|---------|
-| Označi opremu | evidentičar / admin | samo dok je sesija `draft` |
-| Opseg | sistem | postoji slot `(sessionId, warehouseId, parentCategoryId)`; skladište: `equipment.warehouseId`, zatim `stockLot.warehouseId`, registrar dodjela, zadnji transfer `zaduzenje`, org nosioca |
-| Eligible sesije | API | `GET eligible-for-equipment/:equipmentId` |
-| Auto razduženje | sistem | `zaduzeno` → skladište (prenosnica po postavkama) |
+| Označi opremu | evidentičar / admin | samo dok je sesija `draft`; oprema mora biti `skladiste` |
+| Opseg | sistem | postoji slot `(sessionId, warehouseId, parentCategoryId)`; `warehouseId = equipment.warehouseId` |
+| Eligible sesije | API | `GET eligible-for-equipment/:equipmentId` (samo `skladiste`) |
+| Preduvjet | korisnik | zadužena oprema se prvo razduži preko standardnog `razduzenje` transfera |
 | Povrat s liste | admin | samo `draft`, stavka `listed` |
 | Dodjela komisiji | sistem | pri konfiguraciji članova slota (`membersConfigured=true`) |
 | Status opreme | sistem | pri označavanju → `za_rashod`; povrat/brisanje sesije → `skladiste`; approve → `rashodovano` |

@@ -9,10 +9,6 @@ export class MarkDisposalListDto {
   @MinLength(3)
   @MaxLength(2000)
   note!: string;
-
-  @IsOptional()
-  @IsUUID()
-  signerId?: string;
 }
 
 export class WithdrawDisposalListDto {

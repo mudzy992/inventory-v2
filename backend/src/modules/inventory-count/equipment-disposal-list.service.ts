@@ -9,16 +9,13 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { OrgScopeService } from '../../common/services/org-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
-import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { assertCanWriteEquipment } from '../equipment/equipment-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { DISPOSAL_MESSAGES } from '../../common/utils/disposal-messages.util';
-import { isTransferCreationAllowed } from '../transfers/utils/transfer-generation-policy.util';
 import { assignListedDisposalItemsToCommissionInTx } from './utils/assign-disposal-list-to-commission.util';
-import { executeRazduzenjeForDisposalMarkInTx } from './utils/execute-disposal-mark-razduzenje.util';
+import { isEquipmentEligibleForDisposalMark } from './utils/assert-disposal-warehouse-eligibility.util';
 import { resolveParentAssetCategoryIdInTx } from './utils/resolve-parent-asset-category.util';
-import { resolveDisposalTargetWarehouseId } from './utils/resolve-disposal-target-warehouse.util';
 import { buildCommitteeScopeDeps } from './utils/build-committee-scope-deps.util';
 import { isEquipmentInDisposalSessionScope } from './utils/disposal-session-scope.util';
 
@@ -43,7 +40,6 @@ const LIST_ITEM_INCLUDE = {
 export interface MarkDisposalListInput {
   equipmentId: string;
   note?: string;
-  signerId?: string;
 }
 
 @Injectable()
@@ -53,7 +49,6 @@ export class EquipmentDisposalListService {
     private readonly registrarScope: RegistrarScopeService,
     private readonly locationResolutionService: LocationResolutionService,
     private readonly orgScopeService: OrgScopeService,
-    private readonly warehouseResolutionService: WarehouseResolutionService,
     private readonly settingsService: SettingsService,
   ) {}
 
@@ -96,6 +91,9 @@ export class EquipmentDisposalListService {
     if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
       throw new BadRequestException('Oprema je već označena ili rashodovana');
     }
+    if (!isEquipmentEligibleForDisposalMark(equipment)) {
+      throw new BadRequestException(DISPOSAL_MESSAGES.disposalRequiresWarehouse);
+    }
     const trimmedNote = input.note?.trim() ?? '';
     if (trimmedNote.length < 3) {
       throw new BadRequestException(DISPOSAL_MESSAGES.disposalReasonRequired);
@@ -118,7 +116,7 @@ export class EquipmentDisposalListService {
     if (equipment.category.categoryKind !== 'ASSET') {
       throw new BadRequestException('Samo ASSET oprema može biti na listi za rashod');
     }
-    const warehouseId = await this.resolveTargetWarehouseId(user, equipment);
+    const warehouseId = equipment.warehouseId!;
     const parentCategoryId = await resolveParentAssetCategoryIdInTx(
       this.prisma,
       equipment.categoryId,
@@ -148,47 +146,7 @@ export class EquipmentDisposalListService {
     if (!inScope) {
       throw new BadRequestException('Oprema nije u opsegu sesije popisa');
     }
-    const createTransfer = await isTransferCreationAllowed(
-      this.settingsService,
-      'razduzenje',
-      'api',
-    );
-    const finalizeWithoutUpload =
-      (await this.settingsService.getBooleanValue('transfer.allow_finalize_without_upload', false)) ||
-      !(await this.settingsService.getBooleanValue('transfer.require_signed_pdf_upload', true));
-    const signerId = input.signerId ?? (await this.getDefaultSignerId());
     return this.prisma.$transaction(async (tx) => {
-      let razduzenjeTransferId: string | null = null;
-      if (equipment.status === 'zaduzeno') {
-        if (!equipment.currentHolderId) {
-          throw new BadRequestException('Zadužena oprema nema nosioca');
-        }
-        const razduzenje = await executeRazduzenjeForDisposalMarkInTx(tx, {
-          equipmentId: equipment.id,
-          fromPersonId: equipment.currentHolderId,
-          toWarehouseId: warehouseId,
-          actorUserId: user.id,
-          signerId,
-          reason: 'Razduženje pri označavanju za rashod',
-          createTransferDocument: createTransfer,
-          finalizeWithoutUpload,
-        });
-        razduzenjeTransferId = razduzenje.transferId;
-        if (!razduzenje.finalized) {
-          throw new BadRequestException(
-            `Potrebno je finalizirati prenosnicu razduženja prije dodavanja na listu (transfer ${razduzenje.transferId})`,
-          );
-        }
-      } else if (equipment.status === 'skladiste') {
-        if (equipment.warehouseId !== warehouseId) {
-          await tx.equipment.update({
-            where: { id: equipment.id },
-            data: { warehouseId },
-          });
-        }
-      } else {
-        throw new BadRequestException('Nepodržan status opreme za listu rashoda');
-      }
       let listItem;
       if (existing?.status === 'withdrawn') {
         listItem = await tx.equipmentDisposalListItem.update({
@@ -203,7 +161,7 @@ export class EquipmentDisposalListService {
             withdrawnByUserId: null,
             withdrawnAt: null,
             withdrawalNote: null,
-            razduzenjeTransferId,
+            razduzenjeTransferId: null,
             disposalCommissionId: null,
             approvalId: null,
           },
@@ -218,7 +176,6 @@ export class EquipmentDisposalListService {
             categoryId: parentCategoryId,
             note: trimmedNote,
             markedByUserId: user.id,
-            razduzenjeTransferId,
           },
           include: LIST_ITEM_INCLUDE,
         });
@@ -311,13 +268,13 @@ export class EquipmentDisposalListService {
     if (equipment.status === 'rashodovano' || equipment.status === 'za_rashod') {
       return [];
     }
+    if (!isEquipmentEligibleForDisposalMark(equipment)) {
+      return [];
+    }
     if (equipment.category.categoryKind !== 'ASSET') {
       return [];
     }
-    const warehouseId = await this.resolveEquipmentWarehouseIdForDisposal(user, equipment);
-    if (!warehouseId) {
-      return [];
-    }
+    const warehouseId = equipment.warehouseId!;
     const parentCategoryId = await resolveParentAssetCategoryIdInTx(
       this.prisma,
       equipment.categoryId,
@@ -366,21 +323,6 @@ export class EquipmentDisposalListService {
     return eligible;
   }
 
-  private async resolveEquipmentWarehouseIdForDisposal(
-    user: AuthenticatedUser,
-    equipment: {
-      id: string;
-      categoryId: string;
-      status: string;
-      warehouseId: string | null;
-      stockLotId: string | null;
-      currentHolderId: string | null;
-      currentHolder: { id: string; orgUnitId: string } | null;
-    },
-  ): Promise<string | null> {
-    return this.resolveDisposalWarehouseId(user, equipment);
-  }
-
   private async getSessionOrThrow(sessionId: string) {
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: sessionId },
@@ -425,86 +367,6 @@ export class EquipmentDisposalListService {
     };
   }
 
-  private async resolveTargetWarehouseId(
-    user: AuthenticatedUser,
-    equipment: {
-      id: string;
-      categoryId: string;
-      status: string;
-      warehouseId: string | null;
-      stockLotId: string | null;
-      currentHolderId: string | null;
-      currentHolder: { id: string; orgUnitId: string } | null;
-    },
-  ): Promise<string> {
-    const warehouseId = await this.resolveDisposalWarehouseId(user, equipment);
-    if (!warehouseId) {
-      throw new BadRequestException('Nije moguće odrediti skladište za razduženje');
-    }
-    return warehouseId;
-  }
-
-  private async resolveDisposalWarehouseId(
-    user: AuthenticatedUser,
-    equipment: {
-      id: string;
-      categoryId: string;
-      status: string;
-      warehouseId: string | null;
-      stockLotId: string | null;
-      currentHolderId: string | null;
-      currentHolder: { id: string; orgUnitId: string } | null;
-    },
-  ): Promise<string | null> {
-    const fullEquipment = await this.prisma.equipment.findUnique({
-      where: { id: equipment.id },
-      include: { currentHolder: true },
-    });
-    if (!fullEquipment) {
-      return null;
-    }
-    return resolveDisposalTargetWarehouseId(
-      {
-        equipmentId: equipment.id,
-        status: equipment.status,
-        warehouseId: equipment.warehouseId,
-        stockLotId: equipment.stockLotId ?? fullEquipment.stockLotId,
-        currentHolderId: equipment.currentHolderId ?? fullEquipment.currentHolderId,
-      },
-      {
-        loadStockLotWarehouseId: async (stockLotId) => {
-          const lot = await this.prisma.warehouseStockLot.findUnique({
-            where: { id: stockLotId },
-            select: { warehouseId: true },
-          });
-          return lot?.warehouseId ?? null;
-        },
-        loadLastZaduzenjeFromWarehouseId: async (equipmentId) => {
-          const transfer = await this.prisma.transfer.findFirst({
-            where: {
-              equipmentId,
-              type: 'zaduzenje',
-              fromWarehouseId: { not: null },
-            },
-            orderBy: { date: 'desc' },
-            select: { fromWarehouseId: true },
-          });
-          return transfer?.fromWarehouseId ?? null;
-        },
-        resolveRegistrarWarehouseId: async () => {
-          const matches = await this.registrarScope.getMatchingAssignmentsForEquipment(
-            user,
-            fullEquipment,
-            fullEquipment.currentHolder,
-          );
-          return matches.find((row) => row.warehouseId)?.warehouseId ?? null;
-        },
-        resolveHolderWarehouseId: async (employeeId) =>
-          this.warehouseResolutionService.resolveForEmployee(employeeId),
-      },
-    );
-  }
-
   private buildCommitteeScopeDeps() {
     return buildCommitteeScopeDeps(
       this.prisma,
@@ -536,13 +398,5 @@ export class EquipmentDisposalListService {
       return warehouse?.cityId ?? null;
     }
     return null;
-  }
-
-  private async getDefaultSignerId(): Promise<string> {
-    const employee = await this.prisma.employee.findFirst({ select: { id: true } });
-    if (!employee) {
-      throw new BadRequestException('No signer employee configured');
-    }
-    return employee.id;
   }
 }

@@ -1,3 +1,7 @@
+## 2026-06-17 — Rashod samo sa skladišta
+
+- `transfer.generation.on_rashodovanje` deprecated u postavkama; novi rashod preko liste/komisije popisa.
+
 ## 2026-06-17 — Finalizacija nakon uploada
 
 - UI: `uploaded` / `printed` status prikazuje „Finalizuj prenosnicu" kad postoji `scannedDocUrl` i `transfer.require_signed_pdf_upload` je ispunjen.

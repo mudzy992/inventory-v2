@@ -1,5 +1,10 @@
 # disposal-commission — CHANGELOG
 
+## 2026-06-17 (rashod samo sa skladišta)
+
+- Pre-lista rashoda: samo oprema `skladiste`; uklonjeno auto-razduženje pri `markForDisposal`.
+- Razduženje ostaje zaseban korak (`transfer.generation.on_razduzenje`).
+
 ## 2026-06-17 (uklanjanje legacy glasanja)
 
 - Uklonjeni modeli `DisposalApproval` / `DisposalApprovalVote` i API za glasanje na transferu.

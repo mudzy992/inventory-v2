@@ -1,4 +1,6 @@
 export const DISPOSAL_MESSAGES = {
+  disposalRequiresWarehouse:
+    'Oprema mora biti razdužena na skladište prije dodavanja na listu za rashod.',
   disposalReasonRequired: 'Razlog rashoda je obavezan (najmanje 3 znaka).',
   sessionNotDraft: 'Lista za rashod dostupna je samo u nacrtu sesije popisa.',
   removeAdminOnly: 'Samo administrator može povući stavku s liste za rashod.',

@@ -182,8 +182,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const canMarkForDisposal =
     canManage &&
     disposalPreListEnabled &&
-    eq.status !== 'rashodovano' &&
-    eq.status !== 'za_rashod';
+    eq.status === 'skladiste' &&
+    !!eq.warehouseId;
   const reactivateGuard = canReactivateEquipment({
     isAdmin: admin,
     status: eq.status,
@@ -672,6 +672,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       <EquipmentMarkDisposalDialog
         equipmentId={eq.id}
         inventoryNumber={eq.inventoryNumber}
+        equipmentStatus={eq.status}
+        warehouseId={eq.warehouseId}
         open={showMarkDisposal}
         onClose={() => setShowMarkDisposal(false)}
         onMarked={() => void loadEquipment({ silent: true })}

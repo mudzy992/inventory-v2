@@ -16,9 +16,9 @@ Pri kreiranju `InventoryCommittee` automatski se kreira `DisposalCommission`. St
 
 ### Lista za rashod (prije aktivacije sesije)
 
-1. Evidentičar/admin: `POST /inventory-sessions/:id/disposal-list` (samo sesija `draft`)
-2. Oprema → status `za_rashod` (nakon razduženja ako je bila `zaduzeno`)
-3. Zadužena oprema → auto `razduzenje` (direktno ili prenosnica ako `transfer.generation.on_razduzenje`)
+1. Oprema mora biti **`skladiste`** (razduženje je zaseban korak preko `razduzenje` transfera)
+2. Evidentičar/admin: `POST /inventory-sessions/:id/disposal-list` (samo sesija `draft`)
+3. Oprema → status `za_rashod`
 4. Admin može povrat: `DELETE .../disposal-list/:equipmentId` (samo `draft`, status `listed`) → oprema `skladiste`
 
 ### Popisni rashod (aktivna sesija + zatvaranje)

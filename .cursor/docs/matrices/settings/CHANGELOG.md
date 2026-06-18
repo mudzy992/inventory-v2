@@ -1,5 +1,9 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-17
+
+- `transfer.generation.on_rashodovanje` označen deprecated u UI metadata — novi rashod ne koristi prenosnicu.
+
 ## 2026-06-16 (profesionalni admin UI)
 
 - `settings-ui-metadata.ts` — `dependsOn`, `display` (info/deprecated), `detail` za UI hijerarhiju.

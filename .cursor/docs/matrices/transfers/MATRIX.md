@@ -28,7 +28,7 @@
 | `transfer.generation.on_zaduzenje` | true | Skladište → osoba |
 | `transfer.generation.on_prenos` | true | Osoba → osoba |
 | `transfer.generation.on_razduzenje` | true | Osoba → skladište |
-| `transfer.generation.on_rashodovanje` | true | Rashod |
+| `transfer.generation.on_rashodovanje` | true | **Zastarjelo** — novi rashod ide preko liste/komisije; `POST /transfers` tip `rashodovanje` blokiran |
 | `transfer.generate_print_pdf` | true | DOCX → PDF (LibreOffice `soffice` na serveru) |
 | `transfer.require_signed_pdf_upload` | true | Obavezan upload potpisanog PDF prije `sign` |
 

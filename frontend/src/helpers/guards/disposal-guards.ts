@@ -1,4 +1,6 @@
 export const DISPOSAL_GUARD_MESSAGES = {
+  disposalRequiresWarehouse:
+    'Oprema mora biti razdužena na skladište prije dodavanja na listu za rashod.',
   sessionNotDraft: 'Lista za rashod dostupna je samo u nacrtu sesije popisa.',
   removeAdminOnly: 'Samo administrator može povući stavku s liste za rashod.',
   removeListedOnly: 'Moguće je povući samo stavke u statusu na listi.',
@@ -10,9 +12,16 @@ export interface DisposalGuardResult {
   reason?: string;
 }
 
-export const canMarkDisposalList = (sessionStatus: string): DisposalGuardResult => {
-  if (sessionStatus !== 'draft') {
+export const canMarkDisposalList = (input: {
+  sessionStatus: string;
+  equipmentStatus: string;
+  warehouseId?: string | null;
+}): DisposalGuardResult => {
+  if (input.sessionStatus !== 'draft') {
     return { allowed: false, reason: DISPOSAL_GUARD_MESSAGES.sessionNotDraft };
+  }
+  if (input.equipmentStatus !== 'skladiste' || !input.warehouseId) {
+    return { allowed: false, reason: DISPOSAL_GUARD_MESSAGES.disposalRequiresWarehouse };
   }
   return { allowed: true };
 };

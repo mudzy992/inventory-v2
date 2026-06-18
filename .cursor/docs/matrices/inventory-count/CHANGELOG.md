@@ -1,5 +1,10 @@
 # Changelog — inventory-count
 
+## 2026-06-17 (pre-lista rashoda samo sa skladišta)
+
+- `markForDisposal` i `eligible-for-equipment`: samo `skladiste` + `warehouseId`; usklađeno s `predlozen_rashod` na popisu.
+- Uklonjeno auto-razduženje pri dodavanju na listu (`execute-disposal-mark-razduzenje.util.ts`).
+
 ## 2026-06-18 (uređivanje komisije + popisna lista)
 
 - Wizard edit: preskače korake skladište/kategorija; samo dodavanje/izmjena članova (2 koraka).

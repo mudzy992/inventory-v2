@@ -421,7 +421,7 @@ export const fetchEligibleDisposalSessionsApi = (equipmentId: string) =>
 
 export const markDisposalListApi = (
   sessionId: string,
-  body: { equipmentId: string; note?: string; signerId?: string },
+  body: { equipmentId: string; note?: string },
 ) =>
   apiRequest<EquipmentDisposalListItemDto>(`/inventory-sessions/${sessionId}/disposal-list`, {
     method: 'POST',

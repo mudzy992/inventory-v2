@@ -30,7 +30,9 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
   },
   'transfer.generation.on_rashodovanje': {
     dependsOn: { key: 'transfer.generation.enabled', equals: true },
-    detail: 'Dokument prenosnice pri konačnom rashodu opreme.',
+    display: 'deprecated',
+    detail:
+      'Zastarjelo — novi rashod ide preko liste za rashod i komisije popisa (DisposalInventoryApproval), ne prenosnice.',
   },
   'transfer.generate_print_pdf': {
     dependsOn: { key: 'transfer.generation.enabled', equals: true },

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { fetchEligibleDisposalSessionsApi, markDisposalListApi } from '../../api/inventory-api';
 import { ApiError } from '../../api/client';
-import { canMarkDisposalList } from '../../helpers/guards';
+import { canMarkDisposalList, DISPOSAL_GUARD_MESSAGES } from '../../helpers/guards';
 import { useToast } from '../../contexts/toast-context';
 import { Button } from '../ui/button';
 import { inputClass, labelClass, selectClass } from '../ui/form-styles';
@@ -12,6 +12,8 @@ import { MODAL_Z } from '../../constants/modal-z-index';
 interface EquipmentMarkDisposalDialogProps {
   equipmentId: string;
   inventoryNumber: string;
+  equipmentStatus: string;
+  warehouseId?: string | null;
   open: boolean;
   onClose: () => void;
   onMarked: () => void;
@@ -20,6 +22,8 @@ interface EquipmentMarkDisposalDialogProps {
 export const EquipmentMarkDisposalDialog = ({
   equipmentId,
   inventoryNumber,
+  equipmentStatus,
+  warehouseId,
   open,
   onClose,
   onMarked,
@@ -57,7 +61,11 @@ export const EquipmentMarkDisposalDialog = ({
   }, [open, loadSessions]);
 
   const handleSubmit = async () => {
-    const markGuard = canMarkDisposalList('draft');
+    const markGuard = canMarkDisposalList({
+      sessionStatus: 'draft',
+      equipmentStatus,
+      warehouseId,
+    });
     if (!markGuard.allowed) {
       toastError(markGuard.reason ?? 'Označavanje nije dozvoljeno.');
       return;
@@ -84,6 +92,9 @@ export const EquipmentMarkDisposalDialog = ({
     }
   };
 
+  const isWarehouseReady =
+    equipmentStatus === 'skladiste' && !!warehouseId;
+
   return (
     <ModalRoot
       open={open}
@@ -107,10 +118,12 @@ export const EquipmentMarkDisposalDialog = ({
           </button>
         </div>
         <p className="text-sm text-gray-600 mb-4">
-          Oprema <strong>{inventoryNumber}</strong> bit će dodana na listu za rashod u odabranoj
-          draft sesiji popisa.
+          Oprema <strong>{inventoryNumber}</strong> mora biti na skladištu. Ako je zadužena, prvo je
+          razdužite preko prenosnice, zatim je dodajte na listu za rashod u draft sesiji popisa.
         </p>
-        {loading ? (
+        {equipmentStatus !== 'skladiste' || !warehouseId ? (
+          <p className="text-sm text-amber-700">{DISPOSAL_GUARD_MESSAGES.disposalRequiresWarehouse}</p>
+        ) : loading ? (
           <p className="text-sm text-gray-500">Učitavam sesije…</p>
         ) : sessions.length === 0 ? (
           <p className="text-sm text-amber-700">
@@ -156,7 +169,13 @@ export const EquipmentMarkDisposalDialog = ({
           </Button>
           <Button
             onClick={() => void handleSubmit()}
-            disabled={submitting || !sessionId || sessions.length === 0 || note.trim().length < 3}
+            disabled={
+              submitting ||
+              !isWarehouseReady ||
+              !sessionId ||
+              sessions.length === 0 ||
+              note.trim().length < 3
+            }
           >
             {submitting ? 'Snimam…' : 'Dodaj na listu'}
           </Button>

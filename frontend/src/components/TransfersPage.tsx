@@ -19,10 +19,9 @@ import {
   getTransferToPersonName,
 } from '../helpers/transfer-display.util';
 import { usePaginatedList } from '../hooks/usePaginatedList';
-import { AlertBanner } from './ui/alert-banner';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
-import { Search, Filter, ArrowRight, ArrowLeftRight, Package, Warehouse, UserX, Trash2, AlertTriangle, FileText, ClipboardList } from 'lucide-react';
+import { Search, Filter, ArrowRight, ArrowLeftRight, Package, Warehouse, UserX, AlertTriangle, FileText, ClipboardList } from 'lucide-react';
 import { PageHeaderRow } from './ui/page-header-row';
 import { PageTabs } from './ui/page-tabs';
 import { usePublicSettings } from '../contexts/public-settings-context';
@@ -260,14 +259,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
         >
           <Warehouse size={16} /> Razduži
         </button>
-        <button
-          type="button"
-          disabled
-          title={TRANSFER_GUARD_MESSAGES.rashodovanjeBlocked}
-          className="flex items-center gap-2 bg-red-600/50 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-not-allowed opacity-60"
-        >
-          <Trash2 size={16} /> Rashod
-        </button>
       </>
     ) : null;
 
@@ -474,7 +465,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                 {fType === 'zaduzenje' && '📦 Novo zaduženje — sa skladišta na osobu'}
                 {fType === 'prenos' && '🔄 Prenos — sa osobe na osobu'}
                 {fType === 'razduzenje' && '🏪 Razduženje — sa osobe na skladište'}
-                {fType === 'rashodovanje' && '🗑️ Rashodovanje — otpis opreme'}
               </h2>
             </div>
             <div className="p-6 space-y-4">
@@ -486,7 +476,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                   <option value="zaduzenje">Zaduženje (skladište → osoba)</option>
                   <option value="prenos">Prenos (osoba → osoba)</option>
                   <option value="razduzenje">Razduženje (osoba → skladište)</option>
-                  <option value="rashodovanje">Rashodovanje (otpis)</option>
                 </select>
               </div>
 
@@ -512,7 +501,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
               </div>
 
               {/* Show from person info */}
-              {selectedEquipment && selectedEquipHolder && (fType === 'prenos' || fType === 'razduzenje' || fType === 'rashodovanje') && (
+              {selectedEquipment && selectedEquipHolder && (fType === 'prenos' || fType === 'razduzenje') && (
                 <div className="bg-blue-50 rounded-lg p-3 text-sm">
                   <span className="text-blue-700 font-medium">Trenutno zadužen na:</span>{' '}
                   <span>{getEmployeeFullName(selectedEquipHolder)}</span>
@@ -591,20 +580,12 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
               </div>
 
-              {fType === 'rashodovanje' ? (
-                <AlertBanner tone="warning">
-                  Rashodovanje preko prenosnice nije dostupno. Koristite modul Popis i komisiju za rashod.
-                </AlertBanner>
-              ) : null}
-
-              {(fType === 'razduzenje' || fType === 'rashodovanje') && (
+              {fType === 'razduzenje' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Razlog {fType === 'rashodovanje' ? '(obavezno)' : ''}
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Razlog</label>
                   <textarea value={fReason} onChange={e => setFReason(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    rows={2} placeholder={fType === 'rashodovanje' ? 'Razlog rashodovanja...' : 'Razlog razduženja...'} />
+                    rows={2} placeholder="Razlog razduženja..." />
                 </div>
               )}
 
@@ -619,10 +600,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
               <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50">Odustani</button>
               <button 
                 onClick={handleSave} 
-                disabled={
-                  (evidenticar && !admin && wouldBeCrossService) ||
-                  fType === 'rashodovanje'
-                }
+                disabled={evidenticar && !admin && wouldBeCrossService}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Kreiraj prenos

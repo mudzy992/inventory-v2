@@ -451,10 +451,10 @@ Izvor istine za preconditions, backend/frontend guardove i UX poruke po akciji.
 
 ### disposal-commission.mark_disposal_list
 - **Opis:** Dodaj opremu na listu za rashod (draft)
-- **Preconditions:** `features.disposal_pre_list`; `features.inventory_count`; draft
+- **Preconditions:** `features.disposal_pre_list`; `features.inventory_count`; draft; `equipment.status === skladiste` + `warehouseId`
 - **Backend guard:** `equipment-disposal-list.service.ts:markForDisposal` — ✓
 - **Frontend guard:** `canMarkDisposalList` — ✓ (helper)
-- **UX poruka (BS):** `DISPOSAL_GUARD_MESSAGES.sessionNotDraft`
+- **UX poruka (BS):** `DISPOSAL_GUARD_MESSAGES.disposalRequiresWarehouse`, `sessionNotDraft`
 - **Gap:** —
 - **Prioritet:** —
 

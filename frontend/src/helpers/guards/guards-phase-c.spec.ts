@@ -8,6 +8,7 @@ import {
 } from './transfer-guards';
 import { canEditLotSpecifications } from './warehouse-stock-guards';
 import { canTransferRelocationLine } from './employee-relocation-guards';
+import { canMarkDisposalList, DISPOSAL_GUARD_MESSAGES } from './disposal-guards';
 
 describe('Phase C guard smoke — FE helpers', () => {
   it('employees: blocks delete when hasUserAccount', () => {
@@ -54,5 +55,24 @@ describe('Phase C guard smoke — FE helpers', () => {
     });
     assert.equal(result.allowed, false);
     assert.match(result.reason ?? '', /šifrarnik/i);
+  });
+
+  it('disposal: allows mark when equipment is on warehouse', () => {
+    const result = canMarkDisposalList({
+      sessionStatus: 'draft',
+      equipmentStatus: 'skladiste',
+      warehouseId: 'wh-1',
+    });
+    assert.equal(result.allowed, true);
+  });
+
+  it('disposal: blocks mark for zaduzeno equipment', () => {
+    const result = canMarkDisposalList({
+      sessionStatus: 'draft',
+      equipmentStatus: 'zaduzeno',
+      warehouseId: 'wh-1',
+    });
+    assert.equal(result.allowed, false);
+    assert.equal(result.reason, DISPOSAL_GUARD_MESSAGES.disposalRequiresWarehouse);
   });
 });
