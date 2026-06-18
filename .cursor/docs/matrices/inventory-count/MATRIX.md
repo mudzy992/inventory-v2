@@ -90,7 +90,7 @@ Ograničenja:
 
 - 1× komisija po `(sessionId, warehouseId, categoryId)`
 - `MAINTENANCE` kategorije nisu u slotovima
-- članovi: u gradu skladišta i (warehouse coverage **ili** `RegistrarAssignment` za skladište)
+- članovi: efektivno skladište zaposlenika = `committee.warehouseId` **ili** `RegistrarAssignment` za to skladište (grad nije kriterij)
 
 ## Ko smije unositi linije
 
@@ -164,6 +164,23 @@ U Popisu, za unos linija važi: **članstvo komisije** je dovoljno (bez registra
 - `POST /inventory-sessions/:id/reconcile-slots` (admin)
 - `GET/POST /inventory-sessions/:id/disposal-list` (evidentičar/admin; POST samo draft)
 - `DELETE /inventory-sessions/:id/disposal-list/:equipmentId` (admin, draft)
+
+## Inventory freeze (warehouse)
+
+Tokom aktivne sesije ili produkcijskog locka, mutacije su blokirane **po skladištu**, ne po gradu nosioca.
+
+```
+equipmentWarehouseId =
+  status=skladiste → equipment.warehouseId
+  status=zaduzeno  → resolveForEmployee(currentHolderId)
+
+frozen ako postoji aktivna sesija s InventoryCommittee.warehouseId = equipmentWarehouseId
+  OR production lock za distribuciju te sesije (warehouse u komisiji)
+```
+
+Izuzeci: admin; transfer/akcija s `inventoryLineId`; modul Popis i Komisija rashoda.
+
+API: `GET /inventory-sessions/freeze-banner` — sesije filtrirane po skladištima korisnika (registrar, keeper, efektivno skladište).
 
 ## Produkcijski režim (faza 5)
 

@@ -175,7 +175,7 @@ export class MaintenancePartsService {
     if (!warehouse?.isActive) {
       throw new BadRequestException('Warehouse not found or inactive');
     }
-    await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_create');
+    await this.inventoryFreeze.assertNoMutationInWarehouse(warehouseId, user, 'stock_lot_create');
     const category = await this.categoriesService.assertLeafCategory(dto.categoryId);
     if (category.categoryKind !== 'MAINTENANCE') {
       throw new BadRequestException('Category must be maintenance type');
@@ -277,10 +277,10 @@ export class MaintenancePartsService {
     await this.assertMaintenanceAllowedForHost(equipment, lot.categoryId);
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: lot.warehouseId },
-      select: { cityId: true },
+      select: { id: true, cityId: true },
     });
     if (warehouse) {
-      await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_issue');
+      await this.inventoryFreeze.assertNoMutationInWarehouse(warehouse.id, user, 'stock_lot_issue');
     }
     if (lot.quantityOnHand < dto.quantity) {
       throw new BadRequestException('Insufficient quantity on stock lot');
@@ -374,10 +374,10 @@ export class MaintenancePartsService {
     await this.assertMaintenanceAllowedForHost(equipment, lot.categoryId);
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: lot.warehouseId },
-      select: { cityId: true },
+      select: { id: true, cityId: true },
     });
     if (warehouse) {
-      await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_issue');
+      await this.inventoryFreeze.assertNoMutationInWarehouse(warehouse.id, user, 'stock_lot_issue');
     }
     if (lot.quantityOnHand < dto.quantity) {
       throw new BadRequestException('Insufficient quantity on stock lot');

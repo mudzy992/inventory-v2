@@ -31,8 +31,12 @@ export const InventoryFreezeBanner = ({
         <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" aria-hidden />
         <p className="text-sm text-amber-900">
           {isProductionOnly ? 'Produkcijski režim popisa' : 'Godišnji popis je aktivan'}
-          {primary.cityName ? ` u gradu ${primary.cityName}` : ''}:{' '}
-          <strong>{primary.name}</strong>
+          {primary.warehouseName
+            ? ` za skladište ${primary.warehouseName}`
+            : primary.cityName
+              ? ` u gradu ${primary.cityName}`
+              : ''}
+          : <strong>{primary.name}</strong>
           {primary.orgUnitName ? ` (${primary.orgUnitName})` : ''}
           {extraCount > 0 ? ` · +${extraCount} drugih sesija` : ''}
           . {isProductionOnly ? 'Skladišne operacije su ograničene.' : 'Promjene opreme i prenosnica su ograničene.'}

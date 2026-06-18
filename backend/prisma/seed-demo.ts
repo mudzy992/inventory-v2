@@ -55,8 +55,6 @@ const main = async (): Promise<void> => {
   await prisma.inventorySession.deleteMany();
   await prisma.inventoryCommitteeMember.deleteMany();
   await prisma.inventoryCommittee.deleteMany();
-  await prisma.disposalApprovalVote.deleteMany();
-  await prisma.disposalApproval.deleteMany();
   await prisma.disposalCommissionMember.deleteMany();
   await prisma.disposalCommission.deleteMany();
   await prisma.warehouseKeeper.deleteMany();

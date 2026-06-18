@@ -192,12 +192,6 @@ enum DisposalMemberRole {
   clan
 }
 
-enum DisposalApprovalStatus {
-  pending
-  approved
-  rejected
-}
-
 enum InventorySessionStatus {
   draft
   active
@@ -303,7 +297,6 @@ model User {
   savedFilters         SavedFilter[]
   refreshTokens        RefreshToken[]
   warehouseAssignments WarehouseKeeper[]
-  disposalVotes        DisposalApprovalVote[]
   disposalInventoryApprovalsReviewed DisposalInventoryApproval[] @relation("DisposalInventoryApprovalReviewer")
   inventoryLineEvents  InventoryLineEvent[]   @relation("InventoryLineEventActor")
   equipmentEvents      EquipmentEvent[]       @relation("EquipmentEventActor")
@@ -768,7 +761,6 @@ model Transfer {
   signer           Employee          @relation("TransferSigner", fields: [signerId], references: [id])
   fromPerson       Employee?         @relation("TransferFromPerson", fields: [fromPersonId], references: [id], onDelete: SetNull)
   toPerson         Employee?         @relation("TransferToPerson", fields: [toPersonId], references: [id], onDelete: SetNull)
-  disposalApproval DisposalApproval?
   inventoryLine    InventoryLine?    @relation(fields: [inventoryLineId], references: [id], onDelete: SetNull)
   inventoryLineEventsGenerated InventoryLineEvent[] @relation("InventoryLineEventGeneratedTransfer")
   disposalListRazduzenje EquipmentDisposalListItem[] @relation("DisposalListRazduzenjeTransfer")
@@ -870,34 +862,6 @@ model DisposalCommissionMember {
 
   @@id([commissionId, employeeId])
   @@map("disposal_commission_members")
-}
-
-model DisposalApproval {
-  id         String                 @id @default(uuid())
-  transferId String                 @unique
-  status     DisposalApprovalStatus @default(pending)
-  createdAt  DateTime               @default(now())
-  updatedAt  DateTime               @updatedAt
-
-  transfer Transfer               @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  votes    DisposalApprovalVote[]
-
-  @@map("disposal_approvals")
-}
-
-model DisposalApprovalVote {
-  id         String   @id @default(uuid())
-  approvalId String
-  userId     String
-  approved   Boolean
-  note       String?  @db.Text
-  createdAt  DateTime @default(now())
-
-  approval DisposalApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
-  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([approvalId, userId])
-  @@map("disposal_approval_votes")
 }
 
 model InventoryCommittee {

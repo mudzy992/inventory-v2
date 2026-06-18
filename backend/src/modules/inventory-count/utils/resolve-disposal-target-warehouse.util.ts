@@ -20,22 +20,25 @@ export const resolveDisposalTargetWarehouseId = async (
   if (input.status === 'skladiste' && input.warehouseId) {
     return input.warehouseId;
   }
+  if (input.currentHolderId) {
+    const holderWarehouseId = await deps.resolveHolderWarehouseId(input.currentHolderId);
+    if (holderWarehouseId) {
+      return holderWarehouseId;
+    }
+  }
   if (input.stockLotId) {
     const lotWarehouseId = await deps.loadStockLotWarehouseId(input.stockLotId);
     if (lotWarehouseId) {
       return lotWarehouseId;
     }
   }
-  const registrarWarehouseId = await deps.resolveRegistrarWarehouseId();
-  if (registrarWarehouseId) {
-    return registrarWarehouseId;
-  }
   const transferWarehouseId = await deps.loadLastZaduzenjeFromWarehouseId(input.equipmentId);
   if (transferWarehouseId) {
     return transferWarehouseId;
   }
-  if (input.currentHolderId) {
-    return deps.resolveHolderWarehouseId(input.currentHolderId);
+  const registrarWarehouseId = await deps.resolveRegistrarWarehouseId();
+  if (registrarWarehouseId) {
+    return registrarWarehouseId;
   }
   return null;
 };

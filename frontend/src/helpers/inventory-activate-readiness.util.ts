@@ -2,13 +2,14 @@ import type { Warehouse } from '../types';
 
 export const findWarehousesBlockingInventoryActivate = (
   warehouses: Warehouse[],
-  cityId: string | null | undefined,
+  sessionWarehouseIds: string[],
 ): Warehouse[] => {
-  if (!cityId) {
+  if (sessionWarehouseIds.length === 0) {
     return [];
   }
+  const sessionWarehouseIdSet = new Set(sessionWarehouseIds);
   return warehouses.filter((warehouse) => {
-    if (warehouse.cityId !== cityId || warehouse.isActive === false) {
+    if (!sessionWarehouseIdSet.has(warehouse.id) || warehouse.isActive === false) {
       return false;
     }
     const keepers = warehouse.keepers ?? [];

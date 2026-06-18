@@ -19,7 +19,6 @@ import {
   getTransferToPersonName,
 } from '../helpers/transfer-display.util';
 import { usePaginatedList } from '../hooks/usePaginatedList';
-import { resolveDisposalCommissionApi, type DisposalResolveDto } from '../api/disposal-api';
 import { AlertBanner } from './ui/alert-banner';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
@@ -70,7 +69,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const user = getCurrentUser();
   const { toastError } = useToast();
   const isFrozen = useInventoryFreezeActive();
-  const [disposalResolve, setDisposalResolve] = useState<DisposalResolveDto | null>(null);
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -165,30 +163,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const selectedEquipHolder = selectedEquipment?.currentHolder ?? null;
   const selectedToEmployee = availableEmployees.find((emp) => emp.id === fToPersonId);
 
-  useEffect(() => {
-    if (!showForm || fType !== 'rashodovanje' || !fEquipmentId) {
-      setDisposalResolve(null);
-      return;
-    }
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const resolved = await resolveDisposalCommissionApi(fEquipmentId);
-        if (!cancelled) {
-          setDisposalResolve(resolved);
-        }
-      } catch {
-        if (!cancelled) {
-          setDisposalResolve(null);
-        }
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [fEquipmentId, fType, showForm]);
-
   // Check if this would be a cross-service transfer
   const wouldBeCrossService = useMemo(() => {
     if (fType !== 'prenos' || !selectedEquipHolder?.orgUnitId || !selectedToEmployee?.orgUnitId) {
@@ -245,7 +219,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
       notes: fNotes,
       admin,
       evidenticar,
-      hasDisposalCommission: Boolean(disposalResolve?.commission),
     });
     if (result.error) {
       toastError(result.error);
@@ -436,11 +409,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(t.status)}`}>
                         {t.status === 'raw' ? 'RAW' : 'Potpisan'}
                       </span>
-                      {t.disposalApproval ? (
-                        <p className="text-[10px] text-amber-700 mt-0.5">
-                          Rashod: {t.disposalApproval.status}
-                        </p>
-                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500 max-w-[150px] truncate" title={t.reason || t.notes || ''}>
                       {t.reason || t.notes || '—'}
@@ -623,27 +591,10 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
               </div>
 
-              {fType === 'rashodovanje' && evidenticar ? (
-                disposalResolve?.commission ? (
-                  <AlertBanner tone="info">
-                    Komisija za rashod: <strong>{disposalResolve.commission.name}</strong>
-                    {disposalResolve.city?.name ? ` (${disposalResolve.city.name})` : ''}
-                    <ul className="mt-2 text-xs space-y-0.5">
-                      {disposalResolve.commission.members.map((member) => (
-                        <li key={member.employeeId}>
-                          {member.employee
-                            ? `${member.employee.firstName} ${member.employee.lastName}`
-                            : member.employeeId}
-                          {member.role === 'predsjednik' ? ' — predsjednik' : ''}
-                        </li>
-                      ))}
-                    </ul>
-                  </AlertBanner>
-                ) : (
-                  <AlertBanner tone="warning">
-                    Nema aktivne komisije za rashod u gradu zaduženog radnika. Rashod nije moguć.
-                  </AlertBanner>
-                )
+              {fType === 'rashodovanje' ? (
+                <AlertBanner tone="warning">
+                  Rashodovanje preko prenosnice nije dostupno. Koristite modul Popis i komisiju za rashod.
+                </AlertBanner>
               ) : null}
 
               {(fType === 'razduzenje' || fType === 'rashodovanje') && (
@@ -670,7 +621,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                 onClick={handleSave} 
                 disabled={
                   (evidenticar && !admin && wouldBeCrossService) ||
-                  (fType === 'rashodovanje' && evidenticar && !disposalResolve?.commission)
+                  fType === 'rashodovanje'
                 }
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >

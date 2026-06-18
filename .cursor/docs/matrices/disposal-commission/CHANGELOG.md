@@ -1,5 +1,10 @@
 # disposal-commission — CHANGELOG
 
+## 2026-06-17 (uklanjanje legacy glasanja)
+
+- Uklonjeni modeli `DisposalApproval` / `DisposalApprovalVote` i API za glasanje na transferu.
+- Jedini workflow: `DisposalInventoryApproval` (predsjednik + zapisnik).
+
 ## 2026-06-15 (za_rashod)
 
 - Lista za rashod postavlja `equipment.status=za_rashod`; povrat/odbijanje vraća `skladiste`.

@@ -375,11 +375,16 @@ export const InventoryCountPage = () => {
     if (!selectedSession || selectedSession.status !== 'draft') {
       return [];
     }
-    const cityId =
-      selectedSession.orgUnit?.effectiveLocationCityId ??
-      selectedSession.orgUnit?.effectiveLocationCity?.id;
-    return findWarehousesBlockingInventoryActivate(state.warehouses, cityId);
-  }, [selectedSession, state.warehouses]);
+    const sessionWarehouseIds = [
+      ...new Set(
+        committees
+          .filter((committee) => committee.sessionId === selectedSession.id)
+          .map((committee) => committee.warehouseId)
+          .filter((warehouseId): warehouseId is string => Boolean(warehouseId)),
+      ),
+    ];
+    return findWarehousesBlockingInventoryActivate(state.warehouses, sessionWarehouseIds);
+  }, [committees, selectedSession, state.warehouses]);
   const editingCommittee =
     committees.find((row) => row.id === editingCommitteeId) ??
     (editingCommitteeId && committeeId === editingCommitteeId ? selectedCommittee : null) ??

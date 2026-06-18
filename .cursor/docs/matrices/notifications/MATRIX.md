@@ -18,8 +18,8 @@ In-app notifikacije za autentificirane korisnike. Realtime preko Socket.IO; REST
 | `transfer_signed_upload_pending` | Kreiran raw transfer bez `scannedDocUrl` kad je `transfer.require_signed_pdf_upload=true` | isti primatelji kao `transfer_pending` |
 | `transfer_complete` | Potpis transfera | admin, potpisnik, evidentičari u scope-u, `toPerson` user |
 | `equipment_assigned` | Potpis transfera na osobu | korisnik `toPersonId` |
-| `disposal_pending_approval` | Legacy rashod transfer (komisija grad) | članovi komisije s user računom |
-| `disposal_approved` | Legacy rashod odobren | po definiciji servisa |
+| `disposal_pending_approval` | ~~Legacy rashod transfer~~ (ukinuto 2026-06-17) | — |
+| `disposal_approved` | ~~Legacy rashod odobren~~ (ukinuto 2026-06-17) | — |
 | `inventory_transfer_upload_pending` | Draft prenosnica na liniji popisa (`promjena_lokacije`) bez uploada | članovi komisije popisa |
 | `inventory_session_closed` | Close job `done` | admin, članovi komisija sesije, evidentičari u scope-u distribucije |
 | `disposal_approval_pending` | `DisposalInventoryApproval` status `pending` (popisni rashod) | članovi komisije rashoda vezanog uz komitet |

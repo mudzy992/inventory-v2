@@ -1,10 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { UserRole } from '../../../generated/prisma/client';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { ListDisposalCommissionsQueryDto } from './dto/list-disposal-commissions-query.dto';
 import { DisposalCommissionsService } from './disposal-commissions.service';
 
@@ -19,38 +17,9 @@ export class DisposalCommissionsController {
     return this.disposalCommissionsService.findAll(query);
   }
 
-  @Get('resolve')
+  @Get(':id')
   @Roles(UserRole.admin, UserRole.evidenticar)
-  resolve(@Query('equipmentId') equipmentId: string) {
-    return this.disposalCommissionsService.resolveForEquipment(equipmentId);
-  }
-
-  @Get('approvals/pending')
-  @Roles(UserRole.admin, UserRole.evidenticar)
-  findPending(@CurrentUser() user: AuthenticatedUser) {
-    return this.disposalCommissionsService.findPendingApprovals(user);
-  }
-
-  @Post()
-  @Roles(UserRole.admin)
-  create(
-    @Body()
-    body: {
-      cityId: string;
-      name: string;
-      members: { employeeId: string; role: 'predsjednik' | 'clan' }[];
-    },
-  ) {
-    return this.disposalCommissionsService.create(body.cityId, body.name, body.members);
-  }
-
-  @Patch('approvals/:id/vote')
-  @Roles(UserRole.admin, UserRole.evidenticar)
-  vote(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
-    @Body() body: { approved: boolean; note?: string },
-  ) {
-    return this.disposalCommissionsService.vote(user, id, body.approved, body.note);
+  findOne(@Param('id') id: string) {
+    return this.disposalCommissionsService.findOne(id);
   }
 }

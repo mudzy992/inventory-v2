@@ -1,8 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
-import { LocationResolutionService } from './location-resolution.service';
 import { InventoryProductionModeService } from './inventory-production-mode.service';
+import { WarehouseResolutionService } from './warehouse-resolution.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  findFreezeContextForEquipment,
+  findFreezeContextForWarehouse,
+  type InventoryFreezeContext,
+} from '../utils/resolve-inventory-frozen-warehouses.util';
 
 export type InventoryFreezeAction =
   | 'equipment_create'
@@ -16,7 +21,7 @@ export type InventoryFreezeAction =
 export class InventoryFreezeService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly locationResolutionService: LocationResolutionService,
+    private readonly warehouseResolutionService: WarehouseResolutionService,
     private readonly productionModeService: InventoryProductionModeService,
   ) {}
 
@@ -32,10 +37,6 @@ export class InventoryFreezeService {
     if (options?.inventoryLineId) {
       return;
     }
-    const activeSession = await this.findActiveSessionForEquipment(equipmentId);
-    if (!activeSession) {
-      return;
-    }
     if (options?.transferId) {
       const transfer = await this.prisma.transfer.findUnique({
         where: { id: options.transferId },
@@ -45,9 +46,22 @@ export class InventoryFreezeService {
         return;
       }
     }
-    throw new BadRequestException(
-      `Godišnji popis "${activeSession.name}" je aktivan u ovom gradu — akcija "${action}" nije dozvoljena`,
-    );
+    const equipment = await this.prisma.equipment.findUnique({
+      where: { id: equipmentId },
+      select: {
+        status: true,
+        warehouseId: true,
+        currentHolderId: true,
+      },
+    });
+    if (!equipment) {
+      return;
+    }
+    const freezeContext = await this.findFreezeContextForEquipment(equipment);
+    if (!freezeContext) {
+      return;
+    }
+    throw this.buildFreezeException(freezeContext, action);
   }
 
   async assertTransferCreateAllowed(
@@ -103,77 +117,155 @@ export class InventoryFreezeService {
     if (user.role === 'admin') {
       return;
     }
-    const activeSession = await this.findActiveSessionForEquipment(equipmentId);
-    if (activeSession) {
+    const equipment = await this.prisma.equipment.findUnique({
+      where: { id: equipmentId },
+      select: { status: true, warehouseId: true, currentHolderId: true },
+    });
+    if (!equipment) {
+      return;
+    }
+    const freezeContext = await this.findFreezeContextForEquipment(equipment);
+    if (freezeContext) {
       throw new BadRequestException(
         'Rashodovanje preko prenosnice nije dozvoljeno tokom aktivnog popisa — koristite predloženi rashod u komisiji',
       );
     }
   }
 
-  async assertNoMutationInCity(
-    cityId: string,
+  async assertNoMutationInWarehouse(
+    warehouseId: string,
     user: AuthenticatedUser,
     action: InventoryFreezeAction,
   ): Promise<void> {
     if (user.role === 'admin') {
       return;
     }
-    const session = await this.prisma.inventorySession.findFirst({
-      where: { status: 'active', orgUnit: { effectiveLocationCityId: cityId } },
-      select: { name: true },
+    const freezeContext = await findFreezeContextForWarehouse(warehouseId, {
+      findActiveFreezeForWarehouse: (id) => this.findActiveFreezeForWarehouse(id),
+      findProductionFreezeForWarehouse: (id) => this.findProductionFreezeForWarehouse(id),
     });
-    if (session) {
-      throw new BadRequestException(
-        `Godišnji popis "${session.name}" je aktivan u ovom gradu — akcija "${action}" nije dozvoljena`,
-      );
+    if (!freezeContext) {
+      return;
     }
-    if (await this.productionModeService.isProductionLockActiveForCity(cityId)) {
-      throw new BadRequestException(
-        `Produkcijski režim popisa je aktivan u ovom gradu — akcija "${action}" nije dozvoljena`,
-      );
-    }
+    throw this.buildFreezeException(freezeContext, action);
   }
 
-  async findActiveSessionForEquipment(equipmentId: string): Promise<{ id: string; name: string } | null> {
+  async findFrozenContextForEquipment(equipmentId: string): Promise<InventoryFreezeContext | null> {
     const equipment = await this.prisma.equipment.findUnique({
       where: { id: equipmentId },
-      include: { currentHolder: true, warehouse: true },
+      select: { status: true, warehouseId: true, currentHolderId: true },
     });
     if (!equipment) {
       return null;
     }
-    const cityId = await this.resolveEquipmentCityId(equipment);
-    if (!cityId) {
-      return null;
-    }
-    const session = await this.prisma.inventorySession.findFirst({
-      where: { status: 'active', orgUnit: { effectiveLocationCityId: cityId } },
-      select: { id: true, name: true },
-    });
-    return session;
+    return this.findFreezeContextForEquipment(equipment);
   }
 
-  private async resolveEquipmentCityId(equipment: {
-    currentHolder: { orgUnitId: string } | null;
-    warehouse?: { cityId: string } | null;
-    warehouseId?: string | null;
+  private async findFreezeContextForEquipment(equipment: {
+    status: string;
+    warehouseId: string | null;
+    currentHolderId: string | null;
+  }): Promise<InventoryFreezeContext | null> {
+    return findFreezeContextForEquipment(equipment, {
+      resolveEquipmentWarehouseId: (input) => this.resolveEquipmentWarehouseId(input),
+      findActiveFreezeForWarehouse: (warehouseId) => this.findActiveFreezeForWarehouse(warehouseId),
+      findProductionFreezeForWarehouse: (warehouseId) =>
+        this.findProductionFreezeForWarehouse(warehouseId),
+    });
+  }
+
+  private async resolveEquipmentWarehouseId(input: {
+    status: string;
+    warehouseId: string | null;
+    currentHolderId: string | null;
   }): Promise<string | null> {
-    if (equipment.currentHolder) {
-      return this.locationResolutionService.getEffectiveLocationForOrgUnit(
-        equipment.currentHolder.orgUnitId,
-      );
+    if (input.status === 'skladiste' && input.warehouseId) {
+      return input.warehouseId;
     }
-    if (equipment.warehouse) {
-      return equipment.warehouse.cityId;
+    if (input.currentHolderId) {
+      return this.warehouseResolutionService.resolveForEmployee(input.currentHolderId);
     }
-    if (equipment.warehouseId) {
-      const warehouse = await this.prisma.warehouse.findUnique({
-        where: { id: equipment.warehouseId },
-        select: { cityId: true },
-      });
-      return warehouse?.cityId ?? null;
+    return input.warehouseId;
+  }
+
+  private async findActiveFreezeForWarehouse(
+    warehouseId: string,
+  ): Promise<InventoryFreezeContext | null> {
+    const committee = await this.prisma.inventoryCommittee.findFirst({
+      where: {
+        warehouseId,
+        session: { status: 'active' },
+      },
+      select: {
+        session: { select: { id: true, name: true } },
+        warehouse: { select: { id: true, name: true } },
+      },
+      orderBy: { session: { createdAt: 'desc' } },
+    });
+    if (!committee?.warehouse || !committee.session) {
+      return null;
+    }
+    return {
+      sessionId: committee.session.id,
+      sessionName: committee.session.name,
+      warehouseId: committee.warehouse.id,
+      warehouseName: committee.warehouse.name,
+      reason: 'active_session',
+    };
+  }
+
+  private async findProductionFreezeForWarehouse(
+    warehouseId: string,
+  ): Promise<InventoryFreezeContext | null> {
+    if (!(await this.productionModeService.isProductionModeEnabled())) {
+      return null;
+    }
+    const committees = await this.prisma.inventoryCommittee.findMany({
+      where: {
+        warehouseId,
+        session: { status: { in: ['draft', 'active', 'closing'] } },
+      },
+      select: {
+        session: {
+          select: {
+            id: true,
+            name: true,
+            orgUnitId: true,
+            orgUnit: { select: { name: true } },
+          },
+        },
+        warehouse: { select: { id: true, name: true } },
+      },
+      orderBy: { session: { year: 'desc' } },
+    });
+    for (const committee of committees) {
+      if (!committee.session || !committee.warehouse) {
+        continue;
+      }
+      if (await this.productionModeService.isProductionLockActive(committee.session.orgUnitId)) {
+        return {
+          sessionId: committee.session.id,
+          sessionName: committee.session.name,
+          warehouseId: committee.warehouse.id,
+          warehouseName: committee.warehouse.name,
+          reason: 'production_lock',
+        };
+      }
     }
     return null;
+  }
+
+  private buildFreezeException(
+    freezeContext: InventoryFreezeContext,
+    action: InventoryFreezeAction,
+  ): BadRequestException {
+    if (freezeContext.reason === 'production_lock') {
+      return new BadRequestException(
+        `Produkcijski režim popisa je aktivan za skladište "${freezeContext.warehouseName}" — akcija "${action}" nije dozvoljena`,
+      );
+    }
+    return new BadRequestException(
+      `Godišnji popis "${freezeContext.sessionName}" je aktivan za skladište "${freezeContext.warehouseName}" — akcija "${action}" nije dozvoljena`,
+    );
   }
 }

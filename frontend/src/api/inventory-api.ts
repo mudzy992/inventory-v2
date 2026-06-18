@@ -240,6 +240,9 @@ export interface InventoryFreezeBannerSessionDto {
   year: number;
   orgUnitName: string;
   cityName: string | null;
+  warehouseId?: string | null;
+  warehouseName?: string | null;
+  warehouseNames?: string[];
 }
 
 export const fetchInventoryFreezeBannerApi = () =>

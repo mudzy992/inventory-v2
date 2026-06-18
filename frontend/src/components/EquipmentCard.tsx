@@ -512,11 +512,6 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                               {' → '}
                               {t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : to ? getEmployeeFullName(to) : '—'}
                             </p>
-                            {t.disposalApproval ? (
-                              <p className="text-[10px] text-amber-700 mt-0.5">
-                                Komisija: {t.disposalApproval.status}
-                              </p>
-                            ) : null}
                             <p className="text-[10px] text-gray-400 font-mono mt-0.5">{t.documentNumber}</p>
                           </button>
                           {expandedTransferId === t.id && (

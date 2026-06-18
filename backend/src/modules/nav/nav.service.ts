@@ -3,20 +3,18 @@ import type { NotificationType } from '../../../generated/prisma/client';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
-import { DisposalCommissionsService } from '../disposal-commissions/disposal-commissions.service';
 import { EmployeeRelocationService } from '../employee-relocation/employee-relocation.service';
 
 const NOTIFICATION_TYPES_BY_PAGE: Record<string, NotificationType[]> = {
   transfers: ['transfer_pending', 'transfer_signed_upload_pending'],
   equipment: ['equipment_assigned'],
   'registrar-stock': ['warehouse_stock_received'],
-  'inventory-count': ['inventory_transfer_upload_pending', 'inventory_session_closed'],
+  'inventory-count': ['inventory_transfer_upload_pending', 'inventory_session_closed', 'disposal_approval_pending'],
   'employee-relocation': [
     'employee_relocation_action_required',
     'employee_relocation_incoming',
     'employee_relocation_admin_alert',
   ],
-  'disposal-commissions': ['disposal_approval_pending'],
 };
 
 @Injectable()
@@ -25,7 +23,6 @@ export class NavService {
     private readonly prisma: PrismaService,
     private readonly registrarScope: RegistrarScopeService,
     private readonly relocationService: EmployeeRelocationService,
-    private readonly disposalService: DisposalCommissionsService,
   ) {}
 
   async getModuleBadges(user: AuthenticatedUser): Promise<Record<string, number>> {
@@ -64,15 +61,6 @@ export class NavService {
       } catch {
         // feature disabled
       }
-    }
-    try {
-      const pendingApprovals = await this.disposalService.findPendingApprovals(user);
-      if (pendingApprovals.length > 0) {
-        badges['disposal-commissions'] =
-          (badges['disposal-commissions'] ?? 0) + pendingApprovals.length;
-      }
-    } catch {
-      // feature disabled
     }
     return Object.fromEntries(Object.entries(badges).filter(([, count]) => count > 0));
   }

@@ -26,7 +26,6 @@ import {
   assertCanWriteEquipment,
 } from '../equipment/equipment-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
-import { DisposalCommissionsService } from '../disposal-commissions/disposal-commissions.service';
 import { InventoryCountService } from '../inventory-count/inventory-count.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
@@ -58,7 +57,6 @@ const transferInclude = {
   signer: true,
   fromPerson: true,
   toPerson: true,
-  disposalApproval: true,
 } satisfies Prisma.TransferInclude;
 
 const TRANSFER_SORT_FIELDS: Record<string, string> = {
@@ -76,7 +74,6 @@ export class TransfersService {
     private readonly locationResolutionService: LocationResolutionService,
     private readonly settingsService: SettingsService,
     private readonly notificationsService: NotificationsService,
-    private readonly disposalCommissionsService: DisposalCommissionsService,
     private readonly inventoryCountService: InventoryCountService,
     private readonly signerResolutionService: SignerResolutionService,
     private readonly orgScopeService: OrgScopeService,
@@ -324,9 +321,6 @@ export class TransfersService {
       throw new BadRequestException('Transfer is cancelled');
     }
     await this.inventoryFreeze.assertTransferFinalizeAllowed(id, user);
-    if (transfer.type === 'rashodovanje') {
-      await this.disposalCommissionsService.assertCanSignDisposalTransfer(id);
-    }
     if (!(await this.canAccessTransfer(user, transfer))) {
       throw new ForbiddenException('Transfer outside your scope');
     }

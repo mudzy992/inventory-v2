@@ -1,5 +1,21 @@
 # Changelog — inventory-count
 
+## 2026-06-17 (relokacija i warehouse scope cleanup)
+
+- `createRelocationTransfer`: ciljna osoba validirana warehouse coverage / efektivnim skladištem komisije, ne gradom sesije.
+- `assertWarehouseInSessionScope`: samo org scope; skladište mora imati `orgUnitId`.
+- `listWarehousesForSessionOrgUnit`: uklonjen city OR fallback.
+- `resolveDisposalTargetWarehouseId`: za `zaduzeno` prvo holder effective warehouse, pa lot.
+
+## 2026-06-17 (inventory freeze po skladištu)
+
+- `InventoryFreezeService`: zamrzavanje po `warehouseId` (aktivna sesija + production lock), ne po gradu opreme.
+- Freeze banner i stock lot provjere usklađene sa skladištem komisije.
+
+## 2026-06-17 (članovi komisije po skladištu)
+
+- Eligible članovi komisije: `resolveForEmployee === warehouseId` ili registrar assignment; uklonjena provjera grada zaposlenika vs `warehouse.cityId`.
+
 ## 2026-06-17 (warehouse opseg bez grada)
 
 - `evaluateEquipmentInCommitteeScope`: komisija sa `warehouseId` koristi samo warehouse coverage / `warehouseId` (bez usporedbe grada nosioca i `Warehouse.cityId`).

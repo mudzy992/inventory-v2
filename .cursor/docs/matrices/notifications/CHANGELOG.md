@@ -1,5 +1,9 @@
 # Changelog — notifications matrix
 
+## 2026-06-17
+
+- Legacy tipovi `disposal_pending_approval` / `disposal_approved` više se ne emituju (ukinuto glasanje na transferu); aktivni rashod koristi `disposal_approval_pending`.
+
 ## 2026-06-05
 
 - Tipovi za promjenu org. jedinice: `employee_relocation_action_required`, `employee_relocation_incoming`, `employee_relocation_admin_alert`, `employee_relocation_resolved`.

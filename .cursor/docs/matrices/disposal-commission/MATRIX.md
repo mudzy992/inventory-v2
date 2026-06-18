@@ -6,7 +6,7 @@
 - `DisposalCommissionMember`: employeeId, role (`predsjednik` | `clan`)
 - `DisposalInventoryApproval` — odobrenje po opremi u sesiji popisa
 - `EquipmentDisposalListItem` — pre-popisna lista (evidentičar, sesija `draft`)
-- Legacy `DisposalApproval` na transfer `rashodovanje` — **zastarjelo** (novi unosi blokirani)
+- Jedini workflow odluke: `DisposalInventoryApproval` (predsjednik komisije, bez glasanja članova na transferu)
 
 ## Par s popisom
 

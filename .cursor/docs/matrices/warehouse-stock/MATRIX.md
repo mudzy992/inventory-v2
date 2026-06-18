@@ -43,7 +43,7 @@
 | `zatvoreno` | Samo read-only | odbijeno (400) |
 
 - Izmjena lot spec-a **ne retroaktivno** ažurira već izdatu opremu (snapshot pri `POST .../issue`).
-- Freeze u gradu blokira save spec-a (isto kao issue).
+- Freeze u skladištu blokira save spec-a (isto kao issue).
 - **UI kartica** (collapse): `ceka_specifikaciju` → automatski otvorena; nakon snimanja i na svakom sljedećem otvaranju lota zatvorena; korisnik ručno proširi za izmjenu, snimi → ponovo se zatvara.
 
 ## Izdavanje
@@ -98,7 +98,7 @@ Kad admin izda komad iz lota skladišta **W1** na radnika čije efektivno skladi
 
 - Samo `admin`; evidentičar uvijek odbijen za cross-warehouse issue
 - Obavezan `catalogItemId` na izvornom lotu
-- Freeze provjera za grad izvornog i ciljnog skladišta
+- Freeze provjera za izvorno i ciljno skladište
 
 Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/modules/warehouse-stock/utils/cross-warehouse-issue.util.ts), [`resolve-canonical-dest-lot.util.ts`](../../../../backend/src/modules/warehouse-stock/utils/resolve-canonical-dest-lot.util.ts).
 
@@ -108,7 +108,7 @@ Implementacija: [`cross-warehouse-issue.util.ts`](../../../../backend/src/module
 
 ## Freeze
 
-- Tokom aktivnog popisa u gradu: blokiran `stock_lot_create` i `stock_lot_issue`
+- Tokom aktivnog popisa za skladište: blokiran `stock_lot_create` i `stock_lot_issue`
 
 ## Lista dodijeljene robe (evidentičar / admin)
 

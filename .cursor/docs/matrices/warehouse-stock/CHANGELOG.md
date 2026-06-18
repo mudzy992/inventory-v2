@@ -1,5 +1,9 @@
 # Changelog — warehouse-stock
 
+## 2026-06-17 (freeze po skladištu)
+
+- `stock_lot_create` / `stock_lot_issue` koriste `assertNoMutationInWarehouse(warehouse.id)` umjesto gradske provjere.
+
 ## 2026-06-16 (kanonski dest lot)
 
 - Cross-warehouse dispatch sada koristi `resolveCanonicalDestLotInTx`: zatvoreni kanonski lot se reopen-uje pri sljedećem dispatch-u; `quantityReceived` se uvećava na istom lotu (bez duplikata po `catalogItemId`).

@@ -347,7 +347,7 @@ export class WarehouseStockService {
     if (!warehouse?.isActive) {
       throw new BadRequestException('Warehouse not found or inactive');
     }
-    await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_create');
+    await this.inventoryFreeze.assertNoMutationInWarehouse(warehouseId, user, 'stock_lot_create');
     const category = await this.categoriesService.assertLeafCategory(dto.categoryId);
     if (category.categoryKind === 'MAINTENANCE') {
       throw new BadRequestException('Use maintenance stock endpoint for maintenance categories');
@@ -417,7 +417,7 @@ export class WarehouseStockService {
     if (!warehouse?.isActive) {
       throw new BadRequestException('Warehouse not found or inactive');
     }
-    await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_create');
+    await this.inventoryFreeze.assertNoMutationInWarehouse(warehouseId, user, 'stock_lot_create');
     const lotIds = await this.prisma.$transaction(async (tx) => {
       const ids: string[] = [];
       for (const item of dto.items) {
@@ -486,10 +486,10 @@ export class WarehouseStockService {
     }
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: lot.warehouseId },
-      select: { cityId: true },
+      select: { id: true, cityId: true },
     });
     if (warehouse) {
-      await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_issue');
+      await this.inventoryFreeze.assertNoMutationInWarehouse(warehouse.id, user, 'stock_lot_issue');
     }
     const category = await this.categoriesService.assertLeafCategory(lot.categoryId);
     const { optionalFields } = this.categoriesService.getFieldDefinitions(category);
@@ -526,10 +526,10 @@ export class WarehouseStockService {
     }
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: lot.warehouseId },
-      select: { cityId: true },
+      select: { id: true, cityId: true },
     });
     if (warehouse) {
-      await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_issue');
+      await this.inventoryFreeze.assertNoMutationInWarehouse(warehouse.id, user, 'stock_lot_issue');
     }
     const category = await this.categoriesService.assertLeafCategory(lot.categoryId);
     const { fields, optionalFields } = this.categoriesService.getFieldDefinitions(category);
@@ -561,11 +561,11 @@ export class WarehouseStockService {
       }
       const destWarehouse = await this.prisma.warehouse.findUnique({
         where: { id: destWarehouseId },
-        select: { cityId: true },
+        select: { id: true },
       });
       if (destWarehouse) {
-        await this.inventoryFreeze.assertNoMutationInCity(
-          destWarehouse.cityId,
+        await this.inventoryFreeze.assertNoMutationInWarehouse(
+          destWarehouse.id,
           user,
           'stock_lot_issue',
         );
@@ -685,10 +685,10 @@ export class WarehouseStockService {
     }
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: lot.warehouseId },
-      select: { cityId: true },
+      select: { id: true, cityId: true },
     });
     if (warehouse) {
-      await this.inventoryFreeze.assertNoMutationInCity(warehouse.cityId, user, 'stock_lot_issue');
+      await this.inventoryFreeze.assertNoMutationInWarehouse(warehouse.id, user, 'stock_lot_issue');
     }
     const category = await this.categoriesService.assertLeafCategory(lot.categoryId);
     const { fields } = this.categoriesService.getFieldDefinitions(category);

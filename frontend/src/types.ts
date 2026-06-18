@@ -188,10 +188,6 @@ export interface TransferRecord {
   fromWarehouseId?: string | null;
   toWarehouseId?: string | null;
   inventoryLineId?: string | null;
-  disposalApproval?: {
-    id: string;
-    status: 'pending' | 'approved' | 'rejected';
-  };
   equipment?: Pick<Equipment, 'id' | 'inventoryNumber' | 'status' | 'warehouseId' | 'categoryId'> & {
     currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'>;
     warehouse?: Pick<Warehouse, 'id' | 'name' | 'cityId'>;

@@ -15,7 +15,6 @@ export interface BuildTransferPayloadInput {
   notes?: string;
   admin: boolean;
   evidenticar: boolean;
-  hasDisposalCommission?: boolean;
 }
 
 export interface BuildTransferPayloadResult {
@@ -64,7 +63,6 @@ export const buildTransferCreatePayload = (
     notes,
     admin,
     evidenticar,
-    hasDisposalCommission = true,
   } = input;
 
   if ((type === 'zaduzenje' || type === 'prenos') && !toPersonId) {
@@ -79,8 +77,8 @@ export const buildTransferCreatePayload = (
     }
   }
 
-  if (type === 'rashodovanje' && evidenticar && !admin && !hasDisposalCommission) {
-    return { error: 'Nema aktivne komisije za rashod u gradu zaduženog radnika.' };
+  if (type === 'rashodovanje') {
+    return { error: 'Rashodovanje preko prenosnice nije dostupno — koristite modul Popis i komisiju za rashod.' };
   }
 
   const warehousePayload = resolveTransferWarehousePayload(type, equipment, user, state);
@@ -113,13 +111,5 @@ export const buildTransferCreatePayload = (
 };
 
 export const canSignDisposalTransfer = (
-  transfer: { type: TransferType; status: string; disposalApproval?: { status: string } },
-): boolean => {
-  if (transfer.type !== 'rashodovanje') {
-    return transfer.status === 'raw';
-  }
-  if (!transfer.disposalApproval) {
-    return transfer.status === 'raw';
-  }
-  return transfer.status === 'raw' && transfer.disposalApproval.status === 'approved';
-};
+  transfer: { type: TransferType; status: string },
+): boolean => transfer.type === 'rashodovanje' && transfer.status === 'raw';
