@@ -22,7 +22,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=web
-      - traefik.http.routers.inventory-v2-api.rule=Host(`inventory-v2.ba101.top`) && PathPrefix(`/backend`)
+      - traefik.http.routers.inventory-v2-api.rule=Host(`inventory.ba101.top`) && PathPrefix(`/backend`)
       - traefik.http.routers.inventory-v2-api.entrypoints=websecure
       - traefik.http.routers.inventory-v2-api.tls=true
       - traefik.http.routers.inventory-v2-api.tls.certresolver=le
@@ -35,16 +35,16 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: https://inventory-v2.ba101.top/backend
+        VITE_API_URL: https://inventory.ba101.top/backend
         VITE_APP_NAME: Inventory v2
-        VITE_APP_URL: https://inventory-v2.ba101.top
+        VITE_APP_URL: https://inventory.ba101.top
     networks:
       - web
     restart: unless-stopped
     labels:
       - traefik.enable=true
       - traefik.docker.network=web
-      - traefik.http.routers.inventory-v2-web.rule=Host(`inventory-v2.ba101.top`)
+      - traefik.http.routers.inventory-v2-web.rule=Host(`inventory.ba101.top`)
       - traefik.http.routers.inventory-v2-web.entrypoints=websecure
       - traefik.http.routers.inventory-v2-web.tls=true
       - traefik.http.routers.inventory-v2-web.tls.certresolver=le
