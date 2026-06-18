@@ -5,7 +5,7 @@ export type WarehouseScopeEquipment = {
   categoryId: string;
   status: string;
   warehouseId: string | null;
-  currentHolder: { orgUnitId: string } | null;
+  currentHolder: { id: string; orgUnitId: string } | null;
   category?: { categoryKind: CategoryKind } | null;
   warehouse?: { cityId: string } | null;
 };
@@ -23,6 +23,7 @@ export type CommitteeScopeDeps = {
   getWarehouseCityId: (warehouseId: string) => Promise<string | null>;
   expandOrgUnitIds: (rootIds: string[]) => Promise<string[]>;
   getWarehouseOrgUnitId: (warehouseId: string) => Promise<string | null>;
+  resolveEmployeeWarehouseId: (employeeId: string) => Promise<string | null>;
 };
 
 export async function isEmployeeInWarehouseCoverage(
@@ -38,20 +39,16 @@ export async function isEmployeeInWarehouseCoverage(
 }
 
 export async function matchesWarehouseEquipmentScope(
-  deps: Pick<CommitteeScopeDeps, 'expandOrgUnitIds' | 'getWarehouseOrgUnitId'>,
+  deps: Pick<CommitteeScopeDeps, 'resolveEmployeeWarehouseId'>,
   warehouseId: string,
   equipment: WarehouseScopeEquipment,
 ): Promise<boolean> {
   if (equipment.status === 'skladiste') {
     return equipment.warehouseId === warehouseId;
   }
-  if (equipment.status === 'zaduzeno' && equipment.currentHolder) {
-    const warehouseOrgUnitId = await deps.getWarehouseOrgUnitId(warehouseId);
-    return isEmployeeInWarehouseCoverage(
-      deps.expandOrgUnitIds,
-      warehouseOrgUnitId,
-      equipment.currentHolder.orgUnitId,
-    );
+  if (equipment.status === 'zaduzeno' && equipment.currentHolder?.id) {
+    const effectiveWarehouseId = await deps.resolveEmployeeWarehouseId(equipment.currentHolder.id);
+    return effectiveWarehouseId === warehouseId;
   }
   return false;
 }

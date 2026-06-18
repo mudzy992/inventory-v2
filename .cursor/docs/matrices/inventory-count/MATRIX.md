@@ -121,7 +121,7 @@ equipment je u opsegu komisije ako:
   AND (
     (status == skladiste AND equipment.warehouseId == committee.warehouseId)
     OR
-    (status == zaduzeno AND holder.orgUnitId u podstablu warehouse.orgUnitId)
+    (status == zaduzeno AND resolveForEmployee(currentHolderId) == committee.warehouseId)
   )
 ```
 
@@ -154,7 +154,7 @@ U Popisu, za unos linija važi: **članstvo komisije** je dovoljno (bez registra
 | Komisije | grupisane po skladištu; detalj s članovima i rashod komisijom |
 | Wizard (create) | 4 koraka: slot (skladište+kategorija) → popis → rashod → potvrda |
 | Wizard (edit) | 2 koraka: samo članovi popisne i rashod komisije; slot (skladište/kategorija) read-only |
-| Popisna lista (štampa) | Naziv opreme: `{lot.productName} — {serijski}? — {kategorija}`; bez lota `—`; Kol. prazna; footer 3 potpisne linije na svakoj stranici; bez Grad/Godina u zaglavlju |
+| Popisna lista (štampa) | Naziv opreme: `{lot.productName} — {serijski}? — {kategorija}`; bez lota `—`; Kol. prazna; footer 3 kompaktne potpisne linije na svakoj stranici; štampa preko novog prozora; PDF download A4 |
 
 ## API
 

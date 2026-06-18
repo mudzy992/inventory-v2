@@ -1,6 +1,7 @@
 import type { LocationResolutionService } from '../../../common/services/location-resolution.service';
 import type { OrgScopeService } from '../../../common/services/org-scope.service';
 import type { RegistrarScopeService } from '../../../common/services/registrar-scope.service';
+import type { WarehouseResolutionService } from '../../../common/services/warehouse-resolution.service';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import type { CommitteeScopeDeps } from './resolve-warehouse-committee-scope.util';
 
@@ -9,6 +10,7 @@ export const buildCommitteeScopeDeps = (
   locationResolutionService: LocationResolutionService,
   registrarScope: RegistrarScopeService,
   orgScopeService: OrgScopeService,
+  warehouseResolutionService: WarehouseResolutionService,
   resolveEquipmentCityId: CommitteeScopeDeps['resolveEquipmentCityId'],
 ): CommitteeScopeDeps => ({
   expandCategoryIds: (categoryIds) => registrarScope.expandCategoryIds(categoryIds),
@@ -30,4 +32,6 @@ export const buildCommitteeScopeDeps = (
     });
     return row?.orgUnitId ?? null;
   },
+  resolveEmployeeWarehouseId: (employeeId) =>
+    warehouseResolutionService.resolveForEmployee(employeeId),
 });

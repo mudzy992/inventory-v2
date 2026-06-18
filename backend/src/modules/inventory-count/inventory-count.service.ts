@@ -39,6 +39,7 @@ import {
 import { resolveDocumentWarehouseId } from '../transfers/utils/resolve-document-warehouse.util';
 import { finalizeInventoryTransferInTx } from './utils/finalize-inventory-transfer.util';
 import { buildWarehouseCommitteeMembers } from './utils/inventory-warehouse-committees.util';
+import { buildCommitteeScopeDeps } from './utils/build-committee-scope-deps.util';
 import { resolveEligibleCommitteeMembers } from './utils/resolve-eligible-committee-members.util';
 import {
   type CommitteeScopeDeps,
@@ -1192,24 +1193,34 @@ export class InventoryCountService {
     }
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: committee.warehouseId },
-      select: { id: true, orgUnitId: true },
+      select: { id: true },
     });
     if (!warehouse) {
       throw new BadRequestException('Committee warehouse not found');
     }
-    const coverageOrgUnitIds = warehouse.orgUnitId
-      ? await this.orgScopeService.expandOrgUnitIds([warehouse.orgUnitId])
-      : [];
+    const employeeIds = await this.resolveEmployeeIdsForWarehouse(warehouse.id);
     const orConditions: Prisma.EquipmentWhereInput[] = [
       { warehouseId: warehouse.id, status: 'skladiste' },
     ];
-    if (coverageOrgUnitIds.length > 0) {
-      orConditions.push({
-        status: 'zaduzeno',
-        currentHolder: { orgUnitId: { in: coverageOrgUnitIds } },
-      });
-    }
+    orConditions.push({
+      status: 'zaduzeno',
+      currentHolderId: { in: employeeIds.length > 0 ? employeeIds : ['__none__'] },
+    });
     return { ...base, OR: orConditions };
+  }
+
+  private async resolveEmployeeIdsForWarehouse(warehouseId: string): Promise<string[]> {
+    const employees = await this.prisma.employee.findMany({ select: { id: true } });
+    const matching: string[] = [];
+    for (const employee of employees) {
+      const effectiveWarehouseId = await this.warehouseResolutionService.resolveForEmployee(
+        employee.id,
+      );
+      if (effectiveWarehouseId === warehouseId) {
+        matching.push(employee.id);
+      }
+    }
+    return matching;
   }
 
   async getFreezeBannerForUser(user: AuthenticatedUser) {
@@ -2374,27 +2385,14 @@ export class InventoryCountService {
   }
 
   private buildCommitteeScopeDeps(): CommitteeScopeDeps {
-    return {
-      expandCategoryIds: (categoryIds) => this.registrarScope.expandCategoryIds(categoryIds),
-      resolveEquipmentCityId: (equipment) => this.resolveEquipmentCityId(equipment),
-      getEffectiveLocationForOrgUnit: (orgUnitId) =>
-        this.locationResolutionService.getEffectiveLocationForOrgUnit(orgUnitId),
-      getWarehouseCityId: async (warehouseId) => {
-        const row = await this.prisma.warehouse.findUnique({
-          where: { id: warehouseId },
-          select: { cityId: true },
-        });
-        return row?.cityId ?? null;
-      },
-      expandOrgUnitIds: (rootIds) => this.orgScopeService.expandOrgUnitIds(rootIds),
-      getWarehouseOrgUnitId: async (warehouseId) => {
-        const row = await this.prisma.warehouse.findUnique({
-          where: { id: warehouseId },
-          select: { orgUnitId: true },
-        });
-        return row?.orgUnitId ?? null;
-      },
-    };
+    return buildCommitteeScopeDeps(
+      this.prisma,
+      this.locationResolutionService,
+      this.registrarScope,
+      this.orgScopeService,
+      this.warehouseResolutionService,
+      (equipment) => this.resolveEquipmentCityId(equipment),
+    );
   }
 
   private async loadCandidateEquipmentForWarehouse(warehouse: {
@@ -2402,18 +2400,14 @@ export class InventoryCountService {
     cityId: string;
     orgUnitId: string | null;
   }): Promise<WarehouseScopeEquipment[]> {
-    const coverageOrgUnitIds = warehouse.orgUnitId
-      ? await this.orgScopeService.expandOrgUnitIds([warehouse.orgUnitId])
-      : [];
+    const employeeIds = await this.resolveEmployeeIdsForWarehouse(warehouse.id);
     const orConditions: Prisma.EquipmentWhereInput[] = [
       { warehouseId: warehouse.id, status: 'skladiste' },
     ];
-    if (coverageOrgUnitIds.length > 0) {
-      orConditions.push({
-        status: 'zaduzeno',
-        currentHolder: { orgUnitId: { in: coverageOrgUnitIds } },
-      });
-    }
+    orConditions.push({
+      status: 'zaduzeno',
+      currentHolderId: { in: employeeIds.length > 0 ? employeeIds : ['__none__'] },
+    });
     return this.prisma.equipment.findMany({
       where: {
         status: INVENTORY_COUNTABLE_EQUIPMENT_STATUS,

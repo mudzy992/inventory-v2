@@ -16,11 +16,12 @@ const buildDeps = (overrides: Partial<CommitteeScopeDeps> = {}): CommitteeScopeD
   getWarehouseCityId: async () => 'city-1',
   expandOrgUnitIds: async () => ['ou-holder'],
   getWarehouseOrgUnitId: async () => 'wh-ou',
+  resolveEmployeeWarehouseId: async (employeeId) => (employeeId === 'emp-1' ? 'wh-1' : null),
   ...overrides,
 });
 
 describe('disposal-session-scope.util', () => {
-  it('allows zaduzeno equipment when holder is in warehouse coverage', async () => {
+  it('allows zaduzeno equipment when holder effective warehouse matches committee warehouse', async () => {
     const actual = await isEquipmentInDisposalSessionScope(
       buildDeps(),
       scope,
@@ -29,25 +30,23 @@ describe('disposal-session-scope.util', () => {
         categoryId: 'cat-leaf',
         status: 'zaduzeno',
         warehouseId: null,
-        currentHolder: { orgUnitId: 'ou-holder' },
+        currentHolder: { id: 'emp-1', orgUnitId: 'ou-holder' },
         category: { categoryKind: 'ASSET' },
       },
     );
     assert.equal(actual, true);
   });
 
-  it('rejects zaduzeno equipment when holder is outside warehouse coverage', async () => {
+  it('rejects zaduzeno equipment when holder effective warehouse differs', async () => {
     const actual = await isEquipmentInDisposalSessionScope(
-      buildDeps({
-        expandOrgUnitIds: async () => ['ou-other'],
-      }),
+      buildDeps(),
       scope,
       {
         id: 'eq-1',
         categoryId: 'cat-leaf',
         status: 'zaduzeno',
         warehouseId: null,
-        currentHolder: { orgUnitId: 'ou-holder' },
+        currentHolder: { id: 'emp-other', orgUnitId: 'ou-holder' },
         category: { categoryKind: 'ASSET' },
       },
     );
@@ -85,13 +84,11 @@ describe('disposal-session-scope.util', () => {
     assert.equal(outOfScope, false);
   });
 
-  it('allows PJ Maglaj holder when warehouse city differs from holder location city', async () => {
+  it('allows holder when effective warehouse matches even if location city differs', async () => {
     const actual = await isEquipmentInDisposalSessionScope(
       buildDeps({
         resolveEquipmentCityId: async () => 'city-maglaj',
         getWarehouseCityId: async () => 'city-zenica',
-        expandOrgUnitIds: async () => ['ou-ed-zenica', 'ou-maglaj'],
-        getWarehouseOrgUnitId: async () => 'ou-ed-zenica',
       }),
       scope,
       {
@@ -99,7 +96,7 @@ describe('disposal-session-scope.util', () => {
         categoryId: 'cat-leaf',
         status: 'zaduzeno',
         warehouseId: null,
-        currentHolder: { orgUnitId: 'ou-maglaj' },
+        currentHolder: { id: 'emp-1', orgUnitId: 'ou-maglaj' },
         category: { categoryKind: 'ASSET' },
       },
     );

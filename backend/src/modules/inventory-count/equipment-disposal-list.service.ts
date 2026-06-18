@@ -9,6 +9,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { OrgScopeService } from '../../common/services/org-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { assertCanWriteEquipment } from '../equipment/equipment-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -53,6 +54,7 @@ export class EquipmentDisposalListService {
     private readonly registrarScope: RegistrarScopeService,
     private readonly locationResolutionService: LocationResolutionService,
     private readonly orgScopeService: OrgScopeService,
+    private readonly warehouseResolutionService: WarehouseResolutionService,
     private readonly settingsService: SettingsService,
   ) {}
 
@@ -380,6 +382,7 @@ export class EquipmentDisposalListService {
       this.locationResolutionService,
       this.registrarScope,
       this.orgScopeService,
+      this.warehouseResolutionService,
       (equipment) => this.resolveEquipmentCityId(equipment),
     );
   }

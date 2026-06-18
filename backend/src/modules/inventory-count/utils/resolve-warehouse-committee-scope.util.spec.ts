@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   evaluateEquipmentInCommitteeScope,
+  matchesWarehouseEquipmentScope,
   type CommitteeScopeDeps,
 } from './resolve-warehouse-committee-scope.util';
 
@@ -30,11 +31,13 @@ const buildDeps = (overrides: Partial<CommitteeScopeDeps> = {}): CommitteeScopeD
   getWarehouseCityId: async () => 'city-zenica',
   expandOrgUnitIds: async () => ['ou-ed-zenica', 'ou-maglaj'],
   getWarehouseOrgUnitId: async () => 'ou-ed-zenica',
+  resolveEmployeeWarehouseId: async (employeeId) =>
+    employeeId === 'emp-zenica' ? 'wh-zenica' : employeeId === 'emp-maglaj' ? 'wh-maglaj' : null,
   ...overrides,
 });
 
 describe('resolve-warehouse-committee-scope.util', () => {
-  it('allows zaduzeno holder in warehouse coverage when location city differs from warehouse city', async () => {
+  it('allows zaduzeno holder when effective warehouse matches committee warehouse', async () => {
     const actual = await evaluateEquipmentInCommitteeScope(
       buildDeps(),
       warehouseCommittee,
@@ -42,26 +45,41 @@ describe('resolve-warehouse-committee-scope.util', () => {
         ...baseEquipment,
         status: 'zaduzeno',
         warehouseId: null,
-        currentHolder: { orgUnitId: 'ou-maglaj' },
+        currentHolder: { id: 'emp-zenica', orgUnitId: 'ou-maglaj' },
       },
     );
     assert.equal(actual, true);
   });
 
-  it('rejects zaduzeno holder outside warehouse coverage', async () => {
+  it('rejects zaduzeno holder when effective warehouse differs even if org unit is in shared subtree', async () => {
     const actual = await evaluateEquipmentInCommitteeScope(
-      buildDeps({
-        expandOrgUnitIds: async () => ['ou-ed-zenica'],
-      }),
+      buildDeps(),
       warehouseCommittee,
       {
         ...baseEquipment,
         status: 'zaduzeno',
         warehouseId: null,
-        currentHolder: { orgUnitId: 'ou-sarajevo' },
+        currentHolder: { id: 'emp-maglaj', orgUnitId: 'ou-maglaj' },
       },
     );
     assert.equal(actual, false);
+  });
+
+  it('scopes warehouses independently when they share the same orgUnit root', async () => {
+    const inWhA = await matchesWarehouseEquipmentScope(buildDeps(), 'wh-zenica', {
+      ...baseEquipment,
+      status: 'zaduzeno',
+      warehouseId: null,
+      currentHolder: { id: 'emp-zenica', orgUnitId: 'ou-ed-zenica' },
+    });
+    const inWhB = await matchesWarehouseEquipmentScope(buildDeps(), 'wh-maglaj', {
+      ...baseEquipment,
+      status: 'zaduzeno',
+      warehouseId: null,
+      currentHolder: { id: 'emp-maglaj', orgUnitId: 'ou-ed-zenica' },
+    });
+    assert.equal(inWhA, true);
+    assert.equal(inWhB, true);
   });
 
   it('allows skladiste equipment on committee warehouse regardless of city', async () => {
@@ -108,7 +126,7 @@ describe('resolve-warehouse-committee-scope.util', () => {
         ...baseEquipment,
         status: 'zaduzeno',
         warehouseId: null,
-        currentHolder: { orgUnitId: 'ou-maglaj' },
+        currentHolder: { id: 'emp-zenica', orgUnitId: 'ou-maglaj' },
       },
     );
     const outOfScope = await evaluateEquipmentInCommitteeScope(
@@ -121,7 +139,7 @@ describe('resolve-warehouse-committee-scope.util', () => {
         ...baseEquipment,
         status: 'zaduzeno',
         warehouseId: null,
-        currentHolder: { orgUnitId: 'ou-maglaj' },
+        currentHolder: { id: 'emp-zenica', orgUnitId: 'ou-maglaj' },
       },
     );
     assert.equal(inScope, true);
