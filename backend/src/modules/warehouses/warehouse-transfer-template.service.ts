@@ -5,11 +5,12 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { assertTransferTemplateValid } from './utils/validate-transfer-template.util';
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -67,6 +68,7 @@ export class WarehouseTransferTemplateService {
     if (file.size > maxMb * 1024 * 1024) {
       throw new BadRequestException(`File exceeds ${maxMb} MB limit`);
     }
+    assertTransferTemplateValid(file.buffer);
     const templateId = crypto.randomUUID();
     const relativePath = join(
       'templates',
@@ -78,22 +80,23 @@ export class WarehouseTransferTemplateService {
     mkdirSync(resolve(absolutePath, '..'), { recursive: true });
     writeFileSync(absolutePath, file.buffer);
     const trimmedLabel = label.trim() || `Obrazac ${new Date().toISOString().slice(0, 10)}`;
-    return this.prisma.warehouseTransferTemplate.create({
-      data: {
-        id: templateId,
-        warehouseId,
-        label: trimmedLabel,
-        templatePath: relativePath,
-        isActive: false,
-        uploadedByUserId: user.id,
-      },
-      select: {
-        id: true,
-        label: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.warehouseTransferTemplate.updateMany({
+        where: { warehouseId, isActive: true },
+        data: { isActive: false },
+      }),
+      this.prisma.warehouseTransferTemplate.create({
+        data: {
+          id: templateId,
+          warehouseId,
+          label: trimmedLabel,
+          templatePath: relativePath,
+          isActive: true,
+          uploadedByUserId: user.id,
+        },
+      }),
+    ]);
+    return this.getActiveTemplate(warehouseId);
   }
 
   async downloadTemplate(warehouseId: string, templateId: string): Promise<StreamableFile> {
@@ -125,6 +128,11 @@ export class WarehouseTransferTemplateService {
     if (!template) {
       throw new NotFoundException('Template not found');
     }
+    const absolutePath = this.resolveTemplateAbsolutePath(template.templatePath);
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException('Template file not found');
+    }
+    assertTransferTemplateValid(readFileSync(absolutePath));
     await this.prisma.$transaction([
       this.prisma.warehouseTransferTemplate.updateMany({
         where: { warehouseId, isActive: true },
@@ -159,5 +167,27 @@ export class WarehouseTransferTemplateService {
 
   resolveTemplateAbsolutePath(templatePath: string): string {
     return join(this.getUploadRoot(), templatePath);
+  }
+
+  async assertWarehouseHasActiveTemplate(warehouseId: string): Promise<void> {
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { name: true, isActive: true },
+    });
+    if (!warehouse?.isActive) {
+      throw new BadRequestException('Skladište nije pronađeno ili nije aktivno');
+    }
+    const template = await this.getActiveTemplate(warehouseId);
+    if (!template) {
+      throw new BadRequestException(
+        `Skladište „${warehouse.name}” nema aktivni obrazac prenosnice — uploadujte .docx u Kontekst skladišta.`,
+      );
+    }
+    const absolutePath = this.resolveTemplateAbsolutePath(template.templatePath);
+    if (!existsSync(absolutePath)) {
+      throw new BadRequestException(
+        `Aktivni obrazac prenosnice za skladište „${warehouse.name}” nije pronađen na disku — uploadujte ponovo.`,
+      );
+    }
   }
 }

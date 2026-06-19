@@ -19,7 +19,6 @@ import {
   type AvailabilityStatus,
 } from '../../hooks/use-equipment-availability';
 import { getStockLotListBadge } from '../../helpers/warehouse-stock.util';
-import { fetchEmployeesPageApi } from '../../api/employees-api';
 import { fetchAllPaginatedItems } from '../../api/fetch-all-paginated';
 import { usePaginatedList } from '../../hooks/usePaginatedList';
 import { useStore, useRefreshData } from '../../useStore';
@@ -43,7 +42,6 @@ import { Button } from '../ui/button';
 import { PaginationControls } from '../ui/pagination-controls';
 import { cardClass } from '../ui/form-styles';
 import { Badge } from '../ui/badge';
-import { type SearchableOption } from '../searchable-autocomplete';
 import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
@@ -106,7 +104,7 @@ export const RegistrarStockPage = () => {
   const { getBoolean } = useAdminSettings();
   const crossWarehouseIssueEnabled = getBoolean('transfer.allow_admin_cross_warehouse_issue', false);
   const { toastError, toastSuccess } = useToast();
-  const [scopedEmployees, setScopedEmployees] = useState<Employee[]>([]);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const isFrozen = useInventoryFreezeActive();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WarehouseStockLot | null>(null);
@@ -227,29 +225,14 @@ export const RegistrarStockPage = () => {
     setSubCategoryId(null);
     setExpandedGroupKeys(new Set());
   };
-  useEffect(() => {
-    void fetchAllPaginatedItems((params) => fetchEmployeesPageApi(params), 100)
-      .then(setScopedEmployees)
-      .catch(() => setScopedEmployees([]));
-  }, []);
-  const category = useMemo(
-    () => (detail ? state.categories.find((row) => row.id === detail.categoryId) : undefined),
-    [detail, state.categories],
-  );
-  const lotFields = useMemo(() => getLotSpecFieldsForCategory(category), [category]);
-  const issueFields = useMemo(() => getUnitSpecFieldsForCategory(category), [category]);
   const crossWarehouseIssueHint = useMemo(() => {
-    if (!admin || !crossWarehouseIssueEnabled || !detail || !employeeId) {
-      return null;
-    }
-    const employee = scopedEmployees.find((row) => row.id === employeeId);
-    if (!employee) {
+    if (!admin || !crossWarehouseIssueEnabled || !detail || !employeeId || !selectedEmployee) {
       return null;
     }
     const destWarehouseId = resolveEffectiveWarehouseForOrgUnit(
       state.orgUnits,
       state.warehouses,
-      employee.orgUnitId,
+      selectedEmployee.orgUnitId,
     );
     if (!destWarehouseId || destWarehouseId === detail.warehouseId) {
       return null;
@@ -261,25 +244,19 @@ export const RegistrarStockPage = () => {
     crossWarehouseIssueEnabled,
     detail,
     employeeId,
-    scopedEmployees,
+    selectedEmployee,
     state.orgUnits,
     state.warehouses,
   ]);
+  const category = useMemo(
+    () => (detail ? state.categories.find((row) => row.id === detail.categoryId) : undefined),
+    [detail, state.categories],
+  );
+  const lotFields = useMemo(() => getLotSpecFieldsForCategory(category), [category]);
+  const issueFields = useMemo(() => getUnitSpecFieldsForCategory(category), [category]);
   const crossWarehouseCatalogBlocked = Boolean(
     crossWarehouseIssueHint && detail && !detail.catalogItemId,
   );
-  const employeeSearchOptions = useMemo((): SearchableOption[] => {
-    return scopedEmployees.map((employee) => {
-      const orgUnit = state.orgUnits.find((unit) => unit.id === employee.orgUnitId);
-      const orgPath = orgUnit ? getOrgUnitPath(state.orgUnits, orgUnit.id) : '—';
-      return {
-        id: employee.id,
-        label: getEmployeeFullName(employee),
-        subLabel: `${employee.title || '—'} · ${orgPath}`,
-        searchText: `${employee.email ?? ''} ${orgPath}`,
-      };
-    });
-  }, [scopedEmployees, state.orgUnits]);
   const canSubmitUnitSpecs = useMemo(() => {
     if (isAccountingTracked) {
       if (!inventoryNumber.trim()) {
@@ -370,6 +347,7 @@ export const RegistrarStockPage = () => {
     setIsAccountingTracked(true);
     setAffiliation('distribucija');
     setEmployeeId('');
+    setSelectedEmployee(null);
   };
   const loadLotDetail = useCallback(async (id: string) => {
     setSelectedId(id);
@@ -480,6 +458,7 @@ export const RegistrarStockPage = () => {
       setAffiliation('distribucija');
       setUnitSpecs({});
       setEmployeeId('');
+      setSelectedEmployee(null);
       toastSuccess('Komad je izdat i zadužen');
       await groupList.refresh();
       await loadStatsGroups();
@@ -610,8 +589,11 @@ export const RegistrarStockPage = () => {
               onUnitSpecsChange={setUnitSpecs}
               onUniqueAvailabilityChange={handleUniqueAvailabilityChange}
               employeeId={employeeId}
-              onEmployeeIdChange={setEmployeeId}
-              employeeSearchOptions={employeeSearchOptions}
+              onEmployeeChange={(id, employee) => {
+                setEmployeeId(id);
+                setSelectedEmployee(employee);
+              }}
+              orgUnits={state.orgUnits}
               crossWarehouseIssueHint={crossWarehouseIssueHint}
               crossWarehouseCatalogWarning={
                 crossWarehouseCatalogBlocked

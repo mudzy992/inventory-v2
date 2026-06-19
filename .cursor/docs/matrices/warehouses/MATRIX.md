@@ -22,7 +22,8 @@
 
 ## Obrazac prenosnice (.docx)
 
-- Upload (admin): `POST /warehouses/:id/transfer-template`; aktivacija jedne verzije po skladištu.
+- Upload (admin): `POST /warehouses/:id/transfer-template` — validacija placeholdera; upload **automatski aktivira** verziju.
+- Ručna aktivacija arhive: `PATCH .../activate` (ponovna validacija fajla).
 - **Obavezno** `orgUnitId` na skladištu prije uploada/generisanja.
 - UI: tab **Kontekst** — `WarehouseContextPanel` (podaci + skladištari) + `WarehouseTransferTemplatePanel` (obrazac, arhiva verzija).
 - Arhiva: `GET /warehouses/:id/transfer-template/:templateId/download` (admin).

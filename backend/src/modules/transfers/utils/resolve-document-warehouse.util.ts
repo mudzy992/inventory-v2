@@ -7,9 +7,14 @@ export interface ResolveDocumentWarehouseInput {
   toWarehouseId: string | null;
   equipmentWarehouseId: string | null;
   resolvedHolderWarehouseId?: string | null;
+  registrarAssignmentWarehouseId?: string | null;
+  documentWarehouseOverride?: string | null;
 }
 
 export const resolveDocumentWarehouseId = (input: ResolveDocumentWarehouseInput): string => {
+  if (input.documentWarehouseOverride) {
+    return input.documentWarehouseOverride;
+  }
   if (input.type === 'zaduzenje') {
     if (!input.fromWarehouseId) {
       throw new BadRequestException('Zaduženje zahtijeva skladište izvora za prenosnicu');
@@ -30,7 +35,10 @@ export const resolveDocumentWarehouseId = (input: ResolveDocumentWarehouseInput)
     return warehouseId;
   }
   const warehouseId =
-    input.equipmentWarehouseId ?? input.resolvedHolderWarehouseId ?? input.fromWarehouseId;
+    input.resolvedHolderWarehouseId ??
+    input.registrarAssignmentWarehouseId ??
+    input.equipmentWarehouseId ??
+    input.fromWarehouseId;
   if (!warehouseId) {
     throw new BadRequestException('Prenos zahtijeva povezano skladište za prenosnicu');
   }

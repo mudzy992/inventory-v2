@@ -144,22 +144,12 @@ export const TransferDocumentPanel = ({
       link.download = `${transfer.documentNumber}.${format}`;
       link.click();
       URL.revokeObjectURL(url);
-    } catch {
-      await handleDownloadRaw();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  const handleDownloadRaw = async () => {
-    setIsLoading(true);
-    try {
-      const blob = await fetchAuthenticatedBlob(`/transfers/${transfer.id}/raw-document`);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${transfer.documentNumber}-raw.html`;
-      link.click();
-      URL.revokeObjectURL(url);
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : 'Obrazac nije generisan — provjerite aktivni .docx template skladišta.';
+      toastError(message);
     } finally {
       setIsLoading(false);
     }
@@ -309,11 +299,17 @@ export const TransferDocumentPanel = ({
       ) : null}
       {!inventoryMode && isRaw ? (
         <p className="text-xs text-gray-500">
-          Preuzmite generisani obrazac za štampu, potpišite ga, zatim uploadujte PDF.
+          Preuzmite generisani Word obrazac za štampu, potpišite ga, zatim uploadujte PDF.
           {requireSignedPdf ? ' Potpisani PDF je obavezan prije finalizacije.' : ''}
           {allowFinalizeWithoutUpload
             ? ' Administrator može finalizovati bez uploada (postavka uključena).'
             : null}
+        </p>
+      ) : null}
+      {!inventoryMode && isRaw && transfer.hasGeneratedDocument === false ? (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+          Generisani obrazac još nije dostupan — provjerite aktivni .docx template skladišta povezanog
+          s prenosom.
         </p>
       ) : null}
       {canUpload ? (
@@ -353,14 +349,6 @@ export const TransferDocumentPanel = ({
                 <Eye size={14} /> Pregled za štampu
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void handleDownloadRaw()}
-              disabled={isLoading}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50 text-gray-500"
-            >
-              <Download size={14} /> HTML (rezerva)
-            </button>
           </>
         )}
         {uploadMeta && (

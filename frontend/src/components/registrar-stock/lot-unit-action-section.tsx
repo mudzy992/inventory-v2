@@ -1,6 +1,6 @@
-import type { CategoryField, EquipmentAffiliation } from '../../types';
+import type { CategoryField, Employee, EquipmentAffiliation, OrgUnit } from '../../types';
 import type { AvailabilityStatus } from '../../hooks/use-equipment-availability';
-import { SearchableAutocomplete, type SearchableOption } from '../searchable-autocomplete';
+import { EmployeeAutocomplete } from '../employee-autocomplete';
 import { AvailabilityHint } from './availability-hint';
 import { IssueUniqueFieldInput } from './issue-unique-field-input';
 import { CategoryFieldControl } from './category-field-control';
@@ -25,8 +25,8 @@ interface LotUnitActionSectionProps {
   onUnitSpecsChange: (next: Record<string, string>) => void;
   onUniqueAvailabilityChange: (fieldId: string, status: AvailabilityStatus) => void;
   employeeId: string;
-  onEmployeeIdChange: (value: string) => void;
-  employeeSearchOptions: SearchableOption[];
+  onEmployeeChange: (employeeId: string, employee: Employee | null) => void;
+  orgUnits: OrgUnit[];
   crossWarehouseIssueHint: string | null;
   crossWarehouseCatalogWarning?: string | null;
   canSubmit: boolean;
@@ -51,8 +51,8 @@ export const LotUnitActionSection = ({
   onUnitSpecsChange,
   onUniqueAvailabilityChange,
   employeeId,
-  onEmployeeIdChange,
-  employeeSearchOptions,
+  onEmployeeChange,
+  orgUnits,
   crossWarehouseIssueHint,
   crossWarehouseCatalogWarning,
   canSubmit,
@@ -93,11 +93,10 @@ export const LotUnitActionSection = ({
           {isIssue ? (
             <div>
               <label className={labelClass}>Radnik *</label>
-              <SearchableAutocomplete
-                options={employeeSearchOptions}
+              <EmployeeAutocomplete
+                orgUnits={orgUnits}
                 value={employeeId}
-                onChange={onEmployeeIdChange}
-                emptyOption={{ id: '', label: '— Odaberi —' }}
+                onChange={onEmployeeChange}
                 placeholder="Pretraži radnika…"
                 ariaLabel="Radnik"
                 required

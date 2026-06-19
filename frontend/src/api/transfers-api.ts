@@ -15,12 +15,19 @@ const toDateOnly = (value: string | Date): string => {
   return date.toISOString().slice(0, 10);
 };
 
-type TransferApiRow = TransferRecord & { date: string | Date };
+type TransferApiRow = TransferRecord & {
+  date: string | Date;
+  generatedDocxPath?: string | null;
+};
 
-export const mapTransferRow = (row: TransferApiRow): TransferRecord => ({
-  ...row,
-  date: toDateOnly(row.date),
-});
+export const mapTransferRow = (row: TransferApiRow): TransferRecord => {
+  const { generatedDocxPath, ...rest } = row;
+  return {
+    ...rest,
+    date: toDateOnly(row.date),
+    hasGeneratedDocument: row.hasGeneratedDocument ?? Boolean(generatedDocxPath),
+  };
+};
 
 export const fetchTransfersPageApi = async (params: TransfersListFilters = {}) => {
   const query = buildListQueryString(params);

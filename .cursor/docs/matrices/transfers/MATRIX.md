@@ -50,10 +50,10 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 ## Word obrazac (po skladištu)
 
-- Upload: `POST /warehouses/:id/transfer-template` (.docx)
-- Aktivacija: `PATCH /warehouses/:id/transfer-template/:templateId/activate`
-- Skladište mora imati `orgUnitId`
-- Placeholderi u .docx: `{broj_prenosnice}`, `{predao}`, `{preuzeo}`, `{potpisnik}`, `{inv_broj}`, `{naziv_opreme}`, `{obrazlozenje}`
+- Upload: `POST /warehouses/:id/transfer-template` (.docx) — **validacija placeholdera + dry-run render**; upload **automatski aktivira** novu verziju.
+- Aktivacija ručno: `PATCH /warehouses/:id/transfer-template/:templateId/activate` (ponovna validacija fajla na disku).
+- Skladište mora imati `orgUnitId`; `POST /transfers` (document mode) **odbija** create ako skladište nema aktivni obrazac.
+- Placeholderi u .docx: `{broj_prenosnice}`, `{predao}`, `{preuzeo}`, `{potpisnik}`, `{inv_broj}`, `{naziv_opreme}`, `{obrazlozenje}` (jednostruke vitičaste zagrade).
 - Template putanja: `uploads/templates/warehouses/{warehouseId}/{id}.docx`
 
 ## Broj dokumenta
@@ -71,11 +71,12 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 | Generisani PDF | `prenosnice/{warehouseId}/{godina}/{broj}.pdf` |
 | Potpisani sken | `prenosnice/{warehouseId}/{godina}/{broj}-signed.pdf` |
 
-`documentWarehouseId` na transferu: skladište za brojač/putanju (zaduženje → from, razduženje → to, rashod → from/equipment, prenos → equipment/holder warehouse).
+`documentWarehouseId` na transferu: skladište za brojač/putanju/template (zaduženje → from, razduženje → to, rashod → from/equipment, **prenos → effective warehouse osobe koja predaje, zatim registrar assignment, zatim equipment warehouse**).
 
 ## UI — pregled za štampu
 
-- `TransferDocumentPanel`: dugme **Pregled za štampu** → iframe `GET .../generated-document?format=pdf` (odvojeno od pregleda uploadovanog skena).
+- `TransferDocumentPanel` i tab **Prenosnice**: **Preuzmi obrazac** / **Pregled za štampu** koriste `GET .../generated-document?format=docx|pdf` (Word template skladišta).
+- Nema HTML fallback-a pri downloadu generisanog obrasca; greška prikazuje poruku (npr. nedostaje aktivni template).
 - Ako PDF nije generisan (LibreOffice / postavka), prikaži poruku i ponudi DOCX download.
 
 ## Planirano (kasnije)
@@ -86,7 +87,7 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 | Korak UI | Backend |
 |----------|---------|
-| Štampa | `GET /transfers/:id/generated-document?format=docx\|pdf` (fallback HTML: `raw-document`) |
+| Štampa | `GET /transfers/:id/generated-document?format=docx\|pdf` |
 | Upload | `POST /uploads` (samo PDF) → `uploaded` |
 | Čeka zatvaranje | upload OK + sesija `active` — finalize **blokiran** (samo dokument flow) |
 | Primijenjeno | close job finalize (dokument) ili direktna promjena opreme (bez dokumenta) |
@@ -108,6 +109,17 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 - Navigacija: jedan sidebar unos **Zaduženja**; ruta `/documents` preusmjerava na tab Prenosnice (bookmark kompatibilnost).
 - Akcije zaduženja i `InventoryFreezeActionHint` samo na tabu Zaduženja.
+
+## UI — odabir osobe za zaduženje
+
+- Svi dijalozi gdje se bira osoba za zaduženje/prenos koriste `EmployeeAutocomplete` (`GET /employees/search?q=`, min. 2 znaka, debounce 300ms).
+- Lokacije: forma Zaduženja (`TransfersPage`), transfer modal na kartici opreme (`EquipmentCard`), izdavanje iz lota (`registrar-stock`), popis — promjena lokacije na osobu (`session-lines-panel`).
+- Frontend **ne** učitava punu lokalnu listu radnika za picker; scope je server-side.
+- Scope po roli (`RegistrarScopeService.buildEmployeeWhere`):
+  - **admin** — svi radnici
+  - **evidenticar** — radnici u org. jedinicama registrar dodjela (Mode A/B) + vlastiti `employeeId`
+- `POST /transfers` dodatno validira `toPersonId` kroz `canAccessEmployee` (`assertEmployeeInScope`).
+- Pri `prenos` (osoba → osoba): trenutni nosilac isključen iz autocomplete rezultata (`excludeIds`).
 
 ## API
 

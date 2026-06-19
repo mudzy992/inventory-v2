@@ -1,5 +1,10 @@
 # Changelog — warehouses
 
+## 2026-06-19
+
+- Upload obrasca prenosnice: validacija placeholdera pri uploadu/aktivaciji; upload odmah postavlja verziju kao aktivnu.
+- UI toast: „uploadovan i aktiviran“; upozorenje kad postoji arhiva bez aktivne verzije.
+
 ## 2026-06-15
 
 - BS poruke (`warehouse-messages.util.ts`); FE guard `canCreateWarehouse` pri kreiranju skladišta.

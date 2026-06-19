@@ -40,11 +40,13 @@ export class TransferDocumentGenerationService {
       include: transferTemplateInclude,
     });
     if (!transfer?.documentWarehouseId) {
-      return;
+      throw new BadRequestException('Transfer nema povezano skladište za generisanje prenosnice');
     }
     const template = await this.templateService.getActiveTemplate(transfer.documentWarehouseId);
     if (!template) {
-      return;
+      throw new BadRequestException(
+        'Skladište nema aktivni obrazac prenosnice — uploadujte .docx u Kontekst skladišta',
+      );
     }
     const year = transfer.date.getFullYear();
     const templateAbsolute = this.templateService.resolveTemplateAbsolutePath(template.templatePath);
@@ -121,12 +123,19 @@ export class TransferDocumentGenerationService {
   private renderDocx(templatePath: string, data: Record<string, string>): Buffer {
     const content = readFileSync(templatePath, 'binary');
     const zip = new PizZip(content);
-    const doc = new Docxtemplater(zip, {
-      paragraphLoop: true,
-      linebreaks: true,
-      delimiters: { start: '{', end: '}' },
-    });
-    doc.render(data);
-    return doc.toBuffer() as Buffer;
+    try {
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+        delimiters: { start: '{', end: '}' },
+      });
+      doc.render(data);
+      return doc.toBuffer() as Buffer;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nepoznata greška rendera';
+      throw new BadRequestException(
+        `Generisanje prenosnice nije uspjelo: ${message}. Provjerite aktivni Word obrazac skladišta.`,
+      );
+    }
   }
 }

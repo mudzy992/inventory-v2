@@ -667,9 +667,7 @@ export class WarehouseStockService {
         return issued;
       });
       if (result.transferId) {
-        await this.transferDocumentGeneration
-          .generateForTransfer(result.transferId)
-          .catch(() => undefined);
+        await this.transferDocumentGeneration.generateForTransfer(result.transferId);
         await this.notificationsService.notifyTransferSigned(result.transferId);
       }
       return this.findOne(user, lotId);

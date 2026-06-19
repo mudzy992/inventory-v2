@@ -8,13 +8,12 @@ import {
   type InventorySessionDto,
 } from '../../api/inventory-api';
 import { fetchTransferApi } from '../../api/data-api';
-import { fetchEmployeesPageApi } from '../../api/employees-api';
-import { fetchAllPaginatedItems } from '../../api/fetch-all-paginated';
 import { ApiError } from '../../api/client';
 import { getEmployeeFullName, getOrgUnitPath } from '../../helpers';
+import { EmployeeAutocomplete } from '../employee-autocomplete';
 import { useToast } from '../../contexts/toast-context';
 import { useStore } from '../../useStore';
-import type { Employee, Equipment, TransferRecord } from '../../types';
+import type { Equipment, TransferRecord } from '../../types';
 import { AlertBanner } from '../ui/alert-banner';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -66,19 +65,9 @@ export const SessionLinesPanel = ({
 }: SessionLinesPanelProps) => {
   const [state] = useStore();
   const { toastError } = useToast();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  useEffect(() => {
-    void fetchAllPaginatedItems((params) => fetchEmployeesPageApi(params), 100)
-      .then(setEmployees)
-      .catch(() => setEmployees([]));
-  }, []);
   const resolveHolder = useCallback(
-    (item: Equipment) =>
-      item.currentHolder ??
-      (item.currentHolderId
-        ? employees.find((employee) => employee.id === item.currentHolderId)
-        : undefined),
-    [employees],
+    (item: Equipment) => item.currentHolder ?? undefined,
+    [],
   );
   const [search, setSearch] = useState('');
   const [lineFilter, setLineFilter] = useState<LineFilter>('all');
@@ -320,22 +309,17 @@ export const SessionLinesPanel = ({
                 <option value="osoba">Na drugu osobu</option>
               </select>
               {draft.relocationTargetType === 'osoba' ? (
-                <select
+                <EmployeeAutocomplete
+                  orgUnits={state.orgUnits}
                   value={draft.relocationToPersonId}
-                  onChange={(event) =>
-                    handleDraftChange(item.id, { relocationToPersonId: event.target.value })
+                  excludeIds={item.currentHolderId ? new Set([item.currentHolderId]) : undefined}
+                  onChange={(employeeId) =>
+                    handleDraftChange(item.id, { relocationToPersonId: employeeId })
                   }
-                  className={selectClass}
-                >
-                  <option value="">Osoba</option>
-                  {employees
-                    .filter((employee) => employee.id !== item.currentHolderId)
-                    .map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {getEmployeeFullName(employee)}
-                      </option>
-                    ))}
-                </select>
+                  placeholder="Pretraži osobu…"
+                  ariaLabel="Osoba za prenos"
+                  required
+                />
               ) : null}
             </div>
           ) : null}
@@ -545,23 +529,18 @@ export const SessionLinesPanel = ({
                           <option value="osoba">Na drugu osobu</option>
                         </select>
                         {draft.relocationTargetType === 'osoba' ? (
-                          <select
+                          <EmployeeAutocomplete
+                            orgUnits={state.orgUnits}
                             value={draft.relocationToPersonId}
+                            excludeIds={item.currentHolderId ? new Set([item.currentHolderId]) : undefined}
                             disabled={!canEditThisRow || isReadOnly}
-                            onChange={(event) =>
-                              handleDraftChange(item.id, { relocationToPersonId: event.target.value })
+                            onChange={(employeeId) =>
+                              handleDraftChange(item.id, { relocationToPersonId: employeeId })
                             }
-                            className={selectClass}
-                          >
-                            <option value="">Osoba</option>
-                            {employees
-                              .filter((employee) => employee.id !== item.currentHolderId)
-                              .map((employee) => (
-                                <option key={employee.id} value={employee.id}>
-                                  {getEmployeeFullName(employee)}
-                                </option>
-                              ))}
-                          </select>
+                            placeholder="Pretraži osobu…"
+                            ariaLabel="Osoba za prenos"
+                            required
+                          />
                         ) : null}
                       </div>
                     ) : null}

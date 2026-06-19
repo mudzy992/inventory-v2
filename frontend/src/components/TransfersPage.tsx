@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from 'react';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
 import { useStore, useRefreshData } from '../useStore';
-import { getEmployeeFullName, getStatusLabel, getStatusColor, formatDate, getOrgUnitPath, resolveSignerEmployee } from '../helpers';
+import { getEmployeeFullName, getStatusLabel, getStatusColor, formatDate, getOrgUnitPath, getSignerIdForOrgUnit } from '../helpers';
 import {
   isAdmin,
   isEvidenticar,
@@ -10,7 +10,7 @@ import {
 } from '../store';
 import { createTransferApi, fetchTransferApi } from '../api/data-api';
 import { fetchEquipmentPageApi } from '../api/equipment-api';
-import { searchEmployeesApi } from '../api/employees-api';
+import { fetchEmployeeApi } from '../api/employees-api';
 import { fetchTransfersPageApi } from '../api/transfers-api';
 import {
   getTransferEquipmentLabel,
@@ -45,6 +45,7 @@ import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
+import { EmployeeAutocomplete } from './employee-autocomplete';
 interface TransfersPageProps {
   initialTab?: TransferModuleTab;
 }
@@ -68,8 +69,8 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
   const [selectedTransfer, setSelectedTransfer] = useState<TransferRecord | null>(null);
   const [availableEquipment, setAvailableEquipment] = useState<Equipment[]>([]);
-  const [availableEmployees, setAvailableEmployees] = useState<Employee[]>([]);
-  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [selectedToEmployee, setSelectedToEmployee] = useState<Employee | null>(null);
+  const [signerEmployee, setSignerEmployee] = useState<Employee | null>(null);
 
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
@@ -149,26 +150,40 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
       .catch(() => setAvailableEquipment([]));
   }, [showForm, fType]);
 
-  useEffect(() => {
-    if (!showForm) {
-      return;
-    }
-    const term = employeeSearch.trim();
-    if (term.length < 2) {
-      setAvailableEmployees([]);
-      return;
-    }
-    const handle = window.setTimeout(() => {
-      void searchEmployeesApi(term)
-        .then(setAvailableEmployees)
-        .catch(() => setAvailableEmployees([]));
-    }, 300);
-    return () => window.clearTimeout(handle);
-  }, [employeeSearch, showForm]);
-
   const selectedEquipment = availableEquipment.find((e) => e.id === fEquipmentId);
   const selectedEquipHolder = selectedEquipment?.currentHolder ?? null;
-  const selectedToEmployee = availableEmployees.find((emp) => emp.id === fToPersonId);
+
+  const excludeHolderIds = useMemo(() => {
+    const holderId = selectedEquipment?.currentHolderId;
+    return holderId ? new Set([holderId]) : undefined;
+  }, [selectedEquipment?.currentHolderId]);
+
+  useEffect(() => {
+    if (!selectedToEmployee) {
+      setSignerEmployee(null);
+      return;
+    }
+    const signerId = getSignerIdForOrgUnit(state.orgUnits, selectedToEmployee.orgUnitId);
+    if (!signerId) {
+      setSignerEmployee(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchEmployeeApi(signerId)
+      .then((employee) => {
+        if (!cancelled) {
+          setSignerEmployee(employee);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSignerEmployee(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedToEmployee, state.orgUnits]);
 
   // Check if this would be a cross-service transfer
   const wouldBeCrossService = useMemo(() => {
@@ -182,6 +197,8 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     setFType(type);
     setFEquipmentId('');
     setFToPersonId('');
+    setSelectedToEmployee(null);
+    setSignerEmployee(null);
     setFReason('');
     setFDate(new Date().toISOString().slice(0, 10));
     setFNotes('');
@@ -484,7 +501,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
               {/* Transfer type selector */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tip operacije</label>
-                <select value={fType} onChange={e => { setFType(e.target.value as TransferType); setFEquipmentId(''); setFToPersonId(''); }}
+                <select value={fType} onChange={e => { setFType(e.target.value as TransferType); setFEquipmentId(''); setFToPersonId(''); setSelectedToEmployee(null); setSignerEmployee(null); }}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                   <option value="zaduzenje">Zaduženje (skladište → osoba)</option>
                   <option value="prenos">Prenos (osoba → osoba)</option>
@@ -525,31 +542,23 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
               {/* To person - for zaduzenje and prenos */}
               {(fType === 'zaduzenje' || fType === 'prenos') && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Zadužiti na osobu *</label>
-                  <input
-                    type="text"
-                    value={employeeSearch}
-                    onChange={(e) => setEmployeeSearch(e.target.value)}
-                    placeholder="Pretraži radnika (min. 2 znaka)…"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                  <label htmlFor="transfer-to-person" className="block text-sm font-medium text-gray-700 mb-1">
+                    Zadužiti na osobu *
+                  </label>
+                  <EmployeeAutocomplete
+                    id="transfer-to-person"
+                    orgUnits={state.orgUnits}
+                    value={fToPersonId}
+                    excludeIds={excludeHolderIds}
+                    required
+                    onChange={(employeeId, employee) => {
+                      setFToPersonId(employeeId);
+                      setSelectedToEmployee(employee);
+                    }}
                   />
-                  <select value={fToPersonId} onChange={e => setFToPersonId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option value="">— Odaberi osobu —</option>
-                    {availableEmployees
-                      .filter(e => e.id !== selectedEquipment?.currentHolderId)
-                      .map(emp => {
-                        const org = state.orgUnits.find(o => o.id === emp.orgUnitId);
-                        return (
-                          <option key={emp.id} value={emp.id}>
-                            {getEmployeeFullName(emp)} — {emp.title} ({org?.name || ''})
-                          </option>
-                        );
-                      })}
-                  </select>
-                  {employeeSearch.trim().length >= 2 && availableEmployees.length === 0 ? (
-                    <p className="text-xs text-gray-500 mt-1">Nema rezultata pretrage.</p>
-                  ) : null}
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Prikaz: ime · pozicija · org. putanja. Pri kucanju: pretraga po imenu, poziciji ili emailu.
+                  </p>
                 </div>
               )}
 
@@ -572,18 +581,11 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
               {fToPersonId && selectedToEmployee ? (
                 <div className="bg-green-50 rounded-lg p-3 text-sm">
                   <span className="text-green-700 font-medium">Potpisnik (ovlaštena osoba):</span>{' '}
-                  {(() => {
-                    const signer = resolveSignerEmployee(
-                      state.orgUnits,
-                      availableEmployees,
-                      selectedToEmployee.orgUnitId,
-                    );
-                    return signer ? (
-                      <span>{getEmployeeFullName(signer)} — {signer.title}</span>
-                    ) : (
-                      <span className="text-gray-400">Nije definisan</span>
-                    );
-                  })()}
+                  {signerEmployee ? (
+                    <span>{getEmployeeFullName(signerEmployee)} — {signerEmployee.title}</span>
+                  ) : (
+                    <span className="text-gray-400">Nije definisan</span>
+                  )}
                 </div>
               ) : null}
 

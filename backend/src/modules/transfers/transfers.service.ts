@@ -47,18 +47,23 @@ import { requiresTransferDocument } from '../../common/utils/equipment-accountin
 import { resolveDocumentWarehouseId } from './utils/resolve-document-warehouse.util';
 import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { buildTransferRawDocumentHtml } from './utils/transfer-raw-document.util';
+import { pickRegistrarAssignmentWarehouse } from './utils/pick-registrar-assignment-warehouse.util';
+import { WarehouseTransferTemplateService } from '../warehouses/warehouse-transfer-template.service';
 
 const transferInclude = {
   equipment: {
     include: {
       currentHolder: true,
       warehouse: true,
+      category: true,
       stockLot: { select: { warehouseId: true } },
     },
   },
   signer: true,
   fromPerson: true,
   toPerson: true,
+  fromWarehouse: true,
+  toWarehouse: true,
 } satisfies Prisma.TransferInclude;
 
 const TRANSFER_SORT_FIELDS: Record<string, string> = {
@@ -82,6 +87,7 @@ export class TransfersService {
     private readonly inventoryFreeze: InventoryFreezeService,
     private readonly warehouseResolutionService: WarehouseResolutionService,
     private readonly transferDocumentGeneration: TransferDocumentGenerationService,
+    private readonly transferTemplateService: WarehouseTransferTemplateService,
   ) {}
 
   async markUploadedAfterScan(transferId: string): Promise<void> {
@@ -108,7 +114,7 @@ export class TransfersService {
     const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
     const where = await this.buildListWhere(user, query);
     const orderBy = buildOrderBy(query.sortBy, query.sortDir, TRANSFER_SORT_FIELDS, 'createdAt');
-    return paginate({
+    const result = await paginate({
       findMany: (args) =>
         this.prisma.transfer.findMany({
           ...args,
@@ -120,6 +126,10 @@ export class TransfersService {
       page,
       pageSize: take,
     });
+    return {
+      ...result,
+      items: result.items.map((item) => this.mapTransferDocumentMeta(item)),
+    };
   }
 
   async findRecent(user: AuthenticatedUser, query: RecentTransfersQueryDto) {
@@ -130,7 +140,7 @@ export class TransfersService {
       include: TRANSFER_LIST_INCLUDE,
       orderBy: { createdAt: 'desc' },
       take: limit,
-    });
+    }).then((rows) => rows.map((row) => this.mapTransferDocumentMeta(row)));
   }
 
   private async buildListWhere(
@@ -180,7 +190,7 @@ export class TransfersService {
     if (!(await this.canAccessTransfer(user, transfer))) {
       throw new ForbiddenException('Transfer outside your scope');
     }
-    return transfer;
+    return this.mapTransferDocumentMeta(transfer);
   }
 
   async create(user: AuthenticatedUser, dto: CreateTransferDto) {
@@ -250,8 +260,9 @@ export class TransfersService {
     const signerId = await this.resolveSignerForCreate(dto);
     await this.assertSignerExists(signerId);
     const draftNumber = `DRAFT-${Date.now()}`;
-    const documentWarehouseId = await this.resolveDocumentWarehouseForCreate(dto, equipment);
+    const documentWarehouseId = await this.resolveDocumentWarehouseForCreate(user, dto, equipment);
     await this.assertWarehouseReadyForDocuments(documentWarehouseId);
+    await this.transferTemplateService.assertWarehouseHasActiveTemplate(documentWarehouseId);
     const created = await this.prisma.transfer.create({
       data: {
         equipmentId: dto.equipmentId,
@@ -282,9 +293,9 @@ export class TransfersService {
     if (requireSignedPdf) {
       await this.notificationsService.notifyTransferSignedUploadPending(created.id);
     }
-    await this.transferDocumentGeneration.generateForTransfer(created.id).catch(() => undefined);
+    await this.transferDocumentGeneration.generateForTransfer(created.id);
     const transfer = await this.getTransferOrThrow(created.id);
-    return { mode: 'document' as const, transfer };
+    return { mode: 'document' as const, transfer: this.mapTransferDocumentMeta(transfer) };
   }
 
   async markPrinted(user: AuthenticatedUser, id: string) {
@@ -355,7 +366,7 @@ export class TransfersService {
     const isRashod = transfer.type === 'rashodovanje';
     const documentWarehouseId =
       transfer.documentWarehouseId ??
-      (await this.resolveDocumentWarehouseForTransfer(transfer));
+      (await this.resolveDocumentWarehouseForTransfer(user, transfer));
     await this.assertWarehouseReadyForDocuments(documentWarehouseId);
     const equipmentUpdate = buildEquipmentUpdateOnFinalize(
       transfer.type,
@@ -387,9 +398,9 @@ export class TransfersService {
       });
       return updated;
     });
-    await this.transferDocumentGeneration.generateForTransfer(signed.id).catch(() => undefined);
+    await this.transferDocumentGeneration.generateForTransfer(signed.id);
     await this.notificationsService.notifyTransferSigned(signed.id);
-    return signed;
+    return this.mapTransferDocumentMeta(signed);
   }
 
   private async assertCanFinalizeUpload(
@@ -522,8 +533,9 @@ export class TransfersService {
   }
 
   private async resolveDocumentWarehouseForCreate(
+    user: AuthenticatedUser,
     dto: CreateTransferDto,
-    equipment: { warehouseId: string | null },
+    equipment: { warehouseId: string | null; categoryId: string },
   ): Promise<string> {
     let resolvedHolderWarehouseId: string | null = null;
     if (dto.type === 'prenos' && dto.fromPersonId) {
@@ -531,16 +543,20 @@ export class TransfersService {
         dto.fromPersonId,
       );
     }
+    const registrarAssignmentWarehouseId = pickRegistrarAssignmentWarehouse(user, equipment);
     return resolveDocumentWarehouseId({
       type: dto.type,
       fromWarehouseId: dto.fromWarehouseId ?? null,
       toWarehouseId: dto.toWarehouseId ?? null,
       equipmentWarehouseId: equipment.warehouseId,
       resolvedHolderWarehouseId,
+      registrarAssignmentWarehouseId,
+      documentWarehouseOverride: dto.documentWarehouseId ?? null,
     });
   }
 
   private async resolveDocumentWarehouseForTransfer(
+    user: AuthenticatedUser,
     transfer: Awaited<ReturnType<typeof this.getTransferOrThrow>>,
   ): Promise<string> {
     let resolvedHolderWarehouseId: string | null = null;
@@ -549,12 +565,18 @@ export class TransfersService {
         transfer.fromPersonId,
       );
     }
+    const registrarAssignmentWarehouseId = pickRegistrarAssignmentWarehouse(
+      user,
+      transfer.equipment,
+    );
     return resolveDocumentWarehouseId({
       type: transfer.type,
       fromWarehouseId: transfer.fromWarehouseId,
       toWarehouseId: transfer.toWarehouseId,
       equipmentWarehouseId: transfer.equipment.warehouseId,
       resolvedHolderWarehouseId,
+      registrarAssignmentWarehouseId,
+      documentWarehouseOverride: transfer.documentWarehouseId,
     });
   }
 
@@ -611,6 +633,15 @@ export class TransfersService {
       return false;
     }
     return line.committee.members.some((member) => member.employeeId === actor.employeeId);
+  }
+
+  private mapTransferDocumentMeta<T extends { generatedDocxPath?: string | null }>(
+    transfer: T,
+  ): T & { hasGeneratedDocument: boolean } {
+    return {
+      ...transfer,
+      hasGeneratedDocument: Boolean(transfer.generatedDocxPath),
+    };
   }
 
   private async getTransferOrThrow(id: string) {

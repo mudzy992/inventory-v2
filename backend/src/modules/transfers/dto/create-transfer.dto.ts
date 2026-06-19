@@ -59,4 +59,8 @@ export class CreateTransferDto {
   @IsOptional()
   @IsBoolean()
   isCrossServiceTransfer?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  documentWarehouseId?: string;
 }

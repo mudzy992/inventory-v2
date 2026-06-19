@@ -1,3 +1,16 @@
+## 2026-06-19 — Autocomplete za odabir osobe pri zaduženju
+
+- Nova komponenta `EmployeeAutocomplete`: server-side pretraga (`GET /employees/search`), zamjena `<select>` i hibridnih pretraga.
+- Primjena: Zaduženja forma, kartica opreme (transfer), izdavanje iz lota, popis (promjena lokacije na osobu).
+- Scope radnika po roli ostaje na backendu (`buildEmployeeWhere` / `canAccessEmployee`); frontend ne drži punu listu.
+
+## 2026-06-19 — Word template: validacija, auto-aktivacija, UI
+
+- Upload `.docx` validira obavezne placeholdere + dry-run docxtemplater; greška vraća listu nedostajućih polja.
+- Upload automatski aktivira novu verziju; `POST /transfers` (document) blokira create bez aktivnog obrasca.
+- `documentWarehouseId` za tip `prenos`: prioritet holder warehouse → registrar assignment → equipment warehouse.
+- UI: uklonjen HTML „Štampaj“ fallback; preuzimanje/pregled koriste generisani DOCX/PDF.
+
 ## 2026-06-16 — Evidencijska oprema bez prenosnice
 
 - `POST /transfers`: oprema bez inv. broja (`isAccountingTracked=false`) uvijek `mode: direct`, neovisno o `transfer.generation.*`.

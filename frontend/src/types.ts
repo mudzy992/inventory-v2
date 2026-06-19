@@ -190,6 +190,8 @@ export interface TransferRecord {
   fromWarehouseId?: string | null;
   toWarehouseId?: string | null;
   inventoryLineId?: string | null;
+  documentWarehouseId?: string | null;
+  hasGeneratedDocument?: boolean;
   equipment?: Pick<Equipment, 'id' | 'inventoryNumber' | 'status' | 'warehouseId' | 'categoryId'> & {
     currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'>;
     warehouse?: Pick<Warehouse, 'id' | 'name' | 'cityId'>;

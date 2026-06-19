@@ -4,7 +4,7 @@ import { useStore, useRefreshData } from '../useStore';
 import { getCurrentUser, isAdmin, isEvidenticar } from '../store';
 import { createTransferApi } from '../api/data-api';
 import { fetchEquipmentApi, reactivateEquipmentApi } from '../api/equipment-api';
-import { fetchEmployeesPageApi } from '../api/employees-api';
+import { EmployeeAutocomplete } from './employee-autocomplete';
 import { fetchTransfersPageApi } from '../api/transfers-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
@@ -50,6 +50,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<TransferType>('prenos');
   const [toPersonId, setToPersonId] = useState('');
+  const [selectedToEmployee, setSelectedToEmployee] = useState<Employee | null>(null);
   const [reason, setReason] = useState('');
   const [expandedTransferId, setExpandedTransferId] = useState<string | null>(null);
   const [showMarkDisposal, setShowMarkDisposal] = useState(false);
@@ -57,7 +58,6 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const [reactivateReason, setReactivateReason] = useState('');
   const [eq, setEq] = useState<Equipment | null>(null);
   const [transfers, setTransfers] = useState<TransferRecord[]>([]);
-  const [availableEmployees, setAvailableEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -116,30 +116,14 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     }
   }, [equipmentId]);
 
-  const loadEmployees = useCallback(async () => {
-    if (!eq) return;
-    try {
-      const response = await fetchEmployeesPageApi({ page: 1, pageSize: 100 });
-      setAvailableEmployees(
-        response.items.filter((row) => row.id !== eq.currentHolderId),
-      );
-    } catch {
-      setAvailableEmployees([]);
-    }
-  }, [eq]);
+  const excludeHolderIds = useMemo(() => {
+    const holderId = eq?.currentHolderId;
+    return holderId ? new Set([holderId]) : undefined;
+  }, [eq?.currentHolderId]);
 
   useEffect(() => {
     void loadEquipment();
   }, [loadEquipment]);
-
-  useEffect(() => {
-    if (!showTransferModal || !eq) {
-      return;
-    }
-    if (transferType === 'zaduzenje' || transferType === 'prenos') {
-      void loadEmployees();
-    }
-  }, [eq, loadEmployees, showTransferModal, transferType]);
 
   const holderOrg = holder?.orgUnitId
     ? state.orgUnits.find((o) => o.id === holder.orgUnitId)
@@ -270,6 +254,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const handleCloseTransferModal = () => {
     setShowTransferModal(false);
     setToPersonId('');
+    setSelectedToEmployee(null);
     setReason('');
   };
 
@@ -282,7 +267,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       toastError(transferGuard.reason ?? TRANSFER_GUARD_MESSAGES.transfersDisabled);
       return;
     }
-    const toEmployee = availableEmployees.find((row) => row.id === toPersonId);
+    const toEmployee = selectedToEmployee;
     const result = buildTransferCreatePayload({
       state,
       user: currentUser,
@@ -636,19 +621,20 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
           <div className="space-y-4">
             {(transferType === 'zaduzenje' || transferType === 'prenos') && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Zadužiti na osobu *</label>
-                <select
+                <label htmlFor="equipment-transfer-to-person" className="block text-sm font-medium text-gray-700 mb-1">
+                  Zadužiti na osobu *
+                </label>
+                <EmployeeAutocomplete
+                  id="equipment-transfer-to-person"
+                  orgUnits={state.orgUnits}
                   value={toPersonId}
-                  onChange={(e) => setToPersonId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                  <option value="">— Odaberi osobu —</option>
-                  {availableEmployees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {getEmployeeFullName(emp)} — {emp.title}
-                    </option>
-                  ))}
-                </select>
+                  excludeIds={excludeHolderIds}
+                  required
+                  onChange={(employeeId, employee) => {
+                    setToPersonId(employeeId);
+                    setSelectedToEmployee(employee);
+                  }}
+                />
               </div>
             )}
 

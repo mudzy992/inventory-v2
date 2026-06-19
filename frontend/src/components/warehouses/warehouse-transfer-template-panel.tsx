@@ -7,21 +7,14 @@ import {
   uploadWarehouseTransferTemplateApi,
   type WarehouseTransferTemplateMeta,
 } from '../../api/warehouse-transfer-template-api';
+import { TRANSFER_TEMPLATE_PLACEHOLDER_TOKENS } from '../../constants/transfer-template-placeholders';
 import { formatDate } from '../../helpers';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { Button } from '../ui/button';
 import { inputClass, labelClass } from '../ui/form-styles';
 
-const PLACEHOLDERS = [
-  '{broj_prenosnice}',
-  '{predao}',
-  '{preuzeo}',
-  '{potpisnik}',
-  '{inv_broj}',
-  '{naziv_opreme}',
-  '{obrazlozenje}',
-];
+const PLACEHOLDERS = TRANSFER_TEMPLATE_PLACEHOLDER_TOKENS;
 
 interface WarehouseTransferTemplatePanelProps {
   warehouseId: string;
@@ -69,7 +62,7 @@ export const WarehouseTransferTemplatePanel = ({
     }
     try {
       await uploadWarehouseTransferTemplateApi(warehouseId, file, label);
-      toastSuccess('Obrazac prenosnice uploadovan');
+      toastSuccess('Obrazac prenosnice uploadovan i aktiviran');
       setLabel('');
       await load();
     } catch (err) {
@@ -163,6 +156,11 @@ export const WarehouseTransferTemplatePanel = ({
         <p className="text-xs text-gray-500">Nema uploadovanih obrazaca.</p>
       ) : (
         <div className="space-y-4">
+          {activeTemplates.length === 0 && archivedTemplates.length > 0 ? (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              Nema aktivne verzije obrasca — aktivirajte jednu iz arhive ili uploadujte novi .docx.
+            </p>
+          ) : null}
           {activeTemplates.length > 0 ? (
             <div className="space-y-2">
               <p className="text-xs font-medium text-gray-600">Aktivna verzija</p>
