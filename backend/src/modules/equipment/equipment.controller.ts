@@ -33,19 +33,19 @@ export class EquipmentController {
   constructor(private readonly equipmentService: EquipmentService) {}
 
   @Get()
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListEquipmentQueryDto) {
     return this.equipmentService.findAll(user, query);
   }
 
   @Get('summary')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   getSummary(@CurrentUser() user: AuthenticatedUser, @Query() query: EquipmentSummaryQueryDto) {
     return this.equipmentService.getSummary(user, query.categoryId);
   }
 
   @Get('lot-groups')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   getLotGroups(@CurrentUser() user: AuthenticatedUser, @Query() query: EquipmentLotGroupsQueryDto) {
     return this.equipmentService.getLotGroups(user, query.categoryId);
   }
@@ -86,7 +86,7 @@ export class EquipmentController {
   }
 
   @Get(':id')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user)
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.equipmentService.findOne(user, id);
   }

@@ -9,7 +9,7 @@ import { ApiError } from '../api/client';
 import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { canDeleteEmployee } from '../helpers/guards';
 import { useToast } from '../contexts/toast-context';
-import { isAdmin, isEvidenticar, getCurrentUser } from '../store';
+import { isAdmin, isEvidenticar, isModerator, getCurrentUser } from '../store';
 import { Plus, Edit2, Trash2, Search, Package, Eye } from 'lucide-react';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
 import { EmployeeTitleAutocomplete } from './employee-title-autocomplete';
@@ -33,6 +33,8 @@ const getUserRoleLabel = (role: string): string => {
       return 'Skladištar';
     case 'popis_koordinator':
       return 'Koordinator popisa';
+    case 'moderator':
+      return 'Moderator';
     default:
       return 'Korisnik';
   }
@@ -42,6 +44,8 @@ export function EmployeesPage() {
   const [state] = useStore();
   const refresh = useRefreshData();
   const admin = isAdmin();
+  const moderator = isModerator();
+  const canManageEmployees = admin || moderator;
   const evidenticar = isEvidenticar();
   const user = getCurrentUser();
   const { toastError, toastSuccess } = useToast();
@@ -67,7 +71,7 @@ export function EmployeesPage() {
   const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null);
   const [viewEquipmentId, setViewEquipmentId] = useState<string | null>(null);
 
-  const canViewProfile = admin || evidenticar;
+  const canViewProfile = admin || moderator || evidenticar;
 
   useEffect(() => {
     const profileId = searchParams.get('profile');
@@ -85,10 +89,10 @@ export function EmployeesPage() {
   useEffect(() => {
     list.setFilters({
       orgUnitId: filterOrgUnit || undefined,
-      ...(admin && filterStatus === 'active' ? { isActive: true } : {}),
-      ...(admin && filterStatus === 'inactive' ? { isActive: false } : {}),
+      ...(canManageEmployees && filterStatus === 'active' ? { isActive: true } : {}),
+      ...(canManageEmployees && filterStatus === 'inactive' ? { isActive: false } : {}),
     });
-  }, [filterOrgUnit, filterStatus, admin, list.setFilters]);
+  }, [filterOrgUnit, filterStatus, canManageEmployees, list.setFilters]);
 
   const filtered = list.items;
   const search = list.search;
@@ -175,8 +179,8 @@ export function EmployeesPage() {
   };
 
   const handleSave = async () => {
-    if (!admin) {
-      toastError('Samo administrator može mijenjati zaposlenike.');
+    if (!canManageEmployees) {
+      toastError('Nemate dozvolu za izmjenu radnika.');
       return;
     }
     if (!fFirstName.trim() || !fLastName.trim() || !fOrgUnit) return;
@@ -228,7 +232,7 @@ export function EmployeesPage() {
   };
 
   const handleDelete = async (emp: Employee) => {
-    if (!admin) return;
+    if (!canManageEmployees) return;
     const guard = canDeleteEmployee({
       employeeId: emp.id,
       hasUserAccount: emp.hasUserAccount ?? false,
@@ -265,8 +269,8 @@ export function EmployeesPage() {
     <div>
       <PageHeaderRow
         title="Radnici"
-        description={admin ? 'Evidencija radnika po organizacijskim jedinicama' : 'Pregled radnika u vašem opsegu'}
-        actions={admin ? (
+        description={canManageEmployees ? 'Evidencija radnika po organizacijskim jedinicama' : 'Pregled radnika u vašem opsegu'}
+        actions={canManageEmployees ? (
           <button
             type="button"
             onClick={openAdd}
@@ -298,7 +302,7 @@ export function EmployeesPage() {
             <option key={o.id} value={o.id}>{o.name} ({getOrgUnitTypeLabel(o.type)})</option>
           ))}
         </select>
-        {admin ? (
+        {canManageEmployees ? (
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
@@ -347,7 +351,7 @@ export function EmployeesPage() {
                     <Eye size={14} />
                   </button>
                 ) : null}
-                {admin ? (
+                {canManageEmployees ? (
                   <>
                   <button type="button" onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                     <Edit2 size={14} />
@@ -423,7 +427,7 @@ export function EmployeesPage() {
                               <Eye size={14} />
                             </button>
                           ) : null}
-                          {admin ? (
+                          {canManageEmployees ? (
                             <>
                           <button type="button" onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                             <Edit2 size={14} />
@@ -657,9 +661,9 @@ export function EmployeesPage() {
       <EmployeeProfileDialog
         employeeId={profileEmployeeId}
         orgUnits={state.orgUnits}
-        isAdmin={admin}
+        isAdmin={canManageEmployees}
         onClose={() => setProfileEmployeeId(null)}
-        onEdit={admin ? openEditFromProfile : undefined}
+        onEdit={canManageEmployees ? openEditFromProfile : undefined}
         onOpenEquipment={(equipmentId) => {
           setProfileEmployeeId(null);
           setViewEquipmentId(equipmentId);

@@ -32,7 +32,7 @@ export class InventoryCountController {
   }
 
   @Get()
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.popis_koordinator, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.popis_koordinator, UserRole.user)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListSessionsQueryDto) {
     return this.inventoryCountService.findSessionsForUser(user, query);
   }
@@ -69,7 +69,7 @@ export class InventoryCountController {
   }
 
   @Get(':id/committees/setup-options')
-  @Roles(UserRole.admin, UserRole.popis_koordinator)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.popis_koordinator)
   getCommitteeSetupOptions(
     @Param('id') sessionId: string,
     @Query('warehouseId') warehouseId: string,
@@ -83,13 +83,13 @@ export class InventoryCountController {
   }
 
   @Get(':id/session-warehouses')
-  @Roles(UserRole.admin, UserRole.popis_koordinator)
-  getSessionWarehouses(@Param('id') sessionId: string) {
-    return this.inventoryCountService.getSessionWarehouses(sessionId);
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.popis_koordinator)
+  getSessionWarehouses(@CurrentUser() user: AuthenticatedUser, @Param('id') sessionId: string) {
+    return this.inventoryCountService.getSessionWarehouses(sessionId, user);
   }
 
   @Get(':id/committees')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.popis_koordinator, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.popis_koordinator, UserRole.user)
   findCommittees(@Param('id') sessionId: string) {
     return this.inventoryCountService.findCommittees(sessionId);
   }
@@ -101,7 +101,7 @@ export class InventoryCountController {
   }
 
   @Post(':id/committees')
-  @Roles(UserRole.admin, UserRole.popis_koordinator)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.popis_koordinator)
   createCommittee(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') sessionId: string,
@@ -128,7 +128,7 @@ export class InventoryCountController {
   }
 
   @Patch('committees/:id')
-  @Roles(UserRole.admin, UserRole.popis_koordinator)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.popis_koordinator)
   updateCommittee(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') committeeId: string,
@@ -145,7 +145,7 @@ export class InventoryCountController {
   }
 
   @Delete('committees/:id')
-  @Roles(UserRole.admin, UserRole.popis_koordinator)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.popis_koordinator)
   deleteCommittee(@CurrentUser() user: AuthenticatedUser, @Param('id') committeeId: string) {
     return this.inventoryCountService.deleteCommittee(committeeId, user);
   }

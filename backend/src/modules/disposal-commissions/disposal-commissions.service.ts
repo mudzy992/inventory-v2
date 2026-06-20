@@ -1,9 +1,7 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../../generated/prisma/client';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import {
   buildContainsSearchWhere,
   buildOrderBy,
@@ -37,17 +35,22 @@ export class DisposalCommissionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
+    private readonly moderatorScope: ModeratorScopeService,
   ) {}
 
   private async assertDisposalCommissionsEnabled(): Promise<void> {
     await this.settingsService.assertFeatureEnabled('features.disposal_commissions');
   }
 
-  async findAll(query: ListDisposalCommissionsQueryDto) {
+  async findAll(user: AuthenticatedUser, query: ListDisposalCommissionsQueryDto) {
     await this.assertDisposalCommissionsEnabled();
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
     const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
     const filters: Prisma.DisposalCommissionWhereInput[] = [{ isActive: true }];
+    const scopeWhere = await this.buildModeratorScopeWhere(user);
+    if (scopeWhere) {
+      filters.push(scopeWhere);
+    }
     if (query.cityId) {
       filters.push({ cityId: query.cityId });
     }
@@ -72,7 +75,7 @@ export class DisposalCommissionsService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(user: AuthenticatedUser, id: string) {
     await this.assertDisposalCommissionsEnabled();
     const commission = await this.prisma.disposalCommission.findUnique({
       where: { id },
@@ -81,6 +84,40 @@ export class DisposalCommissionsService {
     if (!commission) {
       throw new NotFoundException('Disposal commission not found');
     }
+    await this.assertCommissionInModeratorScope(user, commission.id);
     return commission;
+  }
+
+  private async buildModeratorScopeWhere(
+    user: AuthenticatedUser,
+  ): Promise<Prisma.DisposalCommissionWhereInput | null> {
+    const warehouseScope = await this.moderatorScope.buildScopedWarehouseWhere(user);
+    if (!warehouseScope) {
+      return null;
+    }
+    const scopedOrgIds = warehouseScope.orgUnitId.in;
+    if (scopedOrgIds.length === 0) {
+      return { id: { in: [] } };
+    }
+    return {
+      OR: [
+        { city: { warehouses: { some: { orgUnitId: { in: scopedOrgIds }, isActive: true } } } },
+        { inventoryCommittee: { warehouse: { orgUnitId: { in: scopedOrgIds } } } },
+      ],
+    };
+  }
+
+  private async assertCommissionInModeratorScope(user: AuthenticatedUser, id: string): Promise<void> {
+    const scopeWhere = await this.buildModeratorScopeWhere(user);
+    if (!scopeWhere) {
+      return;
+    }
+    const match = await this.prisma.disposalCommission.findFirst({
+      where: { AND: [{ id }, scopeWhere] },
+      select: { id: true },
+    });
+    if (!match) {
+      throw new ForbiddenException('Komisija rashoda je van vašeg opsega');
+    }
   }
 }

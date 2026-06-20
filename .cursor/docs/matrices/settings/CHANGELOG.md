@@ -1,5 +1,9 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-20
+
+- `features.moderator_role` (private, default true) — globalni kill-switch za moderator write API.
+
 ## 2026-06-18
 
 - Prenos opreme vs. prenosnica: `features.transfers` = blok modula; `transfer.generation.*` = samo dokumenti.

@@ -19,6 +19,26 @@ export const canReadEquipment = async (
   if (user.role === 'admin') {
     return true;
   }
+  if (user.role === 'moderator' && prisma) {
+    const orgIds = await expandOrgIds(prisma, user.moderatorOrgRoots);
+    if (orgIds.length === 0) {
+      return false;
+    }
+    const orgSet = new Set(orgIds);
+    if (holder && orgSet.has(holder.orgUnitId)) {
+      return true;
+    }
+    if (equipment.warehouseId) {
+      const warehouse = await prisma.warehouse.findUnique({
+        where: { id: equipment.warehouseId },
+        select: { orgUnitId: true },
+      });
+      if (warehouse?.orgUnitId && orgSet.has(warehouse.orgUnitId)) {
+        return true;
+      }
+    }
+    return false;
+  }
   if (user.role === 'skladistar') {
     if (!prisma) {
       return false;
@@ -77,5 +97,37 @@ export const assertCanWriteEquipment = async (
   if (user.role === 'user') {
     throw new ForbiddenException('Users cannot modify equipment');
   }
+  if (user.role === 'moderator') {
+    throw new ForbiddenException('Moderator cannot modify equipment');
+  }
   await assertCanReadEquipment(user, equipment, holder, registrarScope, prisma);
+};
+
+const expandOrgIds = async (prisma: PrismaService, rootIds: string[]): Promise<string[]> => {
+  if (rootIds.length === 0) {
+    return [];
+  }
+  const allUnits = await prisma.orgUnit.findMany({
+    select: { id: true, parentId: true },
+  });
+  const childrenByParent = new Map<string | null, string[]>();
+  for (const unit of allUnits) {
+    const siblings = childrenByParent.get(unit.parentId) ?? [];
+    siblings.push(unit.id);
+    childrenByParent.set(unit.parentId, siblings);
+  }
+  const result = new Set<string>();
+  const visit = (id: string): void => {
+    if (result.has(id)) {
+      return;
+    }
+    result.add(id);
+    for (const childId of childrenByParent.get(id) ?? []) {
+      visit(childId);
+    }
+  };
+  for (const rootId of rootIds) {
+    visit(rootId);
+  }
+  return [...result];
 };

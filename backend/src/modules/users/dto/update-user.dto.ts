@@ -1,8 +1,9 @@
 import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsEnum, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from 'class-validator';
 import { UserRole } from '../../../../generated/prisma/client';
-import { RegistrarScopeDto } from './registrar-scope.dto';
 import { CoordinatorScopeDto } from './coordinator-scope.dto';
+import { ModeratorOrgAssignmentDto, ModeratorWarehouseAssignmentDto } from './moderator-assignment.dto';
+import { RegistrarScopeDto } from './registrar-scope.dto';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -33,4 +34,16 @@ export class UpdateUserDto {
   @ValidateNested({ each: true })
   @Type(() => CoordinatorScopeDto)
   coordinatorAssignments?: CoordinatorScopeDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ModeratorOrgAssignmentDto)
+  moderatorOrgAssignments?: ModeratorOrgAssignmentDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ModeratorWarehouseAssignmentDto)
+  moderatorWarehouseAssignments?: ModeratorWarehouseAssignmentDto[];
 }

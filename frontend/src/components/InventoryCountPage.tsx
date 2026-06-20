@@ -34,7 +34,7 @@ import {
 import { findWarehousesBlockingInventoryActivate } from '../helpers/inventory-activate-readiness.util';
 import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { resolveRootDistributionOrgUnit } from '../helpers/resolve-root-distribution.util';
-import { isAdmin, isPopisKoordinator, getCurrentUser } from '../store';
+import { isAdmin, isModerator, isPopisKoordinator, getCurrentUser } from '../store';
 import { useStore } from '../useStore';
 import { useToast } from '../contexts/toast-context';
 import { useInventorySocketEvents } from '../hooks/use-inventory-socket-events';
@@ -82,8 +82,9 @@ const mapScopeItemsToEquipment = (items: PrintScopeEquipmentDto[]): Equipment[] 
 export const InventoryCountPage = () => {
   const [state] = useStore();
   const admin = isAdmin();
+  const moderator = isModerator();
   const coordinator = isPopisKoordinator();
-  const canManageCommittees = admin || coordinator;
+  const canManageCommittees = admin || coordinator || moderator;
   const user = getCurrentUser();
   const userId = user?.id ?? null;
   const { toastError, toastSuccess } = useToast();

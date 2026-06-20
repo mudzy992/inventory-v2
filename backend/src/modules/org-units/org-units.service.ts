@@ -5,11 +5,13 @@ import {
 } from '@nestjs/common';
 import type { OrgUnit, OrgUnitType } from '../../../generated/prisma/client';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import { SignerResolutionService } from '../../common/services/signer-resolution.service';
 import { OrgScopeService, type OrgUnitTreeNode } from '../../common/services/org-scope.service';
 import { ORG_HIERARCHY_MESSAGES } from '../../common/utils/org-hierarchy-messages.util';
 import { assertValidOrgUnitParentChild } from '../../common/utils/org-hierarchy-validation.util';
 import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateOrgUnitDto } from './dto/create-org-unit.dto';
@@ -21,42 +23,51 @@ export class OrgUnitsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgScopeService: OrgScopeService,
+    private readonly moderatorScope: ModeratorScopeService,
     private readonly locationResolutionService: LocationResolutionService,
     private readonly signerResolutionService: SignerResolutionService,
     private readonly settingsService: SettingsService,
   ) {}
 
-  async findFlat(): Promise<OrgUnit[]> {
-    return this.prisma.orgUnit.findMany({ orderBy: { name: 'asc' } });
+  async findFlat(user: AuthenticatedUser): Promise<OrgUnit[]> {
+    const scopedWhere = await this.moderatorScope.buildScopedOrgUnitWhere(user);
+    const units = await this.prisma.orgUnit.findMany({
+      where: scopedWhere ?? undefined,
+      orderBy: { name: 'asc' },
+    });
+    return units;
   }
 
-  async search(query: SearchOrgUnitsQueryDto): Promise<OrgUnit[]> {
+  async search(user: AuthenticatedUser, query: SearchOrgUnitsQueryDto): Promise<OrgUnit[]> {
     const term = query.q.trim();
     const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
+    const scopedWhere = await this.moderatorScope.buildScopedOrgUnitWhere(user);
     return this.prisma.orgUnit.findMany({
       where: {
         name: { contains: term },
+        ...(scopedWhere ?? {}),
       },
       orderBy: { name: 'asc' },
       take: limit,
     });
   }
 
-  async findTree(): Promise<OrgUnitTreeNode[]> {
-    const units = await this.findFlat();
+  async findTree(user: AuthenticatedUser): Promise<OrgUnitTreeNode[]> {
+    const units = await this.findFlat(user);
     return this.orgScopeService.buildOrgUnitTree(units);
   }
 
-  async findOne(id: string): Promise<OrgUnit> {
+  async findOne(user: AuthenticatedUser, id: string): Promise<OrgUnit> {
     const unit = await this.prisma.orgUnit.findUnique({ where: { id } });
     if (!unit) {
       throw new NotFoundException(ORG_HIERARCHY_MESSAGES.notFound);
     }
+    await this.moderatorScope.assertOrgUnitInScope(user, id);
     return unit;
   }
 
-  async countEquipmentInSubtree(orgUnitId: string): Promise<{ count: number }> {
-    await this.findOne(orgUnitId);
+  async countEquipmentInSubtree(user: AuthenticatedUser, orgUnitId: string): Promise<{ count: number }> {
+    await this.findOne(user, orgUnitId);
     const subtreeIds = await this.orgScopeService.expandOrgUnitIds([orgUnitId]);
     const assignedCount = await this.prisma.equipment.count({
       where: {
@@ -78,11 +89,15 @@ export class OrgUnitsService {
     return { count: assignedCount + warehouseEquipmentCount };
   }
 
-  async create(dto: CreateOrgUnitDto): Promise<OrgUnit> {
+  async create(user: AuthenticatedUser, dto: CreateOrgUnitDto): Promise<OrgUnit> {
+    await this.assertModeratorWrites(user);
     await this.settingsService.assertFeatureEnabled('features.organization');
     if (dto.parentId) {
-      const parent = await this.findOne(dto.parentId);
+      await this.moderatorScope.assertOrgUnitInScope(user, dto.parentId);
+      const parent = await this.findOne(user, dto.parentId);
       assertValidOrgUnitParentChild(parent.type, dto.type);
+    } else if (this.moderatorScope.isModerator(user)) {
+      throw new BadRequestException('Moderator mora odabrati parent org jedinicu');
     }
     if (dto.signerId) {
       await this.assertEmployeeExists(dto.signerId);
@@ -103,19 +118,21 @@ export class OrgUnitsService {
       refreshSigner: true,
       refreshLocation: true,
     });
-    return this.findOne(unit.id);
+    return this.findOne(user, unit.id);
   }
 
-  async update(id: string, dto: UpdateOrgUnitDto): Promise<OrgUnit> {
+  async update(user: AuthenticatedUser, id: string, dto: UpdateOrgUnitDto): Promise<OrgUnit> {
+    await this.assertModeratorWrites(user);
     await this.settingsService.assertFeatureEnabled('features.organization');
-    const existing = await this.findOne(id);
+    const existing = await this.findOne(user, id);
     const nextParentId = dto.parentId !== undefined ? dto.parentId : existing.parentId;
     const nextType = dto.type ?? existing.type;
     if (nextParentId) {
       if (nextParentId === id) {
         throw new BadRequestException(ORG_HIERARCHY_MESSAGES.selfParent);
       }
-      const parent = await this.findOne(nextParentId);
+      await this.moderatorScope.assertOrgUnitInScope(user, nextParentId);
+      const parent = await this.findOne(user, nextParentId);
       await this.assertNoCycle(id, nextParentId);
       assertValidOrgUnitParentChild(parent.type, nextType);
     }
@@ -146,11 +163,12 @@ export class OrgUnitsService {
       refreshSigner: signerChanged || parentChanged,
       refreshLocation: locationChanged || parentChanged,
     });
-    return this.findOne(id);
+    return this.findOne(user, id);
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findOne(id);
+  async remove(user: AuthenticatedUser, id: string): Promise<void> {
+    await this.assertModeratorWrites(user);
+    await this.findOne(user, id);
     const childCount = await this.prisma.orgUnit.count({ where: { parentId: id } });
     if (childCount > 0) {
       throw new BadRequestException(ORG_HIERARCHY_MESSAGES.deleteHasChildren);
@@ -160,6 +178,15 @@ export class OrgUnitsService {
       throw new BadRequestException(ORG_HIERARCHY_MESSAGES.deleteHasEmployees);
     }
     await this.prisma.orgUnit.delete({ where: { id } });
+  }
+
+  private async assertModeratorWrites(user: AuthenticatedUser): Promise<void> {
+    if (this.moderatorScope.isModerator(user)) {
+      await this.settingsService.assertFeatureEnabled(
+        'features.moderator_role',
+        'Uloga moderatora je onemogućena u postavkama',
+      );
+    }
   }
 
   private async refreshDerivedFields(

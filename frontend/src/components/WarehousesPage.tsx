@@ -9,7 +9,7 @@ import { canCreateWarehouse } from '../helpers/guards';
 import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { useToast } from '../contexts/toast-context';
 import { useStore, useRefreshData } from '../useStore';
-import { isAdmin, isSkladistar } from '../store';
+import { isAdmin, isModerator, isSkladistar } from '../store';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
 import { isCentralWarehouse } from '../helpers/org-warehouse.util';
 import { getCityLabel, getOrgUnitTypeLabel } from '../helpers';
@@ -32,6 +32,8 @@ export const WarehousesPage = () => {
   const refresh = useRefreshData();
   const { toastError, toastSuccess } = useToast();
   const admin = isAdmin();
+  const moderator = isModerator();
+  const canManageWarehouses = admin || moderator;
   const skladistar = isSkladistar();
   const isFrozen = useInventoryFreezeActive();
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
@@ -52,13 +54,13 @@ export const WarehousesPage = () => {
   const visibleWarehouses = warehousesList.items;
   const [skladistarUsers, setSkladistarUsers] = useState<UserAccount[]>([]);
   useEffect(() => {
-    if (!admin) {
+    if (!canManageWarehouses) {
       return;
     }
     void fetchSkladistarUsersApi()
       .then(setSkladistarUsers)
       .catch(() => setSkladistarUsers([]));
-  }, [admin]);
+  }, [canManageWarehouses]);
   const selectedKeeperIds = keeperIds.split(',').filter(Boolean);
   const isCreateFormValid =
     Boolean(name.trim()) &&
@@ -68,7 +70,7 @@ export const WarehousesPage = () => {
     selectedKeeperIds.length >= 1;
   const canManageDestruction = admin || skladistar;
   const handleCreate = async () => {
-    if (!admin || isFrozen) {
+    if (!canManageWarehouses || isFrozen) {
       return;
     }
     const guard = canCreateWarehouse({
@@ -109,7 +111,7 @@ export const WarehousesPage = () => {
       <WarehouseDetailView
         warehouseId={selectedWarehouseId}
         onBack={() => setSelectedWarehouseId(null)}
-        canEditContext={admin}
+        canEditContext={canManageWarehouses}
         canManageDestruction={canManageDestruction}
         canReceiveStock={skladistar || admin}
       />
@@ -129,12 +131,12 @@ export const WarehousesPage = () => {
       <PageTabs
         tabs={[
           { id: 'list', label: 'Lista', icon: List },
-          ...(admin ? [{ id: 'create' as const, label: 'Novo skladište', icon: WarehouseIcon }] : []),
+          ...(canManageWarehouses ? [{ id: 'create' as const, label: 'Novo skladište', icon: WarehouseIcon }] : []),
         ]}
         activeTab={tab}
         onChange={setTab}
       />
-      {tab === 'create' && admin ? (
+      {tab === 'create' && canManageWarehouses ? (
         <FormCard title="Novo skladište" className="max-w-lg">
           <div>
             <label className={labelClass} htmlFor="wh-create-name">

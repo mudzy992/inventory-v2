@@ -10,7 +10,7 @@ import { useAdminSettings } from '../contexts/admin-settings-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { isNavPageEnabled } from '../utils/settings-feature.util';
 import { cn } from '../utils/cn';
-import { isAdmin, isEvidenticar, isPopisKoordinator, isSkladistar, getUserRole } from '../store';
+import { isAdmin, isEvidenticar, isModerator, isPopisKoordinator, isSkladistar, getUserRole } from '../store';
 import { useCurrentEmployee } from '../hooks/use-current-employee';
 import { useModuleBadges } from '../hooks/use-module-badges';
 import { pathToPageId } from '../routes/app-routes';
@@ -70,6 +70,7 @@ export const AppSidebarNav = ({
   const currentPage = pathToPageId(location.pathname);
   const currentEmployee = useCurrentEmployee();
   const admin = isAdmin();
+  const moderator = isModerator();
   const evidenticar = isEvidenticar();
   const coordinator = isPopisKoordinator();
   const skladistar = isSkladistar();
@@ -81,12 +82,21 @@ export const AppSidebarNav = ({
   const showNavPage = (pageId: PageId): boolean =>
     isNavPageEnabled(pageId, publicSettings, adminSettings);
   const showEquipmentSection =
-    (admin || evidenticar) &&
+    (admin || evidenticar || moderator) &&
     (showNavPage('equipment') || showNavPage('transfers'));
   const showProcessSection =
     (admin && (showNavPage('inventory-count') || showNavPage('disposal-commissions'))) ||
+    (moderator && (showNavPage('inventory-count') || showNavPage('disposal-commissions'))) ||
     (evidenticar && !admin && showNavPage('inventory-count')) ||
     (coordinator && showNavPage('inventory-count'));
+  const showRegionalAdminSection =
+    moderator &&
+    !admin &&
+    (showNavPage('organization') ||
+      showNavPage('employees') ||
+      showNavPage('warehouses') ||
+      showNavPage('user-management') ||
+      showNavPage('employee-relocation'));
   const showMasterDataSection =
     admin &&
     (showNavPage('organization') ||
@@ -110,6 +120,8 @@ export const AppSidebarNav = ({
   const roleLabel =
     role === 'admin'
       ? 'Administrator'
+      : role === 'moderator'
+        ? 'Moderator'
       : role === 'evidenticar'
         ? 'Evidentičar'
         : role === 'popis_koordinator'
@@ -120,6 +132,8 @@ export const AppSidebarNav = ({
   const roleColor =
     role === 'admin'
       ? 'bg-amber-500 text-amber-900'
+      : role === 'moderator'
+        ? 'bg-orange-500 text-orange-100'
       : role === 'evidenticar'
         ? 'bg-purple-500 text-purple-100'
         : role === 'popis_koordinator'
@@ -168,7 +182,7 @@ export const AppSidebarNav = ({
         <NavSection
           label="Pregled"
           collapsed={collapsed}
-          show={(admin || evidenticar) && showNavPage('dashboard')}
+          show={(admin || evidenticar || moderator) && showNavPage('dashboard')}
         >
           <SidebarNavButton
             pageId="dashboard"
@@ -249,7 +263,7 @@ export const AppSidebarNav = ({
             collapsed={collapsed}
             label="Popis"
             icon={ClipboardCheck}
-            visible={showNavPage('inventory-count') && (admin || evidenticar || coordinator)}
+            visible={showNavPage('inventory-count') && (admin || evidenticar || coordinator || moderator)}
             badge={moduleBadges['inventory-count']}
             onNavigateComplete={onNavigateComplete}
           />
@@ -258,7 +272,7 @@ export const AppSidebarNav = ({
             collapsed={collapsed}
             label="Komisija rashod"
             icon={Trash2}
-            visible={admin && showNavPage('disposal-commissions')}
+            visible={(admin || moderator) && showNavPage('disposal-commissions')}
             badge={moduleBadges['disposal-commissions']}
             onNavigateComplete={onNavigateComplete}
           />
@@ -283,6 +297,50 @@ export const AppSidebarNav = ({
             label="Popis skladišta"
             icon={ClipboardCheck}
             visible={showNavPage('warehouse-inventory')}
+            onNavigateComplete={onNavigateComplete}
+          />
+        </NavSection>
+
+        <NavSection label="Regionalna administracija" collapsed={collapsed} show={showRegionalAdminSection}>
+          <SidebarNavButton
+            pageId="organization"
+            collapsed={collapsed}
+            label="Organizacija"
+            icon={Building2}
+            visible={showNavPage('organization')}
+            onNavigateComplete={onNavigateComplete}
+          />
+          <SidebarNavButton
+            pageId="employees"
+            collapsed={collapsed}
+            label="Radnici"
+            icon={Users}
+            visible={showNavPage('employees')}
+            onNavigateComplete={onNavigateComplete}
+          />
+          <SidebarNavButton
+            pageId="warehouses"
+            collapsed={collapsed}
+            label="Skladišta"
+            icon={Warehouse}
+            visible={showNavPage('warehouses')}
+            onNavigateComplete={onNavigateComplete}
+          />
+          <SidebarNavButton
+            pageId="user-management"
+            collapsed={collapsed}
+            label="Korisnici"
+            icon={ClipboardList}
+            visible={showNavPage('user-management')}
+            onNavigateComplete={onNavigateComplete}
+          />
+          <SidebarNavButton
+            pageId="employee-relocation"
+            collapsed={collapsed}
+            label="Org. promjena"
+            icon={ArrowLeftRight}
+            visible={showNavPage('employee-relocation')}
+            badge={moduleBadges['employee-relocation']}
             onNavigateComplete={onNavigateComplete}
           />
         </NavSection>

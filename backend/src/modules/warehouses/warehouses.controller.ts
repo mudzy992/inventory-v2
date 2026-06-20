@@ -33,13 +33,13 @@ export class WarehousesController {
   ) {}
 
   @Get()
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListWarehousesQueryDto) {
     return this.warehousesService.findAll(user, query);
   }
 
   @Get('resolve/effective')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   resolveEffective(
     @Query('orgUnitId') orgUnitId: string,
     @Query('cityId') cityId?: string,
@@ -48,19 +48,19 @@ export class WarehousesController {
   }
 
   @Get(':id')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.warehousesService.findOne(user, id);
   }
 
   @Post()
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.moderator)
   create(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateWarehouseDto) {
     return this.warehousesService.create(user, body);
   }
 
   @Patch(':id')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.moderator)
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,

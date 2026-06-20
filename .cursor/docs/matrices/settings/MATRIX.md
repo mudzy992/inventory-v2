@@ -39,6 +39,7 @@
 | `features.qr_scanner` | true | `qr-scanner` |
 | `features.public_equipment_lookup` | true | Javni QR pregled |
 | `features.maintenance_parts` | true | Skladište održavanje + ugrađeni dijelovi na opremi |
+| `features.moderator_role` | true | Kill-switch delegiranja uloge moderator (BE write guard) |
 
 ### Prenosi (tab: Prenosi)
 

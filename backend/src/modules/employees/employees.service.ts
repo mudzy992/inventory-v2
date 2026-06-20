@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Employee, Prisma } from '../../../generated/prisma/client';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
@@ -83,6 +84,7 @@ export class EmployeesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registrarScope: RegistrarScopeService,
+    private readonly moderatorScope: ModeratorScopeService,
     private readonly warehouseResolution: WarehouseResolutionService,
     private readonly settingsService: SettingsService,
     private readonly employeeRelocationService: EmployeeRelocationService,
@@ -223,9 +225,11 @@ export class EmployeesService {
     };
   }
 
-  async create(dto: CreateEmployeeDto): Promise<Employee> {
+  async create(user: AuthenticatedUser, dto: CreateEmployeeDto): Promise<Employee> {
+    await this.assertModeratorWrites(user);
     await this.settingsService.assertFeatureEnabled('features.employees');
     await this.assertOrgUnitExists(dto.orgUnitId);
+    await this.moderatorScope.assertOrgUnitInScope(user, dto.orgUnitId);
     const staffNumber = this.normalizeStaffNumber(dto.staffNumber);
     if (staffNumber) {
       await this.assertStaffNumberAvailable(staffNumber);
@@ -251,14 +255,17 @@ export class EmployeesService {
   }
 
   async update(
+    user: AuthenticatedUser,
     id: string,
     dto: UpdateEmployeeDto,
-    actorUserId?: string,
   ): Promise<EmployeeUpdateResult> {
+    await this.assertModeratorWrites(user);
     await this.settingsService.assertFeatureEnabled('features.employees');
     const existing = await this.findByIdOrThrow(id);
+    await this.moderatorScope.assertOrgUnitInScope(user, existing.orgUnitId);
     if (dto.orgUnitId) {
       await this.assertOrgUnitExists(dto.orgUnitId);
+      await this.moderatorScope.assertOrgUnitInScope(user, dto.orgUnitId);
     }
     const staffNumber =
       dto.staffNumber !== undefined ? this.normalizeStaffNumber(dto.staffNumber) : undefined;
@@ -311,12 +318,12 @@ export class EmployeesService {
       this.rethrowStaffNumberConflict(err);
       throw err;
     }
-    if (dto.orgUnitId && dto.orgUnitId !== existing.orgUnitId && actorUserId) {
+    if (dto.orgUnitId && dto.orgUnitId !== existing.orgUnitId) {
       await this.employeeRelocationService.handleOrgUnitChange(
         id,
         existing.orgUnitId,
         dto.orgUnitId,
-        actorUserId,
+        user.id,
       );
     }
     if (isDeactivating && linkedUser) {
@@ -329,9 +336,11 @@ export class EmployeesService {
     return updated;
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findByIdOrThrow(id);
-    const [user, heldEquipment, signedTransfers, orgSigner, openRelocation] = await Promise.all([
+  async remove(user: AuthenticatedUser, id: string): Promise<void> {
+    await this.assertModeratorWrites(user);
+    const employee = await this.findByIdOrThrow(id);
+    await this.moderatorScope.assertOrgUnitInScope(user, employee.orgUnitId);
+    const [linkedUser, heldEquipment, signedTransfers, orgSigner, openRelocation] = await Promise.all([
       this.prisma.user.findFirst({ where: { employeeId: id }, select: { id: true } }),
       this.prisma.equipment.count({ where: { currentHolderId: id, status: 'zaduzeno' } }),
       this.prisma.transfer.count({ where: { signerId: id } }),
@@ -340,7 +349,7 @@ export class EmployeesService {
         where: { employeeId: id, status: 'open' },
       }),
     ]);
-    if (user) {
+    if (linkedUser) {
       throw new BadRequestException(EMPLOYEE_MESSAGES.deleteHasUserAccount);
     }
     if (orgSigner > 0) {
@@ -362,13 +371,15 @@ export class EmployeesService {
     user: AuthenticatedUser,
     query: ListEmployeesQueryDto,
   ): Promise<Prisma.EmployeeWhereInput> {
-    const scopeWhere = await this.registrarScope.buildEmployeeWhere(user);
+    const scopeWhere = this.moderatorScope.isModerator(user)
+      ? ((await this.moderatorScope.buildScopedEmployeeWhere(user)) ?? {})
+      : await this.registrarScope.buildEmployeeWhere(user);
     const filters: Prisma.EmployeeWhereInput[] = [scopeWhere];
     if (query.orgUnitId) {
       filters.push({ orgUnitId: query.orgUnitId });
     }
     if (query.withoutUserAccount) {
-      if (user.role !== 'admin') {
+      if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
         throw new ForbiddenException('Only administrators can list employees without user accounts');
       }
       filters.push({ user: { is: null } });
@@ -398,11 +409,24 @@ export class EmployeesService {
     if (user.role === 'admin' || user.role === 'skladistar') {
       return;
     }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertOrgUnitInScope(user, employee.orgUnitId);
+      return;
+    }
     if (user.role === 'evidenticar') {
       const allowed = await this.registrarScope.canAccessEmployee(user, employee);
       if (!allowed) {
         throw new ForbiddenException('Employee outside your scope');
       }
+    }
+  }
+
+  private async assertModeratorWrites(user: AuthenticatedUser): Promise<void> {
+    if (this.moderatorScope.isModerator(user)) {
+      await this.settingsService.assertFeatureEnabled(
+        'features.moderator_role',
+        'Uloga moderatora je onemogućena u postavkama',
+      );
     }
   }
 

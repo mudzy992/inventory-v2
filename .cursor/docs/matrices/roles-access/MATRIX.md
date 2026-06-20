@@ -5,6 +5,7 @@
 | Uloga | Kod | Opis |
 |-------|-----|------|
 | Administrator | `admin` | Puna konfiguracija sistema |
+| Moderator | `moderator` | Org-scoped operativni admin + warehouse moderator za popisne komisije (vidi [moderator/MATRIX.md](../moderator/MATRIX.md)) |
 | Evidentičar | `evidenticar` | Evidencija u dodijeljenim parovima **skladište + kategorija** (+ opcionalno org suženje) |
 | Skladištar | `skladistar` | Evidencija na dodijeljenim skladištima |
 | Koordinator popisa | `popis_koordinator` | Konfiguracija članova auto-slotova u draft sesiji za dodijeljena skladišta |

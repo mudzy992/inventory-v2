@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Equipment, EquipmentStatus, Prisma } from '../../../generated/prisma/client';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import {
@@ -80,6 +81,7 @@ export class EquipmentService {
     private readonly prisma: PrismaService,
     private readonly categoriesService: CategoriesService,
     private readonly registrarScope: RegistrarScopeService,
+    private readonly moderatorScope: ModeratorScopeService,
     private readonly configService: ConfigService,
     private readonly warehousesService: WarehousesService,
     private readonly inventoryFreeze: InventoryFreezeService,
@@ -124,7 +126,7 @@ export class EquipmentService {
 
   async getSummary(user: AuthenticatedUser, categoryId?: string): Promise<EquipmentSummary> {
     await this.settingsService.assertFeatureEnabled('features.equipment');
-    const scopeWhere = await this.registrarScope.buildEquipmentWhere(user);
+    const scopeWhere = await this.buildEquipmentScopeWhere(user);
     const where: Prisma.EquipmentWhereInput = categoryId
       ? { AND: [scopeWhere, { categoryId }] }
       : scopeWhere;
@@ -149,7 +151,7 @@ export class EquipmentService {
 
   async getLotGroups(user: AuthenticatedUser, categoryId: string): Promise<EquipmentLotGroup[]> {
     await this.settingsService.assertFeatureEnabled('features.equipment');
-    const scopeWhere = await this.registrarScope.buildEquipmentWhere(user);
+    const scopeWhere = await this.buildEquipmentScopeWhere(user);
     const where: Prisma.EquipmentWhereInput = { AND: [scopeWhere, { categoryId }] };
     const grouped = await this.prisma.equipment.groupBy({
       by: ['stockLotId'],
@@ -404,7 +406,7 @@ export class EquipmentService {
     user: AuthenticatedUser,
     query: ListEquipmentQueryDto,
   ): Promise<Prisma.EquipmentWhereInput> {
-    const scopeWhere = await this.registrarScope.buildEquipmentWhere(user);
+    const scopeWhere = await this.buildEquipmentScopeWhere(user);
     const stockLotFilter: Prisma.EquipmentWhereInput =
       query.stockLotId === 'none'
         ? { stockLotId: null }
@@ -416,7 +418,9 @@ export class EquipmentService {
     let specMatchEquipmentIds: string[] | undefined;
     let holderMatchEmployeeIds: string[] | undefined;
     if (trimmedSearch) {
-      const employeeScope = await this.registrarScope.buildEmployeeWhere(user);
+      const employeeScope = user.role === 'moderator'
+        ? ((await this.moderatorScope.buildScopedEmployeeWhere(user)) ?? {})
+        : await this.registrarScope.buildEmployeeWhere(user);
       [specMatchEquipmentIds, holderMatchEmployeeIds] = await Promise.all([
         findEquipmentIdsBySpecificationSearch(this.prisma, trimmedSearch, query.categoryId),
         findEmployeeIdsByHolderSearch(this.prisma, trimmedSearch, employeeScope),
@@ -454,6 +458,13 @@ export class EquipmentService {
       return parts[0]!;
     }
     return { AND: parts };
+  }
+
+  private async buildEquipmentScopeWhere(user: AuthenticatedUser): Promise<Prisma.EquipmentWhereInput> {
+    if (this.moderatorScope.isModerator(user)) {
+      return ((await this.moderatorScope.buildEquipmentReadWhere(user)) ?? {}) as Prisma.EquipmentWhereInput;
+    }
+    return this.registrarScope.buildEquipmentWhere(user);
   }
 
   async exportCsv(user: AuthenticatedUser, query: ListEquipmentQueryDto): Promise<string> {

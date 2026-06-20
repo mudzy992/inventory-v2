@@ -1,5 +1,11 @@
 # Changelog — roles-access
 
+## 2026-06-20 (moderator)
+
+- Nova uloga `moderator` + `ModeratorOrgAssignment` + `ModeratorWarehouseAssignment`.
+- Operativni CRUD u org scope; popisne komisije po warehouse dodjeli (1 moderator/skaldište).
+- Delegacija samo operativnih uloga; settings/lifecycle popisa ostaje admin.
+
 ## 2026-06-15 (employee delete guards)
 
 - Brisanje radnika: BE provjere (user račun, potpisnik, transferi, zaduženje, relocation) + `EMPLOYEE_MESSAGES`.

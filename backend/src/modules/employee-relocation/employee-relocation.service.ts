@@ -10,6 +10,7 @@ import type {
 } from '../../../generated/prisma/client';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { getEquipmentInventoryLabel } from '../../common/utils/equipment-accounting-tracked.util';
@@ -77,6 +78,7 @@ export class EmployeeRelocationService {
     private readonly prisma: PrismaService,
     private readonly warehouseResolution: WarehouseResolutionService,
     private readonly registrarScope: RegistrarScopeService,
+    private readonly moderatorScope: ModeratorScopeService,
     private readonly locationResolution: LocationResolutionService,
     private readonly inventoryFreeze: InventoryFreezeService,
     private readonly notifications: NotificationsService,
@@ -275,8 +277,8 @@ export class EmployeeRelocationService {
 
   async listForUser(user: AuthenticatedUser, query: ListRelocationQueryDto) {
     await this.settingsService.assertFeatureEnabled('features.employee_relocation');
-    if (user.role !== 'admin' && user.role !== 'evidenticar') {
-      throw new ForbiddenException('Only registrar or admin can list relocation cases');
+    if (user.role !== 'admin' && user.role !== 'evidenticar' && user.role !== 'moderator') {
+      throw new ForbiddenException('Only admin, moderator, or registrar can list relocation cases');
     }
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
     const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
@@ -313,7 +315,7 @@ export class EmployeeRelocationService {
         page,
         pageSize: take,
       }),
-      user.role === 'admin'
+      user.role === 'admin' || user.role === 'moderator'
         ? paginate({
             findMany: (args) =>
               this.prisma.employeeRelocationCase.findMany({
@@ -324,7 +326,10 @@ export class EmployeeRelocationService {
                 },
               }),
             count: (args) => this.prisma.employeeRelocationCase.count(args),
-            where: { status: 'open' as const },
+            where:
+              user.role === 'admin'
+                ? { status: 'open' as const }
+                : { AND: [{ status: 'open' as const }, await this.buildModeratorCaseWhere(user)] },
             orderBy: caseOrderBy,
             page,
             pageSize: take,
@@ -347,6 +352,15 @@ export class EmployeeRelocationService {
     if (user.role === 'admin') {
       return base;
     }
+    if (user.role === 'moderator') {
+      const scopedIds = await this.moderatorScope.resolveModeratorOrgUnitIds(user);
+      if (!scopedIds || scopedIds.length === 0) {
+        return { id: { in: [] } };
+      }
+      const scopedWarehouseIds = await this.resolveModeratorWarehouseIds(scopedIds);
+      const scopeClauses = this.buildModeratorLineScopeClauses(scopedIds, scopedWarehouseIds);
+      return { AND: [base, { OR: scopeClauses }] };
+    }
     const scopeClauses = await this.buildRegistrarLineScopeClauses(user, 'source');
     if (scopeClauses.length === 0) {
       return { id: { in: [] } };
@@ -363,6 +377,15 @@ export class EmployeeRelocationService {
     };
     if (user.role === 'admin') {
       return base;
+    }
+    if (user.role === 'moderator') {
+      const scopedIds = await this.moderatorScope.resolveModeratorOrgUnitIds(user);
+      if (!scopedIds || scopedIds.length === 0) {
+        return { id: { in: [] } };
+      }
+      const scopedWarehouseIds = await this.resolveModeratorWarehouseIds(scopedIds);
+      const scopeClauses = this.buildModeratorLineScopeClauses(scopedIds, scopedWarehouseIds);
+      return { AND: [base, { OR: scopeClauses }] };
     }
     const scopeClauses = await this.buildRegistrarLineScopeClauses(user, 'dest');
     if (scopeClauses.length === 0) {
@@ -390,6 +413,57 @@ export class EmployeeRelocationService {
       });
     }
     return clauses;
+  }
+
+  private buildModeratorLineScopeClauses(
+    scopedOrgIds: string[],
+    scopedWarehouseIds: string[],
+  ): Prisma.EmployeeRelocationLineWhereInput[] {
+    const clauses: Prisma.EmployeeRelocationLineWhereInput[] = [
+      { case: { employee: { orgUnitId: { in: scopedOrgIds } } } },
+    ];
+    if (scopedWarehouseIds.length > 0) {
+      clauses.push({ case: { fromWarehouseId: { in: scopedWarehouseIds } } });
+      clauses.push({ case: { toWarehouseId: { in: scopedWarehouseIds } } });
+    }
+    return clauses;
+  }
+
+  private async resolveModeratorWarehouseIds(scopedOrgIds: string[]): Promise<string[]> {
+    const rows = await this.prisma.warehouse.findMany({
+      where: { orgUnitId: { in: scopedOrgIds }, isActive: true },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  private async buildModeratorCaseWhere(
+    user: AuthenticatedUser,
+  ): Promise<Prisma.EmployeeRelocationCaseWhereInput> {
+    const scopedIds = await this.moderatorScope.resolveModeratorOrgUnitIds(user);
+    if (!scopedIds || scopedIds.length === 0) {
+      return { id: { in: [] } };
+    }
+    const scopedWarehouseIds = await this.resolveModeratorWarehouseIds(scopedIds);
+    const clauses: Prisma.EmployeeRelocationCaseWhereInput[] = [
+      { employee: { orgUnitId: { in: scopedIds } } },
+    ];
+    if (scopedWarehouseIds.length > 0) {
+      clauses.push({ fromWarehouseId: { in: scopedWarehouseIds } });
+      clauses.push({ toWarehouseId: { in: scopedWarehouseIds } });
+    }
+    return { OR: clauses };
+  }
+
+  private async assertModeratorCanReadCase(user: AuthenticatedUser, caseId: string): Promise<void> {
+    const scopeWhere = await this.buildModeratorCaseWhere(user);
+    const match = await this.prisma.employeeRelocationCase.findFirst({
+      where: { AND: [{ id: caseId }, scopeWhere] },
+      select: { id: true },
+    });
+    if (!match) {
+      throw new ForbiddenException('Slučaj org. promjene je van vašeg opsega');
+    }
   }
 
   async listEventsForEquipment(equipmentId: string) {
@@ -423,6 +497,9 @@ export class EmployeeRelocationService {
     });
     if (!caseRow) {
       throw new NotFoundException('Case not found');
+    }
+    if (user.role === 'moderator') {
+      await this.assertModeratorCanReadCase(user, caseId);
     }
     return caseRow;
   }

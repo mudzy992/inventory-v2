@@ -9,4 +9,6 @@ export interface AuthenticatedUser {
   employeeId: string | null;
   registrarScopes: RegistrarScopeAssignment[];
   coordinatorAssignments: CoordinatorScopeAssignment[];
+  moderatorOrgRoots: string[];
+  moderatorWarehouseIds: string[];
 }

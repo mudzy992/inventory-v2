@@ -22,6 +22,9 @@ describe('warehouses list evidenticar scope', () => {
         { warehouseId: 'wh-b', categoryId: 'cat-2' },
         { warehouseId: 'wh-a', categoryId: 'cat-3' },
       ],
+      coordinatorAssignments: [],
+      moderatorOrgRoots: [],
+      moderatorWarehouseIds: [],
     };
     assert.deepEqual(buildEvidenticarWarehouseScope(user), {
       id: { in: ['wh-a', 'wh-b'] },
@@ -35,6 +38,9 @@ describe('warehouses list evidenticar scope', () => {
       role: 'evidenticar',
       employeeId: null,
       registrarScopes: [],
+      coordinatorAssignments: [],
+      moderatorOrgRoots: [],
+      moderatorWarehouseIds: [],
     };
     assert.deepEqual(buildEvidenticarWarehouseScope(user), { id: { in: [] } });
   });

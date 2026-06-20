@@ -93,6 +93,9 @@ const authUser = (
   role,
   employeeId: role === 'user' ? 'emp-user' : null,
   registrarScopes: [],
+  coordinatorAssignments: [],
+  moderatorOrgRoots: [],
+  moderatorWarehouseIds: [],
   ...overrides,
 });
 

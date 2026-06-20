@@ -33,19 +33,19 @@ export class TransfersController {
   ) {}
 
   @Get()
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListTransfersQueryDto) {
     return this.transfersService.findAll(user, query);
   }
 
   @Get('recent')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   findRecent(@CurrentUser() user: AuthenticatedUser, @Query() query: RecentTransfersQueryDto) {
     return this.transfersService.findRecent(user, query);
   }
 
   @Get(':id')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.transfersService.findOne(user, id);
   }

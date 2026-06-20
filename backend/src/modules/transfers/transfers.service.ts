@@ -10,6 +10,7 @@ import { detectCrossServiceTransfer } from '../../common/utils/transfer-cross-se
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { OrgScopeService } from '../../common/services/org-scope.service';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { SignerResolutionService } from '../../common/services/signer-resolution.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
@@ -79,6 +80,7 @@ export class TransfersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registrarScope: RegistrarScopeService,
+    private readonly moderatorScope: ModeratorScopeService,
     private readonly locationResolutionService: LocationResolutionService,
     private readonly settingsService: SettingsService,
     private readonly notificationsService: NotificationsService,
@@ -148,7 +150,7 @@ export class TransfersService {
     user: AuthenticatedUser,
     query: Pick<ListTransfersQueryDto, 'equipmentId' | 'status' | 'search' | 'personId' | 'warehouseId'>,
   ): Promise<Prisma.TransferWhereInput> {
-    const scopeWhere = await this.registrarScope.buildTransferWhere(user);
+    const scopeWhere = await this.buildTransferScopeWhere(user);
     const filters: Prisma.TransferWhereInput[] = [scopeWhere];
     if (query.equipmentId) {
       filters.push({ equipmentId: query.equipmentId });
@@ -184,6 +186,21 @@ export class TransfersService {
       });
     }
     return filters.length === 1 ? filters[0]! : { AND: filters };
+  }
+
+  private async buildTransferScopeWhere(user: AuthenticatedUser): Promise<Prisma.TransferWhereInput> {
+    if (this.moderatorScope.isModerator(user)) {
+      const equipmentWhere = (await this.moderatorScope.buildEquipmentReadWhere(user)) ?? {};
+      const employeeWhere = (await this.moderatorScope.buildScopedEmployeeWhere(user)) ?? {};
+      return {
+        OR: [
+          { equipment: equipmentWhere },
+          { fromPerson: employeeWhere },
+          { toPerson: employeeWhere },
+        ],
+      };
+    }
+    return this.registrarScope.buildTransferWhere(user);
   }
 
   async findOne(user: AuthenticatedUser, id: string) {

@@ -1,9 +1,17 @@
-import { ClipboardList, Package, Shield, User, CalendarRange } from 'lucide-react';
+import { ClipboardList, Package, Shield, User, CalendarRange, MapPinned } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { UserRole } from '../../types';
 
 export const USER_ROLE_OPTIONS: UserRole[] = [
   'admin',
+  'moderator',
+  'evidenticar',
+  'popis_koordinator',
+  'skladistar',
+  'user',
+];
+
+export const MODERATOR_ASSIGNABLE_ROLES: UserRole[] = [
   'evidenticar',
   'popis_koordinator',
   'skladistar',
@@ -19,6 +27,12 @@ export const USER_ROLE_META: Record<
     color: 'bg-amber-100 text-amber-800',
     icon: <Shield size={12} />,
     description: 'Puna konfiguracija sistema',
+  },
+  moderator: {
+    label: 'Moderator',
+    color: 'bg-orange-100 text-orange-800',
+    icon: <MapPinned size={12} />,
+    description: 'Regionalna operativna administracija',
   },
   evidenticar: {
     label: 'Evidentičar',

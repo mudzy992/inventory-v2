@@ -93,6 +93,24 @@ Izvor istine za preconditions, backend/frontend guardove i UX poruke po akciji.
 - **Gap:** —
 - **Prioritet:** —
 
+### roles-access.moderator_assignment
+- **Opis:** Admin dodjeljuje moderatoru org root(ove) i warehouse dodjele za popisne komisije
+- **Preconditions:** Min 1 org root; warehouse.orgUnitId u org scope; `@@unique([warehouseId])` na warehouse dodjeli
+- **Backend guard:** `users-validation.util` + `ModeratorScopeService` — ✓
+- **Frontend guard:** `UserFormModal` moderator assignment UI — ✓
+- **UX poruka (BS):** BS iz validacije
+- **Gap:** —
+- **Prioritet:** —
+
+### roles-access.moderator_scoped_write
+- **Opis:** Moderator mutira users/org/employees/warehouses/inventory committees u scope
+- **Preconditions:** `features.moderator_role`; target u scope; ne smije dodijeliti admin/moderator
+- **Backend guard:** `ModeratorScopeService` per-servis — ✓
+- **Frontend guard:** `role-page-access.ts`, scoped forms — ✓
+- **UX poruka (BS):** 403 Forbidden
+- **Gap:** —
+- **Prioritet:** —
+
 ---
 
 ## settings

@@ -13,7 +13,8 @@ import type {
 
 /** Lightweight bootstrap: reference data + notifications; large lists load per-page. */
 export const fetchBootstrap = async (role: UserRole): Promise<AppState> => {
-  const loadLocations = role === 'admin' || role === 'evidenticar' || role === 'skladistar';
+  const loadLocations =
+    role === 'admin' || role === 'moderator' || role === 'evidenticar' || role === 'skladistar';
   const [orgUnits, categories, notifications, cantons, cities, warehouses] = await Promise.all([
     fetchOrgUnitsFlatApi(),
     fetchCategoriesFlatApi(),
@@ -109,6 +110,8 @@ export interface CreateUserPayload {
   isActive?: boolean;
   registrarScopes?: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
   coordinatorAssignments?: { warehouseId: string; orgUnitId?: string | null }[];
+  moderatorOrgAssignments?: { orgUnitId: string }[];
+  moderatorWarehouseAssignments?: { warehouseId: string }[];
 }
 
 export interface UpdateUserPayload {
@@ -118,6 +121,8 @@ export interface UpdateUserPayload {
   isActive?: boolean;
   registrarScopes?: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
   coordinatorAssignments?: { warehouseId: string; orgUnitId?: string | null }[];
+  moderatorOrgAssignments?: { orgUnitId: string }[];
+  moderatorWarehouseAssignments?: { warehouseId: string }[];
 }
 
 export const createUserApi = (body: CreateUserPayload) =>

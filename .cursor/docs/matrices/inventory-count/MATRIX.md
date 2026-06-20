@@ -77,7 +77,17 @@ Ograničenja:
 | Kreiranje | blokirano dok postoji bilo koja otvorena sesija u sistemu |
 | Scheduler | Jan 1 / lock dan — skip + log ako je lock aktivan |
 
-## Konfiguracija komisije (admin / koordinator, draft sesija)
+## Konfiguracija komisije (admin / koordinator / moderator, draft sesija)
+
+| Uloga | Scope |
+|-------|-------|
+| `admin` | sva skladišta u sesiji |
+| `popis_koordinator` | dodijeljena skladišta (`InventoryCoordinatorAssignment`) |
+| `moderator` | dodijeljena skladišta (`ModeratorWarehouseAssignment`, 1× po skladištu) |
+
+Moderator **ne** kreira/aktivira/zatvara sesiju — samo konfiguracija članova slotova.
+
+## Konfiguracija komisije — koraci (draft sesija)
 
 | Korak | Polje | Pravilo |
 |------:|-------|---------|

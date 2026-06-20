@@ -27,48 +27,48 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Get()
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListEmployeesQueryDto) {
     return this.employeesService.findAll(user, query);
   }
 
   @Get('search')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   search(@CurrentUser() user: AuthenticatedUser, @Query() query: SearchEmployeesQueryDto) {
     return this.employeesService.search(user, query);
   }
 
   @Get(':id/profile')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar)
   getProfile(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.employeesService.getProfile(user, id);
   }
 
   @Get(':id')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.employeesService.findOne(user, id);
   }
 
   @Post()
-  @Roles(UserRole.admin)
-  create(@Body() body: CreateEmployeeDto) {
-    return this.employeesService.create(body);
+  @Roles(UserRole.admin, UserRole.moderator)
+  create(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateEmployeeDto) {
+    return this.employeesService.create(user, body);
   }
 
   @Patch(':id')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.moderator)
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Body() body: UpdateEmployeeDto,
   ) {
-    return this.employeesService.update(id, body, user.id);
+    return this.employeesService.update(user, id, body);
   }
 
   @Delete(':id')
-  @Roles(UserRole.admin)
-  remove(@Param('id') id: string) {
-    return this.employeesService.remove(id);
+  @Roles(UserRole.admin, UserRole.moderator)
+  remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.employeesService.remove(user, id);
   }
 }

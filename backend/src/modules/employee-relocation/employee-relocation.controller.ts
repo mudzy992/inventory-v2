@@ -38,13 +38,13 @@ export class EmployeeRelocationController {
   }
 
   @Get()
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   list(@CurrentUser() user: AuthenticatedUser, @Query() query: ListRelocationQueryDto) {
     return this.relocationService.listForUser(user, query);
   }
 
   @Get('cases/:id')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   getCase(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.relocationService.getCase(user, id);
   }

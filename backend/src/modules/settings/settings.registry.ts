@@ -157,6 +157,15 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'modules',
   }),
   def({
+    key: 'features.moderator_role',
+    scope: 'private',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Uloga moderator',
+    description: 'Omogućava org-scoped operativnog administratora i warehouse moderatore za popisne komisije.',
+    group: 'modules',
+  }),
+  def({
     key: 'features.employees',
     scope: 'public',
     valueType: 'boolean',

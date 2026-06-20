@@ -23,6 +23,9 @@ export class InventoryCoordinatorScopeService {
     if (this.hasFullAccess(user)) {
       return true;
     }
+    if (user.role === 'moderator') {
+      return user.moderatorWarehouseIds.includes(warehouseId);
+    }
     if (user.role !== 'popis_koordinator') {
       return false;
     }

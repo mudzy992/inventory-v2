@@ -20,6 +20,7 @@ import {
 } from '../../common/utils/pagination.util';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { InventoryCoordinatorScopeService } from '../../common/services/inventory-coordinator-scope.service';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { InventoryProductionModeService } from '../../common/services/inventory-production-mode.service';
 import { OrgScopeService } from '../../common/services/org-scope.service';
@@ -148,6 +149,7 @@ export class InventoryCountService {
     private readonly locationResolutionService: LocationResolutionService,
     private readonly registrarScope: RegistrarScopeService,
     private readonly coordinatorScope: InventoryCoordinatorScopeService,
+    private readonly moderatorScope: ModeratorScopeService,
     private readonly productionModeService: InventoryProductionModeService,
     private readonly orgScopeService: OrgScopeService,
     private readonly notificationsService: NotificationsService,
@@ -521,8 +523,11 @@ export class InventoryCountService {
     });
   }
 
-  async getSessionWarehouses(sessionId: string) {
+  async getSessionWarehouses(sessionId: string, user?: AuthenticatedUser) {
     await this.assertInventoryCountEnabled();
+    if (user) {
+      await this.assertSessionAccess(user, sessionId);
+    }
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: sessionId },
       select: { orgUnitId: true, status: true },
@@ -537,11 +542,31 @@ export class InventoryCountService {
       orderBy: { warehouse: { name: 'asc' } },
     });
     if (committees.length > 0) {
-      return committees
+      const rows = committees
         .map((row) => row.warehouse)
         .filter((row): row is { id: string; name: string } => Boolean(row));
+      return this.filterSessionWarehousesForUser(user, rows);
     }
-    return this.listWarehousesForSessionSlots();
+    const all = await this.listWarehousesForSessionSlots();
+    return this.filterSessionWarehousesForUser(user, all);
+  }
+
+  private filterSessionWarehousesForUser<T extends { id: string }>(
+    user: AuthenticatedUser | undefined,
+    rows: T[],
+  ): T[] {
+    if (!user) {
+      return rows;
+    }
+    if (user.role === 'moderator') {
+      const allowed = new Set(user.moderatorWarehouseIds);
+      return rows.filter((row) => allowed.has(row.id));
+    }
+    if (user.role === 'popis_koordinator') {
+      const allowed = new Set(user.coordinatorAssignments.map((row) => row.warehouseId));
+      return rows.filter((row) => allowed.has(row.id));
+    }
+    return rows;
   }
 
   async getCommitteeSetupOptions(sessionId: string, warehouseId: string, excludeCommitteeId?: string) {
@@ -1048,7 +1073,23 @@ export class InventoryCountService {
       filters.push({ orgUnitId });
     }
     if (user.role !== 'admin' && user.role !== 'evidenticar') {
-      if (user.role === 'popis_koordinator') {
+      if (user.role === 'moderator') {
+        const orgIds = await this.moderatorScope.expandModeratorOrgRoots(user.moderatorOrgRoots);
+        const warehouseIds = user.moderatorWarehouseIds;
+        if (orgIds.length === 0 && warehouseIds.length === 0) {
+          return { id: { in: [] } };
+        }
+        const orFilters: Prisma.InventorySessionWhereInput[] = [];
+        if (orgIds.length > 0) {
+          orFilters.push({ orgUnitId: { in: orgIds } });
+        }
+        if (warehouseIds.length > 0) {
+          orFilters.push({
+            committees: { some: { warehouseId: { in: warehouseIds } } },
+          });
+        }
+        filters.push(orFilters.length === 1 ? orFilters[0]! : { OR: orFilters });
+      } else if (user.role === 'popis_koordinator') {
         const warehouseIds = await this.coordinatorScope.getAssignedWarehouseIds(user);
         const orgUnitIds = await this.coordinatorScope.getAssignedOrgUnitIds(user);
         if (warehouseIds.length === 0 && orgUnitIds.length === 0) {
@@ -1097,6 +1138,12 @@ export class InventoryCountService {
         return { id: { in: [] } };
       }
       return { ...base, warehouseId: { in: warehouseIds } };
+    }
+    if (user.role === 'moderator') {
+      if (user.moderatorWarehouseIds.length === 0) {
+        return { id: { in: [] } };
+      }
+      return { ...base, warehouseId: { in: user.moderatorWarehouseIds } };
     }
     const actor = await this.prisma.user.findUnique({
       where: { id: user.id },
@@ -2236,7 +2283,12 @@ export class InventoryCountService {
     const userId = await this.resolveSystemActorUserId();
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
+      include: {
+        registrarAssignments: true,
+        inventoryCoordinatorAssignments: true,
+        moderatorOrgAssignments: true,
+        moderatorWarehouseAssignments: true,
+      },
     });
     if (!user) {
       throw new BadRequestException('System actor user not found');
@@ -2255,6 +2307,8 @@ export class InventoryCountService {
         warehouseId: row.warehouseId,
         orgUnitId: row.orgUnitId,
       })),
+      moderatorOrgRoots: user.moderatorOrgAssignments.map((row) => row.orgUnitId),
+      moderatorWarehouseIds: user.moderatorWarehouseAssignments.map((row) => row.warehouseId),
     };
   }
 

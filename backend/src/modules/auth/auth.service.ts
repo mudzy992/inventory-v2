@@ -22,6 +22,8 @@ export interface AuthUserResponse {
   employeeId: string | null;
   registrarScopes: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
   coordinatorAssignments: { warehouseId: string; orgUnitId?: string | null }[];
+  moderatorOrgAssignments: { orgUnitId: string }[];
+  moderatorWarehouseAssignments: { warehouseId: string }[];
 }
 
 @Injectable()
@@ -35,7 +37,12 @@ export class AuthService {
   async login(username: string, password: string): Promise<{ tokens: AuthTokens; user: AuthUserResponse }> {
     const user = await this.prisma.user.findUnique({
       where: { username },
-      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
+      include: {
+        registrarAssignments: true,
+        inventoryCoordinatorAssignments: true,
+        moderatorOrgAssignments: true,
+        moderatorWarehouseAssignments: true,
+      },
     });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials');
@@ -58,6 +65,8 @@ export class AuthService {
         user.employeeId,
         user.registrarAssignments,
         user.inventoryCoordinatorAssignments,
+        user.moderatorOrgAssignments,
+        user.moderatorWarehouseAssignments,
       ),
     };
   }
@@ -101,6 +110,8 @@ export class AuthService {
         warehouseId: row.warehouseId,
         orgUnitId: row.orgUnitId ?? null,
       })),
+      user.moderatorOrgRoots.map((orgUnitId) => ({ orgUnitId })),
+      user.moderatorWarehouseIds.map((warehouseId) => ({ warehouseId })),
     );
   }
 
@@ -134,6 +145,8 @@ export class AuthService {
       warehouseId: string;
       orgUnitId: string | null;
     }[],
+    moderatorOrgAssignments: { orgUnitId: string }[],
+    moderatorWarehouseAssignments: { warehouseId: string }[],
   ): AuthUserResponse {
     return {
       id,
@@ -148,6 +161,12 @@ export class AuthService {
       coordinatorAssignments: coordinatorAssignments.map((row) => ({
         warehouseId: row.warehouseId,
         orgUnitId: row.orgUnitId,
+      })),
+      moderatorOrgAssignments: moderatorOrgAssignments.map((row) => ({
+        orgUnitId: row.orgUnitId,
+      })),
+      moderatorWarehouseAssignments: moderatorWarehouseAssignments.map((row) => ({
+        warehouseId: row.warehouseId,
       })),
     };
   }

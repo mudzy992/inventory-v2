@@ -10,6 +10,9 @@ const adminUser: AuthenticatedUser = {
   role: 'admin',
   employeeId: null,
   registrarScopes: [],
+  coordinatorAssignments: [],
+  moderatorOrgRoots: [],
+  moderatorWarehouseIds: [],
 };
 
 const registrarUser: AuthenticatedUser = {
@@ -18,6 +21,9 @@ const registrarUser: AuthenticatedUser = {
   role: 'evidenticar',
   employeeId: 'emp-1',
   registrarScopes: [],
+  coordinatorAssignments: [],
+  moderatorOrgRoots: [],
+  moderatorWarehouseIds: [],
 };
 
 const baseLine = {
@@ -87,6 +93,7 @@ const createService = (options: {
 
   const service = new EmployeeRelocationService(
     prisma as never,
+    {} as never,
     {} as never,
     {} as never,
     {} as never,

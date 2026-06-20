@@ -14,6 +14,7 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import {
   ACCOUNTING_TRACKED_EXCLUSION_MESSAGE,
   isDisposalEligible,
@@ -44,6 +45,7 @@ export class WarehousesService {
     private readonly inventoryFreeze: InventoryFreezeService,
     private readonly warehouseResolutionService: WarehouseResolutionService,
     private readonly settingsService: SettingsService,
+    private readonly moderatorScope: ModeratorScopeService,
   ) {}
 
   async findAll(user: AuthenticatedUser, query: ListWarehousesQueryDto) {
@@ -76,6 +78,12 @@ export class WarehousesService {
     if (user.role === 'evidenticar') {
       const warehouseIds = [...new Set(user.registrarScopes.map((row) => row.warehouseId))];
       filters.push(warehouseIds.length > 0 ? { id: { in: warehouseIds } } : { id: { in: [] } });
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      const scopedWhere = await this.moderatorScope.buildScopedWarehouseWhere(user);
+      if (scopedWhere) {
+        filters.push(scopedWhere);
+      }
     }
     const searchWhere = buildContainsSearchWhere(query.search, ['name']);
     if (searchWhere) {
@@ -166,12 +174,14 @@ export class WarehousesService {
   }
 
   async create(user: AuthenticatedUser, dto: CreateWarehouseDto) {
+    await this.assertModeratorWrites(user);
     await this.settingsService.assertFeatureEnabled('features.warehouses');
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('Only admin can create warehouses');
+    if (!this.moderatorScope.isSystemAdmin(user) && !this.moderatorScope.isModerator(user)) {
+      throw new ForbiddenException('Only admin or moderator can create warehouses');
     }
     await this.assertCityExists(dto.cityId);
     await this.assertOrgUnitExists(dto.orgUnitId);
+    await this.moderatorScope.assertOrgUnitInScope(user, dto.orgUnitId);
     if (!dto.keeperUserIds.length) {
       throw new BadRequestException(WAREHOUSE_MESSAGES.keeperRequired);
     }
@@ -190,11 +200,18 @@ export class WarehousesService {
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateWarehouseDto) {
+    await this.assertModeratorWrites(user);
     await this.settingsService.assertFeatureEnabled('features.warehouses');
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('Only admin can update warehouses');
+    if (!this.moderatorScope.isSystemAdmin(user) && !this.moderatorScope.isModerator(user)) {
+      throw new ForbiddenException('Only admin or moderator can update warehouses');
     }
-    await this.getWarehouseOrThrow(id);
+    const existing = await this.getWarehouseOrThrow(id);
+    await this.moderatorScope.assertWarehouseInOrgScope(user, id);
+    if (dto.orgUnitId) {
+      await this.moderatorScope.assertOrgUnitInScope(user, dto.orgUnitId);
+    } else if (existing.orgUnitId) {
+      await this.moderatorScope.assertOrgUnitInScope(user, existing.orgUnitId);
+    }
     if (dto.cityId) {
       await this.assertCityExists(dto.cityId);
     }
@@ -268,7 +285,20 @@ export class WarehousesService {
     if (user.role === 'admin' || user.role === 'evidenticar') {
       return;
     }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertWarehouseInOrgScope(user, warehouseId);
+      return;
+    }
     await this.assertKeeperCanManageWarehouse(user, warehouseId);
+  }
+
+  private async assertModeratorWrites(user: AuthenticatedUser): Promise<void> {
+    if (this.moderatorScope.isModerator(user)) {
+      await this.settingsService.assertFeatureEnabled(
+        'features.moderator_role',
+        'Uloga moderatora je onemogućena u postavkama',
+      );
+    }
   }
 
   private async assertCityExists(cityId: string): Promise<void> {

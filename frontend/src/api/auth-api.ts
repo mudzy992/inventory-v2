@@ -11,6 +11,8 @@ export interface AuthUserDto {
   employeeId: string | null;
   registrarScopes: { warehouseId: string; categoryId: string; orgUnitId?: string | null }[];
   coordinatorAssignments?: { warehouseId: string; orgUnitId?: string | null }[];
+  moderatorOrgAssignments?: { orgUnitId: string }[];
+  moderatorWarehouseAssignments?: { warehouseId: string }[];
 }
 
 export interface LoginResponseDto {

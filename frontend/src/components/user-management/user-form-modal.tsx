@@ -15,6 +15,8 @@ import type {
   Equipment,
   OrgUnit,
   CoordinatorScopeAssignment,
+  ModeratorOrgAssignment,
+  ModeratorWarehouseAssignment,
   RegistrarScopeAssignment,
   UserAccount,
   UserRole,
@@ -22,7 +24,9 @@ import type {
 } from '../../types';
 import { validateRegistrarScopes } from '../../helpers/registrar-assignment-rules';
 import { UserAccessFields } from './user-access-fields';
+import { MODERATOR_ASSIGNABLE_ROLES, USER_ROLE_OPTIONS } from './user-role-config';
 import { ModalRoot } from '../ui/modal-root';
+import { isAdmin } from '../../store';
 
 export type UserFormMode = 'create' | 'edit';
 
@@ -76,7 +80,13 @@ export const UserFormModal = ({
   const [coordinatorAssignments, setCoordinatorAssignments] = useState<CoordinatorScopeAssignment[]>(
     [],
   );
+  const [moderatorOrgAssignments, setModeratorOrgAssignments] = useState<ModeratorOrgAssignment[]>([]);
+  const [moderatorWarehouseAssignments, setModeratorWarehouseAssignments] = useState<
+    ModeratorWarehouseAssignment[]
+  >([]);
   const [isActive, setIsActive] = useState(true);
+  const actorIsAdmin = isAdmin();
+  const roleOptions = actorIsAdmin ? USER_ROLE_OPTIONS : MODERATOR_ASSIGNABLE_ROLES;
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -112,6 +122,8 @@ export const UserFormModal = ({
       setRole(user.role);
       setRegistrarScopes(user.registrarScopes ?? []);
       setCoordinatorAssignments(user.coordinatorAssignments ?? []);
+      setModeratorOrgAssignments(user.moderatorOrgAssignments ?? []);
+      setModeratorWarehouseAssignments(user.moderatorWarehouseAssignments ?? []);
       setIsActive(user.isActive);
       return;
     }
@@ -122,6 +134,8 @@ export const UserFormModal = ({
     setRole('user');
     setRegistrarScopes([]);
     setCoordinatorAssignments([]);
+    setModeratorOrgAssignments([]);
+    setModeratorWarehouseAssignments([]);
     setIsActive(true);
   }, [mode, user, employeesWithoutAccount]);
 
@@ -144,6 +158,10 @@ export const UserFormModal = ({
     if (nextRole !== 'popis_koordinator') {
       setCoordinatorAssignments([]);
     }
+    if (nextRole !== 'moderator') {
+      setModeratorOrgAssignments([]);
+      setModeratorWarehouseAssignments([]);
+    }
   };
 
   const handleSubmit = async () => {
@@ -162,6 +180,10 @@ export const UserFormModal = ({
     }
     if (role === 'evidenticar' && registrarScopes.length === 0) {
       setError('Evidentičar mora imati barem jednu dodjelu (skladište + kategorija).');
+      return;
+    }
+    if (role === 'moderator' && actorIsAdmin && moderatorOrgAssignments.length === 0) {
+      setError('Moderator mora imati barem jedan org root.');
       return;
     }
     if (role === 'evidenticar') {
@@ -187,6 +209,10 @@ export const UserFormModal = ({
           isActive,
           registrarScopes: role === 'evidenticar' ? registrarScopes : [],
           coordinatorAssignments: role === 'popis_koordinator' ? coordinatorAssignments : [],
+          moderatorOrgAssignments:
+            actorIsAdmin && role === 'moderator' ? moderatorOrgAssignments : undefined,
+          moderatorWarehouseAssignments:
+            actorIsAdmin && role === 'moderator' ? moderatorWarehouseAssignments : undefined,
         };
         await createUserApi(createPayload);
       } else if (user) {
@@ -196,6 +222,10 @@ export const UserFormModal = ({
           isActive,
           registrarScopes: role === 'evidenticar' ? registrarScopes : [],
           coordinatorAssignments: role === 'popis_koordinator' ? coordinatorAssignments : [],
+          moderatorOrgAssignments:
+            actorIsAdmin && role === 'moderator' ? moderatorOrgAssignments : undefined,
+          moderatorWarehouseAssignments:
+            actorIsAdmin && role === 'moderator' ? moderatorWarehouseAssignments : undefined,
         };
         if (password.length >= 6) {
           updatePayload.password = password;
@@ -290,10 +320,16 @@ export const UserFormModal = ({
               <UserAccessFields
                 role={role}
                 onRoleChange={handleRoleChange}
+                roleOptions={roleOptions}
                 registrarScopes={registrarScopes}
                 onRegistrarScopesChange={setRegistrarScopes}
                 coordinatorAssignments={coordinatorAssignments}
                 onCoordinatorAssignmentsChange={setCoordinatorAssignments}
+                moderatorOrgAssignments={moderatorOrgAssignments}
+                onModeratorOrgAssignmentsChange={setModeratorOrgAssignments}
+                moderatorWarehouseAssignments={moderatorWarehouseAssignments}
+                onModeratorWarehouseAssignmentsChange={setModeratorWarehouseAssignments}
+                canEditModeratorAssignments={actorIsAdmin}
                 warehouses={warehouses}
                 categories={categories}
                 orgUnits={orgUnits}

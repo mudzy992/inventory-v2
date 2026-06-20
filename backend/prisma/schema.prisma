@@ -9,6 +9,7 @@ datasource db {
 
 enum UserRole {
   admin
+  moderator
   evidenticar
   popis_koordinator
   user
@@ -323,6 +324,8 @@ model User {
   relocationEvents                 EmployeeRelocationEvent[]     @relation("RelocationEventActor")
   disposalListItemsMarked          EquipmentDisposalListItem[] @relation("DisposalListMarkedBy")
   disposalListItemsWithdrawn       EquipmentDisposalListItem[] @relation("DisposalListWithdrawnBy")
+  moderatorOrgAssignments          ModeratorOrgAssignment[]
+  moderatorWarehouseAssignments    ModeratorWarehouseAssignment[]
 
   @@index([role])
   @@map("users")
@@ -365,6 +368,36 @@ model InventoryCoordinatorAssignment {
   @@index([userId])
   @@index([warehouseId])
   @@map("inventory_coordinator_assignments")
+}
+
+model ModeratorOrgAssignment {
+  id        String   @id @default(uuid())
+  userId    String
+  orgUnitId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgUnit OrgUnit @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgUnitId])
+  @@index([userId])
+  @@index([orgUnitId])
+  @@map("moderator_org_assignments")
+}
+
+model ModeratorWarehouseAssignment {
+  id          String   @id @default(uuid())
+  userId      String
+  warehouseId String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("moderator_warehouse_assignments")
 }
 
 model Employee {
@@ -422,6 +455,7 @@ model OrgUnit {
   inventorySessions               InventorySession[]
   registrarAssignments            RegistrarAssignment[]
   inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
+  moderatorOrgAssignments         ModeratorOrgAssignment[]
 
   @@index([parentId])
   @@index([type])
@@ -449,6 +483,7 @@ model Warehouse {
   inventoryLineTargets  InventoryLine[]
   registrarAssignments            RegistrarAssignment[]
   inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
+  moderatorWarehouseAssignments   ModeratorWarehouseAssignment[]
   transfersFrom                   Transfer[]            @relation("TransferFromWarehouse")
   transfersTo           Transfer[]            @relation("TransferToWarehouse")
   equipmentEvents       EquipmentEvent[]

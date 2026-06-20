@@ -17,6 +17,7 @@ import {
   getRegistrarScopes,
   isAdmin,
   isEvidenticar,
+  isModerator,
 } from '../store';
 import { formatRegistrarAssignmentLabel } from '../helpers/org-warehouse.util';
 import {
@@ -35,7 +36,9 @@ export function Dashboard() {
   const navigate = useNavigate();
   const [state] = useStore();
   const admin = isAdmin();
+  const moderator = isModerator();
   const evidenticar = isEvidenticar();
+  const hasOverviewAccess = admin || moderator;
   const inventoryCountEnabled = useIsPageEnabled('inventory-count');
   const user = getCurrentUser();
   const scopes = getRegistrarScopes();
@@ -113,7 +116,7 @@ export function Dashboard() {
   const inWarehouse = equipmentSummary?.byStatus.skladiste ?? 0;
   const assigned = equipmentSummary?.byStatus.zaduzeno ?? 0;
   const decommissioned = equipmentSummary?.byStatus.rashodovano ?? 0;
-  const scopeCount = admin ? state.cities.length : scopes.length;
+  const scopeCount = hasOverviewAccess ? state.cities.length : scopes.length;
   const assignmentLabels = scopes.map((scope) => formatRegistrarAssignmentLabel(scope, state));
   const myWarehouseIds = new Set(scopes.map((scope) => scope.warehouseId));
   const myWarehouses = state.warehouses.filter((row) => myWarehouseIds.has(row.id));
@@ -142,11 +145,13 @@ export function Dashboard() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
-          {admin ? 'Kontrolna tabla' : 'Kontrolna tabla - Evidencija'}
+          {hasOverviewAccess ? 'Kontrolna tabla' : 'Kontrolna tabla - Evidencija'}
         </h1>
         <p className="text-gray-500 mt-1">
-          {admin
-            ? 'Pregled ukupnog stanja opreme i zaduženja'
+          {hasOverviewAccess
+            ? moderator && !admin
+              ? 'Pregled stanja opreme u vašem regionalnom opsegu'
+              : 'Pregled ukupnog stanja opreme i zaduženja'
             : `Pregled stanja za ${assignmentLabels.length} dodjela (skladište + kategorija)`}
         </p>
       </div>

@@ -5,6 +5,8 @@ import type {
   Equipment,
   OrgUnit,
   CoordinatorScopeAssignment,
+  ModeratorOrgAssignment,
+  ModeratorWarehouseAssignment,
   RegistrarScopeAssignment,
   UserRole,
   Warehouse as WarehouseType,
@@ -23,10 +25,16 @@ import { Check, X } from 'lucide-react';
 interface UserAccessFieldsProps {
   role: UserRole;
   onRoleChange: (role: UserRole) => void;
+  roleOptions?: UserRole[];
   registrarScopes: RegistrarScopeAssignment[];
   onRegistrarScopesChange: (scopes: RegistrarScopeAssignment[]) => void;
   coordinatorAssignments: CoordinatorScopeAssignment[];
   onCoordinatorAssignmentsChange: (scopes: CoordinatorScopeAssignment[]) => void;
+  moderatorOrgAssignments: ModeratorOrgAssignment[];
+  onModeratorOrgAssignmentsChange: (scopes: ModeratorOrgAssignment[]) => void;
+  moderatorWarehouseAssignments: ModeratorWarehouseAssignment[];
+  onModeratorWarehouseAssignmentsChange: (scopes: ModeratorWarehouseAssignment[]) => void;
+  canEditModeratorAssignments?: boolean;
   warehouses: WarehouseType[];
   categories: Category[];
   orgUnits: OrgUnit[];
@@ -40,10 +48,16 @@ interface UserAccessFieldsProps {
 export const UserAccessFields = ({
   role,
   onRoleChange,
+  roleOptions = USER_ROLE_OPTIONS,
   registrarScopes,
   onRegistrarScopesChange,
   coordinatorAssignments,
   onCoordinatorAssignmentsChange,
+  moderatorOrgAssignments,
+  onModeratorOrgAssignmentsChange,
+  moderatorWarehouseAssignments,
+  onModeratorWarehouseAssignmentsChange,
+  canEditModeratorAssignments = false,
   warehouses,
   categories,
   orgUnits,
@@ -61,6 +75,23 @@ export const UserAccessFields = ({
   };
   const activeWarehouses = warehouses.filter((row) => row.isActive !== false);
   const parentCategories = categories.filter((row) => row.parentId === null);
+  const moderatorOrgRootOptions = orgUnits.filter((row) =>
+    ['distribucija', 'podrucje', 'podruznica'].includes(row.type),
+  );
+  const isWarehouseInModeratorOrgScope = (warehouse: WarehouseType): boolean => {
+    if (!warehouse.orgUnitId || moderatorOrgAssignments.length === 0) {
+      return false;
+    }
+    let currentId: string | null = warehouse.orgUnitId;
+    while (currentId) {
+      if (moderatorOrgAssignments.some((row) => row.orgUnitId === currentId)) {
+        return true;
+      }
+      currentId = orgUnits.find((unit) => unit.id === currentId)?.parentId ?? null;
+    }
+    return false;
+  };
+  const scopedModeratorWarehouses = activeWarehouses.filter(isWarehouseInModeratorOrgScope);
 
   const handleAddScope = () => {
     const warehouseId = activeWarehouses[0]?.id ?? '';
@@ -125,7 +156,7 @@ export const UserAccessFields = ({
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Uloga i pristup</label>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          {USER_ROLE_OPTIONS.map((option) => (
+          {roleOptions.map((option) => (
             <button
               key={option}
               type="button"
@@ -283,6 +314,129 @@ export const UserAccessFields = ({
               <Plus size={14} />
               Dodaj skladište
             </button>
+          </div>
+        </div>
+      )}
+      {role === 'moderator' && canEditModeratorAssignments && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <MapPin size={14} className="inline mr-1" />
+              Org rootovi (regionalni opseg)
+            </label>
+            <p className="text-xs text-gray-500 mb-3">
+              Odaberite distribuciju, područje ili podružnicu. Moderator upravlja cijelim podstablom.
+            </p>
+            <div className="space-y-2">
+              {moderatorOrgAssignments.map((scope, index) => (
+                <div key={`mod-org-${scope.orgUnitId}-${index}`} className="flex flex-wrap gap-2 items-center">
+                  <select
+                    className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm min-w-[220px]"
+                    value={scope.orgUnitId}
+                    onChange={(event) =>
+                      onModeratorOrgAssignmentsChange(
+                        moderatorOrgAssignments.map((row, rowIndex) =>
+                          rowIndex === index ? { orgUnitId: event.target.value } : row,
+                        ),
+                      )
+                    }
+                  >
+                    {moderatorOrgRootOptions.map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="text-xs text-red-600"
+                    onClick={() =>
+                      onModeratorOrgAssignmentsChange(
+                        moderatorOrgAssignments.filter((_, rowIndex) => rowIndex !== index),
+                      )
+                    }
+                  >
+                    Ukloni
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const orgUnitId = moderatorOrgRootOptions[0]?.id ?? '';
+                  if (!orgUnitId) {
+                    return;
+                  }
+                  onModeratorOrgAssignmentsChange([...moderatorOrgAssignments, { orgUnitId }]);
+                }}
+                disabled={moderatorOrgRootOptions.length === 0}
+                className="flex items-center gap-1 text-sm text-orange-700 hover:text-orange-900 disabled:opacity-50"
+              >
+                <Plus size={14} />
+                Dodaj org root
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Warehouse size={14} className="inline mr-1" />
+              Skladišta za popisne komisije
+            </label>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 mb-3">
+              Jedno skladište može imati samo jednog moderatora (1:1 dodjela).
+            </p>
+            <div className="space-y-2">
+              {moderatorWarehouseAssignments.map((scope, index) => (
+                <div key={`mod-wh-${scope.warehouseId}-${index}`} className="flex flex-wrap gap-2 items-center">
+                  <select
+                    className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm min-w-[220px]"
+                    value={scope.warehouseId}
+                    onChange={(event) =>
+                      onModeratorWarehouseAssignmentsChange(
+                        moderatorWarehouseAssignments.map((row, rowIndex) =>
+                          rowIndex === index ? { warehouseId: event.target.value } : row,
+                        ),
+                      )
+                    }
+                  >
+                    {scopedModeratorWarehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="text-xs text-red-600"
+                    onClick={() =>
+                      onModeratorWarehouseAssignmentsChange(
+                        moderatorWarehouseAssignments.filter((_, rowIndex) => rowIndex !== index),
+                      )
+                    }
+                  >
+                    Ukloni
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const warehouseId = scopedModeratorWarehouses[0]?.id ?? '';
+                  if (!warehouseId) {
+                    return;
+                  }
+                  onModeratorWarehouseAssignmentsChange([
+                    ...moderatorWarehouseAssignments,
+                    { warehouseId },
+                  ]);
+                }}
+                disabled={scopedModeratorWarehouses.length === 0 || moderatorOrgAssignments.length === 0}
+                className="flex items-center gap-1 text-sm text-orange-700 hover:text-orange-900 disabled:opacity-50"
+              >
+                <Plus size={14} />
+                Dodaj skladište
+              </button>
+            </div>
           </div>
         </div>
       )}
