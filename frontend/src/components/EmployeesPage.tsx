@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useStore, useRefreshData } from '../useStore';
 import { createEmployeeApi, deleteEmployeeApi, updateEmployeeApi } from '../api/data-api';
-import { fetchEmployeesPageApi } from '../api/employees-api';
+import { fetchEmployeesPageApi, fetchEmployeeProfileApi } from '../api/employees-api';
 import { usePaginatedList } from '../hooks/usePaginatedList';
 import { previewRelocationApi, type RelocationPreview } from '../api/employee-relocation-api';
 import { ApiError } from '../api/client';
@@ -14,13 +15,28 @@ import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
 import { EmployeeTitleAutocomplete } from './employee-title-autocomplete';
 import { resolveCanonicalEmployeeTitle } from './employee-title-suggestions';
 import { OrgUnitAutocomplete } from './org-unit-autocomplete';
-import type { Employee } from '../types';
+import type { Employee, EmployeeGender } from '../types';
 import { PageHeaderRow } from './ui/page-header-row';
 import { ResponsiveTable } from './ui/responsive-table';
 import { PaginationControls } from './ui/pagination-controls';
 import { ModalRoot } from './ui/modal-root';
 import { EmployeeProfileDialog } from './employees/employee-profile-dialog';
 import { EquipmentCard } from './EquipmentCard';
+
+const getUserRoleLabel = (role: string): string => {
+  switch (role) {
+    case 'admin':
+      return 'Administrator';
+    case 'evidenticar':
+      return 'Evidentičar';
+    case 'skladistar':
+      return 'Skladištar';
+    case 'popis_koordinator':
+      return 'Koordinator popisa';
+    default:
+      return 'Korisnik';
+  }
+};
 
 export function EmployeesPage() {
   const [state] = useStore();
@@ -39,21 +55,40 @@ export function EmployeesPage() {
   const [fOrgUnit, setFOrgUnit] = useState('');
   const [fEmail, setFEmail] = useState('');
   const [fPhone, setFPhone] = useState('');
+  const [fStaffNumber, setFStaffNumber] = useState('');
+  const [fGender, setFGender] = useState<EmployeeGender>('male');
+  const [fIsActive, setFIsActive] = useState(true);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
+  const [deactivateLinkedRole, setDeactivateLinkedRole] = useState<string | null>(null);
   const [relocationPreview, setRelocationPreview] = useState<RelocationPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null);
   const [viewEquipmentId, setViewEquipmentId] = useState<string | null>(null);
 
   const canViewProfile = admin || evidenticar;
 
-  const list = usePaginatedList<Employee, { orgUnitId?: string }>({
+  useEffect(() => {
+    const profileId = searchParams.get('profile');
+    if (profileId) {
+      setProfileEmployeeId(profileId);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const list = usePaginatedList<Employee, { orgUnitId?: string; isActive?: boolean }>({
     fetchPage: fetchEmployeesPageApi,
     initialFilters: { orgUnitId: undefined },
   });
 
   useEffect(() => {
-    list.setFilters({ orgUnitId: filterOrgUnit || undefined });
-  }, [filterOrgUnit, list.setFilters]);
+    list.setFilters({
+      orgUnitId: filterOrgUnit || undefined,
+      ...(admin && filterStatus === 'active' ? { isActive: true } : {}),
+      ...(admin && filterStatus === 'inactive' ? { isActive: false } : {}),
+    });
+  }, [filterOrgUnit, filterStatus, admin, list.setFilters]);
 
   const filtered = list.items;
   const search = list.search;
@@ -69,6 +104,9 @@ export function EmployeesPage() {
     setFOrgUnit(state.orgUnits[0]?.id || '');
     setFEmail('');
     setFPhone('');
+    setFStaffNumber('');
+    setFGender('male');
+    setFIsActive(true);
     setShowForm(true);
   }
 
@@ -91,27 +129,49 @@ export function EmployeesPage() {
     setFOrgUnit(emp.orgUnitId);
     setFEmail(emp.email || '');
     setFPhone(emp.phone || '');
+    setFStaffNumber(emp.staffNumber || '');
+    setFGender(emp.gender ?? 'male');
+    setFIsActive(emp.isActive !== false);
     setShowForm(true);
   }
 
+  const buildPayload = () => ({
+    firstName: fFirstName.trim(),
+    lastName: fLastName.trim(),
+    title: resolveCanonicalEmployeeTitle([], fTitle).trim(),
+    orgUnitId: fOrgUnit,
+    staffNumber: fStaffNumber.trim() || undefined,
+    gender: fGender,
+    isActive: fIsActive,
+    email: fEmail || undefined,
+    phone: fPhone || undefined,
+  });
   const persistEmployee = async () => {
-    const payload = {
-      firstName: fFirstName.trim(),
-      lastName: fLastName.trim(),
-      title: resolveCanonicalEmployeeTitle([], fTitle).trim(),
-      orgUnitId: fOrgUnit,
-      email: fEmail || undefined,
-      phone: fPhone || undefined,
-    };
+    const payload = buildPayload();
     if (editing) {
-      await updateEmployeeApi(editing.id, payload);
+      const result = await updateEmployeeApi(editing.id, payload) as Employee;
+      await refresh();
+      await list.refresh();
+      setShowForm(false);
+      setRelocationPreview(null);
+      setShowDeactivateConfirm(false);
+      if (result.userDeactivated && result.linkedUserRole) {
+        const roleLabel = getUserRoleLabel(result.linkedUserRole);
+        toastSuccess(`Radnik je deaktiviran. Korisnički račun (${roleLabel}) je također deaktiviran.`);
+        if (result.linkedUserRole !== 'user') {
+          toastSuccess('Provjerite da kategorije/skladišta imaju drugog korisnika s odgovarajućom ulogom.');
+        }
+      } else {
+        toastSuccess('Radnik je sačuvan.');
+      }
     } else {
       await createEmployeeApi(payload);
+      await refresh();
+      await list.refresh();
+      setShowForm(false);
+      setRelocationPreview(null);
+      toastSuccess('Radnik je dodan.');
     }
-    await refresh();
-    await list.refresh();
-    setShowForm(false);
-    setRelocationPreview(null);
   };
 
   const handleSave = async () => {
@@ -120,6 +180,17 @@ export function EmployeesPage() {
       return;
     }
     if (!fFirstName.trim() || !fLastName.trim() || !fOrgUnit) return;
+    const isDeactivating = Boolean(editing && editing.isActive !== false && !fIsActive);
+    if (isDeactivating && editing?.hasUserAccount && !showDeactivateConfirm) {
+      try {
+        const profile = await fetchEmployeeProfileApi(editing.id);
+        setDeactivateLinkedRole(profile.user?.role ?? 'user');
+        setShowDeactivateConfirm(true);
+      } catch (err) {
+        toastError(getApiErrorMessage(err, 'Greška pri učitavanju profila'));
+      }
+      return;
+    }
     try {
       if (editing && editing.orgUnitId !== fOrgUnit) {
         setPreviewLoading(true);
@@ -135,6 +206,15 @@ export function EmployeesPage() {
       const message = err instanceof ApiError ? err.message : 'Greška pri spremanju';
       toastError(message);
       setPreviewLoading(false);
+    }
+  };
+
+  const confirmDeactivateSave = async () => {
+    try {
+      await persistEmployee();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri spremanju';
+      toastError(message);
     }
   };
 
@@ -218,6 +298,18 @@ export function EmployeesPage() {
             <option key={o.id} value={o.id}>{o.name} ({getOrgUnitTypeLabel(o.type)})</option>
           ))}
         </select>
+        {admin ? (
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-full sm:w-auto sm:min-w-[160px]"
+            aria-label="Filter statusa"
+          >
+            <option value="all">Svi statusi</option>
+            <option value="active">Samo aktivni</option>
+            <option value="inactive">Samo neaktivni</option>
+          </select>
+        ) : null}
       </div>
 
       <ResponsiveTable
@@ -246,6 +338,9 @@ export function EmployeesPage() {
               </div>
               <p className="text-xs text-gray-500">{orgUnit ? getOrgUnitPath(state.orgUnits, orgUnit.id) : '—'}</p>
               {emp.email ? <p className="text-xs text-gray-500">{emp.email}</p> : null}
+              <span className={`inline-block text-xs px-2 py-0.5 rounded-full ${emp.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {emp.isActive !== false ? 'Aktivan' : 'Neaktivan'}
+              </span>
               <div className="flex gap-2 pt-1">
                 {canViewProfile ? (
                   <button type="button" onClick={() => openProfile(emp)} className="text-gray-500 hover:text-blue-600 p-1" title="Profil">
@@ -280,6 +375,7 @@ export function EmployeesPage() {
                 <th className="px-4 py-3 font-medium text-gray-600">Pozicija</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Org. jedinica</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Email</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                 <th className="px-4 py-3 font-medium text-gray-600 text-center">Oprema</th>
                 {canViewProfile || admin ? (
                   <th className="px-4 py-3 font-medium text-gray-600 text-right">Akcije</th>
@@ -300,6 +396,11 @@ export function EmployeesPage() {
                       <span className="text-xs text-gray-500">{orgUnit ? getOrgUnitPath(state.orgUnits, orgUnit.id) : '—'}</span>
                     </td>
                     <td className="px-4 py-3 text-gray-500">{emp.email || '—'}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${emp.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {emp.isActive !== false ? 'Aktivan' : 'Neaktivan'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-center">
                       {eqCount > 0 ? (
                         <button
@@ -366,6 +467,7 @@ export function EmployeesPage() {
         onClose={() => {
           setShowForm(false);
           setRelocationPreview(null);
+          setShowDeactivateConfirm(false);
         }}
         size="lg"
         panelClassName="bg-white shadow-xl"
@@ -411,6 +513,47 @@ export function EmployeesPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kadrovski broj</label>
+                  <input
+                    type="text"
+                    value={fStaffNumber}
+                    onChange={(e) => setFStaffNumber(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Spol</label>
+                  <select
+                    value={fGender}
+                    onChange={(e) => setFGender(e.target.value as EmployeeGender)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  >
+                    <option value="male">Muški</option>
+                    <option value="female">Ženski</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFIsActive(true)}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${fIsActive ? 'border-green-500 bg-green-50 text-green-800' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                  >
+                    Aktivan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFIsActive(false)}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${!fIsActive ? 'border-red-500 bg-red-50 text-red-800' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                  >
+                    Neaktivan
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input type="email" value={fEmail} onChange={e => setFEmail(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
@@ -421,6 +564,20 @@ export function EmployeesPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
               </div>
+              {showDeactivateConfirm ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 space-y-2">
+                  <p className="font-medium">Potvrda deaktivacije</p>
+                  <p>
+                    Korisnički račun ({getUserRoleLabel(deactivateLinkedRole ?? 'user')}) povezan s ovim radnikom
+                    će također biti deaktiviran.
+                  </p>
+                  {deactivateLinkedRole && deactivateLinkedRole !== 'user' ? (
+                    <p className="text-xs">
+                      Provjerite da kategorije/skladišta imaju drugog korisnika s odgovarajućom ulogom prije nastavka.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               {relocationPreview ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
                   <p className="font-medium">Promjena org. jedinice — pregled opreme</p>
@@ -465,12 +622,20 @@ export function EmployeesPage() {
                 onClick={() => {
                   setShowForm(false);
                   setRelocationPreview(null);
+                  setShowDeactivateConfirm(false);
                 }}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50"
               >
                 Odustani
               </button>
-              {relocationPreview ? (
+              {showDeactivateConfirm ? (
+                <button
+                  onClick={() => void confirmDeactivateSave()}
+                  className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+                >
+                  Potvrdi deaktivaciju
+                </button>
+              ) : relocationPreview ? (
                 <button
                   onClick={() => void confirmRelocationSave()}
                   className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium"

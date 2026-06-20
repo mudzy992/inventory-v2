@@ -102,6 +102,12 @@ enum NotificationType {
   inventory_close_blocked
   inventory_auto_closed
   info
+  employee_deactivation_equipment_required
+}
+
+enum EmployeeGender {
+  male
+  female
 }
 
 enum EmployeeRelocationCaseStatus {
@@ -362,15 +368,18 @@ model InventoryCoordinatorAssignment {
 }
 
 model Employee {
-  id        String   @id @default(uuid())
-  firstName String   @db.VarChar(120)
-  lastName  String   @db.VarChar(120)
-  title     String   @db.VarChar(200)
-  orgUnitId String
-  email     String?  @db.VarChar(255)
-  phone     String?  @db.VarChar(50)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String         @id @default(uuid())
+  firstName   String         @db.VarChar(120)
+  lastName    String         @db.VarChar(120)
+  title       String         @db.VarChar(200)
+  orgUnitId   String
+  staffNumber String?        @unique @db.VarChar(50)
+  gender      EmployeeGender @default(male)
+  isActive    Boolean        @default(true)
+  email       String?        @db.VarChar(255)
+  phone       String?        @db.VarChar(50)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   orgUnit                   OrgUnit                    @relation(fields: [orgUnitId], references: [id])
   user                      User?

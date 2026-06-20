@@ -7,7 +7,7 @@ import { EmployeeRelocationService } from '../employee-relocation/employee-reloc
 
 const NOTIFICATION_TYPES_BY_PAGE: Record<string, NotificationType[]> = {
   transfers: ['transfer_pending', 'transfer_signed_upload_pending'],
-  equipment: ['equipment_assigned'],
+  equipment: ['equipment_assigned', 'employee_deactivation_equipment_required'],
   'registrar-stock': ['warehouse_stock_received'],
   'inventory-count': ['inventory_transfer_upload_pending', 'inventory_session_closed', 'disposal_approval_pending'],
   'employee-relocation': [

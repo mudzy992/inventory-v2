@@ -6,6 +6,7 @@ import type { Employee } from '../types';
 export interface EmployeesListFilters extends PaginatedListParams {
   orgUnitId?: string;
   withoutUserAccount?: boolean;
+  isActive?: boolean;
 }
 
 export const fetchEmployeesPageApi = (params: EmployeesListFilters = {}) => {
@@ -13,10 +14,13 @@ export const fetchEmployeesPageApi = (params: EmployeesListFilters = {}) => {
   return apiRequest<PaginatedResponse<Employee>>(`/employees${query ? `?${query}` : ''}`);
 };
 
-export const searchEmployeesApi = (q: string, limit = 20) => {
+export const searchEmployeesApi = (q: string, limit = 20, activeOnly = true) => {
   const params = new URLSearchParams({ q });
   if (limit !== 20) {
     params.set('limit', String(limit));
+  }
+  if (!activeOnly) {
+    params.set('activeOnly', 'false');
   }
   return apiRequest<Employee[]>(`/employees/search?${params.toString()}`);
 };

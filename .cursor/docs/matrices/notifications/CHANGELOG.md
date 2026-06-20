@@ -1,5 +1,9 @@
 # Changelog — notifications matrix
 
+## 2026-06-20
+
+- Tip `employee_deactivation_equipment_required`: admin ne može deaktivirati radnika s opremom; evidentičari po kategoriji dobijaju hitnu obavijest.
+
 ## 2026-06-17
 
 - Legacy tipovi `disposal_pending_approval` / `disposal_approved` više se ne emituju (ukinuto glasanje na transferu); aktivni rashod koristi `disposal_approval_pending`.

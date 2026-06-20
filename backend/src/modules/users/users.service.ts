@@ -4,6 +4,8 @@ import type { Prisma, User, UserRole } from '../../../generated/prisma/client';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { CoordinatorScopeAssignment } from '../../common/types/coordinator-scope.type';
 import type { RegistrarScopeAssignment } from '../../common/types/registrar-scope.type';
+import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import {
   buildContainsSearchWhere,
   buildOrderBy,
@@ -12,6 +14,8 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertEmployeeCanDeactivateOrNotify } from '../employees/utils/employee-deactivation.util';
+import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
@@ -40,6 +44,9 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
+    private readonly registrarScope: RegistrarScopeService,
+    private readonly warehouseResolution: WarehouseResolutionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async findAll(query: ListUsersQueryDto): Promise<PaginatedResponse<UserListItem>> {
@@ -178,37 +185,66 @@ export class UsersService {
       coordinatorAssignments,
       excludeUserId: id,
     });
+    const isDeactivatingUser = dto.isActive === false && current.isActive !== false;
+    if (isDeactivatingUser && employeeId) {
+      const employee = await this.prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { firstName: true, lastName: true },
+      });
+      if (employee) {
+        const employeeName = `${employee.firstName} ${employee.lastName}`.trim();
+        await assertEmployeeCanDeactivateOrNotify(
+          {
+            prisma: this.prisma,
+            registrarScope: this.registrarScope,
+            warehouseResolution: this.warehouseResolution,
+            notifications: this.notifications,
+          },
+          employeeId,
+          employeeName,
+        );
+      }
+    }
     const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : undefined;
     await this.prisma.registrarAssignment.deleteMany({ where: { userId: id } });
     await this.prisma.inventoryCoordinatorAssignment.deleteMany({ where: { userId: id } });
-    const user = await this.prisma.user.update({
-      where: { id },
-      data: {
-        passwordHash,
-        role: dto.role,
-        employeeId: dto.employeeId,
-        isActive: dto.isActive,
-        registrarAssignments:
-          registrarScopes.length > 0
-            ? {
-                create: registrarScopes.map((scope) => ({
-                  warehouseId: scope.warehouseId,
-                  categoryId: scope.categoryId,
-                  orgUnitId: scope.orgUnitId ?? null,
-                })),
-              }
-            : undefined,
-        inventoryCoordinatorAssignments:
-          coordinatorAssignments.length > 0
-            ? {
-                create: coordinatorAssignments.map((scope) => ({
-                  warehouseId: scope.warehouseId,
-                  orgUnitId: scope.orgUnitId ?? null,
-                })),
-              }
-            : undefined,
-      },
-      include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
+    const user = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: {
+          passwordHash,
+          role: dto.role,
+          employeeId: dto.employeeId,
+          isActive: dto.isActive,
+          registrarAssignments:
+            registrarScopes.length > 0
+              ? {
+                  create: registrarScopes.map((scope) => ({
+                    warehouseId: scope.warehouseId,
+                    categoryId: scope.categoryId,
+                    orgUnitId: scope.orgUnitId ?? null,
+                  })),
+                }
+              : undefined,
+          inventoryCoordinatorAssignments:
+            coordinatorAssignments.length > 0
+              ? {
+                  create: coordinatorAssignments.map((scope) => ({
+                    warehouseId: scope.warehouseId,
+                    orgUnitId: scope.orgUnitId ?? null,
+                  })),
+                }
+              : undefined,
+        },
+        include: { registrarAssignments: true, inventoryCoordinatorAssignments: true },
+      });
+      if (isDeactivatingUser && employeeId) {
+        await tx.employee.update({
+          where: { id: employeeId },
+          data: { isActive: false },
+        });
+      }
+      return updated;
     });
     return this.toListItem(user);
   }

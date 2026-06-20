@@ -20,6 +20,7 @@ Detaljni guard audit (preconditions, BE/FE status, poruke): [GUARDS_REGISTRY.md]
 | `warehouse-stock` | [warehouse-stock/MATRIX.md](./warehouse-stock/MATRIX.md) | Prijem, izdavanje, lotovi |
 | `maintenance-parts` | [maintenance-parts/MATRIX.md](./maintenance-parts/MATRIX.md) | Instalirani dijelovi, potrošnja |
 | `employee-relocation` | [employee-relocation/MATRIX.md](./employee-relocation/MATRIX.md) | Premještaj radnika + oprema |
+| `employees` | [employees/MATRIX.md](./employees/MATRIX.md) | Radnici, status, deaktivacija |
 | `inventory-count` | [inventory-count/MATRIX.md](./inventory-count/MATRIX.md) | Godišnji popis, komisije, zatvaranje |
 | `disposal-commission` | [disposal-commission/MATRIX.md](./disposal-commission/MATRIX.md) | Komisija rashoda, glasanje |
 | `notifications` | [notifications/MATRIX.md](./notifications/MATRIX.md) | In-app notifikacije, realtime |

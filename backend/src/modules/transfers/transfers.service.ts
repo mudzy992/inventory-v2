@@ -26,6 +26,7 @@ import {
   assertCanWriteEquipment,
 } from '../equipment/equipment-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertEmployeeActiveForAssignment } from '../employees/utils/assert-employee-active-for-assignment.util';
 import { InventoryCountService } from '../inventory-count/inventory-count.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
@@ -238,6 +239,9 @@ export class TransfersService {
     }
     if (dto.toPersonId) {
       await this.assertEmployeeInScope(user, dto.toPersonId);
+      if (dto.type === 'zaduzenje' || dto.type === 'prenos') {
+        await assertEmployeeActiveForAssignment(this.prisma, dto.toPersonId);
+      }
     }
     const documentEnabled =
       requiresTransferDocument(equipment) &&

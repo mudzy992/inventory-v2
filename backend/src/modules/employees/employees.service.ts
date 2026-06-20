@@ -1,6 +1,7 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Employee, Prisma } from '../../../generated/prisma/client';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
+import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { EMPLOYEE_MESSAGES } from '../../common/utils/employee-messages.util';
@@ -15,11 +16,13 @@ import {
 } from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmployeeRelocationService } from '../employee-relocation/employee-relocation.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
 import { SearchEmployeesQueryDto } from './dto/search-employees-query.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { assertEmployeeCanDeactivateOrNotify } from './utils/employee-deactivation.util';
 
 const EMPLOYEE_SORT_FIELDS: Record<string, string> = {
   lastName: 'lastName',
@@ -70,13 +73,20 @@ export interface EmployeeProfile {
   heldEquipmentTotal: number;
 }
 
+export interface EmployeeUpdateResult extends Employee {
+  userDeactivated?: boolean;
+  linkedUserRole?: string;
+}
+
 @Injectable()
 export class EmployeesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registrarScope: RegistrarScopeService,
+    private readonly warehouseResolution: WarehouseResolutionService,
     private readonly settingsService: SettingsService,
     private readonly employeeRelocationService: EmployeeRelocationService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async findAll(
@@ -115,10 +125,16 @@ export class EmployeesService {
       'lastName',
       'email',
       'title',
+      'staffNumber',
     ]);
-    const where: Prisma.EmployeeWhereInput = searchWhere
-      ? { AND: [scopeWhere, searchWhere] }
-      : scopeWhere;
+    const filters: Prisma.EmployeeWhereInput[] = [scopeWhere];
+    if (query.activeOnly !== false) {
+      filters.push({ isActive: true });
+    }
+    if (searchWhere) {
+      filters.push(searchWhere);
+    }
+    const where: Prisma.EmployeeWhereInput = filters.length === 1 ? filters[0]! : { AND: filters };
     return this.prisma.employee.findMany({
       where,
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
@@ -210,20 +226,91 @@ export class EmployeesService {
   async create(dto: CreateEmployeeDto): Promise<Employee> {
     await this.settingsService.assertFeatureEnabled('features.employees');
     await this.assertOrgUnitExists(dto.orgUnitId);
-    return this.prisma.employee.create({ data: dto });
+    const staffNumber = this.normalizeStaffNumber(dto.staffNumber);
+    if (staffNumber) {
+      await this.assertStaffNumberAvailable(staffNumber);
+    }
+    try {
+      return await this.prisma.employee.create({
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          title: dto.title,
+          orgUnitId: dto.orgUnitId,
+          staffNumber,
+          gender: dto.gender ?? 'male',
+          isActive: dto.isActive ?? true,
+          email: dto.email,
+          phone: dto.phone,
+        },
+      });
+    } catch (err) {
+      this.rethrowStaffNumberConflict(err);
+      throw err;
+    }
   }
 
   async update(
     id: string,
     dto: UpdateEmployeeDto,
     actorUserId?: string,
-  ): Promise<Employee> {
+  ): Promise<EmployeeUpdateResult> {
     await this.settingsService.assertFeatureEnabled('features.employees');
     const existing = await this.findByIdOrThrow(id);
     if (dto.orgUnitId) {
       await this.assertOrgUnitExists(dto.orgUnitId);
     }
-    const updated = await this.prisma.employee.update({ where: { id }, data: dto });
+    const staffNumber =
+      dto.staffNumber !== undefined ? this.normalizeStaffNumber(dto.staffNumber) : undefined;
+    if (staffNumber) {
+      await this.assertStaffNumberAvailable(staffNumber, id);
+    }
+    const isDeactivating = existing.isActive && dto.isActive === false;
+    if (isDeactivating) {
+      const employeeName = `${existing.firstName} ${existing.lastName}`.trim();
+      await assertEmployeeCanDeactivateOrNotify(
+        {
+          prisma: this.prisma,
+          registrarScope: this.registrarScope,
+          warehouseResolution: this.warehouseResolution,
+          notifications: this.notifications,
+        },
+        id,
+        employeeName,
+      );
+    }
+    const linkedUser = isDeactivating
+      ? await this.prisma.user.findFirst({
+          where: { employeeId: id },
+          select: { id: true, role: true },
+        })
+      : null;
+    const updatePayload: Prisma.EmployeeUpdateInput = {
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      title: dto.title,
+      staffNumber,
+      gender: dto.gender,
+      isActive: dto.isActive,
+      email: dto.email,
+      phone: dto.phone,
+    };
+    if (dto.orgUnitId) {
+      updatePayload.orgUnit = { connect: { id: dto.orgUnitId } };
+    }
+    let updated: Employee;
+    try {
+      updated = await this.prisma.$transaction(async (tx) => {
+        const employee = await tx.employee.update({ where: { id }, data: updatePayload });
+        if (isDeactivating && linkedUser) {
+          await tx.user.update({ where: { id: linkedUser.id }, data: { isActive: false } });
+        }
+        return employee;
+      });
+    } catch (err) {
+      this.rethrowStaffNumberConflict(err);
+      throw err;
+    }
     if (dto.orgUnitId && dto.orgUnitId !== existing.orgUnitId && actorUserId) {
       await this.employeeRelocationService.handleOrgUnitChange(
         id,
@@ -231,6 +318,13 @@ export class EmployeesService {
         dto.orgUnitId,
         actorUserId,
       );
+    }
+    if (isDeactivating && linkedUser) {
+      return {
+        ...updated,
+        userDeactivated: true,
+        linkedUserRole: linkedUser.role,
+      };
     }
     return updated;
   }
@@ -279,7 +373,15 @@ export class EmployeesService {
       }
       filters.push({ user: { is: null } });
     }
-    const searchWhere = buildContainsSearchWhere(query.search, ['firstName', 'lastName', 'email']);
+    if (query.isActive !== undefined) {
+      filters.push({ isActive: query.isActive });
+    }
+    const searchWhere = buildContainsSearchWhere(query.search, [
+      'firstName',
+      'lastName',
+      'email',
+      'staffNumber',
+    ]);
     if (searchWhere) {
       filters.push(searchWhere);
     }
@@ -316,6 +418,35 @@ export class EmployeesService {
     const unit = await this.prisma.orgUnit.findUnique({ where: { id: orgUnitId } });
     if (!unit) {
       throw new NotFoundException('Org unit not found');
+    }
+  }
+
+  private normalizeStaffNumber(value?: string | null): string | null {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  private async assertStaffNumberAvailable(staffNumber: string, excludeEmployeeId?: string): Promise<void> {
+    const existing = await this.prisma.employee.findFirst({
+      where: {
+        staffNumber,
+        ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException('Staff number already exists');
+    }
+  }
+
+  private rethrowStaffNumberConflict(err: unknown): void {
+    if (
+      typeof err === 'object' &&
+      err !== null &&
+      'code' in err &&
+      (err as { code: string }).code === 'P2002'
+    ) {
+      throw new ConflictException('Staff number already exists');
     }
   }
 

@@ -1,4 +1,5 @@
-import { IsEmail, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { EmployeeGender } from '../../../../generated/prisma/client';
+import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateEmployeeDto {
   @IsString()
@@ -15,6 +16,19 @@ export class CreateEmployeeDto {
 
   @IsUUID()
   orgUnitId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  staffNumber?: string;
+
+  @IsOptional()
+  @IsEnum(EmployeeGender)
+  gender?: EmployeeGender;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 
   @IsOptional()
   @IsEmail()

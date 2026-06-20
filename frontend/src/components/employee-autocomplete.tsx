@@ -15,6 +15,7 @@ interface EmployeeAutocompleteProps {
   id?: string;
   ariaLabel?: string;
   className?: string;
+  activeOnly?: boolean;
 }
 
 export const EmployeeAutocomplete = ({
@@ -28,6 +29,7 @@ export const EmployeeAutocomplete = ({
   id,
   ariaLabel = 'Radnik',
   className,
+  activeOnly = true,
 }: EmployeeAutocompleteProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -78,13 +80,13 @@ export const EmployeeAutocomplete = ({
     }
     const handle = window.setTimeout(() => {
       setLoading(true);
-      void searchEmployeesApi(term)
+      void searchEmployeesApi(term, 20, activeOnly)
         .then(setRemoteResults)
         .catch(() => setRemoteResults([]))
         .finally(() => setLoading(false));
     }, 300);
     return () => window.clearTimeout(handle);
-  }, [disabled, open, query, selectedEmployee]);
+  }, [activeOnly, disabled, open, query, selectedEmployee]);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();

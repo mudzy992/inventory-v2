@@ -12,6 +12,7 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: LucideIcon; label: string }
   employee_relocation_admin_alert: { icon: AlertTriangle, label: 'Org. promjena' },
   employee_relocation_action_required: { icon: ClipboardList, label: 'Org. promjena' },
   employee_relocation_incoming: { icon: Package, label: 'Org. promjena' },
+  employee_deactivation_equipment_required: { icon: AlertTriangle, label: 'Deaktivacija radnika' },
 };
 
 export const getNotificationTypeMeta = (type: string) =>

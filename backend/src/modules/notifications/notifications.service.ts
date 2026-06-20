@@ -404,6 +404,26 @@ export class NotificationsService {
     });
   }
 
+  async notifyEmployeeDeactivationEquipmentRequired(input: {
+    employeeId: string;
+    employeeName: string;
+    heldCount: number;
+    recipientUserIds: string[];
+  }): Promise<void> {
+    if (!(await this.areNotificationsEnabled())) {
+      return;
+    }
+    if (input.recipientUserIds.length === 0) {
+      return;
+    }
+    await this.createForUsers(input.recipientUserIds, {
+      type: 'employee_deactivation_equipment_required',
+      title: 'Hitno razduženje — deaktivacija radnika',
+      message: `${input.employeeName} čeka deaktivaciju; ${input.heldCount} komada opreme na zaduženju. Hitno evidentirajte razduženje ili prenos.`,
+      relatedId: input.employeeId,
+    });
+  }
+
   async notifyWarehouseStockReceived(lotId: string): Promise<void> {
     if (!(await this.areNotificationsEnabled())) {
       return;

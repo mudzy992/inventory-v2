@@ -121,6 +121,9 @@ export const EmployeeProfileDialog = ({
                   </h4>
                   <p className="text-sm text-gray-600">{employee.title || '—'}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${employee.isActive !== false ? 'bg-green-50 text-green-800 ring-green-100' : 'bg-red-50 text-red-800 ring-red-100'}`}>
+                      {employee.isActive !== false ? 'Aktivan' : 'Neaktivan'}
+                    </span>
                     {employee.hasUserAccount ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-100">
                         <User size={12} />
@@ -140,6 +143,19 @@ export const EmployeeProfileDialog = ({
                     ) : null}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Kadrovski broj</p>
+                <p className="mt-1 text-sm text-gray-800">{employee.staffNumber || '—'}</p>
+              </div>
+              <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Spol</p>
+                <p className="mt-1 text-sm text-gray-800">
+                  {employee.gender === 'female' ? 'Ženski' : employee.gender === 'male' ? 'Muški' : '—'}
+                </p>
               </div>
             </div>
 

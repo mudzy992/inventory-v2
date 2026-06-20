@@ -73,12 +73,17 @@ export interface OrgUnit {
   effectiveLocationCityId?: string | null;
 }
 
+export type EmployeeGender = 'male' | 'female';
+
 export interface Employee {
   id: string;
   firstName: string;
   lastName: string;
   title: string;
   orgUnitId: string;
+  staffNumber?: string | null;
+  gender?: EmployeeGender;
+  isActive?: boolean;
   email?: string;
   phone?: string;
   heldEquipmentCount?: number;
@@ -86,6 +91,8 @@ export interface Employee {
   isOrgSigner?: boolean;
   signedTransferCount?: number;
   openRelocationCount?: number;
+  userDeactivated?: boolean;
+  linkedUserRole?: string;
 }
 
 export interface CategoryField {

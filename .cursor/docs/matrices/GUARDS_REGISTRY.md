@@ -539,6 +539,18 @@ Infrastrukturne matrice — **nema poslovnih write guardova** na korisničkim ak
 - **Gap:** —
 - **Prioritet:** —
 
+### employees.deactivate
+- **Opis:** Admin deaktivira radnika (`isActive=false`)
+- **Preconditions:** Nema zadužene opreme (`status=zaduzeno`); admin-only
+- **Backend guard:** `employee-deactivation.util.ts` + `employees.service.ts:update` — ✓
+- **Frontend guard:** Potvrda + upozorenje o ulozi povezanog korisnika — ✓
+- **UX poruka (BS):** `EMPLOYEE_MESSAGES.deactivateHasHeldEquipment`
+- **Notifikacija:** `employee_deactivation_equipment_required` → evidentičari po kategoriji
+- **Sync:** `User.isActive=false` ako postoji račun
+- **Anti-bypass:** `users.service.ts:update` ista provjera
+- **Gap:** —
+- **Prioritet:** —
+
 ---
 
 ## Appendix: equipment-catalog

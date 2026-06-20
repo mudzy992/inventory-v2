@@ -28,6 +28,7 @@ In-app notifikacije za autentificirane korisnike. Realtime preko Socket.IO; REST
 | `employee_relocation_incoming` | Izvor poslao transfer opreme | ciljni evidentičar |
 | `employee_relocation_admin_alert` | Nema evidentičara / legacy šifrarnik / sažetak | admin |
 | `employee_relocation_resolved` | Case resolved (buduće) | admin, radnik |
+| `employee_deactivation_equipment_required` | Admin pokušao deaktivirati radnika s zaduženom opremom | evidentičari po kategoriji zaduženja; fallback admin |
 | `info` | Ručno / buduće | po definiciji |
 
 ## REST API

@@ -36,6 +36,7 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertEmployeeActiveForAssignment } from '../employees/utils/assert-employee-active-for-assignment.util';
 import { CategoriesService } from '../categories/categories.service';
 import { EquipmentCatalogService } from '../equipment-catalog/equipment-catalog.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -550,6 +551,7 @@ export class WarehouseStockService {
     if (!holder) {
       throw new NotFoundException('Employee not found');
     }
+    await assertEmployeeActiveForAssignment(this.prisma, dto.employeeId);
     const canHolder = await this.registrarScope.canAccessEmployee(user, holder);
     if (!canHolder) {
       throw new ForbiddenException('Employee outside your scope');

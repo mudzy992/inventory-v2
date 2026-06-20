@@ -59,6 +59,11 @@ export const NotificationsPanel = () => {
     ) {
       navigate(pageIdToPath('employee-relocation'));
       setOpen(false);
+      return;
+    }
+    if (notification.type === 'employee_deactivation_equipment_required' && notification.relatedId) {
+      navigate(`${pageIdToPath('employees')}?profile=${notification.relatedId}`);
+      setOpen(false);
     }
   };
 
