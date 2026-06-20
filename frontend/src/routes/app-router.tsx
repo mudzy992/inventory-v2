@@ -23,6 +23,7 @@ import {
   LazyWarehousesPage,
 } from './lazy-pages';
 import { LazyRoutePage } from './lazy-route-page';
+import { NotFoundPage } from '../components/not-found-page';
 
 interface AppRouterProps {
   onLogout: () => void;
@@ -84,7 +85,7 @@ export const AppRouter = ({ onLogout }: AppRouterProps) => (
           element={<LazyRoutePage pageId={pageId} Page={Page} />}
         />
       ))}
-      <Route path="*" element={<RoleDefaultRedirect />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   </Layout>
 );

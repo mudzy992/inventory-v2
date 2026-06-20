@@ -24,13 +24,13 @@ export class EquipmentCatalogController {
   constructor(private readonly catalogService: EquipmentCatalogService) {}
 
   @Get()
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   search(@Query() query: SearchCatalogQueryDto) {
     return this.catalogService.findAll(query);
   }
 
   @Get(':id')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   findOne(@Param('id') id: string) {
     return this.catalogService.findOne(id);
   }

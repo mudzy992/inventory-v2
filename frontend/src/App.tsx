@@ -8,6 +8,7 @@ import { useData } from './contexts/DataContext';
 import { getDefaultPathForRole } from './routes/app-routes';
 import { AppRouter } from './routes/app-router';
 import { PublicEquipmentRoute } from './routes/public-equipment-route';
+import { HttpStatusPage } from './components/ui/http-status-page';
 
 export default function App() {
   return (
@@ -20,7 +21,7 @@ export default function App() {
 
 function AppShell() {
   const { isAuthenticated, isLoading: authLoading, logout } = useAuth();
-  const { isLoading: dataLoading, error: dataError } = useData();
+  const { isLoading: dataLoading, error: dataError, refresh } = useData();
   const navigate = useNavigate();
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const [setupSuccessMessage, setSetupSuccessMessage] = useState<string | undefined>();
@@ -83,13 +84,31 @@ function AppShell() {
   }
 
   if (dataError) {
+    if (dataError.status === 403) {
+      return (
+        <HttpStatusPage
+          status={403}
+          variant="fullscreen"
+          description={
+            dataError.message || 'Vaš nalog nema dozvolu za učitavanje aplikacije. Kontaktirajte administratora.'
+          }
+          actionLabel="Odjavi se"
+          onAction={() => void handleLogout()}
+        />
+      );
+    }
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white border border-red-200 rounded-xl p-6 max-w-md text-center">
-          <p className="text-red-600 font-medium mb-2">Greška pri učitavanju</p>
-          <p className="text-sm text-gray-600">{dataError}</p>
-        </div>
-      </div>
+      <HttpStatusPage
+        status={404}
+        variant="fullscreen"
+        showCode={false}
+        title="Greška pri učitavanju"
+        description={dataError.message}
+        actionLabel="Pokušaj ponovo"
+        onAction={() => void refresh()}
+        secondaryActionLabel="Odjavi se"
+        onSecondaryAction={() => void handleLogout()}
+      />
     );
   }
 

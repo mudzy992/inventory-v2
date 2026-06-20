@@ -13,7 +13,14 @@ export class NavController {
   constructor(private readonly navService: NavService) {}
 
   @Get('module-badges')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.popis_koordinator, UserRole.skladistar, UserRole.user)
+  @Roles(
+    UserRole.admin,
+    UserRole.moderator,
+    UserRole.evidenticar,
+    UserRole.popis_koordinator,
+    UserRole.skladistar,
+    UserRole.user,
+  )
   getModuleBadges(@CurrentUser() user: AuthenticatedUser) {
     return this.navService.getModuleBadges(user);
   }

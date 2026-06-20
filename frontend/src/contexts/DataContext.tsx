@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { fetchBootstrap } from '../api/data-api';
+import { ApiError } from '../api/client';
 import { setAuthUser, syncAppState } from '../store';
 import type { AppState } from '../types';
 import { useAuth } from './AuthContext';
@@ -30,7 +31,7 @@ const emptyState = (): AppState => ({
 interface DataContextValue {
   state: AppState;
   isLoading: boolean;
-  error: string | null;
+  error: { message: string; status?: number } | null;
   refresh: () => Promise<void>;
 }
 
@@ -40,7 +41,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const { user, isAuthenticated } = useAuth();
   const [state, setState] = useState<AppState>(emptyState);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; status?: number } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -58,8 +59,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setState(loaded);
       syncAppState(loaded);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Greška pri učitavanju podataka';
-      setError(message);
+      const message = err instanceof ApiError || err instanceof Error ? err.message : 'Greška pri učitavanju podataka';
+      const status = err instanceof ApiError ? err.status : undefined;
+      setError({ message, status });
     } finally {
       setIsLoading(false);
     }

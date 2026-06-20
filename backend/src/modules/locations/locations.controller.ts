@@ -16,25 +16,25 @@ export class LocationsController {
   constructor(private readonly locationsService: LocationsService) {}
 
   @Get('cantons')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   findCantons() {
     return this.locationsService.findCantons();
   }
 
   @Get('cantons/search')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   searchCantons(@Query() query: SearchLocationsQueryDto) {
     return this.locationsService.searchCantons(query);
   }
 
   @Get('cities')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   findCities() {
     return this.locationsService.findCities();
   }
 
   @Get('cities/search')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
   searchCities(@Query() query: SearchLocationsQueryDto) {
     return this.locationsService.searchCities(query);
   }

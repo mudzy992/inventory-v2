@@ -24,25 +24,25 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
   findFlat() {
     return this.categoriesService.findFlat();
   }
 
   @Get('tree')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
   findTree() {
     return this.categoriesService.findTree();
   }
 
   @Get('search')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
   search(@Query() query: SearchCategoriesQueryDto) {
     return this.categoriesService.search(query);
   }
 
   @Get(':id')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
   findOne(@Param('id') id: string) {
     return this.categoriesService.findOne(id);
   }
