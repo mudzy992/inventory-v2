@@ -58,10 +58,10 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 ## Broj dokumenta
 
-- Format: `{n}/{godina}` (npr. `42/2026`); rashod: `R/{n}/{godina}`
-- Brojač: `TransferDocumentSequence` po `documentWarehouseId` + godina (reset svake godine)
-- Dodjeljuje se pri `PATCH /transfers/:id/sign`
-- Draft: `DRAFT-*` dok je `raw` (u generisanom DOCX za štampu)
+- Format: `{n}-{mm}/{godina}` (npr. `1-01/2026`, `42-06/2026`); rashod: `R/{n}-{mm}/{godina}`
+- Brojač: `TransferDocumentSequence` po `documentWarehouseId` + godina + **mjesec** (reset svakog mjeseca na 1; nova godina počinje od 1)
+- Dodjeljuje se pri **kreiranju** transfera (document mode) — odmah vidljiv na štampi
+- Pri finalizaciji zadržava postojeći broj (osim legacy `DRAFT-*` / `PRN-*`)
 
 ## Putanje fajlova (`UPLOAD_DIR`)
 

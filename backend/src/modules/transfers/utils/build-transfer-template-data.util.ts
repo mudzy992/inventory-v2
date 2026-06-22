@@ -1,4 +1,5 @@
 import type { Prisma } from '../../../../generated/prisma/client';
+import { buildTransferEquipmentLabel } from './build-transfer-equipment-label.util';
 
 type TransferForTemplate = {
   documentNumber: string;
@@ -13,8 +14,13 @@ type TransferForTemplate = {
   toWarehouse: { name: string } | null;
   equipment: {
     inventoryNumber: string | null;
-    category: { name: string };
     specifications: Prisma.JsonValue;
+    category: {
+      name: string;
+      fields: Prisma.JsonValue;
+      optionalFields: Prisma.JsonValue;
+    };
+    stockLot: { productName: string } | null;
   };
 };
 
@@ -36,13 +42,6 @@ const formatParty = (
   return label || type;
 };
 
-const buildEquipmentLabel = (transfer: TransferForTemplate): string => {
-  const specs = (transfer.equipment.specifications ?? {}) as Record<string, string>;
-  const specParts = Object.values(specs).filter(Boolean).slice(0, 3);
-  const suffix = specParts.length > 0 ? ` — ${specParts.join(', ')}` : '';
-  return `${transfer.equipment.category.name}${suffix}`;
-};
-
 export const buildTransferTemplateData = (
   transfer: TransferForTemplate,
 ): Record<string, string> => {
@@ -53,7 +52,7 @@ export const buildTransferTemplateData = (
     preuzeo: formatParty(transfer.toType, transfer.toPerson, transfer.toWarehouse),
     potpisnik: formatPerson(transfer.signer),
     inv_broj: transfer.equipment.inventoryNumber ?? '',
-    naziv_opreme: buildEquipmentLabel(transfer),
+    naziv_opreme: buildTransferEquipmentLabel(transfer.equipment),
     obrazlozenje: obrazlozenje || '—',
   };
 };

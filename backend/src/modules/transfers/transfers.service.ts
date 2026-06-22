@@ -43,6 +43,7 @@ import {
 } from './transfer-validation.util';
 import { resolveTransferSignerId } from './utils/resolve-transfer-signer.util';
 import { allocateTransferDocumentNumberInTx } from './utils/allocate-transfer-document-number.util';
+import { isLegacyDocumentNumber } from '../../common/utils/document-number.util';
 import { executeDirectEquipmentTransferInTx } from './utils/execute-direct-equipment-transfer.util';
 import { isTransferDocumentEnabled } from './utils/transfer-generation-policy.util';
 import { requiresTransferDocument } from '../../common/utils/equipment-accounting-tracked.util';
@@ -280,31 +281,39 @@ export class TransfersService {
     }
     const signerId = await this.resolveSignerForCreate(dto);
     await this.assertSignerExists(signerId);
-    const draftNumber = `DRAFT-${Date.now()}`;
+    const transferDate = new Date(dto.date);
     const documentWarehouseId = await this.resolveDocumentWarehouseForCreate(user, dto, equipment);
     await this.assertWarehouseReadyForDocuments(documentWarehouseId);
     await this.transferTemplateService.assertWarehouseHasActiveTemplate(documentWarehouseId);
-    const created = await this.prisma.transfer.create({
-      data: {
-        equipmentId: dto.equipmentId,
-        type: dto.type,
-        fromType: dto.fromType,
-        fromPersonId: dto.fromPersonId,
-        toType: dto.toType,
-        toPersonId: dto.toPersonId,
-        signerId,
-        fromWarehouseId: dto.fromWarehouseId ?? null,
-        toWarehouseId: dto.toWarehouseId ?? null,
+    const created = await this.prisma.$transaction(async (tx) => {
+      const documentNumber = await allocateTransferDocumentNumberInTx(
+        tx,
         documentWarehouseId,
-        createdByUserId: user.id,
-        date: new Date(dto.date),
-        reason: dto.reason,
-        notes: dto.notes,
-        status: 'raw',
-        documentNumber: draftNumber,
-        isCrossServiceTransfer: isCrossService,
-      },
-      include: transferInclude,
+        transferDate,
+        false,
+      );
+      return tx.transfer.create({
+        data: {
+          equipmentId: dto.equipmentId,
+          type: dto.type,
+          fromType: dto.fromType,
+          fromPersonId: dto.fromPersonId,
+          toType: dto.toType,
+          toPersonId: dto.toPersonId,
+          signerId,
+          fromWarehouseId: dto.fromWarehouseId ?? null,
+          toWarehouseId: dto.toWarehouseId ?? null,
+          documentWarehouseId,
+          createdByUserId: user.id,
+          date: transferDate,
+          reason: dto.reason,
+          notes: dto.notes,
+          status: 'raw',
+          documentNumber,
+          isCrossServiceTransfer: isCrossService,
+        },
+        include: transferInclude,
+      });
     });
     await this.notificationsService.notifyTransferPending(created.id);
     const requireSignedPdf = await this.settingsService.getBooleanValue(
@@ -383,7 +392,6 @@ export class TransfersService {
     const signerId = dto.signerId ?? transfer.signerId;
     await this.assertSignerExists(signerId);
     const signDate = dto.date ? new Date(dto.date) : transfer.date;
-    const year = signDate.getFullYear();
     const isRashod = transfer.type === 'rashodovanje';
     const documentWarehouseId =
       transfer.documentWarehouseId ??
@@ -395,12 +403,14 @@ export class TransfersService {
       transfer.toWarehouseId,
     );
     const signed = await this.prisma.$transaction(async (tx) => {
-      const documentNumber = await allocateTransferDocumentNumberInTx(
-        tx,
-        documentWarehouseId,
-        year,
-        isRashod,
-      );
+      const documentNumber = isLegacyDocumentNumber(transfer.documentNumber)
+        ? await allocateTransferDocumentNumberInTx(
+            tx,
+            documentWarehouseId,
+            signDate,
+            isRashod,
+          )
+        : transfer.documentNumber;
       const updated = await tx.transfer.update({
         where: { id },
         data: {

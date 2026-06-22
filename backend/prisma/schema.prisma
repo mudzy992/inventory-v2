@@ -517,14 +517,15 @@ model WarehouseTransferTemplate {
 }
 
 model TransferDocumentSequence {
-  warehouseId String
-  year        Int
-  lastNumber  Int      @default(0)
+  warehouseId      String
+  year             Int
+  month            Int
+  lastNumber       Int @default(0)
   rashodLastNumber Int @default(0)
 
   warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
-  @@id([warehouseId, year])
+  @@id([warehouseId, year, month])
   @@map("transfer_document_sequences")
 }
 

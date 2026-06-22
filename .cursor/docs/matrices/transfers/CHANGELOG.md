@@ -4,6 +4,12 @@
 - Primjena: Zaduženja forma, kartica opreme (transfer), izdavanje iz lota, popis (promjena lokacije na osobu).
 - Scope radnika po roli ostaje na backendu (`buildEmployeeWhere` / `canAccessEmployee`); frontend ne drži punu listu.
 
+## 2026-06-19 — Broj prenosnice po mjesecu + naziv opreme iz lota
+
+- Format broja: `{n}-{mm}/{godina}` (npr. `1-01/2026`); dodjela pri kreiranju, ne `DRAFT-*`.
+- Sekvenca po skladištu + godina + mjesec (`TransferDocumentSequence.month`).
+- `{naziv_opreme}`: `stockLot.productName` + serijski broj iz specifikacije (ako postoji).
+
 ## 2026-06-19 — Word template: validacija, auto-aktivacija, UI
 
 - Upload `.docx` validira obavezne placeholdere + dry-run docxtemplater; greška vraća listu nedostajućih polja.

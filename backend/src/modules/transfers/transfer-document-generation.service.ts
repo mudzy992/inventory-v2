@@ -23,7 +23,7 @@ const transferTemplateInclude = {
   toPerson: true,
   fromWarehouse: true,
   toWarehouse: true,
-  equipment: { include: { category: true } },
+  equipment: { include: { category: true, stockLot: { select: { productName: true } } } },
 } satisfies Prisma.TransferInclude;
 
 @Injectable()

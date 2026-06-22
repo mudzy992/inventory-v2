@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import type { Prisma } from '../../../../generated/prisma/client';
 import { allocateTransferDocumentNumberInTx } from '../../transfers/utils/allocate-transfer-document-number.util';
+import { isLegacyDocumentNumber } from '../../../common/utils/document-number.util';
 import { buildEquipmentUpdateOnFinalize } from '../../transfers/transfer-validation.util';
 
 type FinalizeTx = Prisma.TransactionClient;
@@ -35,14 +36,13 @@ export const finalizeInventoryTransferInTx = async (
   if (!transfer.scannedDocUrl) {
     throw new BadRequestException('Signed document upload required before applying inventory transfer');
   }
-  const year = transfer.date.getFullYear();
   const isRashod = transfer.type === 'rashodovanje';
   const documentNumber =
-    transfer.documentNumber.startsWith('DRAFT') && transfer.documentWarehouseId
+    isLegacyDocumentNumber(transfer.documentNumber) && transfer.documentWarehouseId
       ? await allocateTransferDocumentNumberInTx(
           tx,
           transfer.documentWarehouseId,
-          year,
+          transfer.date,
           isRashod,
         )
       : transfer.documentNumber;

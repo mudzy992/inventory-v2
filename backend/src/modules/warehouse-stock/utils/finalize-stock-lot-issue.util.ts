@@ -76,11 +76,10 @@ export const executeStockLotIssueWithTransferInTx = async (
       warehouseCondition: 'na_skladistu',
     },
   });
-  const year = input.transferDate.getFullYear();
   const documentNumber = await allocateTransferDocumentNumberInTx(
     tx,
     input.lot.warehouseId,
-    year,
+    input.transferDate,
     false,
   );
   const transfer = await tx.transfer.create({
