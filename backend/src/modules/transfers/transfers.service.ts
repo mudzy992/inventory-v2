@@ -149,7 +149,10 @@ export class TransfersService {
 
   private async buildListWhere(
     user: AuthenticatedUser,
-    query: Pick<ListTransfersQueryDto, 'equipmentId' | 'status' | 'search' | 'personId' | 'warehouseId'>,
+    query: Pick<
+      ListTransfersQueryDto,
+      'equipmentId' | 'status' | 'search' | 'personId' | 'warehouseId' | 'workflow'
+    >,
   ): Promise<Prisma.TransferWhereInput> {
     const scopeWhere = await this.buildTransferScopeWhere(user);
     const filters: Prisma.TransferWhereInput[] = [scopeWhere];
@@ -161,7 +164,11 @@ export class TransfersService {
         OR: [{ fromPersonId: query.personId }, { toPersonId: query.personId }],
       });
     }
-    if (query.status) {
+    if (query.workflow === 'pending') {
+      filters.push({ status: { in: ['raw', 'printed', 'uploaded'] } });
+    } else if (query.workflow === 'signed') {
+      filters.push({ status: 'potpisan' });
+    } else if (query.status) {
       filters.push({ status: query.status });
     }
     if (query.warehouseId) {

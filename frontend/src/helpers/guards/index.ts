@@ -47,6 +47,8 @@ export {
   canSignTransfer,
   canFinalizeTransfer,
   isTransferAwaitingFinalize,
+  canShowTransferGeneratedDocx,
+  canShowTransferGeneratedPdf,
   TRANSFER_GUARD_MESSAGES,
   type TransferGuardResult,
 } from './transfer-guards';

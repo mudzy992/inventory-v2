@@ -3,11 +3,14 @@ import type { PaginatedListParams, PaginatedResponse } from '../types/pagination
 import { buildListQueryString } from '../types/pagination';
 import type { TransferRecord } from '../types';
 
+export type TransferWorkflowFilter = 'pending' | 'signed';
+
 export interface TransfersListFilters extends PaginatedListParams {
   equipmentId?: string;
   personId?: string;
   warehouseId?: string;
   status?: TransferRecord['status'];
+  workflow?: TransferWorkflowFilter;
 }
 
 const toDateOnly = (value: string | Date): string => {

@@ -103,12 +103,27 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 | Tab | Izvor podataka | Svrha |
 |-----|----------------|-------|
-| Zaduženja | `GET /transfers` (scope) | Historija prenosa + akcije Zaduži/Prenos/Razduži/Rashod |
-| Trenutna zaduženja | `GET /equipment?status=zaduzeno` (isti registrar scope kao Oprema) | Pregled trenutno zadužene opreme, uključujući direktno izdavanje iz lota bez prenosnice |
-| Prenosnice | `GET /transfers` + dokument workflow | Štampa, upload i potpis prenosnica (`features.documents`) |
+| Zaduženja | `GET /transfers?workflow=pending\|signed` (scope) | Historija prenosa + pod-tabovi Na čekanju (badge) / Potpisano; detalji u dijalogu |
+| Trenutna zaduženja | `GET /equipment?status=zaduzeno` (isti registrar scope kao Oprema) | Pregled trenutno zadužene opreme; klik otvara `EquipmentCard` |
+| Prenosnice | `GET /transfers?workflow=…` + dokument workflow | Kompaktna tabela (desktop) / kartice (mobile); pod-tabovi Čeka obradu / Potpisano |
 
 - Navigacija: jedan sidebar unos **Zaduženja**; ruta `/documents` preusmjerava na tab Prenosnice (bookmark kompatibilnost).
 - Akcije zaduženja i `InventoryFreezeActionHint` samo na tabu Zaduženja.
+- Tab **Zaduženja**: pod-tab **Na čekanju** (`workflow=pending`, statusi `raw|printed|uploaded`) s badge brojem; **Potpisano** (`workflow=signed`). Klik na red otvara `TransferDocumentPanel` u `ModalRoot`.
+- Tab **Prenosnice**: isti `workflow` filter; uklonjeni page-local summary chipovi.
+
+## UI — odabir opreme za transfer
+
+- Forma Zaduženja/Prenos/Razduži koristi `EquipmentAutocomplete` (`GET /equipment?search=&status=`, min. 2 znaka, debounce 300ms).
+- Pretraga: inventurni broj + specifikacija (uključujući serijski broj kad postoji u kategoriji).
+- Filter `status`: `skladiste` za zaduženje, `zaduzeno` za prenos/razduženje.
+- `EquipmentCard` transfer modal ne koristi autocomplete (oprema je već poznata).
+
+## UI — generisani dokument (PDF visibility)
+
+- Dugmad **Obrazac (DOCX)** / **Štampa (PDF)** / **Pregled za štampu** prikazuju se samo kad `hasGeneratedDocument=true`.
+- PDF akcije dodatno zahtijevaju `transfer.generate_print_pdf=true`.
+- Kad obrazac nije dostupan: amber upozorenje bez download dugmadi.
 
 ## UI — odabir osobe za zaduženje
 
@@ -125,7 +140,7 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 | Metoda | Putanja | Uloga |
 |--------|---------|-------|
-| GET | `/backend/transfers` | admin, evidenticar, user (scope) |
+| GET | `/backend/transfers` | admin, evidenticar, user (scope); query `workflow=pending\|signed` |
 | GET | `/backend/transfers/:id` | admin, evidenticar, user (scope) |
 | POST | `/backend/transfers` | admin, evidenticar |
 | GET | `/backend/transfers/:id/generated-document` | admin, evidenticar |

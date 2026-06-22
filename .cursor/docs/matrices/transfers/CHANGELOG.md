@@ -1,3 +1,11 @@
+## 2026-06-22 — UX modul Zaduženja
+
+- Tab Zaduženja: pod-tabovi Na čekanju (badge) / Potpisano; `GET /transfers?workflow=pending|signed`; detalji prenosnice u dijalogu.
+- Tab Prenosnice: kompaktna desktop tabela, workflow pod-tabovi; PDF/DOCX dugmad samo kad je obrazac dostupan.
+- `EquipmentAutocomplete` u formi transfera (pretraga po inv. broju / serijskom).
+- Tab Trenutna zaduženja: poboljšana tabela + `EquipmentCard` na klik.
+- Guardi: `canShowTransferGeneratedDocx`, `canShowTransferGeneratedPdf`.
+
 ## 2026-06-19 — Autocomplete za odabir osobe pri zaduženju
 
 - Nova komponenta `EmployeeAutocomplete`: server-side pretraga (`GET /employees/search`), zamjena `<select>` i hibridnih pretraga.

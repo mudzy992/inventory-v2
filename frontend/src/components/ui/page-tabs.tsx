@@ -5,6 +5,7 @@ export interface PageTabItem<T extends string> {
   id: T;
   label: string;
   icon?: LucideIcon;
+  badge?: number;
 }
 
 interface PageTabsProps<T extends string> {
@@ -37,6 +38,16 @@ export const PageTabs = <T extends string>({
         >
           {Icon ? <Icon size={14} /> : null}
           {row.label}
+          {row.badge != null && row.badge > 0 ? (
+            <span
+              className={cn(
+                'inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+                activeTab === row.id ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800',
+              )}
+            >
+              {row.badge}
+            </span>
+          ) : null}
         </button>
       );
     })}

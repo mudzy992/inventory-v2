@@ -14,7 +14,7 @@ import { cn } from '../utils/cn';
 import { useAdminSettings } from '../contexts/admin-settings-context';
 import { isAdmin } from '../store';
 import { useToast } from '../contexts/toast-context';
-import { canFinalizeTransfer, canSignTransfer } from '../helpers/guards';
+import { canFinalizeTransfer, canSignTransfer, canShowTransferGeneratedDocx, canShowTransferGeneratedPdf } from '../helpers/guards';
 import { ApiError } from '../api/client';
 
 interface UploadMeta {
@@ -40,7 +40,7 @@ export const TransferDocumentPanel = ({
   inventorySessionStatus = 'active',
   linePendingApplied = false,
 }: TransferDocumentPanelProps) => {
-  const { getBoolean, getNumber } = useAdminSettings();
+  const { getBoolean, getNumber, settings: adminSettings } = useAdminSettings();
   const { toastError } = useToast();
   const maxUploadMb = getNumber('upload.max_mb', 10);
   const allowFinalizeWithoutUpload =
@@ -216,6 +216,10 @@ export const TransferDocumentPanel = ({
       allowFinalizeWithoutUpload,
     }).allowed &&
     (Boolean(transfer.scannedDocUrl) || allowFinalizeWithoutUpload);
+  const canShowDocx =
+    canShowTransferGeneratedDocx(transfer) && (inventoryMode || isRaw);
+  const canShowPdf =
+    canShowTransferGeneratedPdf(transfer, adminSettings) && (inventoryMode || isRaw);
   const badgeClass =
     inventoryBadge?.tone === 'success'
       ? 'bg-green-100 text-green-800'
@@ -321,36 +325,36 @@ export const TransferDocumentPanel = ({
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        {(inventoryMode || isRaw) && (
-          <>
-            <button
-              type="button"
-              onClick={() => void handleDownloadGenerated('docx')}
-              disabled={isLoading}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-            >
-              <Download size={14} /> Obrazac (DOCX)
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDownloadGenerated('pdf')}
-              disabled={isLoading}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-            >
-              <Download size={14} /> Štampa (PDF)
-            </button>
-            {canPrintPreview ? (
-              <button
-                type="button"
-                onClick={() => void handlePrintPreview()}
-                disabled={isLoading}
-                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-              >
-                <Eye size={14} /> Pregled za štampu
-              </button>
-            ) : null}
-          </>
-        )}
+        {canShowDocx ? (
+          <button
+            type="button"
+            onClick={() => void handleDownloadGenerated('docx')}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
+          >
+            <Download size={14} /> Obrazac (DOCX)
+          </button>
+        ) : null}
+        {canShowPdf ? (
+          <button
+            type="button"
+            onClick={() => void handleDownloadGenerated('pdf')}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
+          >
+            <Download size={14} /> Štampa (PDF)
+          </button>
+        ) : null}
+        {canShowPdf && canPrintPreview ? (
+          <button
+            type="button"
+            onClick={() => void handlePrintPreview()}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
+          >
+            <Eye size={14} /> Pregled za štampu
+          </button>
+        ) : null}
         {uploadMeta && (
           <>
             <button

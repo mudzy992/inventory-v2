@@ -90,3 +90,13 @@ export const canFinalizeTransfer = (status: string): TransferGuardResult => {
 
 export const isTransferAwaitingFinalize = (status: string): boolean =>
   status === 'uploaded' || status === 'printed';
+
+export const canShowTransferGeneratedDocx = (transfer: {
+  hasGeneratedDocument?: boolean;
+}): boolean => transfer.hasGeneratedDocument === true;
+
+export const canShowTransferGeneratedPdf = (
+  transfer: { hasGeneratedDocument?: boolean },
+  settings: Record<string, unknown>,
+): boolean =>
+  canShowTransferGeneratedDocx(transfer) && settings['transfer.generate_print_pdf'] !== false;
