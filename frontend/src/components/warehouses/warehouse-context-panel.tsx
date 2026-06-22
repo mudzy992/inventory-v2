@@ -6,7 +6,7 @@ import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { getCityLabel, getOrgUnitTypeLabel } from '../../helpers';
 import { useStore, useRefreshData } from '../../useStore';
-import { isAdmin } from '../../store';
+import { isAdmin, isModerator } from '../../store';
 import type { Warehouse } from '../../types';
 import { FormCard } from '../ui/form-card';
 import { Button } from '../ui/button';
@@ -16,25 +16,29 @@ import { WarehouseTransferTemplatePanel } from './warehouse-transfer-template-pa
 interface WarehouseContextPanelProps {
   warehouse: Warehouse;
   canEditContext?: boolean;
+  canManageTransferTemplate?: boolean;
 }
 
 export const WarehouseContextPanel = ({
   warehouse,
   canEditContext = false,
+  canManageTransferTemplate = false,
 }: WarehouseContextPanelProps) => {
   const [state] = useStore();
   const refresh = useRefreshData();
   const { toastError, toastSuccess } = useToast();
   const admin = isAdmin();
+  const moderator = isModerator();
+  const canLoadKeepers = admin || (moderator && canEditContext);
   const [skladistarUsers, setSkladistarUsers] = useState<UserAccount[]>([]);
   useEffect(() => {
-    if (!admin) {
+    if (!canLoadKeepers) {
       return;
     }
     void fetchSkladistarUsersApi()
       .then(setSkladistarUsers)
       .catch(() => setSkladistarUsers([]));
-  }, [admin]);
+  }, [canLoadKeepers]);
   const [name, setName] = useState(warehouse.name);
   const [cityId, setCityId] = useState(warehouse.cityId);
   const [address, setAddress] = useState(warehouse.address);
@@ -238,7 +242,7 @@ export const WarehouseContextPanel = ({
           </dl>
         )}
       </FormCard>
-      {admin ? (
+      {canManageTransferTemplate ? (
         <FormCard title="Obrazac prenosnice">
           <WarehouseTransferTemplatePanel
             warehouseId={warehouse.id}

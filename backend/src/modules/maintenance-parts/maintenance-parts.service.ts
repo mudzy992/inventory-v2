@@ -10,6 +10,7 @@ import type {
   Prisma,
 } from '../../../generated/prisma/client';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { assertCanReadEquipment } from '../equipment/equipment-access.util';
 import { validateLotSpecifications } from '../../common/utils/category-fields.util';
@@ -43,6 +44,7 @@ export class MaintenancePartsService {
     private readonly registrarScope: RegistrarScopeService,
     private readonly inventoryFreeze: InventoryFreezeService,
     private readonly warehousesService: WarehousesService,
+    private readonly moderatorScope: ModeratorScopeService,
   ) {}
 
   private async assertEnabled(): Promise<void> {
@@ -162,11 +164,14 @@ export class MaintenancePartsService {
     dto: ReceiveMaintenanceLotDto,
   ) {
     await this.assertEnabled();
-    if (user.role !== 'skladistar' && user.role !== 'admin' && user.role !== 'evidenticar') {
+    if (user.role !== 'skladistar' && user.role !== 'admin' && user.role !== 'evidenticar' && !this.moderatorScope.isModerator(user)) {
       throw new ForbiddenException('Not allowed to receive maintenance stock');
     }
     if (user.role === 'skladistar') {
       await this.warehousesService.assertKeeperCanManageWarehouse(user, warehouseId);
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertWarehouseAssigned(user, warehouseId);
     }
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
@@ -479,6 +484,10 @@ export class MaintenancePartsService {
       if (!hasScope) {
         throw new ForbiddenException('Warehouse outside your scope');
       }
+      return;
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertWarehouseAssigned(user, warehouseId);
       return;
     }
     throw new ForbiddenException('Not allowed');

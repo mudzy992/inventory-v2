@@ -191,7 +191,7 @@ export class TransfersService {
 
   private async buildTransferScopeWhere(user: AuthenticatedUser): Promise<Prisma.TransferWhereInput> {
     if (this.moderatorScope.isModerator(user)) {
-      const equipmentWhere = (await this.moderatorScope.buildEquipmentReadWhere(user)) ?? {};
+      const equipmentWhere = (await this.moderatorScope.buildEquipmentScopeWhere(user)) ?? {};
       const employeeWhere = (await this.moderatorScope.buildScopedEmployeeWhere(user)) ?? {};
       return {
         OR: [
@@ -232,14 +232,17 @@ export class TransfersService {
       equipment.currentHolder,
       this.registrarScope,
       this.prisma,
+      this.moderatorScope,
     );
     validateEquipmentForTransfer(equipment, dto);
-    await this.registrarScope.assertCanCreateTransferForEquipment(
-      user,
-      equipment,
-      equipment.currentHolder,
-      dto.type,
-    );
+    if (!this.moderatorScope.isModerator(user)) {
+      await this.registrarScope.assertCanCreateTransferForEquipment(
+        user,
+        equipment,
+        equipment.currentHolder,
+        dto.type,
+      );
+    }
     await this.inventoryFreeze.assertTransferCreateAllowed(
       dto.equipmentId,
       user,
@@ -557,8 +560,16 @@ export class TransfersService {
     if (!featureEnabled) {
       throw new BadRequestException('Cross-service transfers are disabled');
     }
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('Only admin can create cross-service transfers');
+    if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+      throw new ForbiddenException('Only admin or moderator can create cross-service transfers');
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      if (fromEmployee) {
+        await this.moderatorScope.assertEmployeeInScope(user, fromEmployee.id);
+      }
+      if (toEmployee) {
+        await this.moderatorScope.assertEmployeeInScope(user, toEmployee.id);
+      }
     }
     return true;
   }
@@ -630,6 +641,14 @@ export class TransfersService {
     user: AuthenticatedUser,
     transfer: Awaited<ReturnType<typeof this.getTransferOrThrow>>,
   ): Promise<boolean> {
+    if (this.moderatorScope.isModerator(user)) {
+      return this.moderatorScope.canAccessTransfer(user, {
+        equipment: transfer.equipment,
+        fromPerson: transfer.fromPerson,
+        toPerson: transfer.toPerson,
+        equipmentHolder: transfer.equipment.currentHolder,
+      });
+    }
     const allowed = await this.registrarScope.canAccessTransfer(user, {
       fromPerson: transfer.fromPerson,
       toPerson: transfer.toPerson,
@@ -697,6 +716,10 @@ export class TransfersService {
     const employee = await this.prisma.employee.findUnique({ where: { id: employeeId } });
     if (!employee) {
       throw new NotFoundException('Employee not found');
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertEmployeeInScope(user, employeeId);
+      return;
     }
     const allowed = await this.registrarScope.canAccessEmployee(user, employee);
     if (user.role === 'evidenticar' && !allowed) {

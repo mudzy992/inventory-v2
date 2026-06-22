@@ -163,13 +163,13 @@ export class InventoryCountController {
   }
 
   @Get('committees/:id/print-scope')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.user)
   getPrintScope(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.inventoryCountService.getPrintScopeForUser(user, id);
   }
 
   @Get('committees/:id/report')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.user)
   getCommitteeReport(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.inventoryCountService.getCommitteeReportForUser(user, id);
   }
@@ -220,7 +220,7 @@ export class InventoryCountController {
   }
 
   @Get(':id/close-job')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.user)
   getCloseJob(@Param('id') id: string) {
     return this.inventoryCountService.getCloseJob(id);
   }

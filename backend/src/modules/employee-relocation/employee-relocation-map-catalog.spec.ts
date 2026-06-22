@@ -91,11 +91,18 @@ const createService = (options: {
     assertFeatureEnabled: async () => undefined,
   };
 
+  const moderatorScope = {
+    isModerator: () => false,
+    assertEmployeeInScope: async () => undefined,
+    resolveModeratorOrgUnitIds: async () => null as string[] | null,
+    assertLineInModeratorScope: async () => undefined,
+  };
+
   const service = new EmployeeRelocationService(
     prisma as never,
     {} as never,
     {} as never,
-    {} as never,
+    moderatorScope as never,
     {} as never,
     {} as never,
     {} as never,

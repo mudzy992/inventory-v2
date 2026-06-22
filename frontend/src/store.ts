@@ -123,6 +123,22 @@ export function isModerator(): boolean {
   return user?.role === 'moderator';
 }
 
+export function isModeratorWarehouseAssigned(warehouseId: string): boolean {
+  const user = getCurrentUser();
+  if (!user || user.role !== 'moderator') {
+    return false;
+  }
+  return (user.moderatorWarehouseAssignments ?? []).some((row) => row.warehouseId === warehouseId);
+}
+
+export function getModeratorWarehouseIds(): string[] {
+  const user = getCurrentUser();
+  if (!user || user.role !== 'moderator') {
+    return [];
+  }
+  return (user.moderatorWarehouseAssignments ?? []).map((row) => row.warehouseId);
+}
+
 export function getUserRole(): UserRole | null {
   const user = getCurrentUser();
   return user?.role || null;

@@ -5,6 +5,7 @@ import { getEmployeeFullName, getStatusLabel, getStatusColor, formatDate, getOrg
 import {
   isAdmin,
   isEvidenticar,
+  isModerator,
   getCurrentUser,
   isCrossServiceTransfer,
 } from '../store';
@@ -74,6 +75,8 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
 
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
+  const moderator = isModerator();
+  const canManageTransfers = admin || evidenticar || moderator;
   const user = getCurrentUser();
   const { toastError } = useToast();
   const isFrozen = useInventoryFreezeActive();
@@ -258,7 +261,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   };
 
   const historyActions =
-    activeTab === 'history' ? (
+    activeTab === 'history' && canManageTransfers ? (
       <>
         <button
           type="button"

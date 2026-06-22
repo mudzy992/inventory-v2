@@ -21,9 +21,9 @@ export const canTransferRelocationLine = (input: {
 
 export const canResolveRelocationWhileFrozen = (input: {
   isFrozen: boolean;
-  isAdmin: boolean;
+  canBypassFreeze: boolean;
 }): EmployeeRelocationGuardResult => {
-  if (input.isFrozen && !input.isAdmin) {
+  if (input.isFrozen && !input.canBypassFreeze) {
     return { allowed: false, reason: EMPLOYEE_RELOCATION_GUARD_MESSAGES.freezeBlocked };
   }
   return { allowed: true };

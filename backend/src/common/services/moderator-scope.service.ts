@@ -75,6 +75,29 @@ export class ModeratorScopeService {
     await this.assertOrgUnitInScope(user, orgUnitId);
   }
 
+  async assertWarehouseAssigned(user: AuthenticatedUser, warehouseId: string): Promise<void> {
+    if (this.hasUnscopedAccess(user)) {
+      return;
+    }
+    if (!this.isModerator(user)) {
+      throw new ForbiddenException('Nemate dozvolu za ovu operaciju na skladištu');
+    }
+    if (!user.moderatorWarehouseIds.includes(warehouseId)) {
+      throw new ForbiddenException('Skladište nije u vašoj dodjeli');
+    }
+    await this.assertWarehouseInOrgScope(user, warehouseId);
+  }
+
+  isWarehouseAssigned(user: AuthenticatedUser, warehouseId: string): boolean {
+    if (this.hasUnscopedAccess(user)) {
+      return true;
+    }
+    if (!this.isModerator(user)) {
+      return false;
+    }
+    return user.moderatorWarehouseIds.includes(warehouseId);
+  }
+
   async assertWarehouseInOrgScope(user: AuthenticatedUser, warehouseId: string): Promise<void> {
     if (this.hasUnscopedAccess(user)) {
       return;
@@ -176,20 +199,145 @@ export class ModeratorScopeService {
     return { orgUnitId: { in: scopedIds } };
   }
 
-  async buildEquipmentReadWhere(user: AuthenticatedUser): Promise<object | null> {
+  async buildEquipmentScopeWhere(user: AuthenticatedUser): Promise<object | null> {
     if (!this.isModerator(user)) {
       return null;
     }
     const scopedIds = await this.resolveModeratorOrgUnitIds(user);
-    if (!scopedIds || scopedIds.length === 0) {
+    const assignedWarehouseIds = user.moderatorWarehouseIds;
+    if ((!scopedIds || scopedIds.length === 0) && assignedWarehouseIds.length === 0) {
       return { id: { in: [] } };
     }
-    return {
-      OR: [
+    const orClauses: object[] = [];
+    if (scopedIds && scopedIds.length > 0) {
+      orClauses.push(
         { warehouse: { orgUnitId: { in: scopedIds } } },
         { currentHolder: { orgUnitId: { in: scopedIds } } },
-      ],
-    };
+      );
+    }
+    if (assignedWarehouseIds.length > 0) {
+      orClauses.push({ warehouseId: { in: assignedWarehouseIds } });
+    }
+    if (orClauses.length === 0) {
+      return { id: { in: [] } };
+    }
+    return { OR: orClauses };
+  }
+
+  async buildEquipmentReadWhere(user: AuthenticatedUser): Promise<object | null> {
+    return this.buildEquipmentScopeWhere(user);
+  }
+
+  async isEquipmentInScope(
+    user: AuthenticatedUser,
+    equipment: { id: string; warehouseId: string | null; currentHolderId: string | null },
+    holder: { orgUnitId: string } | null,
+    warehouseOrgUnitId?: string | null,
+  ): Promise<boolean> {
+    if (this.hasUnscopedAccess(user)) {
+      return true;
+    }
+    if (!this.isModerator(user)) {
+      return false;
+    }
+    const scopedIds = await this.resolveModeratorOrgUnitIds(user);
+    const scopedSet = scopedIds ? new Set(scopedIds) : new Set<string>();
+    if (holder && scopedSet.has(holder.orgUnitId)) {
+      return true;
+    }
+    if (equipment.warehouseId && user.moderatorWarehouseIds.includes(equipment.warehouseId)) {
+      return true;
+    }
+    if (warehouseOrgUnitId && scopedSet.has(warehouseOrgUnitId)) {
+      return true;
+    }
+    if (equipment.warehouseId && !warehouseOrgUnitId) {
+      const warehouse = await this.prisma.warehouse.findUnique({
+        where: { id: equipment.warehouseId },
+        select: { orgUnitId: true },
+      });
+      if (warehouse?.orgUnitId && scopedSet.has(warehouse.orgUnitId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async assertEquipmentInScope(
+    user: AuthenticatedUser,
+    equipment: { id: string; warehouseId: string | null; currentHolderId: string | null },
+    holder: { orgUnitId: string } | null,
+    warehouseOrgUnitId?: string | null,
+  ): Promise<void> {
+    const allowed = await this.isEquipmentInScope(user, equipment, holder, warehouseOrgUnitId);
+    if (!allowed) {
+      throw new ForbiddenException('Oprema je van vašeg opsega');
+    }
+  }
+
+  async assertEmployeeInScope(user: AuthenticatedUser, employeeId: string): Promise<void> {
+    if (this.hasUnscopedAccess(user)) {
+      return;
+    }
+    if (!this.isModerator(user)) {
+      throw new ForbiddenException('Radnik je van vašeg opsega');
+    }
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { orgUnitId: true },
+    });
+    if (!employee) {
+      throw new ForbiddenException('Radnik nije pronađen');
+    }
+    await this.assertOrgUnitInScope(user, employee.orgUnitId);
+  }
+
+  async canAccessTransfer(
+    user: AuthenticatedUser,
+    transfer: {
+      equipment: { id: string; warehouseId: string | null; currentHolderId: string | null };
+      fromPerson: { orgUnitId: string } | null;
+      toPerson: { orgUnitId: string } | null;
+      equipmentHolder?: { orgUnitId: string } | null;
+    },
+  ): Promise<boolean> {
+    if (this.hasUnscopedAccess(user)) {
+      return true;
+    }
+    if (!this.isModerator(user)) {
+      return false;
+    }
+    const holder = transfer.equipmentHolder ?? null;
+    if (await this.isEquipmentInScope(user, transfer.equipment, holder)) {
+      return true;
+    }
+    const scopedIds = await this.resolveModeratorOrgUnitIds(user);
+    if (!scopedIds || scopedIds.length === 0) {
+      return false;
+    }
+    const scopedSet = new Set(scopedIds);
+    if (transfer.fromPerson && scopedSet.has(transfer.fromPerson.orgUnitId)) {
+      return true;
+    }
+    if (transfer.toPerson && scopedSet.has(transfer.toPerson.orgUnitId)) {
+      return true;
+    }
+    return false;
+  }
+
+  async assertCanAccessTransfer(
+    user: AuthenticatedUser,
+    transfer: {
+      equipment: { id: string; warehouseId: string | null; currentHolderId: string | null };
+      fromPerson: { orgUnitId: string } | null;
+      toPerson: { orgUnitId: string } | null;
+      equipmentHolder?: { orgUnitId: string } | null;
+    },
+  ): Promise<void> {
+    const allowed = await this.canAccessTransfer(user, transfer);
+    if (!allowed) {
+      throw new ForbiddenException('Prenosnica je van vašeg opsega');
+    }
   }
 
   async isUserInModeratorScope(actor: AuthenticatedUser, targetUserId: string): Promise<boolean> {

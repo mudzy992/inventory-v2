@@ -32,7 +32,7 @@ export class WarehouseStockController {
   }
 
   @Get('warehouses/:warehouseId/stock-lots')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.moderator)
   listByWarehouse(
     @CurrentUser() user: AuthenticatedUser,
     @Param('warehouseId') warehouseId: string,
@@ -42,7 +42,7 @@ export class WarehouseStockController {
   }
 
   @Post('warehouses/:warehouseId/stock-lots')
-  @Roles(UserRole.admin, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.skladistar, UserRole.moderator)
   receive(
     @CurrentUser() user: AuthenticatedUser,
     @Param('warehouseId') warehouseId: string,
@@ -52,7 +52,7 @@ export class WarehouseStockController {
   }
 
   @Post('warehouses/:warehouseId/stock-lots/bulk')
-  @Roles(UserRole.admin, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.skladistar, UserRole.moderator)
   receiveBulk(
     @CurrentUser() user: AuthenticatedUser,
     @Param('warehouseId') warehouseId: string,
@@ -62,7 +62,7 @@ export class WarehouseStockController {
   }
 
   @Get('warehouses/:warehouseId/stock-lots/receive-preview')
-  @Roles(UserRole.admin, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.skladistar, UserRole.moderator)
   receivePreview(
     @CurrentUser() user: AuthenticatedUser,
     @Param('warehouseId') warehouseId: string,
@@ -72,7 +72,7 @@ export class WarehouseStockController {
   }
 
   @Get('stock-lots/:id')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.moderator)
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.warehouseStockService.findOne(user, id);
   }
@@ -88,7 +88,7 @@ export class WarehouseStockController {
   }
 
   @Post('stock-lots/:id/issue')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   issue(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,

@@ -7,7 +7,7 @@ import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
 import { Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as WarehouseIcon, Info, Download } from 'lucide-react';
-import { isAdmin, isEvidenticar, isSkladistar, getCurrentUser } from '../store';
+import { isAdmin, isEvidenticar, isSkladistar, isModerator, getCurrentUser, isModeratorWarehouseAssigned } from '../store';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName, getEquipmentAffiliationLabel } from '../helpers';
 import {
@@ -59,10 +59,11 @@ export function EquipmentPage() {
   const [showLabels, setShowLabels] = useState(false);
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
+  const moderator = isModerator();
   const skladistar = isSkladistar();
   const user = getCurrentUser();
   const { toastError } = useToast();
-  const canManage = admin || evidenticar;
+  const canManage = admin || evidenticar || moderator;
   const isFrozen = useInventoryFreezeActive();
   const [isExporting, setIsExporting] = useState(false);
 
@@ -233,13 +234,15 @@ export function EquipmentPage() {
   };
 
   if (selectedWarehouseId) {
+    const isAssignedWarehouse = admin || isModeratorWarehouseAssigned(selectedWarehouseId);
     return (
       <WarehouseDetailView
         warehouseId={selectedWarehouseId}
         onBack={() => setSelectedWarehouseId(null)}
-        canEditContext={admin}
+        canEditContext={isAssignedWarehouse}
         canManageDestruction={admin || skladistar}
-        canReceiveStock={admin || skladistar}
+        canReceiveStock={admin || skladistar || (moderator && isAssignedWarehouse)}
+        canManageTransferTemplate={isAssignedWarehouse}
       />
     );
   }

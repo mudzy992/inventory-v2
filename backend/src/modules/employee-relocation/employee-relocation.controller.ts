@@ -26,15 +26,15 @@ export class EmployeeRelocationController {
   constructor(private readonly relocationService: EmployeeRelocationService) {}
 
   @Get('preview')
-  @Roles(UserRole.admin)
-  preview(@Query() query: PreviewRelocationQueryDto) {
-    return this.relocationService.preview(query);
+  @Roles(UserRole.admin, UserRole.moderator)
+  preview(@CurrentUser() user: AuthenticatedUser, @Query() query: PreviewRelocationQueryDto) {
+    return this.relocationService.preview(user, query);
   }
 
   @Get('admin-alerts')
-  @Roles(UserRole.admin)
-  adminAlerts() {
-    return this.relocationService.getAdminAlerts();
+  @Roles(UserRole.admin, UserRole.moderator)
+  adminAlerts(@CurrentUser() user: AuthenticatedUser) {
+    return this.relocationService.getAdminAlerts(user);
   }
 
   @Get()
@@ -50,13 +50,13 @@ export class EmployeeRelocationController {
   }
 
   @Get('equipment/:equipmentId/events')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   equipmentEvents(@Param('equipmentId') equipmentId: string) {
     return this.relocationService.listEventsForEquipment(equipmentId);
   }
 
   @Patch('lines/:id/source')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   resolveSource(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -66,7 +66,7 @@ export class EmployeeRelocationController {
   }
 
   @Patch('lines/:id/dest')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   resolveDest(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -76,7 +76,7 @@ export class EmployeeRelocationController {
   }
 
   @Patch('lines/:id/map-catalog')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.moderator)
   mapCatalog(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,

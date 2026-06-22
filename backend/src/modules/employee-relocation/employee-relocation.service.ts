@@ -86,11 +86,14 @@ export class EmployeeRelocationService {
     private readonly categoriesService: CategoriesService,
   ) {}
 
-  async preview(query: PreviewRelocationQueryDto) {
+  async preview(user: AuthenticatedUser, query: PreviewRelocationQueryDto) {
     await this.settingsService.assertFeatureEnabled('features.employee_relocation');
     const employee = await this.prisma.employee.findUnique({ where: { id: query.employeeId } });
     if (!employee) {
       throw new NotFoundException('Employee not found');
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertEmployeeInScope(user, employee.id);
     }
     const fromWarehouseId = await this.warehouseResolution.resolveForOrgUnit(employee.orgUnitId);
     const toWarehouseId = await this.warehouseResolution.resolveForOrgUnit(query.newOrgUnitId);
@@ -534,10 +537,13 @@ export class EmployeeRelocationService {
 
   async mapLineCatalog(user: AuthenticatedUser, lineId: string, dto: MapCatalogDto) {
     await this.settingsService.assertFeatureEnabled('features.employee_relocation');
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('Samo administrator može mapirati šifrarnik');
+    if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+      throw new ForbiddenException('Samo administrator ili moderator može mapirati šifrarnik');
     }
     const line = await this.getLineOrThrow(lineId);
+    if (this.moderatorScope.isModerator(user)) {
+      await this.assertLineInModeratorScope(user, line);
+    }
     if (!['pending_source', 'rejected'].includes(line.status)) {
       throw new BadRequestException('Šifrarnik se može mapirati samo za aktivne stavke na izvoru');
     }
@@ -567,12 +573,17 @@ export class EmployeeRelocationService {
     return this.getLineOrThrow(lineId);
   }
 
-  async getAdminAlerts() {
+  async getAdminAlerts(user: AuthenticatedUser) {
     await this.settingsService.assertFeatureEnabled('features.employee_relocation');
-    const warehouses = await this.prisma.warehouse.findMany({
+    let warehouses = await this.prisma.warehouse.findMany({
       where: { isActive: true },
-      select: { id: true, name: true },
+      select: { id: true, name: true, orgUnitId: true },
     });
+    if (this.moderatorScope.isModerator(user)) {
+      const scopedIds = await this.moderatorScope.resolveModeratorOrgUnitIds(user);
+      const scopedSet = new Set(scopedIds ?? []);
+      warehouses = warehouses.filter((row) => row.orgUnitId && scopedSet.has(row.orgUnitId));
+    }
     const parentCategories = await this.prisma.category.findMany({
       where: { categoryKind: 'ASSET', parentId: null },
       select: { id: true, name: true },
@@ -901,11 +912,22 @@ export class EmployeeRelocationService {
     return line;
   }
 
+  private async assertLineInModeratorScope(
+    user: AuthenticatedUser,
+    line: Prisma.EmployeeRelocationLineGetPayload<{ include: typeof lineInclude }>,
+  ): Promise<void> {
+    await this.moderatorScope.assertEmployeeInScope(user, line.case.employee.id);
+  }
+
   private async assertSourceRegistrar(
     user: AuthenticatedUser,
     line: Prisma.EmployeeRelocationLineGetPayload<{ include: typeof lineInclude }>,
   ) {
     if (user.role === 'admin') {
+      return;
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.assertLineInModeratorScope(user, line);
       return;
     }
     const allowed = await this.canActAsSourceRegistrar(user, line);
@@ -919,6 +941,10 @@ export class EmployeeRelocationService {
     line: Prisma.EmployeeRelocationLineGetPayload<{ include: typeof lineInclude }>,
   ) {
     if (user.role === 'admin') {
+      return;
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.assertLineInModeratorScope(user, line);
       return;
     }
     const allowed = await this.canActAsDestRegistrar(user, line);

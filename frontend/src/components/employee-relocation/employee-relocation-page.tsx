@@ -12,7 +12,7 @@ import { PaginationControls } from '../ui/pagination-controls';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
 import { useRefreshData } from '../../useStore';
-import { isAdmin } from '../../store';
+import { isAdmin, isModerator } from '../../store';
 import { Button } from '../ui/button';
 import { PageHeaderRow } from '../ui/page-header-row';
 import { ResponsiveTable } from '../ui/responsive-table';
@@ -199,14 +199,16 @@ const RelocationLineRow = ({
   mode,
   onDone,
   frozen,
-  admin,
+  canBypassFreeze,
+  canMapCatalog,
   asCard = false,
 }: {
   line: RelocationLine;
   mode: 'source' | 'dest';
   onDone: () => void;
   frozen: boolean;
-  admin: boolean;
+  canBypassFreeze: boolean;
+  canMapCatalog: boolean;
   asCard?: boolean;
 }) => {
   const { toastError, toastSuccess } = useToast();
@@ -220,11 +222,11 @@ const RelocationLineRow = ({
   });
   const transferBlocked = mode === 'source' && (missingCatalog || !transferGuard.allowed);
   const transferTitle = missingCatalog
-    ? 'Administrator mora mapirati tip u šifrarniku prije transfera.'
+    ? 'Mapirajte tip u šifrarniku prije transfera.'
     : transferGuard.reason;
 
   const runSource = async (action: 'transfer' | 'discharge') => {
-    const freezeGuard = canResolveRelocationWhileFrozen({ isFrozen: frozen, isAdmin: admin });
+    const freezeGuard = canResolveRelocationWhileFrozen({ isFrozen: frozen, canBypassFreeze });
     if (!freezeGuard.allowed) {
       toastError(freezeGuard.reason ?? EMPLOYEE_RELOCATION_GUARD_MESSAGES.freezeBlocked);
       return;
@@ -248,7 +250,7 @@ const RelocationLineRow = ({
   };
 
   const runDest = async (action: 'accept' | 'reject') => {
-    const freezeGuard = canResolveRelocationWhileFrozen({ isFrozen: frozen, isAdmin: admin });
+    const freezeGuard = canResolveRelocationWhileFrozen({ isFrozen: frozen, canBypassFreeze });
     if (!freezeGuard.allowed) {
       toastError(freezeGuard.reason ?? EMPLOYEE_RELOCATION_GUARD_MESSAGES.freezeBlocked);
       return;
@@ -266,7 +268,7 @@ const RelocationLineRow = ({
   };
 
   const mapAction =
-    admin && mode === 'source' && missingCatalog && canMapRelocationCatalog(line) ? (
+    canMapCatalog && mode === 'source' && missingCatalog && canMapRelocationCatalog(line) ? (
       <Button variant="secondary" disabled={busy} onClick={() => setMapOpen(true)}>
         <Link2 size={14} />
         Mapiraj tip
@@ -354,7 +356,8 @@ export const EmployeeRelocationPage = () => {
   const refresh = useRefreshData();
   const { toastError } = useToast();
   const frozen = useInventoryFreezeActive();
-  const admin = isAdmin();
+  const canBypassFreeze = isAdmin() || isModerator();
+  const canMapCatalog = canBypassFreeze;
   const [sourceLines, setSourceLines] = useState<RelocationLine[]>([]);
   const [destLines, setDestLines] = useState<RelocationLine[]>([]);
   const [sourceMeta, setSourceMeta] = useState<{ page: number; pageSize: number; total: number; totalPages: number } | null>(null);
@@ -409,7 +412,8 @@ export const EmployeeRelocationPage = () => {
                 line={line}
                 mode="source"
                 frozen={frozen}
-                admin={admin}
+                canBypassFreeze={canBypassFreeze}
+                canMapCatalog={canMapCatalog}
                 asCard
                 onDone={() => void handleDone()}
               />
@@ -432,7 +436,8 @@ export const EmployeeRelocationPage = () => {
                       line={line}
                       mode="source"
                       frozen={frozen}
-                      admin={admin}
+                      canBypassFreeze={canBypassFreeze}
+                      canMapCatalog={canMapCatalog}
                       onDone={() => void handleDone()}
                     />
                   ))}
@@ -466,7 +471,8 @@ export const EmployeeRelocationPage = () => {
                 line={line}
                 mode="dest"
                 frozen={frozen}
-                admin={admin}
+                canBypassFreeze={canBypassFreeze}
+                canMapCatalog={canMapCatalog}
                 asCard
                 onDone={() => void handleDone()}
               />
@@ -488,7 +494,8 @@ export const EmployeeRelocationPage = () => {
                       line={line}
                       mode="dest"
                       frozen={frozen}
-                      admin={admin}
+                      canBypassFreeze={canBypassFreeze}
+                      canMapCatalog={canMapCatalog}
                       onDone={() => void handleDone()}
                     />
                   ))}

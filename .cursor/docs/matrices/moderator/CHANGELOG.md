@@ -1,5 +1,9 @@
 # Changelog — moderator
 
+## 2026-06-20 (scoped admin)
+
+- Proširenje: equipment/transfer FULL CRUD u org scope; skladišne operacije + transfer template samo na `moderatorWarehouseIds`; bez kreiranja skladišta; org promjena FULL u scope; popis parity `popis_koordinator`.
+
 ## 2026-06-20
 
 - Inicijalna matrica uloge `moderator`: dual assignment (org root + warehouse), capability paket, hard deny lista, edge-caseovi.

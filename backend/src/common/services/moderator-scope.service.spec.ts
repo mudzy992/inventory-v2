@@ -25,6 +25,7 @@ const createService = (options?: {
   orgUnits?: { id: string; type: string }[];
   warehouses?: { id: string; orgUnitId: string | null; isActive: boolean }[];
   warehouseConflicts?: { warehouseId: string }[];
+  employees?: { id: string; orgUnitId: string }[];
 }) => {
   const orgScopeService = {
     expandOrgUnitIds: async (rootIds: string[]) => {
@@ -54,6 +55,10 @@ const createService = (options?: {
     },
     user: {
       findUnique: async () => null,
+    },
+    employee: {
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        (options?.employees ?? []).find((row) => row.id === where.id) ?? null,
     },
   } as unknown as PrismaService;
   return new ModeratorScopeService(prisma, orgScopeService);
@@ -101,6 +106,36 @@ describe('ModeratorScopeService', () => {
     );
   });
 
+  it('assertWarehouseAssigned allows only assigned warehouses', async () => {
+    const service = createService({
+      warehouses: [{ id: 'wh-1', orgUnitId: 'dist-1', isActive: true }],
+    });
+    await assert.doesNotReject(() =>
+      service.assertWarehouseAssigned(
+        authUser('moderator', { moderatorOrgRoots: ['dist-1'], moderatorWarehouseIds: ['wh-1'] }),
+        'wh-1',
+      ),
+    );
+    await assert.rejects(
+      () =>
+        service.assertWarehouseAssigned(
+          authUser('moderator', { moderatorOrgRoots: ['dist-1'], moderatorWarehouseIds: ['wh-1'] }),
+          'wh-2',
+        ),
+      /nije u vašoj dodjeli/,
+    );
+  });
+
+  it('buildEquipmentScopeWhere includes assigned warehouse equipment', async () => {
+    const service = createService();
+    const where = await service.buildEquipmentScopeWhere(
+      authUser('moderator', { moderatorOrgRoots: ['dist-1'], moderatorWarehouseIds: ['wh-9'] }),
+    );
+    assert.ok(where && typeof where === 'object' && 'OR' in where);
+    const orClauses = (where as { OR: object[] }).OR;
+    assert.ok(orClauses.some((row) => JSON.stringify(row).includes('wh-9')));
+  });
+
   it('rejects duplicate warehouse moderator assignment', async () => {
     const service = createService({
       orgUnits: [{ id: 'dist-1', type: 'distribucija' }],
@@ -111,5 +146,54 @@ describe('ModeratorScopeService', () => {
       () => service.assertModeratorWarehouseAssignmentsValid(['dist-1'], ['wh-1']),
       /Skladište već ima dodijeljenog moderatora/,
     );
+  });
+
+  it('isEquipmentInScope allows equipment held by employee in org scope', async () => {
+    const service = createService();
+    const user = authUser('moderator', { moderatorOrgRoots: ['dist-1'], moderatorWarehouseIds: ['wh-other'] });
+    const allowed = await service.isEquipmentInScope(
+      user,
+      { id: 'eq-1', warehouseId: 'wh-remote', currentHolderId: 'emp-1' },
+      { orgUnitId: 'branch-1' },
+    );
+    assert.equal(allowed, true);
+  });
+
+  it('isEquipmentInScope denies equipment on unassigned warehouse without holder in scope', async () => {
+    const service = createService({
+      warehouses: [{ id: 'wh-remote', orgUnitId: 'other-org', isActive: true }],
+    });
+    const user = authUser('moderator', { moderatorOrgRoots: ['dist-1'], moderatorWarehouseIds: ['wh-1'] });
+    const allowed = await service.isEquipmentInScope(
+      user,
+      { id: 'eq-1', warehouseId: 'wh-remote', currentHolderId: null },
+      null,
+      'other-org',
+    );
+    assert.equal(allowed, false);
+  });
+
+  it('assertEmployeeInScope allows employee in expanded org subtree', async () => {
+    const service = createService({
+      employees: [{ id: 'emp-1', orgUnitId: 'branch-1' }],
+    });
+    await assert.doesNotReject(() =>
+      service.assertEmployeeInScope(
+        authUser('moderator', { moderatorOrgRoots: ['dist-1'] }),
+        'emp-1',
+      ),
+    );
+  });
+
+  it('canAccessTransfer allows transfer when equipment is in scope', async () => {
+    const service = createService();
+    const user = authUser('moderator', { moderatorOrgRoots: ['dist-1'], moderatorWarehouseIds: [] });
+    const allowed = await service.canAccessTransfer(user, {
+      equipment: { id: 'eq-1', warehouseId: null, currentHolderId: 'emp-1' },
+      fromPerson: { orgUnitId: 'branch-1' },
+      toPerson: { orgUnitId: 'other' },
+      equipmentHolder: { orgUnitId: 'branch-1' },
+    });
+    assert.equal(allowed, true);
   });
 });

@@ -9,7 +9,7 @@ import { canCreateWarehouse } from '../helpers/guards';
 import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { useToast } from '../contexts/toast-context';
 import { useStore, useRefreshData } from '../useStore';
-import { isAdmin, isModerator, isSkladistar } from '../store';
+import { isAdmin, isModerator, isSkladistar, isModeratorWarehouseAssigned } from '../store';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
 import { isCentralWarehouse } from '../helpers/org-warehouse.util';
 import { getCityLabel, getOrgUnitTypeLabel } from '../helpers';
@@ -34,6 +34,7 @@ export const WarehousesPage = () => {
   const admin = isAdmin();
   const moderator = isModerator();
   const canManageWarehouses = admin || moderator;
+  const canCreateNewWarehouse = admin;
   const skladistar = isSkladistar();
   const isFrozen = useInventoryFreezeActive();
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
@@ -107,13 +108,15 @@ export const WarehousesPage = () => {
     }
   };
   if (selectedWarehouseId) {
+    const isAssignedWarehouse = admin || isModeratorWarehouseAssigned(selectedWarehouseId);
     return (
       <WarehouseDetailView
         warehouseId={selectedWarehouseId}
         onBack={() => setSelectedWarehouseId(null)}
-        canEditContext={canManageWarehouses}
+        canEditContext={isAssignedWarehouse}
         canManageDestruction={canManageDestruction}
-        canReceiveStock={skladistar || admin}
+        canReceiveStock={skladistar || admin || (moderator && isAssignedWarehouse)}
+        canManageTransferTemplate={isAssignedWarehouse}
       />
     );
   }
@@ -131,12 +134,12 @@ export const WarehousesPage = () => {
       <PageTabs
         tabs={[
           { id: 'list', label: 'Lista', icon: List },
-          ...(canManageWarehouses ? [{ id: 'create' as const, label: 'Novo skladište', icon: WarehouseIcon }] : []),
+          ...(canCreateNewWarehouse ? [{ id: 'create' as const, label: 'Novo skladište', icon: WarehouseIcon }] : []),
         ]}
         activeTab={tab}
         onChange={setTab}
       />
-      {tab === 'create' && canManageWarehouses ? (
+      {tab === 'create' && canCreateNewWarehouse ? (
         <FormCard title="Novo skladište" className="max-w-lg">
           <div>
             <label className={labelClass} htmlFor="wh-create-name">

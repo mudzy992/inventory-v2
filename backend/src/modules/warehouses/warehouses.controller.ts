@@ -54,7 +54,7 @@ export class WarehousesController {
   }
 
   @Post()
-  @Roles(UserRole.admin, UserRole.moderator)
+  @Roles(UserRole.admin)
   create(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateWarehouseDto) {
     return this.warehousesService.create(user, body);
   }
@@ -86,9 +86,9 @@ export class WarehousesController {
   }
 
   @Get(':id/transfer-templates')
-  @Roles(UserRole.admin)
-  listTransferTemplates(@Param('id') id: string) {
-    return this.transferTemplateService.listTemplates(id);
+  @Roles(UserRole.admin, UserRole.moderator)
+  listTransferTemplates(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.transferTemplateService.listTemplates(user, id);
   }
 
   @Get(':id/transfer-template/active')
@@ -98,7 +98,7 @@ export class WarehousesController {
   }
 
   @Post(':id/transfer-template')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.moderator)
   @UseInterceptors(FileInterceptor('file'))
   uploadTransferTemplate(
     @CurrentUser() user: AuthenticatedUser,
@@ -110,17 +110,22 @@ export class WarehousesController {
   }
 
   @Patch(':id/transfer-template/:templateId/activate')
-  @Roles(UserRole.admin)
-  activateTransferTemplate(@Param('id') id: string, @Param('templateId') templateId: string) {
-    return this.transferTemplateService.activateTemplate(id, templateId);
+  @Roles(UserRole.admin, UserRole.moderator)
+  activateTransferTemplate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('templateId') templateId: string,
+  ) {
+    return this.transferTemplateService.activateTemplate(user, id, templateId);
   }
 
   @Get(':id/transfer-template/:templateId/download')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.moderator)
   downloadTransferTemplate(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Param('templateId') templateId: string,
   ): Promise<StreamableFile> {
-    return this.transferTemplateService.downloadTemplate(id, templateId);
+    return this.transferTemplateService.downloadTemplate(user, id, templateId);
   }
 }

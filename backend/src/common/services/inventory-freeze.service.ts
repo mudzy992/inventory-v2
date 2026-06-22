@@ -25,13 +25,17 @@ export class InventoryFreezeService {
     private readonly productionModeService: InventoryProductionModeService,
   ) {}
 
+  private canBypassInventoryFreeze(user: AuthenticatedUser): boolean {
+    return user.role === 'admin' || user.role === 'moderator';
+  }
+
   async assertNoEquipmentMutation(
     equipmentId: string,
     user: AuthenticatedUser,
     action: InventoryFreezeAction,
     options?: { inventoryLineId?: string | null; transferId?: string },
   ): Promise<void> {
-    if (user.role === 'admin') {
+    if (this.canBypassInventoryFreeze(user)) {
       return;
     }
     if (options?.inventoryLineId) {
@@ -114,7 +118,7 @@ export class InventoryFreezeService {
     equipmentId: string,
     user: AuthenticatedUser,
   ): Promise<void> {
-    if (user.role === 'admin') {
+    if (this.canBypassInventoryFreeze(user)) {
       return;
     }
     const equipment = await this.prisma.equipment.findUnique({
@@ -137,7 +141,7 @@ export class InventoryFreezeService {
     user: AuthenticatedUser,
     action: InventoryFreezeAction,
   ): Promise<void> {
-    if (user.role === 'admin') {
+    if (this.canBypassInventoryFreeze(user)) {
       return;
     }
     const freezeContext = await findFreezeContextForWarehouse(warehouseId, {

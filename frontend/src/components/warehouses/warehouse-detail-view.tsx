@@ -27,6 +27,7 @@ interface WarehouseDetailViewProps {
   canEditContext?: boolean;
   canManageDestruction?: boolean;
   canReceiveStock?: boolean;
+  canManageTransferTemplate?: boolean;
 }
 
 export const WarehouseDetailView = ({
@@ -35,6 +36,7 @@ export const WarehouseDetailView = ({
   canEditContext = false,
   canManageDestruction = false,
   canReceiveStock = false,
+  canManageTransferTemplate = false,
 }: WarehouseDetailViewProps) => {
   const navigate = useNavigate();
   const admin = isAdmin();
@@ -167,7 +169,7 @@ export const WarehouseDetailView = ({
       {tab === 'maintenance' && maintenanceEnabled ? (
         <WarehouseMaintenanceStockPanel
           warehouseId={warehouse.id}
-          canReceive={canReceiveStock || admin || skladistar}
+          canReceive={canReceiveStock}
         />
       ) : null}
       {tab === 'transfers' ? (
@@ -223,7 +225,11 @@ export const WarehouseDetailView = ({
         <p className="text-sm text-gray-500">Pregled uništenja dostupan skladištaru ili administratoru.</p>
       ) : null}
       {tab === 'context' ? (
-        <WarehouseContextPanel warehouse={warehouse} canEditContext={canEditContext} />
+        <WarehouseContextPanel
+          warehouse={warehouse}
+          canEditContext={canEditContext}
+          canManageTransferTemplate={canManageTransferTemplate}
+        />
       ) : null}
     </div>
   );

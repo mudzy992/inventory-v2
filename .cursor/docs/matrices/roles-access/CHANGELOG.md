@@ -1,5 +1,9 @@
 # Changelog — roles-access
 
+## 2026-06-20 (moderator scoped admin)
+
+- Moderator: equipment/transfer write u org scope; skladište stock/template na assigned WH; org promjena FULL u scope; bez warehouse create.
+
 ## 2026-06-20 (moderator)
 
 - Nova uloga `moderator` + `ModeratorOrgAssignment` + `ModeratorWarehouseAssignment`.

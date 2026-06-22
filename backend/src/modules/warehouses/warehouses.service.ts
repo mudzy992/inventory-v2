@@ -175,13 +175,15 @@ export class WarehousesService {
 
   async create(user: AuthenticatedUser, dto: CreateWarehouseDto) {
     await this.assertModeratorWrites(user);
-    await this.settingsService.assertFeatureEnabled('features.warehouses');
-    if (!this.moderatorScope.isSystemAdmin(user) && !this.moderatorScope.isModerator(user)) {
-      throw new ForbiddenException('Only admin or moderator can create warehouses');
+    if (this.moderatorScope.isModerator(user)) {
+      throw new ForbiddenException('Moderator ne može kreirati skladište');
     }
+    await this.settingsService.assertFeatureEnabled('features.warehouses');
     await this.assertCityExists(dto.cityId);
     await this.assertOrgUnitExists(dto.orgUnitId);
-    await this.moderatorScope.assertOrgUnitInScope(user, dto.orgUnitId);
+    if (!this.moderatorScope.isSystemAdmin(user)) {
+      throw new ForbiddenException('Only admin can create warehouses');
+    }
     if (!dto.keeperUserIds.length) {
       throw new BadRequestException(WAREHOUSE_MESSAGES.keeperRequired);
     }
@@ -206,7 +208,11 @@ export class WarehousesService {
       throw new ForbiddenException('Only admin or moderator can update warehouses');
     }
     const existing = await this.getWarehouseOrThrow(id);
-    await this.moderatorScope.assertWarehouseInOrgScope(user, id);
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertWarehouseAssigned(user, id);
+    } else {
+      await this.moderatorScope.assertWarehouseInOrgScope(user, id);
+    }
     if (dto.orgUnitId) {
       await this.moderatorScope.assertOrgUnitInScope(user, dto.orgUnitId);
     } else if (existing.orgUnitId) {

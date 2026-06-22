@@ -51,20 +51,20 @@ export class TransfersController {
   }
 
   @Post()
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   create(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateTransferDto) {
     return this.transfersService.create(user, body);
   }
 
   @Get(':id/raw-document')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   @Header('Content-Type', 'text/html; charset=utf-8')
   getRawDocument(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.transfersService.getRawDocumentHtml(user, id);
   }
 
   @Get(':id/generated-document')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   async getGeneratedDocument(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -81,19 +81,19 @@ export class TransfersController {
   }
 
   @Patch(':id/mark-printed')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   markPrinted(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.transfersService.markPrinted(user, id);
   }
 
   @Patch(':id/cancel')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   cancel(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.transfersService.cancel(user, id);
   }
 
   @Patch(':id/sign')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   sign(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -103,7 +103,7 @@ export class TransfersController {
   }
 
   @Patch(':id/finalize')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   finalize(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,

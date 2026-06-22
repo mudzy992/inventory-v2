@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, type WarehouseStockLot } from '../../../generated/prisma/client';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { SignerResolutionService } from '../../common/services/signer-resolution.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
@@ -124,6 +125,7 @@ export class WarehouseStockService {
     private readonly settingsService: SettingsService,
     private readonly transferDocumentGeneration: TransferDocumentGenerationService,
     private readonly warehouseResolution: WarehouseResolutionService,
+    private readonly moderatorScope: ModeratorScopeService,
   ) {}
 
   async listForWarehouse(
@@ -283,12 +285,7 @@ export class WarehouseStockService {
 
   async receivePreview(user: AuthenticatedUser, warehouseId: string, catalogItemId: string) {
     await this.settingsService.assertFeatureEnabled('features.registrar_stock');
-    if (user.role !== 'skladistar' && user.role !== 'admin') {
-      throw new ForbiddenException('Only warehouse keeper can receive stock');
-    }
-    if (user.role === 'skladistar') {
-      await this.warehousesService.assertKeeperCanManageWarehouse(user, warehouseId);
-    }
+    await this.assertCanReceiveOnWarehouse(user, warehouseId);
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
       select: { isActive: true },
@@ -340,12 +337,7 @@ export class WarehouseStockService {
 
   async receive(user: AuthenticatedUser, warehouseId: string, dto: CreateStockLotDto) {
     await this.settingsService.assertFeatureEnabled('features.registrar_stock');
-    if (user.role !== 'skladistar' && user.role !== 'admin') {
-      throw new ForbiddenException('Only warehouse keeper can receive stock');
-    }
-    if (user.role === 'skladistar') {
-      await this.warehousesService.assertKeeperCanManageWarehouse(user, warehouseId);
-    }
+    await this.assertCanReceiveOnWarehouse(user, warehouseId);
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
       select: { cityId: true, isActive: true },
@@ -410,12 +402,7 @@ export class WarehouseStockService {
 
   async receiveBulk(user: AuthenticatedUser, warehouseId: string, dto: BulkCreateStockLotDto) {
     await this.settingsService.assertFeatureEnabled('features.registrar_stock');
-    if (user.role !== 'skladistar' && user.role !== 'admin') {
-      throw new ForbiddenException('Only warehouse keeper can receive stock');
-    }
-    if (user.role === 'skladistar') {
-      await this.warehousesService.assertKeeperCanManageWarehouse(user, warehouseId);
-    }
+    await this.assertCanReceiveOnWarehouse(user, warehouseId);
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
       select: { cityId: true, isActive: true },
@@ -517,14 +504,18 @@ export class WarehouseStockService {
   async issueUnit(user: AuthenticatedUser, lotId: string, dto: IssueStockLotDto) {
     await this.settingsService.assertFeatureEnabled('features.registrar_stock');
     await this.settingsService.assertFeatureEnabled('features.transfers');
-    if (user.role !== 'evidenticar' && user.role !== 'admin') {
-      throw new ForbiddenException('Only registrar can issue stock');
+    if (
+      user.role !== 'evidenticar' &&
+      user.role !== 'admin' &&
+      !this.moderatorScope.isModerator(user)
+    ) {
+      throw new ForbiddenException('Only registrar, admin, or moderator can issue stock');
     }
     const lot = await this.getLotOrThrow(lotId);
     if (lot.lotKind === 'MAINTENANCE') {
       throw new BadRequestException('Maintenance stock lots cannot issue equipment units');
     }
-    await this.registrarScope.assertCanAccessStockLot(user, lot);
+    await this.assertCanAccessLot(user, lot);
     if (lot.status !== 'spremno_za_izdavanje') {
       throw new BadRequestException('Define lot specifications before issuing units');
     }
@@ -552,15 +543,19 @@ export class WarehouseStockService {
       throw new NotFoundException('Employee not found');
     }
     await assertEmployeeActiveForAssignment(this.prisma, dto.employeeId);
-    const canHolder = await this.registrarScope.canAccessEmployee(user, holder);
-    if (!canHolder) {
-      throw new ForbiddenException('Employee outside your scope');
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertEmployeeInScope(user, dto.employeeId);
+    } else {
+      const canHolder = await this.registrarScope.canAccessEmployee(user, holder);
+      if (!canHolder) {
+        throw new ForbiddenException('Employee outside your scope');
+      }
     }
     const destWarehouseId = await this.warehouseResolution.resolveForOrgUnit(holder.orgUnitId);
     const isCrossWarehouse =
       destWarehouseId !== null && destWarehouseId !== lot.warehouseId;
     if (isCrossWarehouse) {
-      if (user.role !== 'admin') {
+      if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
         throw new ForbiddenException(WAREHOUSE_STOCK_MESSAGES.crossWarehouseAdminOnly);
       }
       await this.settingsService.assertFeatureEnabled('transfer.allow_admin_cross_warehouse_issue');
@@ -763,6 +758,24 @@ export class WarehouseStockService {
     return lot;
   }
 
+  private async assertCanReceiveOnWarehouse(
+    user: AuthenticatedUser,
+    warehouseId: string,
+  ): Promise<void> {
+    if (user.role === 'admin') {
+      return;
+    }
+    if (user.role === 'skladistar') {
+      await this.warehousesService.assertKeeperCanManageWarehouse(user, warehouseId);
+      return;
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertWarehouseAssigned(user, warehouseId);
+      return;
+    }
+    throw new ForbiddenException('Only warehouse keeper, admin, or moderator can receive stock');
+  }
+
   private async assertCanAccessWarehouse(user: AuthenticatedUser, warehouseId: string): Promise<void> {
     if (user.role === 'admin') {
       return;
@@ -772,6 +785,10 @@ export class WarehouseStockService {
       if (!keeperIds.has(warehouseId)) {
         throw new ForbiddenException('Warehouse outside your assignments');
       }
+      return;
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertWarehouseAssigned(user, warehouseId);
       return;
     }
     if (user.role === 'evidenticar') {
@@ -793,6 +810,10 @@ export class WarehouseStockService {
       if (!keeperIds.has(lot.warehouseId)) {
         throw new ForbiddenException('Stock lot outside your warehouse');
       }
+      return;
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertWarehouseAssigned(user, lot.warehouseId);
       return;
     }
     if (user.role === 'evidenticar') {

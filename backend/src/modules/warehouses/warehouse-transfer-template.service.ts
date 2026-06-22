@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   StreamableFile,
@@ -7,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -20,9 +22,11 @@ export class WarehouseTransferTemplateService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly settingsService: SettingsService,
+    private readonly moderatorScope: ModeratorScopeService,
   ) {}
 
-  async listTemplates(warehouseId: string) {
+  async listTemplates(user: AuthenticatedUser, warehouseId: string) {
+    await this.assertTemplateAccess(user, warehouseId);
     return this.prisma.warehouseTransferTemplate.findMany({
       where: { warehouseId },
       orderBy: { createdAt: 'desc' },
@@ -55,6 +59,7 @@ export class WarehouseTransferTemplateService {
     file: Express.Multer.File,
     label: string,
   ) {
+    await this.assertTemplateAccess(user, warehouseId);
     await this.assertWarehouseForTemplate(warehouseId);
     if (!file) {
       throw new BadRequestException('File is required');
@@ -99,7 +104,12 @@ export class WarehouseTransferTemplateService {
     return this.getActiveTemplate(warehouseId);
   }
 
-  async downloadTemplate(warehouseId: string, templateId: string): Promise<StreamableFile> {
+  async downloadTemplate(
+    user: AuthenticatedUser,
+    warehouseId: string,
+    templateId: string,
+  ): Promise<StreamableFile> {
+    await this.assertTemplateAccess(user, warehouseId);
     await this.assertWarehouseForTemplate(warehouseId);
     const template = await this.prisma.warehouseTransferTemplate.findFirst({
       where: { id: templateId, warehouseId },
@@ -120,7 +130,8 @@ export class WarehouseTransferTemplateService {
     });
   }
 
-  async activateTemplate(warehouseId: string, templateId: string) {
+  async activateTemplate(user: AuthenticatedUser, warehouseId: string, templateId: string) {
+    await this.assertTemplateAccess(user, warehouseId);
     await this.assertWarehouseForTemplate(warehouseId);
     const template = await this.prisma.warehouseTransferTemplate.findFirst({
       where: { id: templateId, warehouseId },
@@ -144,6 +155,17 @@ export class WarehouseTransferTemplateService {
       }),
     ]);
     return this.getActiveTemplate(warehouseId);
+  }
+
+  private async assertTemplateAccess(user: AuthenticatedUser, warehouseId: string): Promise<void> {
+    if (user.role === 'admin') {
+      return;
+    }
+    if (user.role === 'moderator') {
+      await this.moderatorScope.assertWarehouseAssigned(user, warehouseId);
+      return;
+    }
+    throw new ForbiddenException('Nemate dozvolu za upravljanje obrascem prenosnice');
   }
 
   private async assertWarehouseForTemplate(warehouseId: string): Promise<void> {

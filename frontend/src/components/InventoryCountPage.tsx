@@ -764,7 +764,7 @@ export const InventoryCountPage = () => {
                                 setEditingCommitteeId(id);
                               }}
                               onDelete={(id) => void handleDeleteCommittee(id)}
-                              canDeleteCommittees={admin}
+                              canDeleteCommittees={admin || moderator}
                             />
                           </div>
                           <InventoryCommitteeDetailPanel

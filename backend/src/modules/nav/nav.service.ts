@@ -50,9 +50,9 @@ export class NavService {
     if (pendingTransfers > 0) {
       badges.transfers = (badges.transfers ?? 0) + pendingTransfers;
     }
-    if (user.role === 'admin') {
+    if (user.role === 'admin' || user.role === 'moderator') {
       try {
-        const alerts = await this.relocationService.getAdminAlerts();
+        const alerts = await this.relocationService.getAdminAlerts(user);
         const relocationCount =
           alerts.openCases + alerts.pendingDest + alerts.unmappedCatalogLines;
         if (relocationCount > 0) {

@@ -51,7 +51,7 @@ export class EquipmentController {
   }
 
   @Get('export/csv')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   async exportCsv(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: ListEquipmentQueryDto,
@@ -64,13 +64,13 @@ export class EquipmentController {
   }
 
   @Get('check/inventory-number')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   checkInventoryNumber(@Query() query: CheckInventoryNumberQueryDto) {
     return this.equipmentService.checkInventoryNumberAvailable(query.value);
   }
 
   @Get('check/specification-value')
-  @Roles(UserRole.admin, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   checkSpecificationValue(@Query() query: CheckSpecificationValueQueryDto) {
     return this.equipmentService.checkUniqueSpecificationValue(
       query.categoryId,
@@ -80,7 +80,7 @@ export class EquipmentController {
   }
 
   @Get(':id/qr')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.user)
   getQr(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.equipmentService.getQrPayload(user, id);
   }
@@ -92,13 +92,13 @@ export class EquipmentController {
   }
 
   @Post()
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.moderator)
   create(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateEquipmentDto) {
     return this.equipmentService.create(user, body);
   }
 
   @Patch(':id')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.moderator)
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -108,7 +108,7 @@ export class EquipmentController {
   }
 
   @Post(':id/reactivate')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.moderator)
   reactivate(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -118,7 +118,7 @@ export class EquipmentController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.moderator)
   remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.equipmentService.remove(user, id);
   }

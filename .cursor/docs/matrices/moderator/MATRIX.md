@@ -4,7 +4,7 @@
 
 | Uloga | Kod | Opis |
 |-------|-----|------|
-| Moderator | `moderator` | Org-scoped operativni administrator + warehouse moderator za popisne komisije |
+| Moderator | `moderator` | Org-scoped operativni administrator + warehouse moderator za popisne komisije i skladišne operacije |
 
 ## Dodjele
 
@@ -17,12 +17,13 @@
 | Više moderatora na istom rootu | Dozvoljeno |
 | Tip roota | Preporuka: `distribucija`, `podrucje`, `podruznica` |
 
-### `ModeratorWarehouseAssignment` (popisne komisije)
+### `ModeratorWarehouseAssignment` (skladište + popis)
 
 | Polje | Pravilo |
 |-------|---------|
 | `warehouseId` | Jedan aktivni moderator po skladištu (`@@unique`) |
 | Cross-validacija | `warehouse.orgUnitId` mora biti u org scope moderatora |
+| Operacije | Prijem/issue lotova, održavanje, kontekst skladišta, transfer template, popisne komisije |
 
 ## Hard deny (uvijek admin)
 
@@ -31,17 +32,25 @@
 - Kategorije CRUD
 - Equipment catalog CRUD
 - Popis: create/activate/close/delete/reconcile sesije
-- Disposal list withdraw
-- Equipment reactivate/delete
-- Transfer write, cross-service
-- Warehouse transfer templates
-- Employee relocation map-catalog, admin-alerts, preview
+- Disposal list (evidenticar workflow) i withdraw
+- Kreiranje skladišta (`POST /warehouses`)
 - Kreiranje uloga `admin` / `moderator`
-- Dodjela moderator org/warehouse assignments
+- Dodjela moderator org/warehouse assignments (samo admin UI)
+- Transfer template na skladištima izvan `moderatorWarehouseIds`
 
 ## Delegacija uloga (moderator → scoped)
 
 Dozvoljeno: `evidenticar`, `skladistar`, `popis_koordinator`, `user`
+
+## Scope opreme (read i write)
+
+OR unija:
+
+- `currentHolder.orgUnitId ∈ expandedOrgRoots` (bilo koji status)
+- `equipment.warehouseId ∈ moderatorWarehouseIds`
+- `equipment.warehouse.orgUnitId ∈ expandedOrgRoots`
+
+**Lotovi:** samo na `moderatorWarehouseIds`.
 
 ## Korisnik u scope (OR)
 
@@ -50,17 +59,20 @@ Dozvoljeno: `evidenticar`, `skladistar`, `popis_koordinator`, `user`
 - bilo koji `coordinatorAssignment.warehouseId` u scope
 - `WarehouseKeeper` na skladištu u scope
 
-## Pristup po modulu (MVP + read faza)
+## Pristup po modulu
 
 | Modul | moderator |
 |-------|-----------|
-| Org jedinice | CRUD u scope |
+| Org jedinice | CRUD u scope (bez root bez parentId) |
 | Zaposlenici | CRUD u scope |
-| Skladišta | CRUD u scope (bez destroy/template) |
+| Skladišta | PATCH u org scope; **bez create**; stock/maintenance/context/template samo na `moderatorWarehouseIds` |
 | Korisnici | CRUD operativnih uloga u scope |
-| Popis komisije | CRUD za dodijeljena skladišta (draft) |
+| Oprema | FULL CRUD u equipment scope |
+| Transferi / prenosnice | FULL CRUD u equipment scope |
+| Org promjena | FULL u org scope |
+| Popis komisije | parity `popis_koordinator` na dodijeljenim skladištima |
 | Lokacije/kategorije/katalog | read |
-| Oprema/transferi/dashboard | read scoped (faza 6) |
+| Dashboard | read scoped |
 | Settings private | — |
 
 ## Edge-caseovi
@@ -72,6 +84,7 @@ Dozvoljeno: `evidenticar`, `skladistar`, `popis_koordinator`, `user`
 | Warehouse bez orgUnitId | ne može warehouse dodjela |
 | `features.moderator_role=false` | moderator write API → 403 |
 | Moderator + evidenticar isti user | zabranjeno (v1) |
+| Radnik u scope, efektivno skladište drugdje | vidi opremu u listama; lotovi samo na assigned WH |
 
 ## Implementacija
 

@@ -122,13 +122,13 @@ export function Dashboard() {
   const myWarehouses = state.warehouses.filter((row) => myWarehouseIds.has(row.id));
 
   useEffect(() => {
-    if (!admin) {
+    if (!hasOverviewAccess) {
       return;
     }
     void fetchAdminRelocationAlertsApi()
       .then(setRelocationAlerts)
       .catch(() => setRelocationAlerts(null));
-  }, [admin]);
+  }, [hasOverviewAccess]);
 
   const stats = [
     { label: 'Ukupno opreme', value: totalEquipment, icon: <Package size={24} />, color: 'bg-blue-500' },
@@ -209,7 +209,7 @@ export function Dashboard() {
           ) : null}
         </div>
       )}
-      {admin && relocationAlerts ? (
+      {hasOverviewAccess && relocationAlerts ? (
         <div className="mb-6 grid lg:grid-cols-2 gap-4">
           <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
             <h2 className="text-sm font-semibold text-amber-900 flex items-center gap-2">

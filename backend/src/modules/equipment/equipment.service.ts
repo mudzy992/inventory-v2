@@ -192,7 +192,14 @@ export class EquipmentService {
     if (!equipment) {
       throw new NotFoundException('Equipment not found');
     }
-    await assertCanReadEquipment(user, equipment, equipment.currentHolder, this.registrarScope, this.prisma);
+    await assertCanReadEquipment(
+      user,
+      equipment,
+      equipment.currentHolder,
+      this.registrarScope,
+      this.prisma,
+      this.moderatorScope,
+    );
     const disposalReason = await resolveEquipmentDisposalReason(
       this.prisma,
       equipment.id,
@@ -218,8 +225,22 @@ export class EquipmentService {
     if (!existing) {
       throw new NotFoundException('Equipment not found');
     }
-    await assertCanReadEquipment(user, existing, existing.currentHolder, this.registrarScope, this.prisma);
-    await assertCanWriteEquipment(user, existing, existing.currentHolder, this.registrarScope, this.prisma);
+    await assertCanReadEquipment(
+      user,
+      existing,
+      existing.currentHolder,
+      this.registrarScope,
+      this.prisma,
+      this.moderatorScope,
+    );
+    await assertCanWriteEquipment(
+      user,
+      existing,
+      existing.currentHolder,
+      this.registrarScope,
+      this.prisma,
+      this.moderatorScope,
+    );
     const mutatesState =
       dto.status !== undefined ||
       dto.currentHolderId !== undefined ||
@@ -244,8 +265,12 @@ export class EquipmentService {
     validateEquipmentSpecifications(specifications, fields, optionalFields);
     if (dto.currentHolderId) {
       const holder = await this.getEmployeeOrThrow(dto.currentHolderId);
-      const draft = { ...existing, categoryId, currentHolderId: dto.currentHolderId };
-      await this.registrarScope.assertCanAccessEquipment(user, draft, holder);
+      if (this.moderatorScope.isModerator(user)) {
+        await this.moderatorScope.assertEmployeeInScope(user, dto.currentHolderId);
+      } else {
+        const draft = { ...existing, categoryId, currentHolderId: dto.currentHolderId };
+        await this.registrarScope.assertCanAccessEquipment(user, draft, holder);
+      }
     }
     const nextIsAccountingTracked = dto.isAccountingTracked ?? existing.isAccountingTracked;
     const nextInventoryNumber =
@@ -287,12 +312,18 @@ export class EquipmentService {
 
   async reactivate(user: AuthenticatedUser, id: string, reason: string): Promise<Equipment> {
     await this.settingsService.assertFeatureEnabled('features.equipment');
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('Only admin can reactivate equipment');
-    }
-    const existing = await this.prisma.equipment.findUnique({ where: { id } });
+    const existing = await this.prisma.equipment.findUnique({
+      where: { id },
+      include: { currentHolder: true },
+    });
     if (!existing) {
       throw new NotFoundException('Equipment not found');
+    }
+    if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+      throw new ForbiddenException('Only admin or moderator can reactivate equipment');
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.moderatorScope.assertEquipmentInScope(user, existing, existing.currentHolder);
     }
     if (existing.status !== 'rashodovano' || existing.warehouseCondition !== 'unisteno') {
       throw new BadRequestException(
@@ -341,10 +372,24 @@ export class EquipmentService {
     if (!existing) {
       throw new NotFoundException('Equipment not found');
     }
-    await assertCanReadEquipment(user, existing, existing.currentHolder, this.registrarScope, this.prisma);
-    await assertCanWriteEquipment(user, existing, existing.currentHolder, this.registrarScope, this.prisma);
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('Only admin can delete equipment');
+    await assertCanReadEquipment(
+      user,
+      existing,
+      existing.currentHolder,
+      this.registrarScope,
+      this.prisma,
+      this.moderatorScope,
+    );
+    await assertCanWriteEquipment(
+      user,
+      existing,
+      existing.currentHolder,
+      this.registrarScope,
+      this.prisma,
+      this.moderatorScope,
+    );
+    if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+      throw new ForbiddenException('Only admin or moderator can delete equipment');
     }
     await this.prisma.equipment.delete({ where: { id } });
   }
@@ -462,7 +507,7 @@ export class EquipmentService {
 
   private async buildEquipmentScopeWhere(user: AuthenticatedUser): Promise<Prisma.EquipmentWhereInput> {
     if (this.moderatorScope.isModerator(user)) {
-      return ((await this.moderatorScope.buildEquipmentReadWhere(user)) ?? {}) as Prisma.EquipmentWhereInput;
+      return ((await this.moderatorScope.buildEquipmentScopeWhere(user)) ?? {}) as Prisma.EquipmentWhereInput;
     }
     return this.registrarScope.buildEquipmentWhere(user);
   }

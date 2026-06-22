@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { Equipment, Employee } from '../../../generated/prisma/client';
+import type { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import type { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
@@ -15,29 +16,13 @@ export const canReadEquipment = async (
   holder: Employee | null,
   registrarScope: RegistrarScopeService,
   prisma?: PrismaService,
+  moderatorScope?: ModeratorScopeService,
 ): Promise<boolean> => {
   if (user.role === 'admin') {
     return true;
   }
-  if (user.role === 'moderator' && prisma) {
-    const orgIds = await expandOrgIds(prisma, user.moderatorOrgRoots);
-    if (orgIds.length === 0) {
-      return false;
-    }
-    const orgSet = new Set(orgIds);
-    if (holder && orgSet.has(holder.orgUnitId)) {
-      return true;
-    }
-    if (equipment.warehouseId) {
-      const warehouse = await prisma.warehouse.findUnique({
-        where: { id: equipment.warehouseId },
-        select: { orgUnitId: true },
-      });
-      if (warehouse?.orgUnitId && orgSet.has(warehouse.orgUnitId)) {
-        return true;
-      }
-    }
-    return false;
+  if (user.role === 'moderator' && moderatorScope) {
+    return moderatorScope.isEquipmentInScope(user, equipment, holder);
   }
   if (user.role === 'skladistar') {
     if (!prisma) {
@@ -67,8 +52,16 @@ export const assertCanReadEquipment = async (
   holder: Employee | null,
   registrarScope: RegistrarScopeService,
   prisma?: PrismaService,
+  moderatorScope?: ModeratorScopeService,
 ): Promise<void> => {
-  const allowed = await canReadEquipment(user, equipment, holder, registrarScope, prisma);
+  const allowed = await canReadEquipment(
+    user,
+    equipment,
+    holder,
+    registrarScope,
+    prisma,
+    moderatorScope,
+  );
   if (!allowed) {
     throw new ForbiddenException('Equipment outside your scope');
   }
@@ -80,6 +73,7 @@ export const assertCanWriteEquipment = async (
   holder: Employee | null,
   registrarScope: RegistrarScopeService,
   prisma?: PrismaService,
+  moderatorScope?: ModeratorScopeService,
 ): Promise<void> => {
   if (user.role === 'admin') {
     return;
@@ -98,36 +92,11 @@ export const assertCanWriteEquipment = async (
     throw new ForbiddenException('Users cannot modify equipment');
   }
   if (user.role === 'moderator') {
-    throw new ForbiddenException('Moderator cannot modify equipment');
-  }
-  await assertCanReadEquipment(user, equipment, holder, registrarScope, prisma);
-};
-
-const expandOrgIds = async (prisma: PrismaService, rootIds: string[]): Promise<string[]> => {
-  if (rootIds.length === 0) {
-    return [];
-  }
-  const allUnits = await prisma.orgUnit.findMany({
-    select: { id: true, parentId: true },
-  });
-  const childrenByParent = new Map<string | null, string[]>();
-  for (const unit of allUnits) {
-    const siblings = childrenByParent.get(unit.parentId) ?? [];
-    siblings.push(unit.id);
-    childrenByParent.set(unit.parentId, siblings);
-  }
-  const result = new Set<string>();
-  const visit = (id: string): void => {
-    if (result.has(id)) {
-      return;
+    if (!moderatorScope) {
+      throw new ForbiddenException('Moderator scope unavailable');
     }
-    result.add(id);
-    for (const childId of childrenByParent.get(id) ?? []) {
-      visit(childId);
-    }
-  };
-  for (const rootId of rootIds) {
-    visit(rootId);
+    await moderatorScope.assertEquipmentInScope(user, equipment, holder);
+    return;
   }
-  return [...result];
+  await assertCanReadEquipment(user, equipment, holder, registrarScope, prisma, moderatorScope);
 };

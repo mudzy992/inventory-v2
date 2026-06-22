@@ -42,7 +42,7 @@ export class MaintenancePartsController {
   }
 
   @Get('warehouses/:warehouseId/consumption-summary')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.moderator)
   getConsumptionSummary(
     @CurrentUser() user: AuthenticatedUser,
     @Param('warehouseId') warehouseId: string,
@@ -56,7 +56,7 @@ export class MaintenancePartsController {
   }
 
   @Get('warehouses/:warehouseId/stock-lots')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.moderator)
   listMaintenanceLots(
     @CurrentUser() user: AuthenticatedUser,
     @Param('warehouseId') warehouseId: string,
@@ -65,7 +65,7 @@ export class MaintenancePartsController {
   }
 
   @Post('warehouses/:warehouseId/stock-lots')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.skladistar, UserRole.moderator)
   receiveMaintenanceLot(
     @CurrentUser() user: AuthenticatedUser,
     @Param('warehouseId') warehouseId: string,

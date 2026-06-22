@@ -681,14 +681,14 @@ export class InventoryCountService {
     if (!committee.membersConfigured) {
       throw new BadRequestException('Auto-generisani slotovi se ne mogu brisati');
     }
-    if (user?.role !== 'admin') {
-      throw new ForbiddenException('Samo administrator može brisati konfigurisane komisije');
-    }
-    if (committee._count.lines > 0) {
-      throw new BadRequestException('Komisija ima unesene linije i ne može se obrisati');
+    if (user && user.role !== 'admin' && user.role !== 'moderator') {
+      throw new ForbiddenException('Samo administrator ili moderator može brisati konfigurisane komisije');
     }
     if (user && committee.warehouseId) {
       await this.coordinatorScope.assertCanManageWarehouse(user, committee.warehouseId);
+    }
+    if (committee._count.lines > 0) {
+      throw new BadRequestException('Komisija ima unesene linije i ne može se obrisati');
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.inventoryCommittee.delete({ where: { id: committeeId } });
@@ -833,16 +833,23 @@ export class InventoryCountService {
       throw new NotFoundException('Inventory committee not found');
     }
     if (user.role !== 'admin') {
-      const actor = await this.prisma.user.findUnique({
-        where: { id: user.id },
-        select: { employeeId: true },
-      });
-      if (!actor?.employeeId) {
-        throw new ForbiddenException('Only committee members can access inventory scope');
-      }
-      const isMember = committee.members.some((member) => member.employeeId === actor.employeeId);
-      if (!isMember) {
-        throw new ForbiddenException('Only committee members can access inventory scope');
+      if (this.moderatorScope.isModerator(user)) {
+        if (!committee.warehouseId) {
+          throw new ForbiddenException('Only committee members can access inventory scope');
+        }
+        await this.moderatorScope.assertCanManageInventoryCommittee(user, committee.warehouseId);
+      } else {
+        const actor = await this.prisma.user.findUnique({
+          where: { id: user.id },
+          select: { employeeId: true },
+        });
+        if (!actor?.employeeId) {
+          throw new ForbiddenException('Only committee members can access inventory scope');
+        }
+        const isMember = committee.members.some((member) => member.employeeId === actor.employeeId);
+        if (!isMember) {
+          throw new ForbiddenException('Only committee members can access inventory scope');
+        }
       }
     }
     const equipment = await this.resolveCommitteeEquipmentForPrint(committeeId);
