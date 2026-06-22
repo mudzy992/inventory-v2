@@ -22,6 +22,7 @@ import {
   getCreatableOrgUnitTypes,
   canUseRootParent,
   isAllowedOrgUnitParentChild,
+  getOrgTreeRootUnits,
 } from '../helpers/org-hierarchy.util';
 import { cn } from '../utils/cn';
 import type { OrgUnit, OrgUnitType } from '../types';
@@ -162,7 +163,7 @@ export function OrganizationPage() {
       .catch(() => setEmployees([]));
   }, []);
 
-  const rootUnits = state.orgUnits.filter(o => o.parentId === null);
+  const rootUnits = useMemo(() => getOrgTreeRootUnits(state.orgUnits), [state.orgUnits]);
   const hasDirekcija = state.orgUnits.some((unit) => unit.type === 'direkcija');
   const isCreate = !editingUnit;
 

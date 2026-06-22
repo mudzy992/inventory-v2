@@ -19,7 +19,7 @@ import { AlertBanner } from './ui/alert-banner';
 import type { Equipment, EquipmentAffiliation, FilterCondition } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { ModalRoot } from './ui/modal-root';
-import { isAdmin, isEvidenticar, getCurrentUser } from '../store';
+import { isAdmin, isEvidenticar, isModerator, getCurrentUser } from '../store';
 
 export function EquipmentByCategoryPage() {
   const [state, setState] = useStore();
@@ -51,6 +51,7 @@ export function EquipmentByCategoryPage() {
 
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
+  const moderator = isModerator();
   const user = getCurrentUser();
   const [categoryStats, setCategoryStats] = useState<
     Record<string, { total: number; skladiste: number; zaduzeno: number; za_rashod: number; rashodovano: number }>
@@ -877,7 +878,7 @@ export function EquipmentByCategoryPage() {
         <EquipmentCard
           equipmentId={viewItemId}
           onClose={handleCloseEquipment}
-          showTransferActions={admin || evidenticar}
+          showTransferActions={admin || evidenticar || moderator}
         />
       )}
     </div>

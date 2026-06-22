@@ -85,6 +85,8 @@ OR unija:
 | `features.moderator_role=false` | moderator write API → 403 |
 | Moderator + evidenticar isti user | zabranjeno (v1) |
 | Radnik u scope, efektivno skladište drugdje | vidi opremu u listama; lotovi samo na assigned WH |
+| Org stablo scoped (parent izvan opsega) | FE prikazuje forest roots unutar opsega (ne prazan tree) |
+| Kategorije u menijima | moderator read = sve kategorije (bez write) |
 
 ## Implementacija
 

@@ -55,3 +55,11 @@ export const isAllowedOrgUnitParentChild = (
 
 export const canUseRootParent = (childType: OrgUnitType): boolean =>
   ROOT_ORG_UNIT_TYPES.includes(childType);
+
+/** Visible forest roots when the org list is scoped (e.g. moderator subtree). */
+export const getOrgTreeRootUnits = <T extends { id: string; parentId: string | null }>(
+  orgUnits: T[],
+): T[] => {
+  const visibleIds = new Set(orgUnits.map((row) => row.id));
+  return orgUnits.filter((row) => row.parentId === null || !visibleIds.has(row.parentId));
+};

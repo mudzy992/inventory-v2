@@ -9,6 +9,9 @@ import {
 import { canEditLotSpecifications } from './warehouse-stock-guards';
 import { canTransferRelocationLine } from './employee-relocation-guards';
 import { canMarkDisposalList, DISPOSAL_GUARD_MESSAGES } from './disposal-guards';
+import { getScopedCategoryIds } from '../registrar-scope';
+import { getOrgTreeRootUnits } from '../org-hierarchy.util';
+import type { Category, UserAccount } from '../../types';
 
 describe('Phase C guard smoke — FE helpers', () => {
   it('employees: blocks delete when hasUserAccount', () => {
@@ -74,5 +77,24 @@ describe('Phase C guard smoke — FE helpers', () => {
     });
     assert.equal(result.allowed, false);
     assert.equal(result.reason, DISPOSAL_GUARD_MESSAGES.disposalRequiresWarehouse);
+  });
+
+  it('moderator: reads all categories for menus', () => {
+    const categories: Category[] = [
+      { id: 'p1', name: 'Parent', description: '', parentId: null, categoryKind: 'ASSET', fields: [], optionalFields: [] },
+      { id: 'c1', name: 'Child', description: '', parentId: 'p1', categoryKind: 'ASSET', fields: [], optionalFields: [] },
+    ];
+    const moderator = { role: 'moderator' } as UserAccount;
+    const scoped = getScopedCategoryIds(moderator, categories);
+    assert.equal(scoped.size, 2);
+  });
+
+  it('org tree: scoped list uses forest roots', () => {
+    const roots = getOrgTreeRootUnits([
+      { id: 'podrucje-1', parentId: 'direkcija-1', type: 'podrucje', name: 'Područje' } as never,
+      { id: 'ed-zenica', parentId: 'podrucje-1', type: 'podruznica', name: 'ED Zenica' } as never,
+    ]);
+    assert.equal(roots.length, 1);
+    assert.equal(roots[0]?.id, 'podrucje-1');
   });
 });

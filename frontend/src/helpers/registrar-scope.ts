@@ -8,12 +8,15 @@ import type {
   RegistrarScopeAssignment,
   TransferType,
   UserAccount,
+  UserRole,
 } from '../types';
 import {
   collectOrgUnitIdsForEffectiveWarehouse,
   toOrgUnitRows,
   toWarehouseRows,
 } from './effective-warehouse.util';
+
+const CATEGORY_READ_ALL_ROLES = new Set<UserRole>(['admin', 'moderator']);
 
 const expandCategoryIds = (categoryIds: string[], categories: AppState['categories']): Set<string> => {
   const result = new Set<string>();
@@ -140,7 +143,7 @@ export const getScopedCategoryIds = (
   user: UserAccount | null,
   categories: Category[],
 ): Set<string> => {
-  if (!user || user.role === 'admin') {
+  if (!user || CATEGORY_READ_ALL_ROLES.has(user.role)) {
     return new Set(categories.map((row) => row.id));
   }
   if (user.role !== 'evidenticar') {
@@ -154,7 +157,7 @@ export const getScopedParentCategories = (
   user: UserAccount | null,
   categories: Category[],
 ): Category[] => {
-  if (!user || user.role === 'admin') {
+  if (!user || CATEGORY_READ_ALL_ROLES.has(user.role)) {
     return categories.filter((row) => row.parentId === null);
   }
   const scoped = getScopedCategoryIds(user, categories);

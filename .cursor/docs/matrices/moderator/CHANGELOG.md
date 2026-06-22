@@ -1,5 +1,9 @@
 # Changelog — moderator
 
+## 2026-06-22
+
+- FE: moderator vidi sve kategorije (read) u dropdownima i na stranici „Oprema po kategorijama”; org stablo prikazuje scoped forest roots (npr. ED Zenica / Područje snabdjevanja) umjesto praznog prikaza.
+
 ## 2026-06-20 (scoped admin)
 
 - Proširenje: equipment/transfer FULL CRUD u org scope; skladišne operacije + transfer template samo na `moderatorWarehouseIds`; bez kreiranja skladišta; org promjena FULL u scope; popis parity `popis_koordinator`.
