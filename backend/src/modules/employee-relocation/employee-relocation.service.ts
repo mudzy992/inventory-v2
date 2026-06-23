@@ -94,6 +94,8 @@ export class EmployeeRelocationService {
     }
     if (this.moderatorScope.isModerator(user)) {
       await this.moderatorScope.assertEmployeeInScope(user, employee.id);
+    } else if (user.role === 'evidenticar') {
+      await this.registrarScope.assertCanAccessEmployee(user, employee);
     }
     const fromWarehouseId = await this.warehouseResolution.resolveForOrgUnit(employee.orgUnitId);
     const toWarehouseId = await this.warehouseResolution.resolveForOrgUnit(query.newOrgUnitId);

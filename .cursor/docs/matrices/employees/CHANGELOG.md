@@ -1,5 +1,11 @@
 # CHANGELOG — employees
 
+## 2026-06-23 (evidentičar write)
+
+- Evidentičar: `POST`/`PATCH` radnika u registrar scope-u kad je `features.evidenticar_employee_ops` uključen.
+- Org. promjena: ciljni org ne mora biti u registrar scope-u (cross-warehouse); postojeći radnik mora biti u scope-u.
+- Brisanje ostaje admin/moderator.
+
 ## 2026-06-20 (status polja + deaktivacija)
 
 - Polja: `staffNumber`, `gender` (default male), `isActive` (default true).

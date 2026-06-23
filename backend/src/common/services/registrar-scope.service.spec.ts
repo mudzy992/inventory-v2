@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { ForbiddenException } from '@nestjs/common';
 import type { Equipment, Employee, UserRole } from '../../../generated/prisma/client';
 import { RegistrarScopeService } from './registrar-scope.service';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
@@ -636,6 +637,31 @@ describe('RegistrarScopeService', () => {
         self,
       );
       assert.equal(allowed, true);
+    });
+
+    it('assertCanAccessEmployee throws when employee is outside scope', async () => {
+      const service = createService();
+      const employee: Employee = {
+        id: 'emp-out',
+        firstName: 'Out',
+        lastName: 'Scope',
+        title: 'Radnik',
+        orgUnitId: 'ou-other',
+        email: null,
+        phone: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await assert.rejects(
+        () =>
+          service.assertCanAccessEmployee(
+            authUser('evidenticar', {
+              registrarScopes: [{ warehouseId: 'wh-a', categoryId: 'cat-root' }],
+            }),
+            employee,
+          ),
+        (err: unknown) => err instanceof ForbiddenException,
+      );
     });
 
     it('evidenticar can access own held equipment outside registrar scope', async () => {

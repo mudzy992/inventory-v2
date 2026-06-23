@@ -84,13 +84,13 @@ Frontend liste koriste paginirane API-je sa istim BE filterom; ne sužavaju OR u
 | Korisnici | CRUD | — | — | — |
 | Komisija rashod | CRUD | approve + resolve | — | — |
 | Popis | CRUD sesija | evidencija (scope) | — | — |
-| Zaposlenici | CRUD | R (scope) | — | — |
+| Zaposlenici | CRUD | C+U (scope), bez D | — | — |
 | Oprema | CRUD | CRUD (scope) | CRUD (svoja skladišta) | R (own) |
 | Skladišna roba | CRUD | R + issue (scope) | receive | — |
 | Naljepnice | ✓ | ✓ | ✓ svoja | own |
 | Transferi / Zaduženja | CRUD | CRUD (scope) | — | — |
 | Prenosnice | CRUD | R (scope) | — | — |
-| Org. promjena | CRUD | R + akcije (scope) | — | — |
+| Org. promjena | CRUD | R + akcije (scope) + trigger (scope radnika) | — | — |
 | Kontrolna tabla | ✓ | ✓ (scope) | — | — |
 | Moja oprema | ✓ | ✓ | ✓ | ✓ |
 | QR skener | ✓ | ✓ | ✓ | ✓ |

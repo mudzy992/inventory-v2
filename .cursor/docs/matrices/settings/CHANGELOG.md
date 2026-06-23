@@ -1,5 +1,9 @@
 # Settings matrica — CHANGELOG
 
+## 2026-06-23
+
+- `features.evidenticar_employee_ops` (public, default true) — evidentičar može kreirati/uređivati radnike u registrar opsegu i pokretati org. promjenu.
+
 ## 2026-06-20
 
 - `features.moderator_role` (private, default true) — globalni kill-switch za moderator write API.

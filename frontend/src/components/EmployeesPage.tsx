@@ -9,6 +9,7 @@ import { ApiError } from '../api/client';
 import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutation-with-refresh.util';
 import { canDeleteEmployee } from '../helpers/guards';
 import { useToast } from '../contexts/toast-context';
+import { usePublicSettings } from '../contexts/public-settings-context';
 import { isAdmin, isEvidenticar, isModerator, getCurrentUser } from '../store';
 import { Plus, Edit2, Trash2, Search, Package, Eye } from 'lucide-react';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
@@ -45,8 +46,12 @@ export function EmployeesPage() {
   const refresh = useRefreshData();
   const admin = isAdmin();
   const moderator = isModerator();
-  const canManageEmployees = admin || moderator;
   const evidenticar = isEvidenticar();
+  const { getBoolean: getPublicSettingBoolean } = usePublicSettings();
+  const canRegistrarOps =
+    evidenticar && getPublicSettingBoolean('features.evidenticar_employee_ops', true);
+  const canManageEmployees = admin || moderator || canRegistrarOps;
+  const canDeleteEmployees = admin || moderator;
   const user = getCurrentUser();
   const { toastError, toastSuccess } = useToast();
   const [filterOrgUnit, setFilterOrgUnit] = useState('');
@@ -232,7 +237,7 @@ export function EmployeesPage() {
   };
 
   const handleDelete = async (emp: Employee) => {
-    if (!canManageEmployees) return;
+    if (!canDeleteEmployees) return;
     const guard = canDeleteEmployee({
       employeeId: emp.id,
       hasUserAccount: emp.hasUserAccount ?? false,
@@ -356,6 +361,7 @@ export function EmployeesPage() {
                   <button type="button" onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                     <Edit2 size={14} />
                   </button>
+                  {canDeleteEmployees ? (
                   <button
                     type="button"
                     onClick={() => void handleDelete(emp)}
@@ -365,6 +371,7 @@ export function EmployeesPage() {
                   >
                     <Trash2 size={14} />
                   </button>
+                  ) : null}
                   </>
                 ) : null}
               </div>
@@ -381,7 +388,7 @@ export function EmployeesPage() {
                 <th className="px-4 py-3 font-medium text-gray-600">Email</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                 <th className="px-4 py-3 font-medium text-gray-600 text-center">Oprema</th>
-                {canViewProfile || admin ? (
+                {canViewProfile || canManageEmployees ? (
                   <th className="px-4 py-3 font-medium text-gray-600 text-right">Akcije</th>
                 ) : null}
               </tr>
@@ -419,7 +426,7 @@ export function EmployeesPage() {
                         <span className="text-xs text-gray-300">0</span>
                       )}
                     </td>
-                    {canViewProfile || admin ? (
+                    {canViewProfile || canManageEmployees ? (
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
                           {canViewProfile ? (
@@ -432,6 +439,7 @@ export function EmployeesPage() {
                           <button type="button" onClick={() => openEdit(emp)} className="text-blue-500 hover:text-blue-700 p-1" title="Uredi">
                             <Edit2 size={14} />
                           </button>
+                          {canDeleteEmployees ? (
                           <button
                             type="button"
                             onClick={() => void handleDelete(emp)}
@@ -441,6 +449,7 @@ export function EmployeesPage() {
                           >
                             <Trash2 size={14} />
                           </button>
+                          ) : null}
                             </>
                           ) : null}
                         </div>

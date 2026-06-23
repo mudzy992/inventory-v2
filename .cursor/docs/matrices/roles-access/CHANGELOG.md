@@ -1,5 +1,10 @@
 # Changelog — roles-access
 
+## 2026-06-23 (evidentičar radnici)
+
+- Evidentičar: kreiranje i izmjena radnika u registrar scope-u (`features.evidenticar_employee_ops`); bez brisanja.
+- Org. promjena: evidentičar u scope-u radnika može pokrenuti promjenu org. jedinice (preview + PATCH).
+
 ## 2026-06-20 (moderator scoped admin)
 
 - Moderator: equipment/transfer write u org scope; skladište stock/template na assigned WH; org promjena FULL u scope; bez warehouse create.

@@ -226,10 +226,7 @@ export class EmployeesService {
   }
 
   async create(user: AuthenticatedUser, dto: CreateEmployeeDto): Promise<Employee> {
-    await this.assertModeratorWrites(user);
-    await this.settingsService.assertFeatureEnabled('features.employees');
-    await this.assertOrgUnitExists(dto.orgUnitId);
-    await this.moderatorScope.assertOrgUnitInScope(user, dto.orgUnitId);
+    await this.assertCanCreateEmployee(user, dto.orgUnitId);
     const staffNumber = this.normalizeStaffNumber(dto.staffNumber);
     if (staffNumber) {
       await this.assertStaffNumberAvailable(staffNumber);
@@ -259,14 +256,8 @@ export class EmployeesService {
     id: string,
     dto: UpdateEmployeeDto,
   ): Promise<EmployeeUpdateResult> {
-    await this.assertModeratorWrites(user);
-    await this.settingsService.assertFeatureEnabled('features.employees');
     const existing = await this.findByIdOrThrow(id);
-    await this.moderatorScope.assertOrgUnitInScope(user, existing.orgUnitId);
-    if (dto.orgUnitId) {
-      await this.assertOrgUnitExists(dto.orgUnitId);
-      await this.moderatorScope.assertOrgUnitInScope(user, dto.orgUnitId);
-    }
+    await this.assertCanUpdateEmployee(user, existing, dto);
     const staffNumber =
       dto.staffNumber !== undefined ? this.normalizeStaffNumber(dto.staffNumber) : undefined;
     if (staffNumber) {
@@ -419,6 +410,67 @@ export class EmployeesService {
         throw new ForbiddenException('Employee outside your scope');
       }
     }
+  }
+
+  private async assertCanCreateEmployee(user: AuthenticatedUser, orgUnitId: string): Promise<void> {
+    await this.settingsService.assertFeatureEnabled('features.employees');
+    await this.assertOrgUnitExists(orgUnitId);
+    if (user.role === 'admin') {
+      return;
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.assertModeratorWrites(user);
+      await this.moderatorScope.assertOrgUnitInScope(user, orgUnitId);
+      return;
+    }
+    if (user.role === 'evidenticar') {
+      await this.assertRegistrarEmployeeWrites(user);
+      await this.registrarScope.assertCanAccessEmployee(user, { id: '', orgUnitId });
+      return;
+    }
+    throw new ForbiddenException('Nemate dozvolu za kreiranje radnika');
+  }
+
+  private async assertCanUpdateEmployee(
+    user: AuthenticatedUser,
+    existing: Employee,
+    dto: UpdateEmployeeDto,
+  ): Promise<void> {
+    await this.settingsService.assertFeatureEnabled('features.employees');
+    if (user.role === 'admin') {
+      if (dto.orgUnitId) {
+        await this.assertOrgUnitExists(dto.orgUnitId);
+      }
+      return;
+    }
+    if (this.moderatorScope.isModerator(user)) {
+      await this.assertModeratorWrites(user);
+      await this.moderatorScope.assertOrgUnitInScope(user, existing.orgUnitId);
+      if (dto.orgUnitId) {
+        await this.assertOrgUnitExists(dto.orgUnitId);
+        await this.moderatorScope.assertOrgUnitInScope(user, dto.orgUnitId);
+      }
+      return;
+    }
+    if (user.role === 'evidenticar') {
+      await this.assertRegistrarEmployeeWrites(user);
+      await this.registrarScope.assertCanAccessEmployee(user, existing);
+      if (dto.orgUnitId) {
+        await this.assertOrgUnitExists(dto.orgUnitId);
+      }
+      return;
+    }
+    throw new ForbiddenException('Nemate dozvolu za izmjenu radnika');
+  }
+
+  private async assertRegistrarEmployeeWrites(user: AuthenticatedUser): Promise<void> {
+    if (user.role !== 'evidenticar') {
+      return;
+    }
+    await this.settingsService.assertFeatureEnabled(
+      'features.evidenticar_employee_ops',
+      'Upravljanje radnicima za evidentičara je onemogućeno u postavkama',
+    );
   }
 
   private async assertModeratorWrites(user: AuthenticatedUser): Promise<void> {

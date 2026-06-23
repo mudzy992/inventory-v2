@@ -51,13 +51,13 @@ export class EmployeesController {
   }
 
   @Post()
-  @Roles(UserRole.admin, UserRole.moderator)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar)
   create(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateEmployeeDto) {
     return this.employeesService.create(user, body);
   }
 
   @Patch(':id')
-  @Roles(UserRole.admin, UserRole.moderator)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar)
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,

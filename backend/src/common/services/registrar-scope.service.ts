@@ -188,6 +188,17 @@ export class RegistrarScopeService {
     }
   }
 
+  async assertCanAccessEmployee(
+    user: AuthenticatedUser,
+    employee: Pick<Employee, 'id' | 'orgUnitId'>,
+    assignments?: RegistrarScopeAssignment[],
+  ): Promise<void> {
+    const allowed = await this.canAccessEmployee(user, employee as Employee, assignments);
+    if (!allowed) {
+      throw new ForbiddenException('Employee outside your scope');
+    }
+  }
+
   async canAccessEmployee(
     user: AuthenticatedUser,
     employee: Employee,

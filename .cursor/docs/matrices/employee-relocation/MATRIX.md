@@ -2,7 +2,7 @@
 
 ## Trigger
 
-Admin mijenja `Employee.orgUnitId`. Ako efektivno skladište (`resolveEffectiveWarehouseId`) ostaje isto → **nema akcije**.
+Admin, moderator ili evidentičar (u scope-u radnika) mijenja `Employee.orgUnitId`. Ako efektivno skladište (`resolveEffectiveWarehouseId`) ostaje isto → **nema akcije**.
 
 ## Modeli
 

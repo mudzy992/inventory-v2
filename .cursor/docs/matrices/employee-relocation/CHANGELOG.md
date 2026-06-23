@@ -1,5 +1,10 @@
 # CHANGELOG — employee-relocation
 
+## 2026-06-23
+
+- `GET /employee-relocation/preview` dostupan evidentičaru u scope-u radnika (prije org. promjene iz modula Radnici).
+- Trigger org. promjene: admin, moderator ili evidentičar (scope radnika).
+
 ## 2026-06-16
 
 - Source transfer **Prebaci** koristi `resolveCanonicalDestLotInTx` (isti kanonski lot po `catalogItemId` na cilju; reopen zatvorenog umjesto duplikata).

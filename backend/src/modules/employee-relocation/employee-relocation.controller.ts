@@ -26,7 +26,7 @@ export class EmployeeRelocationController {
   constructor(private readonly relocationService: EmployeeRelocationService) {}
 
   @Get('preview')
-  @Roles(UserRole.admin, UserRole.moderator)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar)
   preview(@CurrentUser() user: AuthenticatedUser, @Query() query: PreviewRelocationQueryDto) {
     return this.relocationService.preview(user, query);
   }

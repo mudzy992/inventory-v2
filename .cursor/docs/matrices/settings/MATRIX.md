@@ -26,6 +26,7 @@
 | `features.categories` | true | `categories` |
 | `features.user_management` | true | `user-management` |
 | `features.employees` | true | `employees` |
+| `features.evidenticar_employee_ops` | true | evidentičar: kreiranje/izmjena radnika u scope-u |
 | `features.warehouses` | true | `warehouses` |
 | `features.registrar_stock` | true | `registrar-stock` |
 | `features.warehouse_inventory` | true | `warehouse-inventory` |
@@ -109,6 +110,7 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 | `features.locations` | `LocationsService` |
 | `features.categories` | `CategoriesService` |
 | `features.employees` | `EmployeesService` |
+| `features.evidenticar_employee_ops` | `EmployeesService` (registrar create/update) |
 | `features.equipment` | `EquipmentService` |
 | `features.user_management` | `UsersService` |
 | `features.warehouses` | `WarehousesService` |

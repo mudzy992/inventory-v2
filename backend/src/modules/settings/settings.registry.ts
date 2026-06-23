@@ -175,6 +175,15 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'modules',
   }),
   def({
+    key: 'features.evidenticar_employee_ops',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Upravljanje radnicima (evidentičar)',
+    description: 'Evidentičar može kreirati i uređivati radnike u registrar opsegu te pokretati org. promjenu.',
+    group: 'modules',
+  }),
+  def({
     key: 'features.warehouses',
     scope: 'public',
     valueType: 'boolean',

@@ -6,6 +6,7 @@ export const PUBLIC_FEATURE_DEFAULTS: Record<string, boolean> = {
   'features.categories': true,
   'features.user_management': true,
   'features.employees': true,
+  'features.evidenticar_employee_ops': true,
   'features.warehouses': true,
   'features.registrar_stock': true,
   'features.warehouse_inventory': true,
