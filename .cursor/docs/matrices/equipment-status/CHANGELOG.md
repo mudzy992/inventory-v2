@@ -1,5 +1,9 @@
 # Changelog — equipment-status
 
+## 2026-06-23 (custody pool backfill)
+
+- Skripta `npm run db:backfill-custody-pool` postavlja `custodyOrgUnitId` iz zadnjeg finaliziranog `razduzenje` za opremu na skladištu bez poola (`--dry-run` za pregled).
+
 ## 2026-06-23 (custody pool Režim B)
 
 - Novo polje `Equipment.custodyOrgUnitId` — pripadnost vraćene opreme org. jedinici pri razduženju.

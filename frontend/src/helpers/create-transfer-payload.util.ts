@@ -43,7 +43,10 @@ const resolveSignerId = (
       return getSignerIdForOrgUnit(orgUnits, equipment.currentHolder.orgUnitId) ?? '';
     }
     const dirUnit = orgUnits.find((row) => row.type === 'direkcija');
-    return dirUnit?.effectiveSignerId ?? dirUnit?.signerId ?? '';
+    if (dirUnit) {
+      return getSignerIdForOrgUnit(orgUnits, dirUnit.id) ?? '';
+    }
+    return '';
   }
   return '';
 };

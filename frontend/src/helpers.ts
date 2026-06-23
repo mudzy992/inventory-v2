@@ -1,4 +1,5 @@
 import type { OrgUnit, Employee, AppState, City } from './types';
+import { resolveEffectiveSignerId } from './helpers/resolve-effective-signer.util';
 
 export function getCityLabel(
   cities: (Pick<City, 'id' | 'name'> & { canton?: { name: string } })[],
@@ -34,17 +35,11 @@ export function getEffectiveSignerForOrgUnit(
   employees: Employee[],
   unitId: string,
 ): Employee | null {
-  let current = orgUnits.find((unit) => unit.id === unitId);
-  while (current) {
-    if (current.effectiveSignerId) {
-      return employees.find((employee) => employee.id === current!.effectiveSignerId) ?? null;
-    }
-    if (current.signerId) {
-      return employees.find((employee) => employee.id === current!.signerId) ?? null;
-    }
-    current = orgUnits.find((unit) => unit.id === current!.parentId);
+  const signerId = resolveEffectiveSignerId(unitId, orgUnits);
+  if (!signerId) {
+    return null;
   }
-  return null;
+  return employees.find((employee) => employee.id === signerId) ?? null;
 }
 
 export function getOrgUnitPath(orgUnits: OrgUnit[], unitId: string): string {
@@ -70,17 +65,8 @@ export function getEmployeeFullName(emp: Pick<Employee, 'firstName' | 'lastName'
 }
 
 export function getSignerIdForOrgUnit(orgUnits: OrgUnit[], unitId: string): string | undefined {
-  let current = orgUnits.find((unit) => unit.id === unitId);
-  while (current) {
-    if (current.effectiveSignerId) {
-      return current.effectiveSignerId;
-    }
-    if (current.signerId) {
-      return current.signerId;
-    }
-    current = orgUnits.find((unit) => unit.id === current!.parentId);
-  }
-  return undefined;
+  const signerId = resolveEffectiveSignerId(unitId, orgUnits);
+  return signerId ?? undefined;
 }
 
 /** Resolve signer employee when a local employees list is available (e.g. search results). */

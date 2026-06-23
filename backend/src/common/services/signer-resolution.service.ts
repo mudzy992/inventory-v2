@@ -38,13 +38,6 @@ export class SignerResolutionService {
   }
 
   async getEffectiveSignerForOrgUnit(orgUnitId: string): Promise<string | null> {
-    const unit = await this.prisma.orgUnit.findUnique({
-      where: { id: orgUnitId },
-      select: { effectiveSignerId: true },
-    });
-    if (unit?.effectiveSignerId) {
-      return unit.effectiveSignerId;
-    }
     const units = await this.prisma.orgUnit.findMany({
       select: { id: true, parentId: true, signerId: true },
     });
