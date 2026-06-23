@@ -18,6 +18,18 @@ import { CreateOrgUnitDto } from './dto/create-org-unit.dto';
 import { SearchOrgUnitsQueryDto } from './dto/search-org-units-query.dto';
 import { UpdateOrgUnitDto } from './dto/update-org-unit.dto';
 
+const ORG_UNIT_SIGNER_EMPLOYEE_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  title: true,
+} as const;
+
+const ORG_UNIT_FLAT_INCLUDE = {
+  effectiveSigner: { select: ORG_UNIT_SIGNER_EMPLOYEE_SELECT },
+  signer: { select: ORG_UNIT_SIGNER_EMPLOYEE_SELECT },
+} as const;
+
 @Injectable()
 export class OrgUnitsService {
   constructor(
@@ -31,11 +43,11 @@ export class OrgUnitsService {
 
   async findFlat(user: AuthenticatedUser): Promise<OrgUnit[]> {
     const scopedWhere = await this.moderatorScope.buildScopedOrgUnitWhere(user);
-    const units = await this.prisma.orgUnit.findMany({
+    return this.prisma.orgUnit.findMany({
       where: scopedWhere ?? undefined,
       orderBy: { name: 'asc' },
+      include: ORG_UNIT_FLAT_INCLUDE,
     });
-    return units;
   }
 
   async search(user: AuthenticatedUser, query: SearchOrgUnitsQueryDto): Promise<OrgUnit[]> {

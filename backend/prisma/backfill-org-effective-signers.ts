@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { createPrismaClient } from '../src/prisma/create-prisma-client';
 import { buildEffectiveSignerMap } from '../src/common/utils/resolve-effective-signer.util';
 
-config({ path: resolve(__dirname, '../.env') });
+config({ path: resolve(__dirname, '../../.env') });
 
 const isDryRun = process.argv.includes('--dry-run');
 

@@ -72,6 +72,13 @@ export interface UserAccount {
   moderatorWarehouseAssignments?: ModeratorWarehouseAssignment[];
 }
 
+export interface OrgUnitSignerSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  title: string;
+}
+
 export interface OrgUnit {
   id: string;
   name: string;
@@ -79,6 +86,8 @@ export interface OrgUnit {
   parentId: string | null;
   signerId?: string | null;
   effectiveSignerId?: string | null;
+  signer?: OrgUnitSignerSummary | null;
+  effectiveSigner?: OrgUnitSignerSummary | null;
   locationCityId?: string | null;
   effectiveLocationCityId?: string | null;
 }

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from 'react';
 import { useStore, useRefreshData } from '../useStore';
-import { getEmployeeFullName, getOrgUnitPath, getSignerIdForOrgUnit } from '../helpers';
+import { getEmployeeFullName, getOrgUnitPath } from '../helpers';
+import { resolveEffectiveSignerDisplay } from '../helpers/resolve-effective-signer.util';
 import {
   isAdmin,
   isEvidenticar,
@@ -9,7 +10,6 @@ import {
   isCrossServiceTransfer,
 } from '../store';
 import { createTransferApi } from '../api/data-api';
-import { fetchEmployeeApi } from '../api/employees-api';
 import { useToast } from '../contexts/toast-context';
 import { Package, ArrowRight, ArrowLeftRight, Warehouse, AlertTriangle, FileText, ClipboardList } from 'lucide-react';
 import { PageHeaderRow } from './ui/page-header-row';
@@ -64,7 +64,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const [showForm, setShowForm] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
   const [selectedToEmployee, setSelectedToEmployee] = useState<Employee | null>(null);
-  const [signerEmployee, setSignerEmployee] = useState<Employee | null>(null);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const admin = isAdmin();
@@ -131,31 +130,11 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     return holderId ? new Set([holderId]) : undefined;
   }, [selectedEquipment?.currentHolderId]);
 
-  useEffect(() => {
+  const signerEmployee = useMemo(() => {
     if (!selectedToEmployee) {
-      setSignerEmployee(null);
-      return;
+      return null;
     }
-    const signerId = getSignerIdForOrgUnit(state.orgUnits, selectedToEmployee.orgUnitId);
-    if (!signerId) {
-      setSignerEmployee(null);
-      return;
-    }
-    let cancelled = false;
-    void fetchEmployeeApi(signerId)
-      .then((employee) => {
-        if (!cancelled) {
-          setSignerEmployee(employee);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSignerEmployee(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
+    return resolveEffectiveSignerDisplay(selectedToEmployee.orgUnitId, state.orgUnits);
   }, [selectedToEmployee, state.orgUnits]);
 
   const wouldBeCrossService = useMemo(() => {
@@ -171,7 +150,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     setSelectedEquipment(null);
     setFToPersonId('');
     setSelectedToEmployee(null);
-    setSignerEmployee(null);
     setFReason('');
     setFDate(new Date().toISOString().slice(0, 10));
     setFNotes('');

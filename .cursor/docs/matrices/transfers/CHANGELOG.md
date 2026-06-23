@@ -1,3 +1,8 @@
+## 2026-06-23 — Potpisnik u formi prenosa (evidentičar scope)
+
+- UI više ne učitava potpisnika preko `GET /employees/:id` (403 kad je direktor van registrar opsega).
+- `GET /org-units` vraća `effectiveSigner` + `signer` (ime, pozicija); forma koristi te podatke.
+
 ## 2026-06-23 — Režim B custody pool + alignment
 
 - `GET /equipment/resolve-custody-pool` za zaduženje iz poola vraćene opreme (inv. broj).
