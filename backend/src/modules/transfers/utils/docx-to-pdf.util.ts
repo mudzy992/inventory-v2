@@ -5,6 +5,12 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+const SOFFICE_ENV: NodeJS.ProcessEnv = {
+  ...process.env,
+  LANG: 'C.UTF-8',
+  LC_ALL: 'C.UTF-8',
+};
+
 export const convertDocxToPdf = async (
   docxAbsolutePath: string,
   pdfAbsolutePath: string,
@@ -17,7 +23,7 @@ export const convertDocxToPdf = async (
     await execFileAsync(
       'soffice',
       ['--headless', '--convert-to', 'pdf', '--outdir', outDir, docxAbsolutePath],
-      { timeout: 120_000 },
+      { timeout: 120_000, env: SOFFICE_ENV },
     );
     return existsSync(pdfAbsolutePath);
   } catch {

@@ -1,3 +1,11 @@
+## 2026-06-22 — Docker LibreOffice + drawer prenosnica + UTF-8 PDF
+
+- Backend Docker: `node:22-bookworm-slim` (sve faze), LibreOffice + fontovi (DejaVu, Liberation, Noto), `LANG=C.UTF-8`.
+- `soffice` konverzija DOCX→PDF s UTF-8 env u child procesu.
+- UI: `TransferDocumentDrawer` (desktop desni drawer / mobile bottom sheet) s auto PDF pregledom; primjena na tabovima Zaduženja i Prenosnice.
+- Tab Potpisano: auto pregled uploadanog skena + download potpisane prenosnice.
+- Popisna lista PDF: DejaVu Sans embed (jspdf) za ispravne dijakritike.
+
 ## 2026-06-22 — UX modul Zaduženja
 
 - Tab Zaduženja: pod-tabovi Na čekanju (badge) / Potpisano; `GET /transfers?workflow=pending|signed`; detalji prenosnice u dijalogu.

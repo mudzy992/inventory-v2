@@ -43,7 +43,7 @@
 | `transfer.generation.on_zaduzenje` | true | Skladište → osoba: dokument ili direktno |
 | `transfer.generation.on_prenos` | true | Osoba → osoba: dokument ili direktno |
 | `transfer.generation.on_razduzenje` | true | Osoba → skladište: dokument ili direktno |
-| `transfer.generate_print_pdf` | true | DOCX → PDF (LibreOffice `soffice` na serveru) |
+| `transfer.generate_print_pdf` | true | DOCX → PDF (LibreOffice `soffice` u backend Docker kontejneru) |
 | `transfer.require_signed_pdf_upload` | true | Obavezan upload potpisanog PDF prije `sign` (samo dokument flow) |
 
 Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosnica iz lota: `on_stock_lot_issue=false` (master može ostati uključen).
@@ -78,6 +78,15 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 - `TransferDocumentPanel` i tab **Prenosnice**: **Preuzmi obrazac** / **Pregled za štampu** koriste `GET .../generated-document?format=docx|pdf` (Word template skladišta).
 - Nema HTML fallback-a pri downloadu generisanog obrasca; greška prikazuje poruku (npr. nedostaje aktivni template).
 - Ako PDF nije generisan (LibreOffice / postavka), prikaži poruku i ponudi DOCX download.
+- Tabovi **Zaduženja** i **Prenosnice**: klik na red otvara `TransferDocumentDrawer` (desktop: desni drawer; mobile: bottom sheet) s automatskim PDF pregledom (`generated` na Na čekanju, `signed` na Potpisano).
+- Inventory popis i `EquipmentCard` zadržavaju inline `TransferDocumentPanel`.
+
+## Deploy — LibreOffice + UTF-8
+
+- Backend image: `node:22-bookworm-slim`; runner instalira `libreoffice-writer`, `libreoffice-common`, `fontconfig`, `fonts-dejavu-core`, `fonts-liberation`, `fonts-noto-core`.
+- Env: `LANG=C.UTF-8`, `LC_ALL=C.UTF-8`; `soffice` child proces isti env.
+- Aktivni `.docx` obrazac treba koristiti font dostupan u kontejneru (DejaVu Sans, Liberation Sans, Calibri uz substitution) — ne egzotične fontove.
+- Smoke nakon deploya: `docker compose exec backend which soffice`.
 
 ## Planirano (kasnije)
 
@@ -109,8 +118,8 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 - Navigacija: jedan sidebar unos **Zaduženja**; ruta `/documents` preusmjerava na tab Prenosnice (bookmark kompatibilnost).
 - Akcije zaduženja i `InventoryFreezeActionHint` samo na tabu Zaduženja.
-- Tab **Zaduženja**: pod-tab **Na čekanju** (`workflow=pending`, statusi `raw|printed|uploaded`) s badge brojem; **Potpisano** (`workflow=signed`). Klik na red otvara `TransferDocumentPanel` u `ModalRoot`.
-- Tab **Prenosnice**: isti `workflow` filter; uklonjeni page-local summary chipovi.
+- Tab **Zaduženja**: pod-tab **Na čekanju** (`workflow=pending`, statusi `raw|printed|uploaded`) s badge brojem; **Potpisano** (`workflow=signed`). Klik na red otvara `TransferDocumentDrawer` s auto PDF pregledom.
+- Tab **Prenosnice**: isti `workflow` filter i drawer; uklonjeni page-local summary chipovi.
 
 ## UI — odabir opreme za transfer
 

@@ -22,9 +22,8 @@ import {
 import { getTransferStepBadge } from './transfer-step.util';
 import { refreshAfterMutation } from '../../helpers/run-mutation-with-refresh.util';
 import { Search, Download, Upload, CheckCircle, Eye } from 'lucide-react';
-import { TransferDocumentPanel } from '../TransferDocumentPanel';
+import { TransferDocumentDrawer } from './transfer-document-drawer';
 import { PaginationControls } from '../ui/pagination-controls';
-import { ModalRoot } from '../ui/modal-root';
 import { PageTabs } from '../ui/page-tabs';
 import type { TransferRecord } from '../../types';
 
@@ -397,42 +396,20 @@ export const TransferDocumentsTab = () => {
       ) : null}
 
       {viewTransfer ? (
-        <ModalRoot
-          open
+        <TransferDocumentDrawer
+          transfer={viewTransfer}
+          previewMode={workflowTab === 'signed' ? 'signed' : 'generated'}
           onClose={() => setViewDoc(null)}
-          size="xl"
-          panelClassName="bg-white shadow-xl max-w-3xl"
-          enableEscape
-          closeOnBackdrop
-        >
-          <div className="bg-white rounded-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Prenosnica {viewTransfer.documentNumber}
-                </h2>
-                <p className="text-sm text-gray-500">
-                  {getStatusLabel(viewTransfer.type)} · {formatDate(viewTransfer.date)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setViewDoc(null)}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50"
-              >
-                Zatvori
-              </button>
-            </div>
-            <TransferDocumentPanel
-              transfer={viewTransfer}
-              allowSign={viewTransfer.status !== 'potpisan' && viewTransfer.status !== 'cancelled'}
-              onSigned={() => {
-                void refresh();
-                void list.refresh();
-              }}
-            />
-          </div>
-        </ModalRoot>
+          allowSign={
+            workflowTab === 'pending' &&
+            viewTransfer.status !== 'potpisan' &&
+            viewTransfer.status !== 'cancelled'
+          }
+          onSigned={() => {
+            void refresh();
+            void list.refresh();
+          }}
+        />
       ) : null}
     </div>
   );

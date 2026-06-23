@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { TransferDocumentPanel } from '../TransferDocumentPanel';
 import { useStore, useRefreshData } from '../../useStore';
+import { getTransferStepBadge } from './transfer-step.util';
 import { getStatusLabel, formatDate } from '../../helpers';
 import { fetchTransferApi } from '../../api/data-api';
 import { fetchTransfersPageApi } from '../../api/transfers-api';
@@ -15,8 +15,7 @@ import { Search, Filter, Warehouse, UserX } from 'lucide-react';
 import { PageTabs } from '../ui/page-tabs';
 import { ResponsiveTable } from '../ui/responsive-table';
 import { PaginationControls } from '../ui/pagination-controls';
-import { ModalRoot } from '../ui/modal-root';
-import { getTransferStepBadge } from './transfer-step.util';
+import { TransferDocumentDrawer } from './transfer-document-drawer';
 import {
   InventoryFreezeActionHint,
 } from '../inventory-count/inventory-freeze-action-hint';
@@ -307,41 +306,17 @@ export const TransferHistoryTab = () => {
       ) : null}
 
       {selectedTransfer ? (
-        <ModalRoot
-          open
+        <TransferDocumentDrawer
+          transfer={selectedTransfer}
+          previewMode={workflowTab === 'signed' ? 'signed' : 'generated'}
           onClose={() => setSelectedTransferId(null)}
-          size="xl"
-          panelClassName="bg-white shadow-xl max-w-3xl"
-          enableEscape
-          closeOnBackdrop
-        >
-          <div className="bg-white rounded-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Prenosnica {selectedTransfer.documentNumber}
-                </h2>
-                <p className="text-sm text-gray-500">
-                  {getStatusLabel(selectedTransfer.type)} · {formatDate(selectedTransfer.date)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTransferId(null)}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50"
-              >
-                Zatvori
-              </button>
-            </div>
-            <TransferDocumentPanel
-              transfer={selectedTransfer}
-              allowSign={
-                selectedTransfer.status !== 'potpisan' && selectedTransfer.status !== 'cancelled'
-              }
-              onSigned={handleSigned}
-            />
-          </div>
-        </ModalRoot>
+          allowSign={
+            workflowTab === 'pending' &&
+            selectedTransfer.status !== 'potpisan' &&
+            selectedTransfer.status !== 'cancelled'
+          }
+          onSigned={handleSigned}
+        />
       ) : null}
     </>
   );

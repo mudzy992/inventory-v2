@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react';
 import { CheckCircle, Download, Eye, FileText, Upload } from 'lucide-react';
 import type { InventorySessionStatus } from '../api/inventory-api';
 import { fetchAuthenticatedBlob, getApiBaseUrl } from '../api/client';
-import { apiRequest } from '../api/client';
 import { signTransferApi, uploadTransferDocumentApi } from '../api/data-api';
 import type { TransferRecord } from '../types';
 import {
@@ -10,18 +8,22 @@ import {
   getInventoryTransferBadge,
 } from './inventory-count/inventory-transfer-step.util';
 import { buildTransferSteps, getTransferStepBadge } from './transfers/transfer-step.util';
+import {
+  useTransferDocumentPreview,
+  type TransferDocumentPreviewMode,
+} from './transfers/use-transfer-document-preview';
 import { cn } from '../utils/cn';
 import { useAdminSettings } from '../contexts/admin-settings-context';
 import { isAdmin } from '../store';
 import { useToast } from '../contexts/toast-context';
-import { canFinalizeTransfer, canSignTransfer, canShowTransferGeneratedDocx, canShowTransferGeneratedPdf } from '../helpers/guards';
+import {
+  canFinalizeTransfer,
+  canSignTransfer,
+  canShowTransferGeneratedDocx,
+  canShowTransferGeneratedPdf,
+} from '../helpers/guards';
 import { ApiError } from '../api/client';
-
-interface UploadMeta {
-  id: string;
-  mime: string;
-  path: string;
-}
+import { useState } from 'react';
 
 interface TransferDocumentPanelProps {
   transfer: TransferRecord;
@@ -30,6 +32,8 @@ interface TransferDocumentPanelProps {
   inventoryMode?: boolean;
   inventorySessionStatus?: InventorySessionStatus;
   linePendingApplied?: boolean;
+  layout?: 'inline' | 'drawer';
+  autoPreview?: TransferDocumentPreviewMode | false;
 }
 
 export const TransferDocumentPanel = ({
@@ -39,6 +43,8 @@ export const TransferDocumentPanel = ({
   inventoryMode = false,
   inventorySessionStatus = 'active',
   linePendingApplied = false,
+  layout = 'inline',
+  autoPreview = false,
 }: TransferDocumentPanelProps) => {
   const { getBoolean, getNumber, settings: adminSettings } = useAdminSettings();
   const { toastError } = useToast();
@@ -46,10 +52,22 @@ export const TransferDocumentPanel = ({
   const allowFinalizeWithoutUpload =
     isAdmin() && getBoolean('transfer.allow_finalize_without_upload', false);
   const requireSignedPdf = getBoolean('transfer.require_signed_pdf_upload', true);
-  const [uploadMeta, setUploadMeta] = useState<UploadMeta | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [generatedPrintPreviewUrl, setGeneratedPrintPreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const isDrawer = layout === 'drawer';
+  const effectiveAutoPreview = isDrawer ? autoPreview : false;
+
+  const {
+    uploadMeta,
+    previewUrl,
+    previewError,
+    isPreviewLoading,
+    handleManualGeneratedPreview,
+    handleManualSignedPreview,
+  } = useTransferDocumentPreview({
+    transfer,
+    autoPreview: effectiveAutoPreview,
+  });
+
   const inventorySteps = inventoryMode
     ? buildInventoryTransferSteps(transfer, inventorySessionStatus, linePendingApplied)
     : null;
@@ -60,48 +78,8 @@ export const TransferDocumentPanel = ({
   const standardBadge = !inventoryMode ? getTransferStepBadge(transfer) : null;
   const finalizeBlocked =
     inventoryMode && inventorySessionStatus === 'active' && transfer.status !== 'potpisan';
-  useEffect(() => {
-    return () => {
-      if (generatedPrintPreviewUrl) {
-        URL.revokeObjectURL(generatedPrintPreviewUrl);
-      }
-    };
-  }, [generatedPrintPreviewUrl]);
 
-  useEffect(() => {
-    const load = async () => {
-      if (!transfer.scannedDocUrl) {
-        setUploadMeta(null);
-        return;
-      }
-      try {
-        const uploads = await apiRequest<UploadMeta[]>(
-          `/uploads?entityType=transfer&entityId=${transfer.id}`,
-        ).catch(() => []);
-        const first = Array.isArray(uploads) ? uploads[0] : null;
-        if (first) {
-          setUploadMeta(first);
-        }
-      } catch {
-        setUploadMeta(null);
-      }
-    };
-    void load();
-  }, [transfer.id, transfer.scannedDocUrl]);
-  const handlePreview = async () => {
-    if (!uploadMeta) {
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const blob = await fetchAuthenticatedBlob(`/uploads/${uploadMeta.id}`);
-      const url = URL.createObjectURL(blob);
-      setPreviewUrl(url);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  const handleDownload = async () => {
+  const handleDownloadSigned = async () => {
     if (!uploadMeta) {
       return;
     }
@@ -109,27 +87,9 @@ export const TransferDocumentPanel = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = transfer.documentNumber;
+    link.download = `${transfer.documentNumber}-signed.pdf`;
     link.click();
     URL.revokeObjectURL(url);
-  };
-  const handlePrintPreview = async () => {
-    setIsLoading(true);
-    try {
-      const blob = await fetchAuthenticatedBlob(
-        `/transfers/${transfer.id}/generated-document?format=pdf`,
-      );
-      if (generatedPrintPreviewUrl) {
-        URL.revokeObjectURL(generatedPrintPreviewUrl);
-      }
-      setGeneratedPrintPreviewUrl(URL.createObjectURL(blob));
-    } catch {
-      toastError(
-        'PDF nije generisan (provjerite postavku generate_print_pdf i LibreOffice na serveru). Preuzmite DOCX.',
-      );
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleDownloadGenerated = async (format: 'docx' | 'pdf') => {
@@ -154,6 +114,7 @@ export const TransferDocumentPanel = ({
       setIsLoading(false);
     }
   };
+
   const handleUpload = async (file: File) => {
     if (file.type !== 'application/pdf') {
       toastError('Potpisana prenosnica mora biti PDF');
@@ -167,6 +128,7 @@ export const TransferDocumentPanel = ({
     await uploadTransferDocumentApi(transfer.id, file);
     onSigned?.();
   };
+
   const handleFinalize = async () => {
     const finalizeGuard = canFinalizeTransfer(transfer.status);
     if (!finalizeGuard.allowed) {
@@ -193,8 +155,10 @@ export const TransferDocumentPanel = ({
       setIsLoading(false);
     }
   };
+
   const isRaw = transfer.status === 'raw' || transfer.status === 'printed';
   const isAwaitingFinalize = transfer.status === 'uploaded' || transfer.status === 'printed';
+  const isSigned = transfer.status === 'potpisan';
   const canPrintPreview =
     !inventoryMode &&
     (transfer.status === 'raw' ||
@@ -220,49 +184,98 @@ export const TransferDocumentPanel = ({
     canShowTransferGeneratedDocx(transfer) && (inventoryMode || isRaw);
   const canShowPdf =
     canShowTransferGeneratedPdf(transfer, adminSettings) && (inventoryMode || isRaw);
+  const showAutoPreview = Boolean(effectiveAutoPreview);
+  const showSignedDownload = isDrawer && effectiveAutoPreview === 'signed' && uploadMeta;
   const badgeClass =
     inventoryBadge?.tone === 'success'
       ? 'bg-green-100 text-green-800'
       : inventoryBadge?.tone === 'info'
         ? 'bg-blue-100 text-blue-800'
         : 'bg-amber-100 text-amber-800';
+
+  const previewFrameClass = isDrawer
+    ? 'w-full min-h-[50vh] md:min-h-[55vh] border rounded-lg bg-white'
+    : 'w-full h-[360px] border rounded bg-white';
+
   return (
-    <div className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
-          <FileText size={16} />
-          Prenosnica {transfer.documentNumber}
+    <div
+      className={cn(
+        'space-y-3',
+        !isDrawer && 'border border-gray-200 rounded-lg p-4 bg-gray-50',
+      )}
+    >
+      {!isDrawer ? (
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
+            <FileText size={16} />
+            Prenosnica {transfer.documentNumber}
+          </div>
+          {inventoryMode && inventoryBadge ? (
+            <span className={cn('text-xs px-2 py-0.5 rounded-full', badgeClass)}>
+              {inventoryBadge.label}
+            </span>
+          ) : standardBadge ? (
+            <span
+              className={cn(
+                'text-xs px-2 py-0.5 rounded-full',
+                standardBadge.tone === 'success'
+                  ? 'bg-green-100 text-green-800'
+                  : standardBadge.tone === 'info'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-amber-100 text-amber-800',
+              )}
+            >
+              {standardBadge.label}
+            </span>
+          ) : (
+            <span
+              className={cn(
+                'text-xs px-2 py-0.5 rounded-full',
+                isRaw
+                  ? 'bg-amber-100 text-amber-800'
+                  : isAwaitingFinalize
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-green-100 text-green-800',
+              )}
+            >
+              {isRaw ? 'RAW' : isAwaitingFinalize ? 'Upload OK' : 'Potpisana'}
+            </span>
+          )}
         </div>
-        {inventoryMode && inventoryBadge ? (
-          <span className={cn('text-xs px-2 py-0.5 rounded-full', badgeClass)}>{inventoryBadge.label}</span>
-        ) : standardBadge ? (
-          <span
-            className={cn(
-              'text-xs px-2 py-0.5 rounded-full',
-              standardBadge.tone === 'success'
-                ? 'bg-green-100 text-green-800'
-                : standardBadge.tone === 'info'
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-amber-100 text-amber-800',
-            )}
-          >
-            {standardBadge.label}
-          </span>
-        ) : (
-          <span
-            className={cn(
-              'text-xs px-2 py-0.5 rounded-full',
-              isRaw
-                ? 'bg-amber-100 text-amber-800'
-                : isAwaitingFinalize
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-green-100 text-green-800',
-            )}
-          >
-            {isRaw ? 'RAW' : isAwaitingFinalize ? 'Upload OK' : 'Potpisana'}
-          </span>
-        )}
-      </div>
+      ) : null}
+
+      {isDrawer && showAutoPreview ? (
+        <div className="space-y-2">
+          {isPreviewLoading ? (
+            <p className="text-sm text-gray-500 py-8 text-center">Učitavanje PDF pregleda…</p>
+          ) : null}
+          {previewError ? (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              {previewError}
+            </p>
+          ) : null}
+          {previewUrl ? (
+            uploadMeta?.mime.startsWith('image/') && effectiveAutoPreview === 'signed' ? (
+              <img
+                src={previewUrl}
+                alt="Sken prenosnice"
+                className="max-h-[60vh] w-full rounded-lg border object-contain bg-white"
+              />
+            ) : (
+              <iframe
+                src={previewUrl}
+                title={
+                  effectiveAutoPreview === 'signed'
+                    ? 'Pregled potpisane prenosnice'
+                    : 'Pregled generisanog PDF-a za štampu'
+                }
+                className={previewFrameClass}
+              />
+            )
+          ) : null}
+        </div>
+      ) : null}
+
       {inventoryMode && inventorySteps ? (
         <ol className="flex flex-wrap gap-1 sm:gap-2" aria-label="Koraci prenosnice u popisu">
           {inventorySteps.map((step) => (
@@ -282,7 +295,7 @@ export const TransferDocumentPanel = ({
           ))}
         </ol>
       ) : null}
-      {!inventoryMode && standardSteps ? (
+      {!inventoryMode && standardSteps && !isDrawer ? (
         <ol className="flex flex-wrap gap-1 sm:gap-2" aria-label="Koraci prenosnice">
           {standardSteps.map((step) => (
             <li
@@ -301,7 +314,7 @@ export const TransferDocumentPanel = ({
           ))}
         </ol>
       ) : null}
-      {!inventoryMode && isRaw ? (
+      {!inventoryMode && isRaw && !isDrawer ? (
         <p className="text-xs text-gray-500">
           Preuzmite generisani Word obrazac za štampu, potpišite ga, zatim uploadujte PDF.
           {requireSignedPdf ? ' Potpisani PDF je obavezan prije finalizacije.' : ''}
@@ -324,7 +337,23 @@ export const TransferDocumentPanel = ({
           Oprema se mijenja tek nakon zatvaranja sesije popisa. Upload potpisane prenosnice tokom aktivne sesije.
         </p>
       ) : null}
-      <div className="flex flex-wrap gap-2">
+
+      <div
+        className={cn(
+          'flex flex-wrap gap-2',
+          isDrawer && 'sticky bottom-0 z-10 -mx-1 border-t border-gray-100 bg-white pt-3 pb-1 md:static md:border-0 md:pt-0 md:pb-0',
+        )}
+      >
+        {showSignedDownload ? (
+          <button
+            type="button"
+            onClick={() => void handleDownloadSigned()}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Download size={14} /> Preuzmi potpisani PDF
+          </button>
+        ) : null}
         {canShowDocx ? (
           <button
             type="button"
@@ -345,36 +374,36 @@ export const TransferDocumentPanel = ({
             <Download size={14} /> Štampa (PDF)
           </button>
         ) : null}
-        {canShowPdf && canPrintPreview ? (
+        {canShowPdf && canPrintPreview && !showAutoPreview ? (
           <button
             type="button"
-            onClick={() => void handlePrintPreview()}
-            disabled={isLoading}
+            onClick={handleManualGeneratedPreview}
+            disabled={isLoading || isPreviewLoading}
             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
           >
             <Eye size={14} /> Pregled za štampu
           </button>
         ) : null}
-        {uploadMeta && (
+        {uploadMeta && !showAutoPreview ? (
           <>
             <button
               type="button"
-              onClick={() => void handlePreview()}
-              disabled={isLoading}
+              onClick={handleManualSignedPreview}
+              disabled={isLoading || isPreviewLoading}
               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
             >
               <Eye size={14} /> Pregled skena
             </button>
             <button
               type="button"
-              onClick={() => void handleDownload()}
+              onClick={() => void handleDownloadSigned()}
               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
             >
               <Download size={14} /> Preuzmi sken
             </button>
           </>
-        )}
-        {canUpload && (
+        ) : null}
+        {canUpload ? (
           <label className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700">
             <Upload size={14} /> {transfer.scannedDocUrl ? 'Zamijeni PDF' : 'Upload potpisane'}
             <input
@@ -389,7 +418,7 @@ export const TransferDocumentPanel = ({
               }}
             />
           </label>
-        )}
+        ) : null}
         {canFinalize && (isAwaitingFinalize || (isRaw && allowFinalizeWithoutUpload)) ? (
           <button
             type="button"
@@ -419,34 +448,45 @@ export const TransferDocumentPanel = ({
             />
           </label>
         ) : null}
+        {isDrawer && isSigned && uploadMeta && !showSignedDownload ? (
+          <button
+            type="button"
+            onClick={() => void handleDownloadSigned()}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
+          >
+            <Download size={14} /> Preuzmi potpisani PDF
+          </button>
+        ) : null}
       </div>
+
       {finalizeBlocked ? (
         <p className="text-xs text-amber-800" title="Finalizacija je blokirana dok je sesija popisa aktivna">
           Finalizacija prenosnice nije dostupna dok traje godišnji popis — promjena opreme se primjenjuje pri zatvaranju
           sesije.
         </p>
       ) : null}
-      {generatedPrintPreviewUrl ? (
-        <div className="mt-2">
-          <iframe
-            src={generatedPrintPreviewUrl}
-            title="Pregled generisanog PDF-a za štampu"
-            className="w-full h-[360px] border rounded bg-white"
-          />
-        </div>
-      ) : null}
-      {previewUrl && (
+
+      {!isDrawer && previewUrl && !showAutoPreview ? (
         <div className="mt-2">
           {uploadMeta?.mime.startsWith('image/') ? (
             <img src={previewUrl} alt="Sken prenosnice" className="max-h-64 rounded border" />
           ) : (
-            <iframe src={previewUrl} title="Sken potpisane prenosnice" className="w-full h-64 border rounded" />
+            <iframe
+              src={previewUrl}
+              title="Pregled dokumenta"
+              className="w-full h-64 border rounded"
+            />
           )}
-          <p className="text-[10px] text-gray-400 mt-1">
-            {getApiBaseUrl()}/uploads/{uploadMeta?.id}
-          </p>
+          {!showAutoPreview && uploadMeta ? (
+            <p className="text-[10px] text-gray-400 mt-1">
+              {getApiBaseUrl()}/uploads/{uploadMeta.id}
+            </p>
+          ) : null}
         </div>
-      )}
+      ) : null}
+      {!isDrawer && previewError && !showAutoPreview ? (
+        <p className="text-xs text-amber-700">{previewError}</p>
+      ) : null}
     </div>
   );
 };

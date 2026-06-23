@@ -88,7 +88,7 @@ export const InventoryPrintSheet = ({ scope, state, onClose }: InventoryPrintShe
     openInventoryPrintWindow(buildInventoryPrintHtml(documentInput));
   };
   const handleDownloadPdf = () => {
-    downloadInventoryPrintPdf(documentInput);
+    void downloadInventoryPrintPdf(documentInput);
   };
   return (
     <ModalRoot

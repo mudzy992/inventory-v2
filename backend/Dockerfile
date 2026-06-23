@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine AS deps
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -12,12 +12,21 @@ ENV DATABASE_URL="mysql://mudzy:nije,kikiriki@sql.ba101.top:3306/inventory-v3"
 RUN npx prisma generate
 RUN npm run build
 
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# PDF prenosnica (transfer.generate_print_pdf): odkomentirati za LibreOffice u image-u
-# RUN apk add --no-cache libreoffice
-RUN addgroup -S app && adduser -S app -G app
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    libreoffice-writer \
+    libreoffice-common \
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-liberation \
+    fonts-noto-core \
+  && rm -rf /var/lib/apt/lists/*
+RUN groupadd --system app && useradd --system --gid app --create-home --home-dir /app app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

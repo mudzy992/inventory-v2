@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import type { InventoryPrintScopeDto } from '../../api/inventory-api';
 import { getEmployeeFullName, getOrgUnitPath } from '../../helpers';
 import { buildInventoryPrintEquipmentName } from '../../helpers/equipment-display.util';
+import { applyUnicodeFontToDoc } from '../../helpers/jspdf-unicode-font.util';
 import type { CompanyHeaderInput } from '../../helpers/company-header.util';
 import type { AppState } from '../../types';
 
@@ -234,27 +235,28 @@ const drawPdfPageHeader = (
   input: InventoryPrintDocumentInput,
   pageNumber: number,
   totalPages: number,
+  fontFamily: string,
 ): number => {
   const { categoryLabels, warehouseLabel, title } = buildPrintMeta(input);
   let y = 14;
   if (input.company.name) {
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(fontFamily, 'bold');
     doc.text(input.company.name, 105, y, { align: 'center' });
     y += 4;
     if (input.companyLine) {
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(fontFamily, 'normal');
       doc.setFontSize(8);
       doc.text(input.companyLine, 105, y, { align: 'center' });
       y += 5;
     }
   }
   doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(fontFamily, 'bold');
   doc.text(title, 14, y);
   y += 5;
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(fontFamily, 'normal');
   if (warehouseLabel) {
     doc.text(`Skladište: ${warehouseLabel}`, 14, y);
     y += 4;
@@ -268,9 +270,10 @@ const drawPdfPageHeader = (
   return y + 2;
 };
 
-const drawPdfPageFooter = (doc: jsPDF): void => {
+const drawPdfPageFooter = (doc: jsPDF, fontFamily: string): void => {
   const footerTop = 272;
   doc.setFontSize(8);
+  doc.setFont(fontFamily, 'normal');
   doc.setTextColor(100);
   doc.text('Potpisi komisije:', 14, footerTop);
   doc.setDrawColor(156, 163, 175);
@@ -280,30 +283,31 @@ const drawPdfPageFooter = (doc: jsPDF): void => {
   doc.setTextColor(0);
 };
 
-export const downloadInventoryPrintPdf = (input: InventoryPrintDocumentInput): void => {
+export const downloadInventoryPrintPdf = async (input: InventoryPrintDocumentInput): Promise<void> => {
   const pages = buildInventoryPrintPages(input);
   const totalPages = pages.length;
   const { title } = buildPrintMeta(input);
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const fontFamily = await applyUnicodeFontToDoc(doc);
   for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
     if (pageIndex > 0) {
       doc.addPage();
     }
     const page = pages[pageIndex]!;
-    let startY = drawPdfPageHeader(doc, input, page.pageNumber, totalPages);
+    let startY = drawPdfPageHeader(doc, input, page.pageNumber, totalPages, fontFamily);
     for (const block of page.blocks) {
       if (startY > 240) {
-        drawPdfPageFooter(doc);
+        drawPdfPageFooter(doc, fontFamily);
         doc.addPage();
-        startY = drawPdfPageHeader(doc, input, page.pageNumber, totalPages);
+        startY = drawPdfPageHeader(doc, input, page.pageNumber, totalPages, fontFamily);
       }
       if (block.showGroupHeader) {
         doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont(fontFamily, 'bold');
         doc.text(block.groupTitle, 14, startY);
         startY += 4;
         if (block.groupSubtitle) {
-          doc.setFont('helvetica', 'normal');
+          doc.setFont(fontFamily, 'normal');
           doc.setFontSize(8);
           doc.setTextColor(100);
           doc.text(block.groupSubtitle, 14, startY);
@@ -312,7 +316,7 @@ export const downloadInventoryPrintPdf = (input: InventoryPrintDocumentInput): v
         }
       } else {
         doc.setFontSize(8);
-        doc.setFont('helvetica', 'italic');
+        doc.setFont(fontFamily, 'normal');
         doc.setTextColor(100);
         doc.text(`Nastavak: ${block.groupTitle}`, 14, startY);
         doc.setTextColor(0);
@@ -322,10 +326,10 @@ export const downloadInventoryPrintPdf = (input: InventoryPrintDocumentInput): v
         startY,
         head: [['Inv. broj', 'Naziv opreme', 'Kol.', 'Potpis', 'Napomena']],
         body: block.rows.map((row) => [row.inventoryNumber, row.name, '', '', '']),
-        styles: { fontSize: 8, cellPadding: 1.5 },
-        headStyles: { fillColor: [249, 250, 251], textColor: 20, fontStyle: 'bold' },
+        styles: { fontSize: 8, cellPadding: 1.5, font: fontFamily },
+        headStyles: { fillColor: [249, 250, 251], textColor: 20, fontStyle: 'bold', font: fontFamily },
         columnStyles: {
-          0: { cellWidth: 28, font: 'courier' },
+          0: { cellWidth: 28, font: fontFamily },
           1: { cellWidth: 'auto' },
           2: { cellWidth: 10, halign: 'center' },
           3: { cellWidth: 22 },
@@ -336,7 +340,7 @@ export const downloadInventoryPrintPdf = (input: InventoryPrintDocumentInput): v
       });
       startY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
     }
-    drawPdfPageFooter(doc);
+    drawPdfPageFooter(doc, fontFamily);
   }
   doc.save(`${slugifyFilename(title)}.pdf`);
 };

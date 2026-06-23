@@ -1,5 +1,9 @@
 # Changelog — inventory-count
 
+## 2026-06-22 (PDF UTF-8 dijakritike)
+
+- `downloadInventoryPrintPdf`: embed DejaVu Sans (`public/fonts/DejaVuSans.ttf`) preko `jspdf-unicode-font.util`; HTML štampa nepromijenjena.
+
 ## 2026-06-16 (isključenje evidencijske opreme)
 
 - `buildCommitteeEquipmentWhere`: filter `isAccountingTracked=true` + `inventoryNumber not null`.
