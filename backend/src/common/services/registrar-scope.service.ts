@@ -238,7 +238,7 @@ export class RegistrarScopeService {
     }
     const scopes = assignments ?? user.registrarScopes;
     if (transferType === 'zaduzenje') {
-      return scopes.some((row) => isRegistrarModeA(row));
+      return scopes.length > 0;
     }
     return scopes.length > 0;
   }
@@ -292,14 +292,86 @@ export class RegistrarScopeService {
       holder,
       assignments,
     );
+    if (matches.length === 0 && transferType === 'zaduzenje') {
+      return this.isEquipmentInCustodyPool(user, equipment, assignments);
+    }
     if (matches.length === 0) {
       return false;
     }
     const hasModeA = matches.some((row) => isRegistrarModeA(row));
+    if (transferType === 'zaduzenje') {
+      if (await this.isEquipmentInCustodyPool(user, equipment, assignments)) {
+        return true;
+      }
+      if (!hasModeA) {
+        return false;
+      }
+      return true;
+    }
     if (!hasModeA) {
-      return transferType === 'razduzenje';
+      return transferType === 'razduzenje' || transferType === 'prenos';
     }
     return this.canCreateTransferType(user, transferType, matches);
+  }
+
+  async isEquipmentInCustodyPool(
+    user: AuthenticatedUser,
+    equipment: Equipment,
+    assignments?: RegistrarScopeAssignment[],
+  ): Promise<boolean> {
+    if (this.hasFullAccess(user)) {
+      return equipment.status === 'skladiste' && Boolean(equipment.custodyOrgUnitId);
+    }
+    if (user.role !== 'evidenticar') {
+      return false;
+    }
+    if (equipment.status !== 'skladiste' || !equipment.custodyOrgUnitId || !equipment.warehouseId) {
+      return false;
+    }
+    const scopes = assignments ?? user.registrarScopes;
+    const categoryIds = await this.expandCategoryIds(scopes.map((row) => row.categoryId));
+    if (!categoryIds.has(equipment.categoryId)) {
+      return false;
+    }
+    for (const assignment of scopes) {
+      if (isRegistrarModeA(assignment)) {
+        continue;
+      }
+      const expanded = await this.expandCategoryIds([assignment.categoryId]);
+      if (!expanded.has(equipment.categoryId)) {
+        continue;
+      }
+      if (equipment.warehouseId !== assignment.warehouseId) {
+        continue;
+      }
+      const effectiveOrgIds = await this.getEffectiveOrgIdsForModeB(assignment);
+      if (effectiveOrgIds.includes(equipment.custodyOrgUnitId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async assertCanZaduzenjeFromCustodyPool(
+    user: AuthenticatedUser,
+    equipment: Equipment,
+    toPersonId: string,
+  ): Promise<void> {
+    const inPool = await this.isEquipmentInCustodyPool(user, equipment);
+    if (!inPool) {
+      throw new ForbiddenException('Equipment not in your custody pool');
+    }
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: toPersonId },
+      select: { id: true, orgUnitId: true },
+    });
+    if (!employee) {
+      throw new ForbiddenException('Employee outside your scope');
+    }
+    const allowed = await this.canAccessEmployee(user, employee as Employee);
+    if (!allowed) {
+      throw new ForbiddenException('Employee outside your scope');
+    }
   }
 
   async assertCanCreateTransferForEquipment(

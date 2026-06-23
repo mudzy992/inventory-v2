@@ -181,6 +181,9 @@ export interface Equipment {
   category?: Pick<Category, 'id' | 'name' | 'parentId'>;
   warehouseId?: string | null;
   warehouseCondition?: WarehouseCondition | null;
+  custodyOrgUnitId?: string | null;
+  custodyOrgUnit?: Pick<OrgUnit, 'id' | 'name'> | null;
+  warehouse?: Pick<Warehouse, 'id' | 'name' | 'cityId'>;
   notes?: string;
   disposalReason?: string | null;
   stockLot?: { id: string; productName: string } | null;

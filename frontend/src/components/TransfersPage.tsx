@@ -36,6 +36,11 @@ import {
 } from './inventory-count/inventory-freeze-action-hint';
 import { EmployeeAutocomplete } from './employee-autocomplete';
 import { EquipmentAutocomplete } from './equipment-autocomplete';
+import { CustodyPoolEquipmentLookup } from './transfers/custody-pool-equipment-lookup';
+import {
+  hasRegistrarModeAAssignment,
+  hasRegistrarModeBAssignment,
+} from '../helpers/registrar-scope';
 
 interface TransfersPageProps {
   initialTab?: TransferModuleTab;
@@ -45,6 +50,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const { getBoolean } = usePublicSettings();
   const { settings: adminSettings } = useAdminSettings();
   const documentsEnabled = getBoolean('features.documents', true);
+  const custodyPoolEnabled = getBoolean('features.registrar_mode_b_custody_pool', true);
   const transferSettings = useMemo(
     () => ({
       'features.transfers': getBoolean('features.transfers', true),
@@ -96,6 +102,17 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const [fReason, setFReason] = useState('');
   const [fDate, setFDate] = useState(new Date().toISOString().slice(0, 10));
   const [fNotes, setFNotes] = useState('');
+  const [zaduzenjePickMode, setZaduzenjePickMode] = useState<'list' | 'custody'>('list');
+
+  const showModeAListPicker = evidenticar && hasRegistrarModeAAssignment(user);
+  const showCustodyPoolPicker =
+    fType === 'zaduzenje' &&
+    evidenticar &&
+    custodyPoolEnabled &&
+    hasRegistrarModeBAssignment(user) &&
+    (!showModeAListPicker || zaduzenjePickMode === 'custody');
+  const showEquipmentAutocomplete =
+    !evidenticar || fType !== 'zaduzenje' || (showModeAListPicker && zaduzenjePickMode === 'list');
 
   const equipmentStatus = useMemo(
     () =>
@@ -158,6 +175,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     setFReason('');
     setFDate(new Date().toISOString().slice(0, 10));
     setFNotes('');
+    setZaduzenjePickMode(hasRegistrarModeAAssignment(user) ? 'list' : 'custody');
     setShowForm(true);
   };
 
@@ -298,6 +316,9 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                     setFToPersonId('');
                     setSelectedToEmployee(null);
                     setSignerEmployee(null);
+                    if (e.target.value === 'zaduzenje') {
+                      setZaduzenjePickMode(hasRegistrarModeAAssignment(user) ? 'list' : 'custody');
+                    }
                   }}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 >
@@ -311,17 +332,63 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                 <label htmlFor="transfer-equipment" className="block text-sm font-medium text-gray-700 mb-1">
                   Oprema *
                 </label>
-                <EquipmentAutocomplete
-                  id="transfer-equipment"
-                  categories={state.categories}
-                  status={equipmentStatus}
-                  value={fEquipmentId}
-                  required
-                  onChange={(equipmentId, equipment) => {
-                    setFEquipmentId(equipmentId);
-                    setSelectedEquipment(equipment);
-                  }}
-                />
+                {fType === 'zaduzenje' && showModeAListPicker && custodyPoolEnabled && hasRegistrarModeBAssignment(user) ? (
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setZaduzenjePickMode('list');
+                        setFEquipmentId('');
+                        setSelectedEquipment(null);
+                      }}
+                      className={`flex-1 text-sm py-2 rounded-lg border ${
+                        zaduzenjePickMode === 'list'
+                          ? 'border-blue-600 bg-blue-50 text-blue-800'
+                          : 'border-gray-200 text-gray-600'
+                      }`}
+                    >
+                      Sa skladišta (lista)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setZaduzenjePickMode('custody');
+                        setFEquipmentId('');
+                        setSelectedEquipment(null);
+                      }}
+                      className={`flex-1 text-sm py-2 rounded-lg border ${
+                        zaduzenjePickMode === 'custody'
+                          ? 'border-purple-600 bg-purple-50 text-purple-800'
+                          : 'border-gray-200 text-gray-600'
+                      }`}
+                    >
+                      Pool vraćene opreme
+                    </button>
+                  </div>
+                ) : null}
+                {showEquipmentAutocomplete ? (
+                  <EquipmentAutocomplete
+                    id="transfer-equipment"
+                    categories={state.categories}
+                    status={equipmentStatus}
+                    value={fEquipmentId}
+                    required
+                    onChange={(equipmentId, equipment) => {
+                      setFEquipmentId(equipmentId);
+                      setSelectedEquipment(equipment);
+                    }}
+                  />
+                ) : null}
+                {fType === 'zaduzenje' && showCustodyPoolPicker ? (
+                  <CustodyPoolEquipmentLookup
+                    state={state}
+                    value={fEquipmentId}
+                    onChange={(equipmentId, equipment) => {
+                      setFEquipmentId(equipmentId);
+                      setSelectedEquipment(equipment);
+                    }}
+                  />
+                ) : null}
               </div>
 
               {selectedEquipment && selectedEquipHolder && (fType === 'prenos' || fType === 'razduzenje') ? (

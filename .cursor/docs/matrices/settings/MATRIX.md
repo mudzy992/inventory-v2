@@ -29,6 +29,7 @@
 | `features.evidenticar_employee_ops` | true | evidentičar: kreiranje/izmjena radnika u scope-u |
 | `features.warehouses` | true | `warehouses` |
 | `features.registrar_stock` | true | `registrar-stock` |
+| `features.registrar_mode_b_custody_pool` | true | Režim B: pool vraćene opreme + zaduženje po inv. broju |
 | `features.warehouse_inventory` | true | `warehouse-inventory` |
 | `features.equipment` | true | `equipment`, `equipment-by-category` |
 | `features.equipment_labels` | true | UI naljepnica na opremi |
@@ -115,6 +116,7 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 | `features.user_management` | `UsersService` |
 | `features.warehouses` | `WarehousesService` |
 | `features.registrar_stock` | `WarehouseStockService` (receive/issue) |
+| `features.registrar_mode_b_custody_pool` | `EquipmentService.resolveCustodyPool`, FE lookup UI |
 | `features.maintenance_parts` | `MaintenancePartsService` |
 | `inventory.production_mode` | `InventorySchedulerService`, `InventoryProductionModeService`, freeze proširenje |
 | `inventory.lock_date` / `inventory.session_end_date` | Scheduler dnevni job (TZ iz `inventory.scheduler_timezone`) |

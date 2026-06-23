@@ -1,5 +1,12 @@
 # Changelog — roles-access
 
+## 2026-06-23 (Režim B custody pool)
+
+- Režim B: dozvoljen `prenos` (osoba → osoba) uz isti efektivni WH nosilaca i primaoca.
+- Custody pool: `Equipment.custodyOrgUnitId` postavlja se pri razduženju; zaduženje iz poola preko `GET /equipment/resolve-custody-pool` (tačan inv. broj).
+- Zaduženje iz poola: `resolveForEmployee(to) === equipment.warehouseId` (anti-lutanje između skladišta).
+- Feature flag: `features.registrar_mode_b_custody_pool`.
+
 ## 2026-06-23 (evidentičar radnici)
 
 - Evidentičar: kreiranje i izmjena radnika u registrar scope-u (`features.evidenticar_employee_ops`); bez brisanja.

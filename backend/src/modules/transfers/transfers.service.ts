@@ -15,6 +15,12 @@ import { RegistrarScopeService } from '../../common/services/registrar-scope.ser
 import { SignerResolutionService } from '../../common/services/signer-resolution.service';
 import { WarehouseResolutionService } from '../../common/services/warehouse-resolution.service';
 import { assertRazduzenjeWarehouseCoverage } from '../../common/utils/warehouse-coverage.util';
+import { buildCustodyUpdateOnTransferFinalize } from '../../common/utils/equipment-custody.util';
+import {
+  assertPrenosWarehouseAlignment,
+  assertZaduzenjeWarehouseAlignment,
+} from '../../common/utils/assert-transfer-warehouse-alignment.util';
+import { isRegistrarModeA } from '../../common/types/registrar-scope.type';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import {
@@ -262,6 +268,40 @@ export class TransfersService {
     const isCrossService = await this.resolveCrossServiceFlag(user, dto);
     await this.assertWarehouseIds(dto);
     await this.assertWarehouseCoverageForTransfer(dto);
+    if (dto.type === 'zaduzenje' && dto.toPersonId) {
+      if (user.role === 'evidenticar') {
+        await assertZaduzenjeWarehouseAlignment(
+          this.warehouseResolutionService,
+          equipment,
+          dto.toPersonId,
+        );
+        const matches = await this.registrarScope.getMatchingAssignmentsForEquipment(
+          user,
+          equipment,
+          equipment.currentHolder,
+        );
+        const hasModeASkladisteMatch = matches.some(
+          (row) =>
+            isRegistrarModeA(row) &&
+            equipment.status === 'skladiste' &&
+            equipment.warehouseId === row.warehouseId,
+        );
+        if (!hasModeASkladisteMatch) {
+          await this.registrarScope.assertCanZaduzenjeFromCustodyPool(
+            user,
+            equipment,
+            dto.toPersonId,
+          );
+        }
+      }
+    }
+    if (dto.type === 'prenos' && dto.fromPersonId && dto.toPersonId && user.role === 'evidenticar') {
+      await assertPrenosWarehouseAlignment(
+        this.warehouseResolutionService,
+        dto.fromPersonId,
+        dto.toPersonId,
+      );
+    }
     if (dto.fromPersonId) {
       await this.assertEmployeeInScope(user, dto.fromPersonId);
     }
@@ -275,12 +315,21 @@ export class TransfersService {
       requiresTransferDocument(equipment) &&
       (await isTransferDocumentEnabled(this.settingsService, dto.type, 'api'));
     if (!documentEnabled) {
+      let fromPersonOrgUnitId: string | null = null;
+      if (dto.fromPersonId) {
+        const fromEmployee = await this.prisma.employee.findUnique({
+          where: { id: dto.fromPersonId },
+          select: { orgUnitId: true },
+        });
+        fromPersonOrgUnitId = fromEmployee?.orgUnitId ?? null;
+      }
       const updatedEquipment = await this.prisma.$transaction(async (tx) => {
         await executeDirectEquipmentTransferInTx(tx, {
           equipmentId: dto.equipmentId,
           type: dto.type,
           toPersonId: dto.toPersonId,
           toWarehouseId: dto.toWarehouseId,
+          fromPersonOrgUnitId,
         });
         return tx.equipment.findUnique({
           where: { id: dto.equipmentId },
@@ -407,11 +456,17 @@ export class TransfersService {
       transfer.documentWarehouseId ??
       (await this.resolveDocumentWarehouseForTransfer(user, transfer));
     await this.assertWarehouseReadyForDocuments(documentWarehouseId);
-    const equipmentUpdate = buildEquipmentUpdateOnFinalize(
-      transfer.type,
-      transfer.toPersonId,
-      transfer.toWarehouseId,
-    );
+    const equipmentUpdate = {
+      ...buildEquipmentUpdateOnFinalize(
+        transfer.type,
+        transfer.toPersonId,
+        transfer.toWarehouseId,
+      ),
+      ...buildCustodyUpdateOnTransferFinalize(
+        transfer.type,
+        transfer.fromPerson?.orgUnitId ?? null,
+      ),
+    };
     const signed = await this.prisma.$transaction(async (tx) => {
       const documentNumber = isLegacyDocumentNumber(transfer.documentNumber)
         ? await allocateTransferDocumentNumberInTx(

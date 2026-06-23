@@ -2,6 +2,7 @@
 
 ## 2026-06-23
 
+- `features.registrar_mode_b_custody_pool` (public, default true) — Režim B pool vraćene opreme i zaduženje po inventurnom broju.
 - `features.evidenticar_employee_ops` (public, default true) — evidentičar može kreirati/uređivati radnike u registrar opsegu i pokretati org. promjenu.
 
 ## 2026-06-20

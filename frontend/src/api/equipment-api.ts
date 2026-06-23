@@ -1,7 +1,7 @@
 import { apiRequest, fetchAuthenticatedBlob } from './client';
 import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
 import { buildListQueryString } from '../types/pagination';
-import type { Equipment, EquipmentStatus, EquipmentAffiliation } from '../types';
+import type { Employee, Equipment, EquipmentStatus, EquipmentAffiliation } from '../types';
 
 export interface EquipmentSummary {
   total: number;
@@ -59,6 +59,20 @@ export const fetchEquipmentLotGroupsApi = (categoryId: string) =>
 export const fetchEquipmentApi = async (id: string) => {
   const row = await apiRequest<Equipment & { entryDate: string }>(`/equipment/${id}`);
   return mapEquipmentRow(row);
+};
+
+export const CUSTODY_POOL_LOOKUP_NOT_FOUND_MESSAGE =
+  'Nije u vašem poolu vraćene opreme, pogrešan inventurni broj ili nije na skladištu.';
+
+export type CustodyPoolEquipment = Equipment & {
+  lastRazduzenjeFromPerson?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'> | null;
+};
+
+export const resolveCustodyPoolEquipmentApi = async (inventoryNumber: string) => {
+  const row = await apiRequest<CustodyPoolEquipment & { entryDate: string }>(
+    `/equipment/resolve-custody-pool?inventoryNumber=${encodeURIComponent(inventoryNumber.trim())}`,
+  );
+  return mapEquipmentRow(row) as CustodyPoolEquipment;
 };
 
 export const reactivateEquipmentApi = (id: string, reason: string) =>

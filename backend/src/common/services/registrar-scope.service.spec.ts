@@ -390,13 +390,13 @@ describe('RegistrarScopeService', () => {
       assert.equal(await service.canCreateTransferType(authUser('admin'), 'prenos'), true);
     });
 
-    it('evidenticar needs mode A assignment for zaduzenje', async () => {
+    it('evidenticar with any assignment can create zaduzenje type', async () => {
       const service = createService();
       assert.equal(
         await service.canCreateTransferType(authUser('evidenticar'), 'zaduzenje', [
           { warehouseId: 'wh-a', categoryId: 'cat-root', orgUnitId: 'ou-child' },
         ]),
-        false,
+        true,
       );
       assert.equal(
         await service.canCreateTransferType(authUser('evidenticar'), 'zaduzenje', [
@@ -433,7 +433,7 @@ describe('RegistrarScopeService', () => {
       updatedAt: new Date(),
     };
 
-    it('mode B only allows razduzenje', async () => {
+    it('mode B allows razduzenje and prenos', async () => {
       const service = createService();
       const scopes = [{ warehouseId: 'wh-a', categoryId: 'cat-root', orgUnitId: 'ou-root' }];
       assert.equal(
@@ -454,7 +454,7 @@ describe('RegistrarScopeService', () => {
           'prenos',
           scopes,
         ),
-        false,
+        true,
       );
     });
 
@@ -470,6 +470,51 @@ describe('RegistrarScopeService', () => {
           scopes,
         ),
         true,
+      );
+    });
+
+    it('mode B allows zaduzenje from custody pool only', async () => {
+      const service = createService();
+      const scopes = [{ warehouseId: 'wh-a', categoryId: 'cat-root', orgUnitId: 'ou-root' }];
+      const poolEquipment: Equipment = {
+        id: 'eq-pool',
+        inventoryNumber: 'INV-POOL',
+        categoryId: 'cat-child',
+        status: 'skladiste',
+        warehouseId: 'wh-a',
+        custodyOrgUnitId: 'ou-child',
+        currentHolderId: null,
+        entryDate: new Date(),
+        specifications: {},
+        warehouseCondition: 'na_skladistu',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const plainSkladiste: Equipment = {
+        ...poolEquipment,
+        id: 'eq-plain',
+        inventoryNumber: 'INV-PLAIN',
+        custodyOrgUnitId: null,
+      };
+      assert.equal(
+        await service.canCreateTransferForEquipment(
+          authUser('evidenticar'),
+          poolEquipment,
+          null,
+          'zaduzenje',
+          scopes,
+        ),
+        true,
+      );
+      assert.equal(
+        await service.canCreateTransferForEquipment(
+          authUser('evidenticar'),
+          plainSkladiste,
+          null,
+          'zaduzenje',
+          scopes,
+        ),
+        false,
       );
     });
   });

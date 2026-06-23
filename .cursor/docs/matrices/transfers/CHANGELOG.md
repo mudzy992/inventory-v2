@@ -1,3 +1,10 @@
+## 2026-06-23 — Režim B custody pool + alignment
+
+- `GET /equipment/resolve-custody-pool` za zaduženje iz poola vraćene opreme (inv. broj).
+- Evidentičar `zaduzenje`: alignment efektivnog skladišta radnika i `equipment.warehouseId`.
+- Evidentičar `prenos`: ista efektivna skladišta za `from` i `to`.
+- UI: `CustodyPoolEquipmentLookup` na formi zaduženja (Režim B).
+
 ## 2026-06-23 — Upload mount permisije (PDF Access Code 7)
 
 - Backend Docker: fiksni app uid/gid 100/101; skripta `scripts/fix-upload-permissions.sh` za host bind mount.

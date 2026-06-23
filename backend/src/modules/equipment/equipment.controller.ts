@@ -23,6 +23,7 @@ import { CreateEquipmentDto } from './dto/create-equipment.dto';
 import { EquipmentSummaryQueryDto } from './dto/equipment-summary-query.dto';
 import { EquipmentLotGroupsQueryDto } from './dto/equipment-lot-groups-query.dto';
 import { ListEquipmentQueryDto } from './dto/list-equipment-query.dto';
+import { ResolveCustodyPoolQueryDto } from './dto/resolve-custody-pool-query.dto';
 import { UpdateEquipmentDto } from './dto/update-equipment.dto';
 import { ReactivateEquipmentDto } from './dto/reactivate-equipment.dto';
 import { EquipmentService } from './equipment.service';
@@ -77,6 +78,15 @@ export class EquipmentController {
       query.fieldId,
       query.value,
     );
+  }
+
+  @Get('resolve-custody-pool')
+  @Roles(UserRole.evidenticar)
+  resolveCustodyPool(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ResolveCustodyPoolQueryDto,
+  ) {
+    return this.equipmentService.resolveCustodyPool(user, query.inventoryNumber);
   }
 
   @Get(':id/qr')

@@ -46,13 +46,13 @@ Za radnika/org jedinicu: `resolveEffectiveWarehouseId(orgUnitId)` — prvo sklad
 
 | Entitet | Režim A (`orgUnitId = null`) | Režim B |
 |---------|------------------------------|---------|
-| Oprema `skladiste` | `equipment.warehouseId = W` | ne vidi |
+| Oprema `skladiste` | `equipment.warehouseId = W` | ne vidi u listi; **custody pool** preko `GET /equipment/resolve-custody-pool` |
 | Oprema `zaduzeno` | holder u org jedinicama gdje efektivno skladište = W | holder u `expand(orgUnitId) ∩ efektivno W` |
 | Oprema `rashodovano` | `equipment.warehouseId = W` | ne vidi |
 | Lot (Skladišna roba) | `lot.warehouseId = W`, kategorija ∈ expand(C); uključuje `0/N` | ne vidi lotove |
 | Radnik | efektivno skladište = W | org ∈ `expand(O) ∩ efektivno W` |
 | Transfer / prenosnica | oprema u scope **OR** `fromPerson`/`toPerson` u scope radnika | isto |
-| Akcije transfera | zaduženje, razduženje, prenos, rashod (prema opremi u A) | **samo razduženje** (`canCreateTransferForEquipment`) |
+| Akcije transfera | zaduženje, razduženje, prenos, rashod (prema opremi u A) | **razduženje + prenos**; **zaduženje** samo iz custody poola (inv. broj) |
 
 Implementacija: [`registrar-scope.service.ts`](../../../../backend/src/common/services/registrar-scope.service.ts), [`collect-org-units-for-warehouse.util.ts`](../../../../backend/src/common/utils/collect-org-units-for-warehouse.util.ts).
 
@@ -69,7 +69,7 @@ Više redova dodjele = **unija** scope-a u svim modulima ispod. Primjer: A W1+Ca
 | Kontrolna tabla | `GET /equipment/summary` (BE scoped) | scoped kategorije | scoped zaduženo |
 | Skladišta (lista) | `warehouses.service` | warehouseIds iz dodjela | isto |
 | Org. promjena | `employee-relocation` | samo Režim A redovi | B ne vidi relocation linije |
-| Akcije na opremi | `canCreateTransferForEquipment` | pun set transfera | **samo razduženje** → ciljno skladište iz matching dodjele |
+| Akcije na opremi | `canCreateTransferForEquipment` | pun set transfera | razduženje + prenos; zaduženje iz custody poola |
 
 Frontend liste koriste paginirane API-je sa istim BE filterom; ne sužavaju OR uniju dodatnim client filterom.
 
@@ -108,7 +108,7 @@ Frontend liste koriste paginirane API-je sa istim BE filterom; ne sužavaju OR u
 |---------|------|
 | Pristup | Samo `admin` (`/users` CRUD) |
 | Evidentičar | Obavezan `registrarScopes` (≥1 par skladište+kategorija) |
-| Režim A/B | `orgUnitId = null` → Režim A (puna evidencija); setovan → Režim B (samo zaduženo + razduženje). Validacija A/B ekskluzivnosti po W+C |
+| Režim A/B | `orgUnitId = null` → Režim A (puna evidencija); setovan → Režim B (zaduženo + razduženje + prenos + zaduženje iz custody poola). Validacija A/B ekskluzivnosti po W+C |
 
 ## CHANGELOG
 

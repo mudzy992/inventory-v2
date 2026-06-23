@@ -126,7 +126,8 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 ## UI — odabir opreme za transfer
 
-- Forma Zaduženja/Prenos/Razduži koristi `EquipmentAutocomplete` (`GET /equipment?search=&status=`, min. 2 znaka, debounce 300ms).
+- Forma Zaduženja/Prenos/Razduži koristi `EquipmentAutocomplete` (`GET /equipment?search=&status=`, min. 2 znaka, debounce 300ms) — **Režim A** ili admin.
+- **Režim B zaduženje:** `CustodyPoolEquipmentLookup` → `GET /equipment/resolve-custody-pool?inventoryNumber=` (tačan match, unified 404 poruka).
 - Pretraga: inventurni broj + specifikacija (uključujući serijski broj kad postoji u kategoriji).
 - Filter `status`: `skladiste` za zaduženje, `zaduzeno` za prenos/razduženje.
 - `EquipmentCard` transfer modal ne koristi autocomplete (oprema je već poznata).
@@ -152,6 +153,7 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 | Metoda | Putanja | Uloga |
 |--------|---------|-------|
+| GET | `/backend/equipment/resolve-custody-pool?inventoryNumber=` | evidenticar (Režim B pool) |
 | GET | `/backend/transfers` | admin, evidenticar, user (scope); query `workflow=pending\|signed` |
 | GET | `/backend/transfers/:id` | admin, evidenticar, user (scope) |
 | POST | `/backend/transfers` | admin, evidenticar |
@@ -164,3 +166,15 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 ## Scope
 
 Evidentičar: transferi za opremu u istom scope-u kao equipment API.
+
+### Validacija efektivnog skladišta (evidentičar)
+
+| Tip | Pravilo |
+|-----|---------|
+| `zaduzenje` | `resolveForEmployee(toPersonId) === equipment.warehouseId` |
+| `prenos` | `resolveForEmployee(from) === resolveForEmployee(to)` |
+
+### Custody pool (Režim B)
+
+- `Equipment.custodyOrgUnitId` — postavlja se na finalize `razduzenje` (`fromPerson.orgUnitId`), briše na `zaduzenje`.
+- Pool match: `status=skladiste`, `warehouseId=assignment.warehouseId`, kategorija u scope, `custodyOrgUnitId ∈ expand(O) ∩ efektivno W`.

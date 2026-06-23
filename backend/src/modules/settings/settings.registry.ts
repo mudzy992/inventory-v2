@@ -202,6 +202,16 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'modules',
   }),
   def({
+    key: 'features.registrar_mode_b_custody_pool',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Pool vraćene opreme (Režim B)',
+    description:
+      'Evidentičar u Režimu B može zadužiti opremu iz poola vraćene robe pretragom inventurnog broja (bez liste skladišta).',
+    group: 'modules',
+  }),
+  def({
     key: 'features.warehouse_inventory',
     scope: 'public',
     valueType: 'boolean',

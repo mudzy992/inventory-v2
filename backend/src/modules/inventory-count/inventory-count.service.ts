@@ -2612,6 +2612,7 @@ export class InventoryCountService {
               equipmentId: equipment.id,
               type: 'razduzenje',
               toWarehouseId: resolvedWarehouseId,
+              fromPersonOrgUnitId: equipment.currentHolder?.orgUnitId ?? null,
             });
           };
           if (tx) {

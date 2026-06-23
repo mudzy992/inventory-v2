@@ -456,6 +456,7 @@ model OrgUnit {
   registrarAssignments            RegistrarAssignment[]
   inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
   moderatorOrgAssignments         ModeratorOrgAssignment[]
+  equipmentCustody                Equipment[]            @relation("EquipmentCustodyOrgUnit")
 
   @@index([parentId])
   @@index([type])
@@ -615,6 +616,7 @@ model Equipment {
   currentHolderId    String?
   warehouseId        String?
   warehouseCondition WarehouseCondition?
+  custodyOrgUnitId   String?
   notes              String?             @db.Text
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -624,6 +626,7 @@ model Equipment {
   stockLot       WarehouseStockLot? @relation(fields: [stockLotId], references: [id], onDelete: SetNull)
   currentHolder  Employee?       @relation("EquipmentHolder", fields: [currentHolderId], references: [id], onDelete: SetNull)
   warehouse      Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  custodyOrgUnit OrgUnit?        @relation("EquipmentCustodyOrgUnit", fields: [custodyOrgUnitId], references: [id], onDelete: SetNull)
   transfers      Transfer[]
   inventoryLines InventoryLine[]
   inventoryLineEvents InventoryLineEvent[]
@@ -642,6 +645,7 @@ model Equipment {
   @@index([isAccountingTracked])
   @@index([currentHolderId])
   @@index([warehouseId])
+  @@index([custodyOrgUnitId])
   @@map("equipment")
 }
 

@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Equipment, EquipmentStatus, Prisma } from '../../../generated/prisma/client';
+import type { Equipment, EquipmentStatus, Prisma, Employee } from '../../../generated/prisma/client';
 import { InventoryFreezeService } from '../../common/services/inventory-freeze.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
@@ -30,6 +30,7 @@ import {
   assertEquipmentAccountingUpgrade,
   normalizeInventoryNumber,
 } from '../../common/utils/equipment-accounting-tracked.util';
+import { CUSTODY_POOL_LOOKUP_NOT_FOUND_MESSAGE } from '../../common/utils/equipment-custody.util';
 import {
   buildOrderBy,
   paginate,
@@ -208,6 +209,56 @@ export class EquipmentService {
       equipment.notes,
     );
     return { ...equipment, disposalReason };
+  }
+
+  async resolveCustodyPool(
+    user: AuthenticatedUser,
+    inventoryNumberInput: string,
+  ): Promise<EquipmentWithDisposalReason & { lastRazduzenjeFromPerson?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'> | null }> {
+    await this.settingsService.assertFeatureEnabled('features.registrar_mode_b_custody_pool');
+    await this.settingsService.assertFeatureEnabled('features.equipment');
+    if (user.role !== 'evidenticar') {
+      throw new ForbiddenException(CUSTODY_POOL_LOOKUP_NOT_FOUND_MESSAGE);
+    }
+    const inventoryNumber = normalizeInventoryNumber(inventoryNumberInput);
+    if (!inventoryNumber) {
+      throw new NotFoundException(CUSTODY_POOL_LOOKUP_NOT_FOUND_MESSAGE);
+    }
+    const equipment = await this.prisma.equipment.findUnique({
+      where: { inventoryNumber },
+      include: {
+        currentHolder: true,
+        category: { select: { id: true, name: true, parentId: true } },
+        warehouse: { select: { id: true, name: true, cityId: true } },
+        stockLot: { select: { id: true, productName: true } },
+        custodyOrgUnit: { select: { id: true, name: true } },
+      },
+    });
+    if (!equipment) {
+      throw new NotFoundException(CUSTODY_POOL_LOOKUP_NOT_FOUND_MESSAGE);
+    }
+    const inPool = await this.registrarScope.isEquipmentInCustodyPool(user, equipment);
+    if (!inPool) {
+      throw new NotFoundException(CUSTODY_POOL_LOOKUP_NOT_FOUND_MESSAGE);
+    }
+    const lastRazduzenje = await this.prisma.transfer.findFirst({
+      where: { equipmentId: equipment.id, type: 'razduzenje', status: 'potpisan' },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        fromPerson: { select: { id: true, firstName: true, lastName: true, orgUnitId: true } },
+      },
+    });
+    const disposalReason = await resolveEquipmentDisposalReason(
+      this.prisma,
+      equipment.id,
+      equipment.status,
+      equipment.notes,
+    );
+    return {
+      ...equipment,
+      disposalReason,
+      lastRazduzenjeFromPerson: lastRazduzenje?.fromPerson ?? null,
+    };
   }
 
   async create(_user: AuthenticatedUser, _dto: CreateEquipmentDto): Promise<Equipment> {

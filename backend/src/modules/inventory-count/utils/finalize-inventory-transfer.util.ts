@@ -3,6 +3,7 @@ import type { Prisma } from '../../../../generated/prisma/client';
 import { allocateTransferDocumentNumberInTx } from '../../transfers/utils/allocate-transfer-document-number.util';
 import { isLegacyDocumentNumber } from '../../../common/utils/document-number.util';
 import { buildEquipmentUpdateOnFinalize } from '../../transfers/transfer-validation.util';
+import { buildCustodyUpdateOnTransferFinalize } from '../../../common/utils/equipment-custody.util';
 
 type FinalizeTx = Prisma.TransactionClient;
 
@@ -20,6 +21,8 @@ export const finalizeInventoryTransferInTx = async (
       equipmentId: true,
       toPersonId: true,
       toWarehouseId: true,
+      fromPersonId: true,
+      fromPerson: { select: { orgUnitId: true } },
       signerId: true,
       date: true,
       scannedDocUrl: true,
@@ -46,11 +49,17 @@ export const finalizeInventoryTransferInTx = async (
           isRashod,
         )
       : transfer.documentNumber;
-  const equipmentUpdate = buildEquipmentUpdateOnFinalize(
-    transfer.type,
-    transfer.toPersonId,
-    transfer.toWarehouseId,
-  );
+  const equipmentUpdate = {
+    ...buildEquipmentUpdateOnFinalize(
+      transfer.type,
+      transfer.toPersonId,
+      transfer.toWarehouseId,
+    ),
+    ...buildCustodyUpdateOnTransferFinalize(
+      transfer.type,
+      transfer.fromPerson?.orgUnitId ?? null,
+    ),
+  };
   await tx.transfer.update({
     where: { id: transferId },
     data: {

@@ -17,6 +17,14 @@
 | `spremno_za_unistenje` | Legacy — odobreno prije novog toka; skladištar može `destroy-equipment` |
 | `unisteno` | Službeni otpis komisije rashoda (novi tok) ili legacy destroy |
 
+## `custodyOrgUnitId` (pool vraćene opreme — Režim B)
+
+| Stanje | Vrijednost |
+|--------|------------|
+| Zaduženo / prenos | `null` |
+| Razduženje (finalize) | `fromPerson.orgUnitId` |
+| Na skladištu u poolu | setovan; evidentičar B nalazi preko inv. broja, ne liste |
+
 ## Pretraga opreme
 
 - `GET /equipment?search=` — inv. broj, ugovor, bilješke + `contains` u JSON specifikaciji

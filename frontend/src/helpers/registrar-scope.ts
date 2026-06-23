@@ -222,17 +222,70 @@ export const canRegistrarCreateTransfer = (
   }
   const matches = getMatchingAssignmentsForEquipment(equipment, user, state);
   if (matches.length === 0) {
+    if (transferType === 'zaduzenje') {
+      return isEquipmentInCustodyPool(equipment, user, state);
+    }
     return false;
   }
   const hasModeA = matches.some((row) => isModeA(row));
+  if (transferType === 'zaduzenje') {
+    if (isEquipmentInCustodyPool(equipment, user, state)) {
+      return true;
+    }
+    if (!hasModeA) {
+      return false;
+    }
+    return true;
+  }
   if (!hasModeA) {
-    return transferType === 'razduzenje';
+    return transferType === 'razduzenje' || transferType === 'prenos';
   }
   if (transferType === 'zaduzenje') {
     return matches.some((row) => isModeA(row));
   }
   return true;
 };
+
+const matchesCustodyPoolAssignment = (
+  assignment: RegistrarScopeAssignment,
+  equipment: Equipment,
+  state: AppState,
+): boolean => {
+  if (isModeA(assignment)) {
+    return false;
+  }
+  if (equipment.status !== 'skladiste' || !equipment.custodyOrgUnitId || !equipment.warehouseId) {
+    return false;
+  }
+  const expanded = expandCategoryIds([assignment.categoryId], state.categories);
+  if (!expanded.has(equipment.categoryId)) {
+    return false;
+  }
+  if (equipment.warehouseId !== assignment.warehouseId) {
+    return false;
+  }
+  return getEffectiveOrgIdsForModeB(state, assignment).has(equipment.custodyOrgUnitId);
+};
+
+export const isEquipmentInCustodyPool = (
+  equipment: Equipment,
+  user: UserAccount | null,
+  state: AppState,
+): boolean => {
+  if (!user || user.role !== 'evidenticar') {
+    return false;
+  }
+  const assignments = user.registrarScopes ?? [];
+  return assignments.some((assignment) =>
+    matchesCustodyPoolAssignment(assignment, equipment, state),
+  );
+};
+
+export const hasRegistrarModeAAssignment = (user: UserAccount | null): boolean =>
+  Boolean(user?.registrarScopes?.some((row) => isModeA(row)));
+
+export const hasRegistrarModeBAssignment = (user: UserAccount | null): boolean =>
+  Boolean(user?.registrarScopes?.some((row) => !isModeA(row)));
 
 export const equipmentMatchesScope = (
   equipment: Equipment,

@@ -1,5 +1,10 @@
 # Changelog — equipment-status
 
+## 2026-06-23 (custody pool Režim B)
+
+- Novo polje `Equipment.custodyOrgUnitId` — pripadnost vraćene opreme org. jedinici pri razduženju.
+- Briše se pri zaduženju iz poola; ne utiče na listu opreme u Režimu B.
+
 ## 2026-06-16 (knjigovodstveno vođena oprema)
 
 - Novo polje `Equipment.isAccountingTracked` (default `true`); `inventoryNumber` postaje nullable (`String? @unique`).
