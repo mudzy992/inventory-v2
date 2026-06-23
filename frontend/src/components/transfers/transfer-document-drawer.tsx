@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { MODAL_Z } from '../../constants/modal-z-index';
@@ -22,6 +22,13 @@ export const TransferDocumentDrawer = ({
   onSigned,
   allowSign = false,
 }: TransferDocumentDrawerProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setIsOpen(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -38,10 +45,30 @@ export const TransferDocumentDrawer = ({
   }, [onClose]);
 
   return createPortal(
-    <DrawerShell onClose={onClose}>
-      <div className="flex h-full min-h-0 flex-col">
+    <div className="fixed inset-0" style={{ zIndex: MODAL_Z.base }} role="presentation">
+      <button
+        type="button"
+        className={cn(
+          'absolute inset-0 bg-black/50 transition-opacity duration-300',
+          isOpen ? 'opacity-100' : 'opacity-0',
+        )}
+        aria-label="Zatvori pregled prenosnice"
+        onClick={onClose}
+      />
+      <aside
+        className={cn(
+          'absolute flex flex-col bg-white shadow-2xl transition-transform duration-300 ease-out',
+          'inset-x-0 bottom-0 max-h-[92dvh] rounded-t-2xl',
+          'md:inset-y-0 md:right-0 md:left-auto md:bottom-auto md:max-h-none md:h-full md:w-[min(720px,55vw)] md:rounded-none md:rounded-l-2xl',
+          isOpen ? 'translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full',
+        )}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Pregled prenosnice"
+        onClick={(event) => event.stopPropagation()}
+      >
         <DrawerHeader transfer={transfer} onClose={onClose} />
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <TransferDocumentPanel
             transfer={transfer}
             onSigned={onSigned}
@@ -50,35 +77,11 @@ export const TransferDocumentDrawer = ({
             autoPreview={previewMode}
           />
         </div>
-      </div>
-    </DrawerShell>,
+      </aside>
+    </div>,
     document.body,
   );
 };
-
-const DrawerShell = ({ children, onClose }: { children: ReactNode; onClose: () => void }) => (
-  <div className="fixed inset-0" style={{ zIndex: MODAL_Z.base }} role="presentation">
-    <button
-      type="button"
-      className="absolute inset-0 bg-black/50"
-      aria-label="Zatvori pregled prenosnice"
-      onClick={onClose}
-    />
-    <aside
-      className={cn(
-        'absolute flex flex-col bg-white shadow-xl',
-        'inset-x-0 bottom-0 max-h-[90dvh] rounded-t-2xl',
-        'md:inset-y-0 md:right-0 md:left-auto md:bottom-auto md:max-h-none md:w-[min(720px,55vw)] md:rounded-none md:rounded-l-2xl',
-      )}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Pregled prenosnice"
-      onClick={(event) => event.stopPropagation()}
-    >
-      {children}
-    </aside>
-  </div>
-);
 
 const DrawerHeader = ({
   transfer,
@@ -87,12 +90,10 @@ const DrawerHeader = ({
   transfer: TransferRecord;
   onClose: () => void;
 }) => (
-  <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 px-4 py-4 md:px-5">
-    <div className="min-w-0 pr-2">
-      <h2 className="truncate text-lg font-semibold text-gray-900">
-        Prenosnica {transfer.documentNumber}
-      </h2>
-      <p className="text-sm text-gray-500">Pregled dokumenta i akcije</p>
+  <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 md:px-5">
+    <div className="min-w-0">
+      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Prenosnica</p>
+      <h2 className="truncate text-lg font-semibold text-gray-900">{transfer.documentNumber}</h2>
     </div>
     <button
       type="button"

@@ -14,7 +14,6 @@ import {
 } from './utils/transfer-document-path.util';
 import {
   convertDocxToPdf,
-  resolveExpectedPdfPathInDir,
 } from './utils/docx-to-pdf.util';
 
 const transferTemplateInclude = {
@@ -70,17 +69,16 @@ export class TransferDocumentGenerationService {
     );
     if (generatePdf) {
       const outDir = resolve(docxAbsolute, '..');
-      const converted = await convertDocxToPdf(docxAbsolute, join(outDir, 'x.pdf'));
-      const expectedPdf = resolveExpectedPdfPathInDir(docxAbsolute, outDir);
-      if (converted && existsSync(expectedPdf)) {
+      const convertedPdf = await convertDocxToPdf(docxAbsolute, outDir);
+      if (convertedPdf) {
         pdfRelative = buildGeneratedPdfRelativePath(
           transfer.documentWarehouseId,
           year,
           transfer.documentNumber,
         );
         const pdfAbsolute = join(this.templateService.getUploadRoot(), pdfRelative);
-        if (expectedPdf !== pdfAbsolute) {
-          writeFileSync(pdfAbsolute, readFileSync(expectedPdf));
+        if (convertedPdf !== pdfAbsolute) {
+          writeFileSync(pdfAbsolute, readFileSync(convertedPdf));
         }
       }
     }
@@ -97,10 +95,48 @@ export class TransferDocumentGenerationService {
     transferId: string,
     format: 'docx' | 'pdf',
   ): Promise<{ absolutePath: string; mime: string; filename: string }> {
-    const transfer = await this.prisma.transfer.findUnique({
+    let transfer = await this.prisma.transfer.findUnique({
       where: { id: transferId },
-      select: { documentNumber: true, generatedDocxPath: true, generatedPdfPath: true },
+      select: {
+        documentNumber: true,
+        documentWarehouseId: true,
+        date: true,
+        generatedDocxPath: true,
+        generatedPdfPath: true,
+      },
     });
+    if (!transfer) {
+      throw new NotFoundException('Transfer not found');
+    }
+    if (
+      format === 'pdf' &&
+      !transfer.generatedPdfPath &&
+      transfer.generatedDocxPath &&
+      transfer.documentWarehouseId
+    ) {
+      const generatePdf = await this.settingsService.getBooleanValue(
+        'transfer.generate_print_pdf',
+        true,
+      );
+      if (generatePdf && transfer.generatedDocxPath && transfer.documentWarehouseId) {
+        await this.ensurePdfFromExistingDocx(transferId, {
+          documentNumber: transfer.documentNumber,
+          documentWarehouseId: transfer.documentWarehouseId,
+          date: transfer.date,
+          generatedDocxPath: transfer.generatedDocxPath,
+        });
+        transfer = await this.prisma.transfer.findUnique({
+          where: { id: transferId },
+          select: {
+            documentNumber: true,
+            documentWarehouseId: true,
+            date: true,
+            generatedDocxPath: true,
+            generatedPdfPath: true,
+          },
+        });
+      }
+    }
     if (!transfer) {
       throw new NotFoundException('Transfer not found');
     }
@@ -118,6 +154,39 @@ export class TransferDocumentGenerationService {
         : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     const filename = `${transfer.documentNumber}.${format}`;
     return { absolutePath, mime, filename };
+  }
+
+  private async ensurePdfFromExistingDocx(
+    transferId: string,
+    transfer: {
+      documentNumber: string;
+      documentWarehouseId: string;
+      date: Date;
+      generatedDocxPath: string;
+    },
+  ): Promise<void> {
+    const docxAbsolute = join(this.templateService.getUploadRoot(), transfer.generatedDocxPath);
+    if (!existsSync(docxAbsolute)) {
+      return;
+    }
+    const outDir = resolve(docxAbsolute, '..');
+    const convertedPdf = await convertDocxToPdf(docxAbsolute, outDir);
+    if (!convertedPdf) {
+      return;
+    }
+    const pdfRelative = buildGeneratedPdfRelativePath(
+      transfer.documentWarehouseId,
+      transfer.date.getFullYear(),
+      transfer.documentNumber,
+    );
+    const pdfAbsolute = join(this.templateService.getUploadRoot(), pdfRelative);
+    if (convertedPdf !== pdfAbsolute) {
+      writeFileSync(pdfAbsolute, readFileSync(convertedPdf));
+    }
+    await this.prisma.transfer.update({
+      where: { id: transferId },
+      data: { generatedPdfPath: pdfRelative },
+    });
   }
 
   private renderDocx(templatePath: string, data: Record<string, string>): Buffer {

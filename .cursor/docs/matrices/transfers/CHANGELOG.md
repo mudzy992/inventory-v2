@@ -1,3 +1,9 @@
+## 2026-06-23 — PDF konverzija fix + drawer layout
+
+- `convertDocxToPdf`: ispravna provjera izlaznog `.pdf` (LibreOffice ne piše `x.pdf`).
+- `GET .../generated-document?format=pdf`: on-demand konverzija iz postojećeg DOCX ako PDF još nije u bazi.
+- Drawer: slide-in animacija; desktop split (PDF lijevo, akcije desno); mobile bottom sheet.
+
 ## 2026-06-22 — Docker LibreOffice + drawer prenosnica + UTF-8 PDF
 
 - Backend Docker: `node:22-bookworm-slim` (sve faze), LibreOffice + fontovi (DejaVu, Liberation, Noto), `LANG=C.UTF-8`.

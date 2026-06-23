@@ -63,6 +63,7 @@ export const TransferDocumentPanel = ({
     isPreviewLoading,
     handleManualGeneratedPreview,
     handleManualSignedPreview,
+    reloadAutoPreview,
   } = useTransferDocumentPreview({
     transfer,
     autoPreview: effectiveAutoPreview,
@@ -194,87 +195,239 @@ export const TransferDocumentPanel = ({
         : 'bg-amber-100 text-amber-800';
 
   const previewFrameClass = isDrawer
-    ? 'w-full min-h-[50vh] md:min-h-[55vh] border rounded-lg bg-white'
+    ? 'h-full min-h-[45vh] w-full rounded-lg border border-gray-200 bg-gray-50 md:min-h-0'
     : 'w-full h-[360px] border rounded bg-white';
 
-  return (
-    <div
-      className={cn(
-        'space-y-3',
-        !isDrawer && 'border border-gray-200 rounded-lg p-4 bg-gray-50',
-      )}
-    >
-      {!isDrawer ? (
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
-            <FileText size={16} />
-            Prenosnica {transfer.documentNumber}
-          </div>
-          {inventoryMode && inventoryBadge ? (
-            <span className={cn('text-xs px-2 py-0.5 rounded-full', badgeClass)}>
-              {inventoryBadge.label}
-            </span>
-          ) : standardBadge ? (
-            <span
-              className={cn(
-                'text-xs px-2 py-0.5 rounded-full',
-                standardBadge.tone === 'success'
-                  ? 'bg-green-100 text-green-800'
-                  : standardBadge.tone === 'info'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-amber-100 text-amber-800',
-              )}
-            >
-              {standardBadge.label}
-            </span>
-          ) : (
-            <span
-              className={cn(
-                'text-xs px-2 py-0.5 rounded-full',
-                isRaw
-                  ? 'bg-amber-100 text-amber-800'
-                  : isAwaitingFinalize
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-green-100 text-green-800',
-              )}
-            >
-              {isRaw ? 'RAW' : isAwaitingFinalize ? 'Upload OK' : 'Potpisana'}
-            </span>
-          )}
+  const drawerPreview = isDrawer && showAutoPreview ? (
+    <div className="flex min-h-[45vh] flex-1 flex-col md:min-h-0">
+      {isPreviewLoading ? (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-gray-500">Učitavanje PDF pregleda…</p>
         </div>
       ) : null}
-
-      {isDrawer && showAutoPreview ? (
-        <div className="space-y-2">
-          {isPreviewLoading ? (
-            <p className="text-sm text-gray-500 py-8 text-center">Učitavanje PDF pregleda…</p>
+      {!isPreviewLoading && previewError ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4">
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center">
+            {previewError}
+          </p>
+          {effectiveAutoPreview === 'generated' ? (
+            <button
+              type="button"
+              onClick={() => void reloadAutoPreview()}
+              className="text-xs text-blue-700 hover:underline"
+            >
+              Pokušaj ponovo
+            </button>
           ) : null}
-          {previewError ? (
-            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              {previewError}
+        </div>
+      ) : null}
+      {!isPreviewLoading && previewUrl ? (
+        uploadMeta?.mime.startsWith('image/') && effectiveAutoPreview === 'signed' ? (
+          <div className="flex flex-1 items-center justify-center p-4">
+            <img
+              src={previewUrl}
+              alt="Sken prenosnice"
+              className="max-h-full max-w-full rounded-lg border object-contain bg-white"
+            />
+          </div>
+        ) : (
+          <iframe
+            src={previewUrl}
+            title={
+              effectiveAutoPreview === 'signed'
+                ? 'Pregled potpisane prenosnice'
+                : 'Pregled generisanog PDF-a za štampu'
+            }
+            className={previewFrameClass}
+          />
+        )
+      ) : null}
+      {!isPreviewLoading && !previewUrl && !previewError ? (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-gray-500">PDF pregled nije dostupan.</p>
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
+  const actionButtons = (
+    <>
+      {showSignedDownload ? (
+        <button
+          type="button"
+          onClick={() => void handleDownloadSigned()}
+          disabled={isLoading}
+          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          <Download size={14} /> Preuzmi potpisani PDF
+        </button>
+      ) : null}
+      {canShowDocx ? (
+        <button
+          type="button"
+          onClick={() => void handleDownloadGenerated('docx')}
+          disabled={isLoading}
+          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs border rounded-lg bg-white hover:bg-gray-50"
+        >
+          <Download size={14} /> Obrazac (DOCX)
+        </button>
+      ) : null}
+      {canShowPdf ? (
+        <button
+          type="button"
+          onClick={() => void handleDownloadGenerated('pdf')}
+          disabled={isLoading}
+          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs border rounded-lg bg-white hover:bg-gray-50"
+        >
+          <Download size={14} /> Štampa (PDF)
+        </button>
+      ) : null}
+      {canShowPdf && canPrintPreview && !showAutoPreview ? (
+        <button
+          type="button"
+          onClick={handleManualGeneratedPreview}
+          disabled={isLoading || isPreviewLoading}
+          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs border rounded-lg bg-white hover:bg-gray-50"
+        >
+          <Eye size={14} /> Pregled za štampu
+        </button>
+      ) : null}
+      {uploadMeta && !showAutoPreview ? (
+        <>
+          <button
+            type="button"
+            onClick={handleManualSignedPreview}
+            disabled={isLoading || isPreviewLoading}
+            className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs border rounded-lg bg-white hover:bg-gray-50"
+          >
+            <Eye size={14} /> Pregled skena
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDownloadSigned()}
+            className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs border rounded-lg bg-white hover:bg-gray-50"
+          >
+            <Download size={14} /> Preuzmi sken
+          </button>
+        </>
+      ) : null}
+      {canUpload ? (
+        <label className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700">
+          <Upload size={14} /> {transfer.scannedDocUrl ? 'Zamijeni PDF' : 'Upload potpisane'}
+          <input
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void handleUpload(file);
+              }
+            }}
+          />
+        </label>
+      ) : null}
+      {canFinalize && (isAwaitingFinalize || (isRaw && allowFinalizeWithoutUpload)) ? (
+        <button
+          type="button"
+          onClick={() => void handleFinalize()}
+          disabled={isLoading}
+          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+        >
+          <CheckCircle size={14} /> Finalizuj prenosnicu
+        </button>
+      ) : null}
+      {!inventoryMode && allowSign && isRaw && !transfer.scannedDocUrl ? (
+        <label className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs bg-green-700 text-white rounded-lg cursor-pointer hover:bg-green-800">
+          <Upload size={14} /> Upload + potpis
+          <input
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void (async () => {
+                  await handleUpload(file);
+                  await handleFinalize();
+                })();
+              }
+            }}
+          />
+        </label>
+      ) : null}
+      {isDrawer && isSigned && uploadMeta && !showSignedDownload ? (
+        <button
+          type="button"
+          onClick={() => void handleDownloadSigned()}
+          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs border rounded-lg bg-white hover:bg-gray-50"
+        >
+          <Download size={14} /> Preuzmi potpisani PDF
+        </button>
+      ) : null}
+    </>
+  );
+
+  if (isDrawer) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:p-5">
+          {drawerPreview}
+        </div>
+        <div className="shrink-0 border-t border-gray-100 bg-gray-50/80 p-4 md:w-56 md:border-t-0 md:border-l md:overflow-y-auto">
+          <p className="mb-3 hidden text-xs font-medium uppercase tracking-wide text-gray-400 md:block">
+            Akcije
+          </p>
+          <div className="flex flex-wrap gap-2 md:flex-col md:items-stretch">{actionButtons}</div>
+          {finalizeBlocked ? (
+            <p className="mt-3 text-xs text-amber-800">
+              Finalizacija nije dostupna dok traje godišnji popis.
             </p>
           ) : null}
-          {previewUrl ? (
-            uploadMeta?.mime.startsWith('image/') && effectiveAutoPreview === 'signed' ? (
-              <img
-                src={previewUrl}
-                alt="Sken prenosnice"
-                className="max-h-[60vh] w-full rounded-lg border object-contain bg-white"
-              />
-            ) : (
-              <iframe
-                src={previewUrl}
-                title={
-                  effectiveAutoPreview === 'signed'
-                    ? 'Pregled potpisane prenosnice'
-                    : 'Pregled generisanog PDF-a za štampu'
-                }
-                className={previewFrameClass}
-              />
-            )
-          ) : null}
         </div>
-      ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 border border-gray-200 rounded-lg p-4 bg-gray-50">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
+          <FileText size={16} />
+          Prenosnica {transfer.documentNumber}
+        </div>
+        {inventoryMode && inventoryBadge ? (
+          <span className={cn('text-xs px-2 py-0.5 rounded-full', badgeClass)}>
+            {inventoryBadge.label}
+          </span>
+        ) : standardBadge ? (
+          <span
+            className={cn(
+              'text-xs px-2 py-0.5 rounded-full',
+              standardBadge.tone === 'success'
+                ? 'bg-green-100 text-green-800'
+                : standardBadge.tone === 'info'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-amber-100 text-amber-800',
+            )}
+          >
+            {standardBadge.label}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              'text-xs px-2 py-0.5 rounded-full',
+              isRaw
+                ? 'bg-amber-100 text-amber-800'
+                : isAwaitingFinalize
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-green-100 text-green-800',
+            )}
+          >
+            {isRaw ? 'RAW' : isAwaitingFinalize ? 'Upload OK' : 'Potpisana'}
+          </span>
+        )}
+      </div>
 
       {inventoryMode && inventorySteps ? (
         <ol className="flex flex-wrap gap-1 sm:gap-2" aria-label="Koraci prenosnice u popisu">
@@ -295,7 +448,7 @@ export const TransferDocumentPanel = ({
           ))}
         </ol>
       ) : null}
-      {!inventoryMode && standardSteps && !isDrawer ? (
+      {!inventoryMode && standardSteps ? (
         <ol className="flex flex-wrap gap-1 sm:gap-2" aria-label="Koraci prenosnice">
           {standardSteps.map((step) => (
             <li
@@ -314,7 +467,7 @@ export const TransferDocumentPanel = ({
           ))}
         </ol>
       ) : null}
-      {!inventoryMode && isRaw && !isDrawer ? (
+      {!inventoryMode && isRaw ? (
         <p className="text-xs text-gray-500">
           Preuzmite generisani Word obrazac za štampu, potpišite ga, zatim uploadujte PDF.
           {requireSignedPdf ? ' Potpisani PDF je obavezan prije finalizacije.' : ''}
@@ -338,126 +491,7 @@ export const TransferDocumentPanel = ({
         </p>
       ) : null}
 
-      <div
-        className={cn(
-          'flex flex-wrap gap-2',
-          isDrawer && 'sticky bottom-0 z-10 -mx-1 border-t border-gray-100 bg-white pt-3 pb-1 md:static md:border-0 md:pt-0 md:pb-0',
-        )}
-      >
-        {showSignedDownload ? (
-          <button
-            type="button"
-            onClick={() => void handleDownloadSigned()}
-            disabled={isLoading}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Download size={14} /> Preuzmi potpisani PDF
-          </button>
-        ) : null}
-        {canShowDocx ? (
-          <button
-            type="button"
-            onClick={() => void handleDownloadGenerated('docx')}
-            disabled={isLoading}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-          >
-            <Download size={14} /> Obrazac (DOCX)
-          </button>
-        ) : null}
-        {canShowPdf ? (
-          <button
-            type="button"
-            onClick={() => void handleDownloadGenerated('pdf')}
-            disabled={isLoading}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-          >
-            <Download size={14} /> Štampa (PDF)
-          </button>
-        ) : null}
-        {canShowPdf && canPrintPreview && !showAutoPreview ? (
-          <button
-            type="button"
-            onClick={handleManualGeneratedPreview}
-            disabled={isLoading || isPreviewLoading}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-          >
-            <Eye size={14} /> Pregled za štampu
-          </button>
-        ) : null}
-        {uploadMeta && !showAutoPreview ? (
-          <>
-            <button
-              type="button"
-              onClick={handleManualSignedPreview}
-              disabled={isLoading || isPreviewLoading}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-            >
-              <Eye size={14} /> Pregled skena
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDownloadSigned()}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-            >
-              <Download size={14} /> Preuzmi sken
-            </button>
-          </>
-        ) : null}
-        {canUpload ? (
-          <label className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700">
-            <Upload size={14} /> {transfer.scannedDocUrl ? 'Zamijeni PDF' : 'Upload potpisane'}
-            <input
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void handleUpload(file);
-                }
-              }}
-            />
-          </label>
-        ) : null}
-        {canFinalize && (isAwaitingFinalize || (isRaw && allowFinalizeWithoutUpload)) ? (
-          <button
-            type="button"
-            onClick={() => void handleFinalize()}
-            disabled={isLoading}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-          >
-            <CheckCircle size={14} /> Finalizuj prenosnicu
-          </button>
-        ) : null}
-        {!inventoryMode && allowSign && isRaw && !transfer.scannedDocUrl ? (
-          <label className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-green-700 text-white rounded-lg cursor-pointer hover:bg-green-800">
-            <Upload size={14} /> Upload + potpis
-            <input
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void (async () => {
-                    await handleUpload(file);
-                    await handleFinalize();
-                  })();
-                }
-              }}
-            />
-          </label>
-        ) : null}
-        {isDrawer && isSigned && uploadMeta && !showSignedDownload ? (
-          <button
-            type="button"
-            onClick={() => void handleDownloadSigned()}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg bg-white hover:bg-gray-50"
-          >
-            <Download size={14} /> Preuzmi potpisani PDF
-          </button>
-        ) : null}
-      </div>
+      <div className="flex flex-wrap gap-2">{actionButtons}</div>
 
       {finalizeBlocked ? (
         <p className="text-xs text-amber-800" title="Finalizacija je blokirana dok je sesija popisa aktivna">
@@ -466,7 +500,7 @@ export const TransferDocumentPanel = ({
         </p>
       ) : null}
 
-      {!isDrawer && previewUrl && !showAutoPreview ? (
+      {previewUrl && !showAutoPreview ? (
         <div className="mt-2">
           {uploadMeta?.mime.startsWith('image/') ? (
             <img src={previewUrl} alt="Sken prenosnice" className="max-h-64 rounded border" />
@@ -477,14 +511,14 @@ export const TransferDocumentPanel = ({
               className="w-full h-64 border rounded"
             />
           )}
-          {!showAutoPreview && uploadMeta ? (
+          {uploadMeta ? (
             <p className="text-[10px] text-gray-400 mt-1">
               {getApiBaseUrl()}/uploads/{uploadMeta.id}
             </p>
           ) : null}
         </div>
       ) : null}
-      {!isDrawer && previewError && !showAutoPreview ? (
+      {previewError && !showAutoPreview ? (
         <p className="text-xs text-amber-700">{previewError}</p>
       ) : null}
     </div>
