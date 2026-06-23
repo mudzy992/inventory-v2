@@ -23,10 +23,11 @@ import type {
   Warehouse,
 } from '../../types';
 import { validateRegistrarScopes } from '../../helpers/registrar-assignment-rules';
+import { buildRegistrarAssignmentWarehouses } from '../../helpers/registrar-assignment-warehouse-context.util';
 import { UserAccessFields } from './user-access-fields';
 import { MODERATOR_ASSIGNABLE_ROLES, USER_ROLE_OPTIONS } from './user-role-config';
 import { ModalRoot } from '../ui/modal-root';
-import { isAdmin } from '../../store';
+import { getModeratorOrgRootIds, isAdmin, isModerator } from '../../store';
 
 export type UserFormMode = 'create' | 'edit';
 
@@ -86,7 +87,9 @@ export const UserFormModal = ({
   >([]);
   const [isActive, setIsActive] = useState(true);
   const actorIsAdmin = isAdmin();
+  const actorIsModerator = isModerator();
   const roleOptions = actorIsAdmin ? USER_ROLE_OPTIONS : MODERATOR_ASSIGNABLE_ROLES;
+  const [registrarWarehouses, setRegistrarWarehouses] = useState<Warehouse[]>(warehouses);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -139,6 +142,29 @@ export const UserFormModal = ({
     setIsActive(true);
   }, [mode, user, employeesWithoutAccount]);
 
+  useEffect(() => {
+    if (role !== 'evidenticar') {
+      setRegistrarWarehouses(warehouses);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const merged = await buildRegistrarAssignmentWarehouses({
+        baseWarehouses: warehouses,
+        registrarScopes,
+        orgUnits,
+        moderatorOrgRootIds: actorIsModerator ? getModeratorOrgRootIds() : undefined,
+      });
+      if (!cancelled) {
+        setRegistrarWarehouses(merged);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [role, warehouses, registrarScopes, orgUnits, actorIsModerator]);
+
   const handleEmployeeChange = (nextEmployeeId: string) => {
     setEmployeeId(nextEmployeeId);
     if (mode !== 'create') {
@@ -189,7 +215,7 @@ export const UserFormModal = ({
     if (role === 'evidenticar') {
       const scopeValidation = validateRegistrarScopes(registrarScopes, {
         categories,
-        warehouses,
+        warehouses: registrarWarehouses,
         orgUnits,
         equipment,
       });
@@ -330,7 +356,7 @@ export const UserFormModal = ({
                 moderatorWarehouseAssignments={moderatorWarehouseAssignments}
                 onModeratorWarehouseAssignmentsChange={setModeratorWarehouseAssignments}
                 canEditModeratorAssignments={actorIsAdmin}
-                warehouses={warehouses}
+                warehouses={role === 'evidenticar' ? registrarWarehouses : warehouses}
                 categories={categories}
                 orgUnits={orgUnits}
                 equipment={equipment}

@@ -4,6 +4,7 @@ import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import { isEquipmentHeldByUser, isSelfEmployeeId } from '../utils/self-profile-access.util';
 import { isModeratorAssignableOrgType } from '../utils/moderator-org-types.util';
 import { OrgScopeService } from './org-scope.service';
+import { WarehouseResolutionService } from './warehouse-resolution.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const MODERATOR_ASSIGNABLE_ROLES: UserRole[] = [
@@ -20,6 +21,7 @@ export class ModeratorScopeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgScopeService: OrgScopeService,
+    private readonly warehouseResolution: WarehouseResolutionService,
   ) {}
 
   isSystemAdmin(user: AuthenticatedUser): boolean {
@@ -438,10 +440,17 @@ export class ModeratorScopeService {
       return;
     }
     for (const scope of scopes) {
-      await this.assertWarehouseInOrgScope(actor, scope.warehouseId);
       if (scope.orgUnitId) {
         await this.assertOrgUnitInScope(actor, scope.orgUnitId);
+        const effectiveWarehouseId = await this.warehouseResolution.resolveForOrgUnit(scope.orgUnitId);
+        if (effectiveWarehouseId !== scope.warehouseId) {
+          throw new ForbiddenException(
+            'Skladište dodjele mora odgovarati efektivnom skladištu org. jedinice',
+          );
+        }
+        continue;
       }
+      await this.assertWarehouseInOrgScope(actor, scope.warehouseId);
     }
   }
 

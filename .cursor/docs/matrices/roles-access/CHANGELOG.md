@@ -4,6 +4,7 @@
 
 - Evidentičar: kreiranje i izmjena radnika u registrar scope-u (`features.evidenticar_employee_ops`); bez brisanja.
 - Org. promjena: evidentičar u scope-u radnika može pokrenuti promjenu org. jedinice (preview + PATCH).
+- Moderator: Režim B registrar dodjela — skladište = efektivno skladište org. jedinice u moderator opsegu (ne mora biti direktno u org listi skladišta).
 
 ## 2026-06-20 (moderator scoped admin)
 

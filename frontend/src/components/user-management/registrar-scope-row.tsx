@@ -1,5 +1,7 @@
 import { Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import type { Category, Equipment, OrgUnit, RegistrarScopeAssignment, Warehouse } from '../../types';
+import { resolveEffectiveWarehouseApi } from '../../api/warehouses-api';
 import { getCityLabel, getOrgUnitTypeLabel } from '../../helpers';
 import {
   getAvailableCategoriesForRow,
@@ -36,6 +38,7 @@ export const RegistrarScopeRow = ({
   onChange,
   onRemove,
 }: RegistrarScopeRowProps) => {
+  const [orgResolveBusy, setOrgResolveBusy] = useState(false);
   const ctx: RegistrarAssignmentValidationContext = {
     categories,
     warehouses,
@@ -57,6 +60,25 @@ export const RegistrarScopeRow = ({
   const allowedOrgIds = new Set(availableOrgUnits.map((row) => row.id));
   const pairMode = getWarehouseCategoryMode(scopes, scope.warehouseId, scope.categoryId, index);
   const isModeA = isRegistrarModeA(scope);
+
+  const handleOrgUnitChange = async (orgUnitId: string) => {
+    if (!orgUnitId) {
+      onChange({ orgUnitId: null });
+      return;
+    }
+    setOrgResolveBusy(true);
+    try {
+      const result = await resolveEffectiveWarehouseApi(orgUnitId);
+      onChange({
+        orgUnitId,
+        ...(result.warehouseId ? { warehouseId: result.warehouseId } : {}),
+      });
+    } catch {
+      onChange({ orgUnitId });
+    } finally {
+      setOrgResolveBusy(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50/80">
@@ -108,8 +130,8 @@ export const RegistrarScopeRow = ({
           <div className="flex-1">
             <OrgUnitAutocomplete
               value={scope.orgUnitId ?? ''}
-              onChange={(orgUnitId) => onChange({ orgUnitId: orgUnitId || null })}
-              placeholder="Pretraži službu za Režim B…"
+              onChange={(orgUnitId) => void handleOrgUnitChange(orgUnitId)}
+              placeholder={orgResolveBusy ? 'Učitavanje skladišta…' : 'Pretraži službu za Režim B…'}
               allowedOrgUnitIds={pairMode === 'A' ? new Set() : allowedOrgIds}
               className={pairMode === 'A' ? 'opacity-60 pointer-events-none' : undefined}
             />

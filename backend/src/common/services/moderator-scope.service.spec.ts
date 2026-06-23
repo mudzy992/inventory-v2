@@ -26,6 +26,7 @@ const createService = (options?: {
   warehouses?: { id: string; orgUnitId: string | null; isActive: boolean }[];
   warehouseConflicts?: { warehouseId: string }[];
   employees?: { id: string; orgUnitId: string }[];
+  effectiveWarehouseByOrg?: Record<string, string | null>;
 }) => {
   const orgScopeService = {
     expandOrgUnitIds: async (rootIds: string[]) => {
@@ -61,7 +62,10 @@ const createService = (options?: {
         (options?.employees ?? []).find((row) => row.id === where.id) ?? null,
     },
   } as unknown as PrismaService;
-  return new ModeratorScopeService(prisma, orgScopeService);
+  const warehouseResolution = {
+    resolveForOrgUnit: async (orgUnitId: string) => options?.effectiveWarehouseByOrg?.[orgUnitId] ?? null,
+  };
+  return new ModeratorScopeService(prisma, orgScopeService, warehouseResolution as never);
 };
 
 describe('ModeratorScopeService', () => {
@@ -229,5 +233,29 @@ describe('ModeratorScopeService', () => {
       authUser('moderator', { employeeId: 'emp-self', moderatorOrgRoots: [], moderatorWarehouseIds: [] }),
     );
     assert.deepEqual(where, { id: { in: [] } });
+  });
+
+  it('assertRegistrarScopesInModeratorScope allows mode B with effective warehouse outside direct org scope', async () => {
+    const service = createService({
+      effectiveWarehouseByOrg: { 'branch-1': 'wh-central' },
+    });
+    await service.assertRegistrarScopesInModeratorScope(
+      authUser('moderator', { moderatorOrgRoots: ['dist-1'] }),
+      [{ warehouseId: 'wh-central', orgUnitId: 'branch-1' }],
+    );
+  });
+
+  it('assertRegistrarScopesInModeratorScope rejects mode B when warehouse mismatches effective org warehouse', async () => {
+    const service = createService({
+      effectiveWarehouseByOrg: { 'branch-1': 'wh-central' },
+    });
+    await assert.rejects(
+      () =>
+        service.assertRegistrarScopesInModeratorScope(
+          authUser('moderator', { moderatorOrgRoots: ['dist-1'] }),
+          [{ warehouseId: 'wh-other', orgUnitId: 'branch-1' }],
+        ),
+      /efektivnom skladištu/,
+    );
   });
 });
