@@ -1,5 +1,13 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  accessSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -12,6 +20,15 @@ const buildSofficeEnv = (): NodeJS.ProcessEnv => ({
   LC_ALL: 'C.UTF-8',
   HOME: process.env.HOME ?? '/tmp',
 });
+
+const canReadFile = (absolutePath: string): boolean => {
+  try {
+    accessSync(absolutePath, constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export const resolveExpectedPdfPath = (docxAbsolutePath: string): string => {
   const base = docxAbsolutePath.replace(/\.docx$/i, '');
@@ -28,10 +45,16 @@ export const convertDocxToPdf = async (
   outDir?: string,
 ): Promise<string | null> => {
   if (!existsSync(docxAbsolutePath)) {
+    console.error('[docx-to-pdf] source missing', { docxAbsolutePath });
+    return null;
+  }
+  if (!canReadFile(docxAbsolutePath)) {
+    console.error('[docx-to-pdf] source not readable', { docxAbsolutePath });
     return null;
   }
   const targetDir = outDir ?? dirname(docxAbsolutePath);
-  const expectedPdf = resolveExpectedPdfPathInDir(docxAbsolutePath, targetDir);
+  const finalPdf = resolveExpectedPdfPathInDir(docxAbsolutePath, targetDir);
+  const tempOutDir = mkdtempSync(join(tmpdir(), 'soffice-out-'));
   const profileDir = mkdtempSync(join(tmpdir(), 'soffice-'));
   const userInstallation = `file://${profileDir.replace(/\\/g, '/')}`;
   try {
@@ -44,15 +67,51 @@ export const convertDocxToPdf = async (
         '--convert-to',
         'pdf',
         '--outdir',
-        targetDir,
+        tempOutDir,
         docxAbsolutePath,
       ],
       { timeout: 120_000, env: buildSofficeEnv() },
     );
-    return existsSync(expectedPdf) ? expectedPdf : null;
-  } catch {
+    const tempPdf = resolveExpectedPdfPathInDir(docxAbsolutePath, tempOutDir);
+    if (!existsSync(tempPdf)) {
+      console.error('[docx-to-pdf] temp output missing after soffice', {
+        docxAbsolutePath,
+        tempPdf,
+      });
+      return null;
+    }
+    mkdirSync(targetDir, { recursive: true });
+    copyFileSync(tempPdf, finalPdf);
+    if (!existsSync(finalPdf)) {
+      console.error('[docx-to-pdf] failed to copy pdf to target', {
+        docxAbsolutePath,
+        finalPdf,
+      });
+      return null;
+    }
+    return finalPdf;
+  } catch (error) {
+    const execError = error as NodeJS.ErrnoException & { stderr?: Buffer; stdout?: Buffer };
+    const errno = execError.code;
+    if (errno === 'EACCES' || errno === 'EPERM') {
+      console.error('[docx-to-pdf] permission denied writing pdf — pokrenite scripts/fix-upload-permissions.sh na hostu', {
+        docxAbsolutePath,
+        finalPdf,
+      });
+    }
+    console.error('[docx-to-pdf] soffice failed', {
+      docxAbsolutePath,
+      message: execError.message,
+      stderr: execError.stderr?.toString().trim(),
+      stdout: execError.stdout?.toString().trim(),
+    });
     return null;
   } finally {
+    try {
+      rmSync(tempOutDir, { recursive: true, force: true });
+    } catch {
+      // ignore cleanup errors
+    }
     try {
       rmSync(profileDir, { recursive: true, force: true });
     } catch {

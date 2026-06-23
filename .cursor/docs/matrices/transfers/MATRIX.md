@@ -83,7 +83,8 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 
 ## Deploy — LibreOffice + UTF-8
 
-- Backend image: `node:22-bookworm-slim`; runner instalira `libreoffice-writer`, `libreoffice-common`, `fontconfig`, `fonts-dejavu-core`, `fonts-liberation`, `fonts-noto-core`.
+- Backend image: `node:22-bookworm-slim`; runner instalira `libreoffice-writer`, `libreoffice-common`, `fontconfig`, `fonts-dejavu-core`, `fonts-liberation`, `fonts-noto-core`; app korisnik uid **100** / gid **101**.
+- Bind mount `/mnt/shared-app-files/inventory-v2` → `/app/uploads`: pokrenuti `./scripts/fix-upload-permissions.sh` ako `soffice` javlja **Access Code 7** (nema write prava u `prenosnice/`).
 - Env: `LANG=C.UTF-8`, `LC_ALL=C.UTF-8`; `soffice` child proces isti env.
 - Aktivni `.docx` obrazac treba koristiti font dostupan u kontejneru (DejaVu Sans, Liberation Sans, Calibri uz substitution) — ne egzotične fontove.
 - Smoke nakon deploya: `docker compose exec backend which soffice`.

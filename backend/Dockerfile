@@ -27,7 +27,12 @@ RUN apt-get update \
     fonts-liberation \
     fonts-noto-core \
   && rm -rf /var/lib/apt/lists/*
-RUN groupadd --system app && useradd --system --gid app --create-home --home-dir /app app
+# Fiksni UID/GID da odgovaraju bind mountu na hostu (prenosnice/, templates/, …)
+ARG APP_UID=100
+ARG APP_GID=101
+RUN groupadd -g "${APP_GID}" app 2>/dev/null || groupadd --system app \
+  && useradd -u "${APP_UID}" -g app -d /app -M app 2>/dev/null \
+  || useradd --system --gid app --home-dir /app app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

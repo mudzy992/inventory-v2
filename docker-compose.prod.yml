@@ -1,6 +1,6 @@
 # Produkcija — Traefik (mreža web), TLS le, host evidens.ba101.top
 # Prije build/up: root .env sa DATABASE_URL, JWT_SECRET, UPLOAD_DIR=/app/uploads
-# Host upload: mkdir -p /mnt/shared-app-files/inventory-v2 && chown prema `docker compose run --rm backend id app`
+# Host upload: mkdir -p /mnt/shared-app-files/inventory-v2 && ./scripts/fix-upload-permissions.sh
 # Build: ./scripts/docker-prod-build.sh  (build + uklanjanje dangling image-a)
 services:
   backend:

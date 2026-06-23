@@ -1,3 +1,8 @@
+## 2026-06-23 — Upload mount permisije (PDF Access Code 7)
+
+- Backend Docker: fiksni app uid/gid 100/101; skripta `scripts/fix-upload-permissions.sh` za host bind mount.
+- `docx-to-pdf`: konverzija u `/tmp`, kopija PDF-a u `prenosnice/`; log za EACCES.
+
 ## 2026-06-23 — Drawer akcije gore + auto-regeneracija starih prenosnica
 
 - Drawer širi (`85vw`), akcije u gornjoj traci, PDF ispod u punoj visini.
