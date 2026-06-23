@@ -1,5 +1,11 @@
 # Changelog — moderator
 
+## 2026-06-20 (scoped dashboard + org opseg)
+
+- **Org opseg:** prošireni dozvoljeni tipovi dodjele (`direkcija` → `odjeljenje`); validacija redundantnih parova ancestor/descendant pri create/update moderatora.
+- **Dashboard:** `GET /equipment/summary` i kategorije koriste operativni scope (bez self-held OR); FE scope kartica, stat „Org jedinice”, kategorije s `total > 0`.
+- **Nav badge:** pending transferi za moderatora preko `ModeratorScopeService.buildTransferWhere` (ne `registrarScope`).
+
 ## 2026-06-22
 
 - **Moj profil / Moja oprema:** vlastita zadužena oprema, transferi i org jedinica radnika nisu ograničeni operativnim moderator scope-om (self-access za sve uloge s `employeeId`).

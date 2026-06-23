@@ -21,6 +21,12 @@ import {
 import { USER_ROLE_META, USER_ROLE_OPTIONS } from './user-role-config';
 import { RegistrarScopeRow } from './registrar-scope-row';
 import { Check, X } from 'lucide-react';
+import { getOrgUnitPath, getOrgUnitTypeLabel } from '../../helpers';
+import {
+  findModeratorOrgAssignmentRedundancy,
+  isOrgUnitCoveredByModeratorAssignments,
+  MODERATOR_ASSIGNABLE_ORG_TYPES,
+} from '../../helpers/moderator-org-scope.util';
 
 interface UserAccessFieldsProps {
   role: UserRole;
@@ -75,9 +81,25 @@ export const UserAccessFields = ({
   };
   const activeWarehouses = warehouses.filter((row) => row.isActive !== false);
   const parentCategories = categories.filter((row) => row.parentId === null);
-  const moderatorOrgRootOptions = orgUnits.filter((row) =>
-    ['distribucija', 'podrucje', 'podruznica'].includes(row.type),
+  const moderatorOrgAssignmentIds = moderatorOrgAssignments.map((row) => row.orgUnitId);
+  const moderatorOrgAssignableOptions = orgUnits.filter((row) =>
+    MODERATOR_ASSIGNABLE_ORG_TYPES.includes(row.type as (typeof MODERATOR_ASSIGNABLE_ORG_TYPES)[number]),
   );
+  const getModeratorOrgOptionsForRow = (currentOrgUnitId: string) =>
+    moderatorOrgAssignableOptions.filter((unit) => {
+      if (unit.id === currentOrgUnitId) {
+        return true;
+      }
+      const otherAssignments = moderatorOrgAssignmentIds.filter((id) => id !== currentOrgUnitId);
+      if (otherAssignments.includes(unit.id)) {
+        return false;
+      }
+      return !isOrgUnitCoveredByModeratorAssignments(unit.id, otherAssignments, orgUnits);
+    });
+  const formatModeratorOrgOptionLabel = (unit: OrgUnit): string => {
+    const path = getOrgUnitPath(orgUnits, unit.id);
+    return `${path} (${getOrgUnitTypeLabel(unit.type)})`;
+  };
   const isWarehouseInModeratorOrgScope = (warehouse: WarehouseType): boolean => {
     if (!warehouse.orgUnitId || moderatorOrgAssignments.length === 0) {
       return false;
@@ -322,58 +344,85 @@ export const UserAccessFields = ({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <MapPin size={14} className="inline mr-1" />
-              Org rootovi (regionalni opseg)
+              Org opseg (moderacija)
             </label>
             <p className="text-xs text-gray-500 mb-3">
-              Odaberite distribuciju, područje ili podružnicu. Moderator upravlja cijelim podstablom.
+              Odaberite org jedinicu na bilo kom nivou hijerarhije. Moderator upravlja cijelim podstablom ispod
+              odabira.
             </p>
             <div className="space-y-2">
-              {moderatorOrgAssignments.map((scope, index) => (
-                <div key={`mod-org-${scope.orgUnitId}-${index}`} className="flex flex-wrap gap-2 items-center">
-                  <select
-                    className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm min-w-[220px]"
-                    value={scope.orgUnitId}
-                    onChange={(event) =>
-                      onModeratorOrgAssignmentsChange(
-                        moderatorOrgAssignments.map((row, rowIndex) =>
-                          rowIndex === index ? { orgUnitId: event.target.value } : row,
-                        ),
-                      )
-                    }
-                  >
-                    {moderatorOrgRootOptions.map((unit) => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="text-xs text-red-600"
-                    onClick={() =>
-                      onModeratorOrgAssignmentsChange(
-                        moderatorOrgAssignments.filter((_, rowIndex) => rowIndex !== index),
-                      )
-                    }
-                  >
-                    Ukloni
-                  </button>
-                </div>
-              ))}
+              {moderatorOrgAssignments.map((scope, index) => {
+                const rowOptions = getModeratorOrgOptionsForRow(scope.orgUnitId);
+                const redundancy =
+                  findModeratorOrgAssignmentRedundancy(
+                    scope.orgUnitId,
+                    moderatorOrgAssignmentIds.filter((id) => id !== scope.orgUnitId),
+                    orgUnits,
+                  ) ?? null;
+                return (
+                  <div key={`mod-org-${scope.orgUnitId}-${index}`} className="space-y-1">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <select
+                        className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm min-w-[280px]"
+                        value={scope.orgUnitId}
+                        onChange={(event) => {
+                          const nextOrgUnitId = event.target.value;
+                          const warning = findModeratorOrgAssignmentRedundancy(
+                            nextOrgUnitId,
+                            moderatorOrgAssignmentIds.filter((id) => id !== scope.orgUnitId),
+                            orgUnits,
+                          );
+                          if (warning) {
+                            return;
+                          }
+                          onModeratorOrgAssignmentsChange(
+                            moderatorOrgAssignments.map((row, rowIndex) =>
+                              rowIndex === index ? { orgUnitId: nextOrgUnitId } : row,
+                            ),
+                          );
+                        }}
+                      >
+                        {rowOptions.map((unit) => (
+                          <option key={unit.id} value={unit.id}>
+                            {formatModeratorOrgOptionLabel(unit)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="text-xs text-red-600"
+                        onClick={() =>
+                          onModeratorOrgAssignmentsChange(
+                            moderatorOrgAssignments.filter((_, rowIndex) => rowIndex !== index),
+                          )
+                        }
+                      >
+                        Ukloni
+                      </button>
+                    </div>
+                    {redundancy ? (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-2 py-1.5">
+                        {redundancy}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
               <button
                 type="button"
                 onClick={() => {
-                  const orgUnitId = moderatorOrgRootOptions[0]?.id ?? '';
+                  const available = getModeratorOrgOptionsForRow('');
+                  const orgUnitId = available[0]?.id ?? '';
                   if (!orgUnitId) {
                     return;
                   }
                   onModeratorOrgAssignmentsChange([...moderatorOrgAssignments, { orgUnitId }]);
                 }}
-                disabled={moderatorOrgRootOptions.length === 0}
+                disabled={getModeratorOrgOptionsForRow('').length === 0}
                 className="flex items-center gap-1 text-sm text-orange-700 hover:text-orange-900 disabled:opacity-50"
               >
                 <Plus size={14} />
-                Dodaj org root
+                Dodaj org jedinicu
               </button>
             </div>
           </div>

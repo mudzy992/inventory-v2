@@ -218,6 +218,16 @@ describe('ModeratorScopeService', () => {
     const where = await service.buildEquipmentScopeWhere(
       authUser('moderator', { employeeId: 'emp-self', moderatorOrgRoots: [], moderatorWarehouseIds: [] }),
     );
-    assert.deepEqual(where, { currentHolderId: 'emp-self' });
+    assert.deepEqual(where, {
+      OR: [{ id: { in: [] } }, { currentHolderId: 'emp-self' }],
+    });
+  });
+
+  it('buildOperationalEquipmentScopeWhere excludes own held equipment', async () => {
+    const service = createService();
+    const where = await service.buildOperationalEquipmentScopeWhere(
+      authUser('moderator', { employeeId: 'emp-self', moderatorOrgRoots: [], moderatorWarehouseIds: [] }),
+    );
+    assert.deepEqual(where, { id: { in: [] } });
   });
 });

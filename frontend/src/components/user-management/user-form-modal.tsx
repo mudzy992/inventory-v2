@@ -183,7 +183,7 @@ export const UserFormModal = ({
       return;
     }
     if (role === 'moderator' && actorIsAdmin && moderatorOrgAssignments.length === 0) {
-      setError('Moderator mora imati barem jedan org root.');
+      setError('Moderator mora imati barem jednu org jedinicu opsega.');
       return;
     }
     if (role === 'evidenticar') {

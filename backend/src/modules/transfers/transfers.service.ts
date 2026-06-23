@@ -206,18 +206,7 @@ export class TransfersService {
 
   private async buildTransferScopeWhere(user: AuthenticatedUser): Promise<Prisma.TransferWhereInput> {
     if (this.moderatorScope.isModerator(user)) {
-      const equipmentWhere = (await this.moderatorScope.buildEquipmentScopeWhere(user)) ?? {};
-      const employeeWhere = (await this.moderatorScope.buildScopedEmployeeWhere(user)) ?? {};
-      const orClauses: Prisma.TransferWhereInput[] = [
-        { equipment: equipmentWhere },
-        { fromPerson: employeeWhere },
-        { toPerson: employeeWhere },
-      ];
-      if (user.employeeId) {
-        orClauses.push({ fromPersonId: user.employeeId });
-        orClauses.push({ toPersonId: user.employeeId });
-      }
-      return { OR: orClauses };
+      return (await this.moderatorScope.buildTransferWhere(user)) as Prisma.TransferWhereInput;
     }
     return this.registrarScope.buildTransferWhere(user);
   }

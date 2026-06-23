@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { OrgUnit, UserRole, Warehouse } from '../../../generated/prisma/client';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import { isEquipmentHeldByUser, isSelfEmployeeId } from '../utils/self-profile-access.util';
+import { isModeratorAssignableOrgType } from '../utils/moderator-org-types.util';
 import { OrgScopeService } from './org-scope.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -11,8 +12,6 @@ const MODERATOR_ASSIGNABLE_ROLES: UserRole[] = [
   'popis_koordinator',
   'user',
 ];
-
-const ALLOWED_ORG_ROOT_TYPES = new Set(['distribucija', 'podrucje', 'podruznica']);
 
 @Injectable()
 export class ModeratorScopeService {
@@ -204,15 +203,20 @@ export class ModeratorScopeService {
   }
 
   async buildEquipmentScopeWhere(user: AuthenticatedUser): Promise<object | null> {
+    const operational = await this.buildOperationalEquipmentScopeWhere(user);
+    if (!this.isModerator(user) || !user.employeeId) {
+      return operational;
+    }
+    return { OR: [operational, { currentHolderId: user.employeeId }] };
+  }
+
+  async buildOperationalEquipmentScopeWhere(user: AuthenticatedUser): Promise<object | null> {
     if (!this.isModerator(user)) {
       return null;
     }
     const scopedIds = await this.resolveModeratorOrgUnitIds(user);
     const assignedWarehouseIds = user.moderatorWarehouseIds;
     if ((!scopedIds || scopedIds.length === 0) && assignedWarehouseIds.length === 0) {
-      if (user.employeeId) {
-        return { currentHolderId: user.employeeId };
-      }
       return { id: { in: [] } };
     }
     const orClauses: object[] = [];
@@ -226,16 +230,9 @@ export class ModeratorScopeService {
       orClauses.push({ warehouseId: { in: assignedWarehouseIds } });
     }
     if (orClauses.length === 0) {
-      if (user.employeeId) {
-        return { currentHolderId: user.employeeId };
-      }
       return { id: { in: [] } };
     }
-    const scopeWhere = { OR: orClauses };
-    if (user.employeeId) {
-      return { OR: [scopeWhere, { currentHolderId: user.employeeId }] };
-    }
-    return scopeWhere;
+    return { OR: orClauses };
   }
 
   async buildEquipmentReadWhere(user: AuthenticatedUser): Promise<object | null> {
@@ -363,6 +360,21 @@ export class ModeratorScopeService {
     }
   }
 
+  async buildTransferWhere(user: AuthenticatedUser): Promise<object> {
+    const equipmentWhere = (await this.buildEquipmentScopeWhere(user)) ?? {};
+    const employeeWhere = (await this.buildScopedEmployeeWhere(user)) ?? {};
+    const orClauses: object[] = [
+      { equipment: equipmentWhere },
+      { fromPerson: employeeWhere },
+      { toPerson: employeeWhere },
+    ];
+    if (user.employeeId) {
+      orClauses.push({ fromPersonId: user.employeeId });
+      orClauses.push({ toPersonId: user.employeeId });
+    }
+    return { OR: orClauses };
+  }
+
   async isUserInModeratorScope(actor: AuthenticatedUser, targetUserId: string): Promise<boolean> {
     if (this.hasUnscopedAccess(actor)) {
       return true;
@@ -460,8 +472,8 @@ export class ModeratorScopeService {
       throw new ForbiddenException('Jedna ili više org jedinica ne postoji');
     }
     for (const unit of units) {
-      if (!ALLOWED_ORG_ROOT_TYPES.has(unit.type)) {
-        throw new ForbiddenException('Org root mora biti distribucija, područje ili podružnica');
+      if (!isModeratorAssignableOrgType(unit.type)) {
+        throw new ForbiddenException('Org jedinica mora biti valjan nivo za moderator opseg');
       }
     }
   }

@@ -12,10 +12,11 @@
 
 | Polje | Pravilo |
 |-------|---------|
-| `orgUnitId` | Root moderacije; expand podstablo = operativni scope |
-| Više rootova | Unija (OR) scope-a |
-| Više moderatora na istom rootu | Dozvoljeno |
-| Tip roota | Preporuka: `distribucija`, `podrucje`, `podruznica` |
+| `orgUnitId` | Anchor moderacije (bilo koji dozvoljeni tip); expand podstablo = operativni scope |
+| Više dodjela | Unija (OR) scope-a |
+| Više moderatora na istom anchoru | Dozvoljeno |
+| Dozvoljeni tipovi | `direkcija`, `distribucija`, `podrucje`, `podruznica`, `poslovna_jedinica`, `sektor`, `sluzba`, `odjeljenje` |
+| Redundancija | Zabranjen par ancestor+descendant u istom setu dodjela (npr. Direkcija + ED Zenica) |
 
 ### `ModeratorWarehouseAssignment` (skladište + popis)
 
@@ -72,7 +73,7 @@ OR unija:
 | Org promjena | FULL u org scope |
 | Popis komisije | parity `popis_koordinator` na dodijeljenim skladištima |
 | Lokacije/kategorije/katalog | read |
-| Dashboard | read scoped |
+| Dashboard | read scoped (operativni scope bez self-held OR u summary; nav transfer badge preko moderator scope) |
 | Settings private | — |
 
 ## Edge-caseovi

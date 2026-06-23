@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { NotificationType } from '../../../generated/prisma/client';
+import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -22,6 +23,7 @@ export class NavService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registrarScope: RegistrarScopeService,
+    private readonly moderatorScope: ModeratorScopeService,
     private readonly relocationService: EmployeeRelocationService,
   ) {}
 
@@ -41,7 +43,9 @@ export class NavService {
         badges[pageId] = (badges[pageId] ?? 0) + count;
       }
     }
-    const transferWhere = await this.registrarScope.buildTransferWhere(user);
+    const transferWhere = this.moderatorScope.isModerator(user)
+      ? await this.moderatorScope.buildTransferWhere(user)
+      : await this.registrarScope.buildTransferWhere(user);
     const pendingTransfers = await this.prisma.transfer.count({
       where: {
         AND: [transferWhere, { status: { in: ['raw', 'printed'] } }],

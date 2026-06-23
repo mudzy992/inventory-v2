@@ -14,12 +14,15 @@ import {
 import { useStore } from '../useStore';
 import {
   getCurrentUser,
+  getModeratorOrgRootIds,
+  getModeratorWarehouseIds,
   getRegistrarScopes,
   isAdmin,
   isEvidenticar,
   isModerator,
 } from '../store';
 import { formatRegistrarAssignmentLabel } from '../helpers/org-warehouse.util';
+import { getOrgUnitPath } from '../helpers';
 import {
   getScopedParentCategories,
   getScopedSubCategories,
@@ -108,6 +111,14 @@ export function Dashboard() {
         return { parent, stats, subCategories };
       }),
     )
+      .then((rows) =>
+        rows
+          .map((row) => ({
+            ...row,
+            subCategories: row.subCategories.filter((sub) => sub.stats.total > 0),
+          }))
+          .filter((row) => row.stats.total > 0),
+      )
       .then(setCategoryStats)
       .catch(() => setCategoryStats([]));
   }, [state.categories, user]);
@@ -116,7 +127,19 @@ export function Dashboard() {
   const inWarehouse = equipmentSummary?.byStatus.skladiste ?? 0;
   const assigned = equipmentSummary?.byStatus.zaduzeno ?? 0;
   const decommissioned = equipmentSummary?.byStatus.rashodovano ?? 0;
-  const scopeCount = hasOverviewAccess ? state.cities.length : scopes.length;
+  const moderatorOrgRootIds = getModeratorOrgRootIds();
+  const moderatorWarehouseIds = getModeratorWarehouseIds();
+  const moderatorOrgLabels = moderatorOrgRootIds.map((orgUnitId) => {
+    const unit = state.orgUnits.find((row) => row.id === orgUnitId);
+    return unit ? getOrgUnitPath(state.orgUnits, unit.id) : orgUnitId;
+  });
+  const moderatorWarehouses = state.warehouses.filter((row) => moderatorWarehouseIds.includes(row.id));
+  const scopeCount = admin
+    ? state.cities.length
+    : moderator
+      ? moderatorOrgRootIds.length
+      : scopes.length;
+  const scopeStatLabel = moderator && !admin ? 'Org jedinice' : 'Dodjele';
   const assignmentLabels = scopes.map((scope) => formatRegistrarAssignmentLabel(scope, state));
   const myWarehouseIds = new Set(scopes.map((scope) => scope.warehouseId));
   const myWarehouses = state.warehouses.filter((row) => myWarehouseIds.has(row.id));
@@ -136,7 +159,7 @@ export function Dashboard() {
     { label: 'Zaduženo', value: assigned, icon: <ArrowLeftRight size={24} />, color: 'bg-green-500' },
     { label: 'Rashodovano', value: decommissioned, icon: <AlertTriangle size={24} />, color: 'bg-red-500' },
     { label: 'Radnici', value: totalEmployees, icon: <Users size={24} />, color: 'bg-purple-500' },
-    { label: 'Dodjele', value: scopeCount, icon: <MapPin size={24} />, color: 'bg-teal-500' },
+    { label: scopeStatLabel, value: scopeCount, icon: <MapPin size={24} />, color: 'bg-teal-500' },
     { label: 'Ukupno prenosa', value: totalTransfers, icon: <ArrowLeftRight size={24} />, color: 'bg-orange-500' },
     { label: 'Čeka potpis', value: rawTransfers, icon: <Clock size={24} />, color: rawTransfers > 0 ? 'bg-yellow-500' : 'bg-gray-400' },
   ];
@@ -209,6 +232,33 @@ export function Dashboard() {
           ) : null}
         </div>
       )}
+      {moderator && !admin ? (
+        <div className="mb-6 bg-orange-50 border border-orange-100 rounded-xl p-4 space-y-3">
+          <p className="text-sm font-medium text-orange-900">Moj operativni opseg</p>
+          {moderatorOrgLabels.length > 0 ? (
+            <div>
+              <p className="text-xs font-medium text-orange-800 mb-1">Org dodjele</p>
+              <div className="flex flex-wrap gap-2">
+                {moderatorOrgLabels.map((label) => (
+                  <span
+                    key={label}
+                    className="text-xs bg-white text-orange-800 px-2 py-1 rounded-lg border border-orange-100"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-orange-800">Nema dodijeljenih org jedinica opsega.</p>
+          )}
+          {moderatorWarehouses.length > 0 ? (
+            <p className="text-xs text-orange-800">
+              Skladišta (popis): {moderatorWarehouses.map((row) => row.name).join(', ')}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {hasOverviewAccess && relocationAlerts ? (
         <div className="mb-6 grid lg:grid-cols-2 gap-4">
           <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">

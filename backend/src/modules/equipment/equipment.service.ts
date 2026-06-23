@@ -127,7 +127,7 @@ export class EquipmentService {
 
   async getSummary(user: AuthenticatedUser, categoryId?: string): Promise<EquipmentSummary> {
     await this.settingsService.assertFeatureEnabled('features.equipment');
-    const scopeWhere = await this.buildEquipmentScopeWhere(user);
+    const scopeWhere = await this.buildOperationalEquipmentScopeWhere(user);
     const where: Prisma.EquipmentWhereInput = categoryId
       ? { AND: [scopeWhere, { categoryId }] }
       : scopeWhere;
@@ -152,7 +152,7 @@ export class EquipmentService {
 
   async getLotGroups(user: AuthenticatedUser, categoryId: string): Promise<EquipmentLotGroup[]> {
     await this.settingsService.assertFeatureEnabled('features.equipment');
-    const scopeWhere = await this.buildEquipmentScopeWhere(user);
+    const scopeWhere = await this.buildOperationalEquipmentScopeWhere(user);
     const where: Prisma.EquipmentWhereInput = { AND: [scopeWhere, { categoryId }] };
     const grouped = await this.prisma.equipment.groupBy({
       by: ['stockLotId'],
@@ -507,6 +507,14 @@ export class EquipmentService {
       return parts[0]!;
     }
     return { AND: parts };
+  }
+
+  private async buildOperationalEquipmentScopeWhere(user: AuthenticatedUser): Promise<Prisma.EquipmentWhereInput> {
+    if (this.moderatorScope.isModerator(user)) {
+      return ((await this.moderatorScope.buildOperationalEquipmentScopeWhere(user)) ??
+        {}) as Prisma.EquipmentWhereInput;
+    }
+    return this.registrarScope.buildEquipmentWhere(user);
   }
 
   private async buildEquipmentScopeWhere(user: AuthenticatedUser): Promise<Prisma.EquipmentWhereInput> {

@@ -131,6 +131,14 @@ export function isModeratorWarehouseAssigned(warehouseId: string): boolean {
   return (user.moderatorWarehouseAssignments ?? []).some((row) => row.warehouseId === warehouseId);
 }
 
+export function getModeratorOrgRootIds(): string[] {
+  const user = getCurrentUser();
+  if (!user || user.role !== 'moderator') {
+    return [];
+  }
+  return (user.moderatorOrgAssignments ?? []).map((row) => row.orgUnitId);
+}
+
 export function getModeratorWarehouseIds(): string[] {
   const user = getCurrentUser();
   if (!user || user.role !== 'moderator') {

@@ -7,6 +7,7 @@ import type { RegistrarScopeAssignment } from '../../common/types/registrar-scop
 import type { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { assertRegistrarScopesValid } from './registrar-assignment-validation.util';
+import { assertModeratorOrgAssignmentsNotRedundant } from '../../common/utils/moderator-org-assignment-validation.util';
 
 interface ValidateUserAccessInput {
   role: UserRole;
@@ -158,6 +159,14 @@ export const assertUserAccessRules = async (
     if (moderatorScope) {
       await moderatorScope.assertModeratorOrgRootsValid(orgUnitIds);
     }
+    const assignmentUnits = await prisma.orgUnit.findMany({
+      where: { id: { in: orgUnitIds } },
+      select: { id: true, name: true, parentId: true },
+    });
+    const allOrgUnits = await prisma.orgUnit.findMany({
+      select: { id: true, name: true, parentId: true },
+    });
+    assertModeratorOrgAssignmentsNotRedundant(assignmentUnits, allOrgUnits);
   }
   const moderatorWarehouseAssignments = input.moderatorWarehouseAssignments ?? [];
   if (moderatorWarehouseAssignments.length > 0) {
