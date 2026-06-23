@@ -51,7 +51,7 @@ export const findModeratorOrgAssignmentRedundancy = (
     if (!anchor) {
       continue;
     }
-    if (isOrgUnitCoveredByModeratorAssignments(unitId, [assignmentId], orgUnits)) {
+    if (isOrgUnitCoveredByModeratorAssignments(orgUnitId, [assignmentId], orgUnits)) {
       return `${unit.name} je već pokrivena dodjelom ${anchor.name}`;
     }
     if (isOrgUnitCoveredByModeratorAssignments(assignmentId, [orgUnitId], orgUnits)) {

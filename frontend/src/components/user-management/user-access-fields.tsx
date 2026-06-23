@@ -85,8 +85,8 @@ export const UserAccessFields = ({
   const moderatorOrgAssignableOptions = orgUnits.filter((row) =>
     MODERATOR_ASSIGNABLE_ORG_TYPES.includes(row.type as (typeof MODERATOR_ASSIGNABLE_ORG_TYPES)[number]),
   );
-  const getModeratorOrgOptionsForRow = (currentOrgUnitId: string) =>
-    moderatorOrgAssignableOptions.filter((unit) => {
+  const getModeratorOrgOptionsForRow = (currentOrgUnitId: string) => {
+    const filtered = moderatorOrgAssignableOptions.filter((unit) => {
       if (unit.id === currentOrgUnitId) {
         return true;
       }
@@ -96,6 +96,12 @@ export const UserAccessFields = ({
       }
       return !isOrgUnitCoveredByModeratorAssignments(unit.id, otherAssignments, orgUnits);
     });
+    if (!currentOrgUnitId || filtered.some((unit) => unit.id === currentOrgUnitId)) {
+      return filtered;
+    }
+    const currentUnit = orgUnits.find((unit) => unit.id === currentOrgUnitId);
+    return currentUnit ? [currentUnit, ...filtered] : filtered;
+  };
   const formatModeratorOrgOptionLabel = (unit: OrgUnit): string => {
     const path = getOrgUnitPath(orgUnits, unit.id);
     return `${path} (${getOrgUnitTypeLabel(unit.type)})`;
