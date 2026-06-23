@@ -2,6 +2,7 @@
 
 ## 2026-06-22
 
+- **Moj profil / Moja oprema:** vlastita zadužena oprema, transferi i org jedinica radnika nisu ograničeni operativnim moderator scope-om (self-access za sve uloge s `employeeId`).
 - FE: moderator vidi sve kategorije (read) u dropdownima i na stranici „Oprema po kategorijama”; org stablo prikazuje scoped forest roots (npr. ED Zenica / Područje snabdjevanja) umjesto praznog prikaza.
 
 ## 2026-06-20 (scoped admin)

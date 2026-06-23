@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from '../useStore';
 import { getCurrentUser } from '../store';
 import { fetchEquipmentPageApi } from '../api/equipment-api';
+import { fetchOrgUnitApi } from '../api/org-units-api';
 import { fetchTransfersPageApi } from '../api/transfers-api';
 import { apiRequest } from '../api/client';
 import { usePaginatedList } from '../hooks/usePaginatedList';
-import type { Employee, Equipment } from '../types';
+import type { Employee, Equipment, OrgUnit } from '../types';
 import {
   Package,
   Monitor,
@@ -33,6 +34,7 @@ export function MyEquipmentPage() {
   const [selectedEquipId, setSelectedEquipId] = useState<string | null>(null);
   const [showLabels, setShowLabels] = useState(false);
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [profileOrgUnit, setProfileOrgUnit] = useState<OrgUnit | null>(null);
 
   useEffect(() => {
     if (!currentUser?.employeeId) {
@@ -43,6 +45,21 @@ export function MyEquipmentPage() {
       .then(setEmployee)
       .catch(() => setEmployee(null));
   }, [currentUser?.employeeId]);
+
+  useEffect(() => {
+    if (!employee?.orgUnitId) {
+      setProfileOrgUnit(null);
+      return;
+    }
+    const fromState = state.orgUnits.find((row) => row.id === employee.orgUnitId);
+    if (fromState) {
+      setProfileOrgUnit(fromState);
+      return;
+    }
+    void fetchOrgUnitApi(employee.orgUnitId)
+      .then(setProfileOrgUnit)
+      .catch(() => setProfileOrgUnit(null));
+  }, [employee?.orgUnitId, state.orgUnits]);
 
   const fetchEquipment = useCallback(
     (params: { page?: number; pageSize?: number }) =>
@@ -109,7 +126,14 @@ export function MyEquipmentPage() {
     );
   }
 
-  const orgUnit = employee ? state.orgUnits.find((o) => o.id === employee.orgUnitId) : null;
+  const orgUnit =
+    profileOrgUnit ??
+    (employee ? state.orgUnits.find((o) => o.id === employee.orgUnitId) ?? null : null);
+  const orgUnitsForPath = profileOrgUnit
+    ? [...state.orgUnits, profileOrgUnit].filter(
+        (row, index, rows) => rows.findIndex((item) => item.id === row.id) === index,
+      )
+    : state.orgUnits;
 
   const getCategoryIcon = (catId: string) => {
     const cat = state.categories.find((c) => c.id === catId);
@@ -139,7 +163,7 @@ export function MyEquipmentPage() {
               <div className="flex flex-wrap gap-4 mt-3 text-sm text-blue-100">
                 {orgUnit ? (
                   <span className="flex items-center gap-1">
-                    <Building2 size={14} /> {getOrgUnitPath(state.orgUnits, orgUnit.id)}
+                    <Building2 size={14} /> {getOrgUnitPath(orgUnitsForPath, orgUnit.id)}
                   </span>
                 ) : null}
                 {employee.email ? (

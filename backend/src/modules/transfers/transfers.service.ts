@@ -24,6 +24,10 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import {
+  isOwnTransfersListQuery,
+  isTransferInvolvingUser,
+} from '../../common/utils/self-profile-access.util';
+import {
   assertCanWriteEquipment,
 } from '../equipment/equipment-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -154,8 +158,7 @@ export class TransfersService {
       'equipmentId' | 'status' | 'search' | 'personId' | 'warehouseId' | 'workflow'
     >,
   ): Promise<Prisma.TransferWhereInput> {
-    const scopeWhere = await this.buildTransferScopeWhere(user);
-    const filters: Prisma.TransferWhereInput[] = [scopeWhere];
+    const filters: Prisma.TransferWhereInput[] = [];
     if (query.equipmentId) {
       filters.push({ equipmentId: query.equipmentId });
     }
@@ -193,6 +196,11 @@ export class TransfersService {
         ],
       });
     }
+    if (isOwnTransfersListQuery(user, query.personId)) {
+      return filters.length === 0 ? {} : filters.length === 1 ? filters[0]! : { AND: filters };
+    }
+    const scopeWhere = await this.buildTransferScopeWhere(user);
+    filters.unshift(scopeWhere);
     return filters.length === 1 ? filters[0]! : { AND: filters };
   }
 
@@ -200,13 +208,16 @@ export class TransfersService {
     if (this.moderatorScope.isModerator(user)) {
       const equipmentWhere = (await this.moderatorScope.buildEquipmentScopeWhere(user)) ?? {};
       const employeeWhere = (await this.moderatorScope.buildScopedEmployeeWhere(user)) ?? {};
-      return {
-        OR: [
-          { equipment: equipmentWhere },
-          { fromPerson: employeeWhere },
-          { toPerson: employeeWhere },
-        ],
-      };
+      const orClauses: Prisma.TransferWhereInput[] = [
+        { equipment: equipmentWhere },
+        { fromPerson: employeeWhere },
+        { toPerson: employeeWhere },
+      ];
+      if (user.employeeId) {
+        orClauses.push({ fromPersonId: user.employeeId });
+        orClauses.push({ toPersonId: user.employeeId });
+      }
+      return { OR: orClauses };
     }
     return this.registrarScope.buildTransferWhere(user);
   }
@@ -648,6 +659,9 @@ export class TransfersService {
     user: AuthenticatedUser,
     transfer: Awaited<ReturnType<typeof this.getTransferOrThrow>>,
   ): Promise<boolean> {
+    if (isTransferInvolvingUser(user, transfer)) {
+      return true;
+    }
     if (this.moderatorScope.isModerator(user)) {
       return this.moderatorScope.canAccessTransfer(user, {
         equipment: transfer.equipment,

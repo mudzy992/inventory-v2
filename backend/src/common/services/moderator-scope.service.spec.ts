@@ -196,4 +196,28 @@ describe('ModeratorScopeService', () => {
     });
     assert.equal(allowed, true);
   });
+
+  it('isEquipmentInScope allows own held equipment outside org scope', async () => {
+    const service = createService();
+    const user = authUser('moderator', {
+      employeeId: 'emp-self',
+      moderatorOrgRoots: ['dist-1'],
+      moderatorWarehouseIds: [],
+    });
+    const allowed = await service.isEquipmentInScope(
+      user,
+      { id: 'eq-1', warehouseId: 'wh-remote', currentHolderId: 'emp-self' },
+      { orgUnitId: 'other-org' },
+      'other-org',
+    );
+    assert.equal(allowed, true);
+  });
+
+  it('buildEquipmentScopeWhere includes own held equipment when scope is empty', async () => {
+    const service = createService();
+    const where = await service.buildEquipmentScopeWhere(
+      authUser('moderator', { employeeId: 'emp-self', moderatorOrgRoots: [], moderatorWarehouseIds: [] }),
+    );
+    assert.deepEqual(where, { currentHolderId: 'emp-self' });
+  });
 });

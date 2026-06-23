@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { OrgUnit, UserRole, Warehouse } from '../../../generated/prisma/client';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
+import { isEquipmentHeldByUser, isSelfEmployeeId } from '../utils/self-profile-access.util';
 import { OrgScopeService } from './org-scope.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -60,6 +61,9 @@ export class ModeratorScopeService {
 
   async assertOrgUnitInScope(user: AuthenticatedUser, orgUnitId: string): Promise<void> {
     if (!this.isModerator(user)) {
+      return;
+    }
+    if (await this.isSelfEmployeeOrgUnit(user, orgUnitId)) {
       return;
     }
     const scopedIds = await this.resolveModeratorOrgUnitIds(user);
@@ -206,6 +210,9 @@ export class ModeratorScopeService {
     const scopedIds = await this.resolveModeratorOrgUnitIds(user);
     const assignedWarehouseIds = user.moderatorWarehouseIds;
     if ((!scopedIds || scopedIds.length === 0) && assignedWarehouseIds.length === 0) {
+      if (user.employeeId) {
+        return { currentHolderId: user.employeeId };
+      }
       return { id: { in: [] } };
     }
     const orClauses: object[] = [];
@@ -219,9 +226,16 @@ export class ModeratorScopeService {
       orClauses.push({ warehouseId: { in: assignedWarehouseIds } });
     }
     if (orClauses.length === 0) {
+      if (user.employeeId) {
+        return { currentHolderId: user.employeeId };
+      }
       return { id: { in: [] } };
     }
-    return { OR: orClauses };
+    const scopeWhere = { OR: orClauses };
+    if (user.employeeId) {
+      return { OR: [scopeWhere, { currentHolderId: user.employeeId }] };
+    }
+    return scopeWhere;
   }
 
   async buildEquipmentReadWhere(user: AuthenticatedUser): Promise<object | null> {
@@ -239,6 +253,9 @@ export class ModeratorScopeService {
     }
     if (!this.isModerator(user)) {
       return false;
+    }
+    if (isEquipmentHeldByUser(user, equipment)) {
+      return true;
     }
     const scopedIds = await this.resolveModeratorOrgUnitIds(user);
     const scopedSet = scopedIds ? new Set(scopedIds) : new Set<string>();
@@ -282,6 +299,9 @@ export class ModeratorScopeService {
     if (!this.isModerator(user)) {
       throw new ForbiddenException('Radnik je van vašeg opsega');
     }
+    if (isSelfEmployeeId(user, employeeId)) {
+      return;
+    }
     const employee = await this.prisma.employee.findUnique({
       where: { id: employeeId },
       select: { orgUnitId: true },
@@ -306,6 +326,9 @@ export class ModeratorScopeService {
     }
     if (!this.isModerator(user)) {
       return false;
+    }
+    if (isEquipmentHeldByUser(user, transfer.equipment)) {
+      return true;
     }
     const holder = transfer.equipmentHolder ?? null;
     if (await this.isEquipmentInScope(user, transfer.equipment, holder)) {
@@ -487,5 +510,16 @@ export class ModeratorScopeService {
     }
     const allowed = new Set(scopedWhere.orgUnitId.in);
     return warehouses.filter((row) => row.orgUnitId && allowed.has(row.orgUnitId));
+  }
+
+  private async isSelfEmployeeOrgUnit(user: AuthenticatedUser, orgUnitId: string): Promise<boolean> {
+    if (!user.employeeId) {
+      return false;
+    }
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: user.employeeId },
+      select: { orgUnitId: true },
+    });
+    return employee?.orgUnitId === orgUnitId;
   }
 }

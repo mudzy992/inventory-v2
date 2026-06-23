@@ -23,6 +23,7 @@ import {
   buildEquipmentSearchWhere,
   collectCategoryTextFieldIds,
 } from '../../common/utils/build-equipment-search-where.util';
+import { isOwnHeldEquipmentListQuery } from '../../common/utils/self-profile-access.util';
 import { findEquipmentIdsBySpecificationSearch } from '../../common/utils/find-equipment-ids-by-specification-search.util';
 import { findEmployeeIdsByHolderSearch } from '../../common/utils/find-employee-ids-by-holder-search.util';
 import {
@@ -451,7 +452,6 @@ export class EquipmentService {
     user: AuthenticatedUser,
     query: ListEquipmentQueryDto,
   ): Promise<Prisma.EquipmentWhereInput> {
-    const scopeWhere = await this.buildEquipmentScopeWhere(user);
     const stockLotFilter: Prisma.EquipmentWhereInput =
       query.stockLotId === 'none'
         ? { stockLotId: null }
@@ -495,6 +495,10 @@ export class EquipmentService {
       ...stockLotFilter,
       ...(searchWhere ?? {}),
     };
+    if (isOwnHeldEquipmentListQuery(user, query.currentHolderId)) {
+      return filters;
+    }
+    const scopeWhere = await this.buildEquipmentScopeWhere(user);
     const parts = [scopeWhere, filters].filter((part) => Object.keys(part).length > 0);
     if (parts.length === 0) {
       return {};

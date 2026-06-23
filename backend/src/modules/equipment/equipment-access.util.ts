@@ -4,6 +4,7 @@ import type { ModeratorScopeService } from '../../common/services/moderator-scop
 import type { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { isEquipmentHeldByUser } from '../../common/utils/self-profile-access.util';
 import {
   canKeeperReadEquipment,
   canKeeperWriteEquipment,
@@ -21,6 +22,9 @@ export const canReadEquipment = async (
   if (user.role === 'admin') {
     return true;
   }
+  if (isEquipmentHeldByUser(user, equipment)) {
+    return true;
+  }
   if (user.role === 'moderator' && moderatorScope) {
     return moderatorScope.isEquipmentInScope(user, equipment, holder);
   }
@@ -33,9 +37,6 @@ export const canReadEquipment = async (
       return false;
     }
     return canKeeperReadEquipment(equipment, keeperWarehouseIds);
-  }
-  if (user.employeeId && equipment.currentHolderId === user.employeeId) {
-    return true;
   }
   if (user.role === 'user') {
     return false;

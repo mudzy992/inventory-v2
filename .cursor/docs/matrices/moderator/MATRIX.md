@@ -87,6 +87,7 @@ OR unija:
 | Radnik u scope, efektivno skladište drugdje | vidi opremu u listama; lotovi samo na assigned WH |
 | Org stablo scoped (parent izvan opsega) | FE prikazuje forest roots unutar opsega (ne prazan tree) |
 | Kategorije u menijima | moderator read = sve kategorije (bez write) |
+| Moj profil / Moja oprema | uvijek vlastiti `employeeId` + zadužena oprema + transferi; org jedinica radnika read bez scope |
 
 ## Implementacija
 
