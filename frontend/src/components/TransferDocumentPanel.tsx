@@ -195,11 +195,11 @@ export const TransferDocumentPanel = ({
         : 'bg-amber-100 text-amber-800';
 
   const previewFrameClass = isDrawer
-    ? 'h-full min-h-[45vh] w-full rounded-lg border border-gray-200 bg-gray-50 md:min-h-0'
+    ? 'h-full min-h-0 w-full rounded-lg border border-gray-200 bg-white'
     : 'w-full h-[360px] border rounded bg-white';
 
   const drawerPreview = isDrawer && showAutoPreview ? (
-    <div className="flex min-h-[45vh] flex-1 flex-col md:min-h-0">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       {isPreviewLoading ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-gray-500">Učitavanje PDF pregleda…</p>
@@ -370,21 +370,16 @@ export const TransferDocumentPanel = ({
 
   if (isDrawer) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:p-5">
-          {drawerPreview}
-        </div>
-        <div className="shrink-0 border-t border-gray-100 bg-gray-50/80 p-4 md:w-56 md:border-t-0 md:border-l md:overflow-y-auto">
-          <p className="mb-3 hidden text-xs font-medium uppercase tracking-wide text-gray-400 md:block">
-            Akcije
-          </p>
-          <div className="flex flex-wrap gap-2 md:flex-col md:items-stretch">{actionButtons}</div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="shrink-0 border-b border-gray-100 bg-white px-4 py-3 md:px-5">
+          <div className="flex flex-wrap items-center gap-2">{actionButtons}</div>
           {finalizeBlocked ? (
-            <p className="mt-3 text-xs text-amber-800">
+            <p className="mt-2 text-xs text-amber-800">
               Finalizacija nije dostupna dok traje godišnji popis.
             </p>
           ) : null}
         </div>
+        <div className="min-h-0 flex-1 overflow-hidden bg-gray-50 p-3 md:p-4">{drawerPreview}</div>
       </div>
     );
   }

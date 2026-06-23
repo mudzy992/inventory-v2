@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchAuthenticatedBlob } from '../../api/client';
-import { apiRequest } from '../../api/client';
+import { apiRequest, ApiError } from '../../api/client';
 import type { TransferRecord } from '../../types';
 
 export type TransferDocumentPreviewMode = 'generated' | 'signed';
@@ -78,10 +78,17 @@ export const useTransferDocumentPreview = ({
         }
         return URL.createObjectURL(blob);
       });
-    } catch {
-      setPreviewError(
-        'PDF nije generisan (provjerite postavku generate_print_pdf i LibreOffice na serveru). Preuzmite DOCX.',
-      );
+    } catch (err) {
+      const apiMessage = err instanceof ApiError ? err.message : '';
+      if (apiMessage.includes('Generated pdf not available') || apiMessage.includes('not found')) {
+        setPreviewError(
+          'PDF još nije generisan. Pokušajte ponovo — starije prenosnice se automatski regenerišu pri prvom zahtjevu. Ako ne uspije, preuzmite DOCX.',
+        );
+      } else {
+        setPreviewError(
+          'PDF nije dostupan (provjerite postavku generate_print_pdf i LibreOffice na serveru). Preuzmite DOCX.',
+        );
+      }
       setPreviewUrl((previous) => {
         if (previous) {
           URL.revokeObjectURL(previous);

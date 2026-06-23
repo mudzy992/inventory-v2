@@ -58,8 +58,8 @@ export const TransferDocumentDrawer = ({
       <aside
         className={cn(
           'absolute flex flex-col bg-white shadow-2xl transition-transform duration-300 ease-out',
-          'inset-x-0 bottom-0 max-h-[92dvh] rounded-t-2xl',
-          'md:inset-y-0 md:right-0 md:left-auto md:bottom-auto md:max-h-none md:h-full md:w-[min(720px,55vw)] md:rounded-none md:rounded-l-2xl',
+          'inset-x-0 bottom-0 max-h-[95dvh] rounded-t-2xl',
+          'md:inset-y-0 md:right-0 md:left-auto md:bottom-auto md:max-h-none md:h-full md:w-[min(1000px,85vw)] md:rounded-none md:rounded-l-2xl',
           isOpen ? 'translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full',
         )}
         role="dialog"

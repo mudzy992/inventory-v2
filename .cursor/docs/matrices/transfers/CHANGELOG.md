@@ -1,3 +1,9 @@
+## 2026-06-23 — Drawer akcije gore + auto-regeneracija starih prenosnica
+
+- Drawer širi (`85vw`), akcije u gornjoj traci, PDF ispod u punoj visini.
+- `ensureGeneratedArtifacts`: starije prenosnice bez DOCX/PDF regenerišu se pri prvom downloadu/pregledu.
+- LibreOffice u Dockeru: `HOME=/tmp`, izolovan `UserInstallation` profil po konverziji.
+
 ## 2026-06-23 — PDF konverzija fix + drawer layout
 
 - `convertDocxToPdf`: ispravna provjera izlaznog `.pdf` (LibreOffice ne piše `x.pdf`).

@@ -95,48 +95,15 @@ export class TransferDocumentGenerationService {
     transferId: string,
     format: 'docx' | 'pdf',
   ): Promise<{ absolutePath: string; mime: string; filename: string }> {
-    let transfer = await this.prisma.transfer.findUnique({
+    await this.ensureGeneratedArtifacts(transferId);
+    const transfer = await this.prisma.transfer.findUnique({
       where: { id: transferId },
       select: {
         documentNumber: true,
-        documentWarehouseId: true,
-        date: true,
         generatedDocxPath: true,
         generatedPdfPath: true,
       },
     });
-    if (!transfer) {
-      throw new NotFoundException('Transfer not found');
-    }
-    if (
-      format === 'pdf' &&
-      !transfer.generatedPdfPath &&
-      transfer.generatedDocxPath &&
-      transfer.documentWarehouseId
-    ) {
-      const generatePdf = await this.settingsService.getBooleanValue(
-        'transfer.generate_print_pdf',
-        true,
-      );
-      if (generatePdf && transfer.generatedDocxPath && transfer.documentWarehouseId) {
-        await this.ensurePdfFromExistingDocx(transferId, {
-          documentNumber: transfer.documentNumber,
-          documentWarehouseId: transfer.documentWarehouseId,
-          date: transfer.date,
-          generatedDocxPath: transfer.generatedDocxPath,
-        });
-        transfer = await this.prisma.transfer.findUnique({
-          where: { id: transferId },
-          select: {
-            documentNumber: true,
-            documentWarehouseId: true,
-            date: true,
-            generatedDocxPath: true,
-            generatedPdfPath: true,
-          },
-        });
-      }
-    }
     if (!transfer) {
       throw new NotFoundException('Transfer not found');
     }
@@ -154,6 +121,53 @@ export class TransferDocumentGenerationService {
         : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     const filename = `${transfer.documentNumber}.${format}`;
     return { absolutePath, mime, filename };
+  }
+
+  private async ensureGeneratedArtifacts(transferId: string): Promise<void> {
+    const transfer = await this.prisma.transfer.findUnique({
+      where: { id: transferId },
+      select: {
+        documentNumber: true,
+        documentWarehouseId: true,
+        date: true,
+        generatedDocxPath: true,
+        generatedPdfPath: true,
+      },
+    });
+    if (!transfer?.documentWarehouseId) {
+      return;
+    }
+    const uploadRoot = this.templateService.getUploadRoot();
+    const docxAbsolute = transfer.generatedDocxPath
+      ? join(uploadRoot, transfer.generatedDocxPath)
+      : null;
+    const pdfAbsolute = transfer.generatedPdfPath
+      ? join(uploadRoot, transfer.generatedPdfPath)
+      : null;
+    const docxOnDisk = Boolean(docxAbsolute && existsSync(docxAbsolute));
+    const pdfOnDisk = Boolean(pdfAbsolute && existsSync(pdfAbsolute));
+    if (!docxOnDisk) {
+      try {
+        await this.generateForTransfer(transferId);
+      } catch {
+        return;
+      }
+      return;
+    }
+    if (!pdfOnDisk && transfer.generatedDocxPath) {
+      const generatePdf = await this.settingsService.getBooleanValue(
+        'transfer.generate_print_pdf',
+        true,
+      );
+      if (generatePdf) {
+        await this.ensurePdfFromExistingDocx(transferId, {
+          documentNumber: transfer.documentNumber,
+          documentWarehouseId: transfer.documentWarehouseId,
+          date: transfer.date,
+          generatedDocxPath: transfer.generatedDocxPath,
+        });
+      }
+    }
   }
 
   private async ensurePdfFromExistingDocx(

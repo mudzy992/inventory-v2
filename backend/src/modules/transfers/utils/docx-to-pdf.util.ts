@@ -1,15 +1,17 @@
 import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-const SOFFICE_ENV: NodeJS.ProcessEnv = {
+const buildSofficeEnv = (): NodeJS.ProcessEnv => ({
   ...process.env,
   LANG: 'C.UTF-8',
   LC_ALL: 'C.UTF-8',
-};
+  HOME: process.env.HOME ?? '/tmp',
+});
 
 export const resolveExpectedPdfPath = (docxAbsolutePath: string): string => {
   const base = docxAbsolutePath.replace(/\.docx$/i, '');
@@ -30,14 +32,31 @@ export const convertDocxToPdf = async (
   }
   const targetDir = outDir ?? dirname(docxAbsolutePath);
   const expectedPdf = resolveExpectedPdfPathInDir(docxAbsolutePath, targetDir);
+  const profileDir = mkdtempSync(join(tmpdir(), 'soffice-'));
+  const userInstallation = `file://${profileDir.replace(/\\/g, '/')}`;
   try {
     await execFileAsync(
       'soffice',
-      ['--headless', '--convert-to', 'pdf', '--outdir', targetDir, docxAbsolutePath],
-      { timeout: 120_000, env: SOFFICE_ENV },
+      [
+        `-env:UserInstallation=${userInstallation}`,
+        '--headless',
+        '--norestore',
+        '--convert-to',
+        'pdf',
+        '--outdir',
+        targetDir,
+        docxAbsolutePath,
+      ],
+      { timeout: 120_000, env: buildSofficeEnv() },
     );
     return existsSync(expectedPdf) ? expectedPdf : null;
   } catch {
     return null;
+  } finally {
+    try {
+      rmSync(profileDir, { recursive: true, force: true });
+    } catch {
+      // ignore cleanup errors
+    }
   }
 };

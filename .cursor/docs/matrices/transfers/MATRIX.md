@@ -88,6 +88,7 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 - Aktivni `.docx` obrazac treba koristiti font dostupan u kontejneru (DejaVu Sans, Liberation Sans, Calibri uz substitution) — ne egzotične fontove.
 - Smoke nakon deploya: `docker compose exec backend which soffice`.
 - PDF konverzija: LibreOffice piše `{broj}.pdf` u isti folder kao DOCX; ako PDF nedostaje u bazi, `GET ...?format=pdf` pokušava konvertovati iz postojećeg DOCX.
+- Starije prenosnice: pri prvom `GET .../generated-document` backend poziva `ensureGeneratedArtifacts` — regeneriše DOCX iz aktivnog templatea ako nedostaje, zatim PDF iz DOCX-a.
 
 ## Planirano (kasnije)
 
