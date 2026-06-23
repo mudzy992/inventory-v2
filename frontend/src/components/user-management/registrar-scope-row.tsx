@@ -21,6 +21,7 @@ interface RegistrarScopeRowProps {
   categories: Category[];
   orgUnits: OrgUnit[];
   equipment: Pick<Equipment, 'warehouseId' | 'categoryId'>[];
+  effectiveWarehouseIdByOrgUnit?: Record<string, string | null>;
   cities: { id: string; name: string; canton?: { name: string } }[];
   onChange: (patch: Partial<RegistrarScopeAssignment>) => void;
   onRemove: () => void;
@@ -34,6 +35,7 @@ export const RegistrarScopeRow = ({
   categories,
   orgUnits,
   equipment,
+  effectiveWarehouseIdByOrgUnit,
   cities,
   onChange,
   onRemove,
@@ -44,6 +46,7 @@ export const RegistrarScopeRow = ({
     warehouses,
     orgUnits,
     equipment,
+    effectiveWarehouseIdByOrgUnit,
   };
   const activeWarehouses = warehouses.filter((row) => row.isActive !== false);
   const warehouseOptions: SearchableOption[] = activeWarehouses.map((warehouse) => ({

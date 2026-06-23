@@ -9,6 +9,8 @@ export interface RegistrarAssignmentValidationContext {
   warehouses: Warehouse[];
   orgUnits: OrgUnit[];
   equipment: Pick<Equipment, 'warehouseId' | 'categoryId'>[];
+  /** Backend resolve/effective — izvor istine za Režim B (izbjegava pogrešan nearest-wins na suženoj listi). */
+  effectiveWarehouseIdByOrgUnit?: Record<string, string | null>;
 }
 
 export interface RegistrarAssignmentValidationResult {
@@ -97,13 +99,17 @@ export const getWarehouseCategoryMode = (
 const resolveOrgEffectiveWarehouseId = (
   orgUnitId: string,
   ctx: RegistrarAssignmentValidationContext,
-): string | null =>
-  resolveEffectiveWarehouseForOrgUnit(
+): string | null => {
+  if (ctx.effectiveWarehouseIdByOrgUnit && orgUnitId in ctx.effectiveWarehouseIdByOrgUnit) {
+    return ctx.effectiveWarehouseIdByOrgUnit[orgUnitId] ?? null;
+  }
+  return resolveEffectiveWarehouseForOrgUnit(
     ctx.orgUnits,
     ctx.warehouses,
     orgUnitId,
     getEffectiveCityForOrgUnit(ctx.orgUnits, orgUnitId),
   );
+};
 
 const getWarehouseName = (ctx: RegistrarAssignmentValidationContext, warehouseId: string): string =>
   ctx.warehouses.find((row) => row.id === warehouseId)?.name ?? 'Skladište';
@@ -134,6 +140,12 @@ export const validateRegistrarScopes = (
       );
     }
     if (scope.orgUnitId) {
+      if (
+        ctx.effectiveWarehouseIdByOrgUnit &&
+        !(scope.orgUnitId in ctx.effectiveWarehouseIdByOrgUnit)
+      ) {
+        continue;
+      }
       const effectiveWarehouseId = resolveOrgEffectiveWarehouseId(scope.orgUnitId, ctx);
       if (effectiveWarehouseId !== scope.warehouseId) {
         const effectiveName = effectiveWarehouseId

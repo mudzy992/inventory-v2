@@ -45,6 +45,7 @@ interface UserAccessFieldsProps {
   categories: Category[];
   orgUnits: OrgUnit[];
   equipment: Pick<Equipment, 'warehouseId' | 'categoryId'>[];
+  effectiveWarehouseIdByOrgUnit?: Record<string, string | null>;
   cities: { id: string; name: string; canton?: { name: string } }[];
   isActive: boolean;
   onIsActiveChange: (active: boolean) => void;
@@ -68,6 +69,7 @@ export const UserAccessFields = ({
   categories,
   orgUnits,
   equipment,
+  effectiveWarehouseIdByOrgUnit,
   cities,
   isActive,
   onIsActiveChange,
@@ -78,6 +80,7 @@ export const UserAccessFields = ({
     warehouses,
     orgUnits,
     equipment,
+    effectiveWarehouseIdByOrgUnit,
   };
   const activeWarehouses = warehouses.filter((row) => row.isActive !== false);
   const parentCategories = categories.filter((row) => row.parentId === null);
@@ -221,6 +224,7 @@ export const UserAccessFields = ({
                 categories={categories}
                 orgUnits={orgUnits}
                 equipment={equipment}
+                effectiveWarehouseIdByOrgUnit={effectiveWarehouseIdByOrgUnit}
                 cities={cities}
                 onChange={(patch) => handleUpdateScope(index, patch)}
                 onRemove={() => handleRemoveScope(index)}

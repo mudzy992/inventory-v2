@@ -3,6 +3,11 @@ import type { OrgUnit, RegistrarScopeAssignment, Warehouse } from '../types';
 import { getOrgSubtreeIds } from './org-warehouse.util';
 import { isOrgUnitCoveredByModeratorAssignments } from './moderator-org-scope.util';
 
+export interface RegistrarWarehouseContext {
+  warehouses: Warehouse[];
+  effectiveWarehouseIdByOrgUnit: Record<string, string | null>;
+}
+
 export const mergeWarehousesById = (base: Warehouse[], extra: Warehouse[]): Warehouse[] => {
   const byId = new Map(base.map((row) => [row.id, row]));
   for (const row of extra) {
@@ -17,21 +22,23 @@ const collectUniqueOrgUnitIds = (orgUnitIds: string[]): string[] => [...new Set(
 
 export const resolveEffectiveWarehousesForOrgUnits = async (
   orgUnitIds: string[],
-): Promise<Warehouse[]> => {
+): Promise<RegistrarWarehouseContext> => {
   const warehouses: Warehouse[] = [];
+  const effectiveWarehouseIdByOrgUnit: Record<string, string | null> = {};
   const seenWarehouseIds = new Set<string>();
   for (const orgUnitId of collectUniqueOrgUnitIds(orgUnitIds)) {
     try {
       const result = await resolveEffectiveWarehouseApi(orgUnitId);
+      effectiveWarehouseIdByOrgUnit[orgUnitId] = result.warehouseId;
       if (result.warehouse && !seenWarehouseIds.has(result.warehouse.id)) {
         seenWarehouseIds.add(result.warehouse.id);
         warehouses.push(result.warehouse);
       }
     } catch {
-      // ignore single resolve failures
+      effectiveWarehouseIdByOrgUnit[orgUnitId] = null;
     }
   }
-  return warehouses;
+  return { warehouses, effectiveWarehouseIdByOrgUnit };
 };
 
 export const collectModeratorScopeOrgUnitIds = (
@@ -52,7 +59,7 @@ export const buildRegistrarAssignmentWarehouses = async (input: {
   registrarScopes: RegistrarScopeAssignment[];
   orgUnits: OrgUnit[];
   moderatorOrgRootIds?: string[];
-}): Promise<Warehouse[]> => {
+}): Promise<RegistrarWarehouseContext> => {
   const orgUnitIds = [
     ...input.registrarScopes.map((scope) => scope.orgUnitId).filter((id): id is string => Boolean(id)),
   ];
@@ -64,8 +71,11 @@ export const buildRegistrarAssignmentWarehouses = async (input: {
     });
     orgUnitIds.push(...sluzbaOrgIds);
   }
-  const effectiveWarehouses = await resolveEffectiveWarehousesForOrgUnits(orgUnitIds);
-  return mergeWarehousesById(input.baseWarehouses, effectiveWarehouses);
+  const resolved = await resolveEffectiveWarehousesForOrgUnits(orgUnitIds);
+  return {
+    warehouses: mergeWarehousesById(input.baseWarehouses, resolved.warehouses),
+    effectiveWarehouseIdByOrgUnit: resolved.effectiveWarehouseIdByOrgUnit,
+  };
 };
 
 export const isOrgUnitInModeratorRegistrarScope = (

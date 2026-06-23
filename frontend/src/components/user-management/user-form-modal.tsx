@@ -90,6 +90,9 @@ export const UserFormModal = ({
   const actorIsModerator = isModerator();
   const roleOptions = actorIsAdmin ? USER_ROLE_OPTIONS : MODERATOR_ASSIGNABLE_ROLES;
   const [registrarWarehouses, setRegistrarWarehouses] = useState<Warehouse[]>(warehouses);
+  const [effectiveWarehouseIdByOrgUnit, setEffectiveWarehouseIdByOrgUnit] = useState<
+    Record<string, string | null>
+  >({});
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -145,18 +148,20 @@ export const UserFormModal = ({
   useEffect(() => {
     if (role !== 'evidenticar') {
       setRegistrarWarehouses(warehouses);
+      setEffectiveWarehouseIdByOrgUnit({});
       return;
     }
     let cancelled = false;
     const load = async () => {
-      const merged = await buildRegistrarAssignmentWarehouses({
+      const context = await buildRegistrarAssignmentWarehouses({
         baseWarehouses: warehouses,
         registrarScopes,
         orgUnits,
         moderatorOrgRootIds: actorIsModerator ? getModeratorOrgRootIds() : undefined,
       });
       if (!cancelled) {
-        setRegistrarWarehouses(merged);
+        setRegistrarWarehouses(context.warehouses);
+        setEffectiveWarehouseIdByOrgUnit(context.effectiveWarehouseIdByOrgUnit);
       }
     };
     void load();
@@ -218,6 +223,7 @@ export const UserFormModal = ({
         warehouses: registrarWarehouses,
         orgUnits,
         equipment,
+        effectiveWarehouseIdByOrgUnit,
       });
       if (!scopeValidation.valid) {
         setError(scopeValidation.errors[0] ?? 'Neispravne dodjele evidentičara.');
@@ -357,6 +363,9 @@ export const UserFormModal = ({
                 onModeratorWarehouseAssignmentsChange={setModeratorWarehouseAssignments}
                 canEditModeratorAssignments={actorIsAdmin}
                 warehouses={role === 'evidenticar' ? registrarWarehouses : warehouses}
+                effectiveWarehouseIdByOrgUnit={
+                  role === 'evidenticar' ? effectiveWarehouseIdByOrgUnit : undefined
+                }
                 categories={categories}
                 orgUnits={orgUnits}
                 equipment={equipment}
