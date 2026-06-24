@@ -1,5 +1,14 @@
 # Changelog — inventory-count
 
+## 2026-06-24 (koordinator list API)
+
+- `inventory-count-list.controller`: `popis_koordinator` na `GET /sessions`, `/sessions/:id/committees`, `/committees/:id/lines`, `/committees/:id/equipment-scope` (FE lista sesija/komisija).
+
+## 2026-06-24 (moderator/koordinator UI bez krovne distribucije)
+
+- `InventoryCountPage`: upozorenje o krovnoj distribuciji i kreiranje sesije samo za `admin`.
+- Moderator/koordinator: učitavanje sesija bez `orgUnitId` filtera; prikaz komisija za dodijeljena skladišta čak i kad scoped org lista nema `distribucija`.
+
 ## 2026-06-22 (PDF UTF-8 dijakritike)
 
 - `downloadInventoryPrintPdf`: embed DejaVu Sans (`public/fonts/DejaVuSans.ttf`) preko `jspdf-unicode-font.util`; HTML štampa nepromijenjena.

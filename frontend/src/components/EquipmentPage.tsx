@@ -10,6 +10,7 @@ import { Search, Eye, Edit2, Filter, QrCode, Printer, List, Warehouse as Warehou
 import { isAdmin, isEvidenticar, isSkladistar, isModerator, getCurrentUser, isModeratorWarehouseAssigned } from '../store';
 import { LabelPrintSheet } from './LabelPrintSheet';
 import { getStatusLabel, getStatusColor, getEmployeeFullName, getEquipmentAffiliationLabel } from '../helpers';
+import { getSerialNumberDisplay } from '../helpers/equipment-display.util';
 import {
   getEquipmentPrimaryLabel,
   getEquipmentTrackingBadge,
@@ -480,12 +481,12 @@ export function EquipmentPage() {
                     />
                   </th>
                 ) : null}
-                <th className="px-4 py-3 font-medium text-gray-600">Lot</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Naziv</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Inv. broj</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Pripadnost</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Ključne spec.</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Serijski broj</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Kategorija</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Status</th>
+                <th className="px-4 py-3 font-medium text-gray-600 min-w-[110px]">Status</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Zadužen na</th>
                 <th className="px-4 py-3 font-medium text-gray-600 text-right">Akcije</th>
               </tr>
@@ -494,10 +495,7 @@ export function EquipmentPage() {
               {filtered.map(eq => {
                 const cat = state.categories.find(c => c.id === eq.categoryId);
                 const holder = eq.currentHolder;
-                const holderOrg = holder ? state.orgUnits.find(o => o.id === holder.orgUnitId) : null;
-                const specPreviews = cat && cat.fields[0]
-                  ? `${cat.fields[0].name}: ${eq.specifications[cat.fields[0].id] || '—'}`
-                  : '';
+                const serialValue = getSerialNumberDisplay(cat, eq.specifications)?.value ?? '—';
 
                 return (
                   <tr key={eq.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
@@ -526,9 +524,11 @@ export function EquipmentPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
-                        <span className="font-mono text-xs font-medium text-gray-800">
-                          {getEquipmentPrimaryLabel(eq)}
-                        </span>
+                        {eq.inventoryNumber?.trim() ? (
+                          <span className="font-mono text-xs font-medium text-gray-800">
+                            {eq.inventoryNumber.trim()}
+                          </span>
+                        ) : null}
                         {getEquipmentTrackingBadge(eq) ? (
                           <span className="inline-flex w-fit text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
                             {getEquipmentTrackingBadge(eq)}
@@ -540,24 +540,19 @@ export function EquipmentPage() {
                       <span className="text-xs text-gray-600">{getEquipmentAffiliationLabel(eq.affiliation)}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs text-gray-500">{specPreviews}</span>
+                      <span className="text-xs text-gray-500">{serialValue}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-gray-700">{cat?.name || '—'}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(eq.status)}`}>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ${getStatusColor(eq.status)}`}>
                         {getStatusLabel(eq.status)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       {holder ? (
-                        <div>
-                          <span className="text-gray-700 text-xs">{getEmployeeFullName(holder)}</span>
-                          {holderOrg && (
-                            <p className="text-[10px] text-gray-400">{holderOrg.name}</p>
-                          )}
-                        </div>
+                        <span className="text-gray-700 text-xs">{getEmployeeFullName(holder)}</span>
                       ) : (
                         <span className="text-xs text-gray-300">—</span>
                       )}

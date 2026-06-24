@@ -1,5 +1,10 @@
 # Changelog — roles-access
 
+## 2026-06-24 (pristup popisu + koordinator read API)
+
+- `canAccessPage`: `inventory-count` provjera (`ADMIN_OR_EVIDENTICAR_INVENTORY_PAGES`) prije `ADMIN_OR_MODERATOR_PAGES` — evidentičar i koordinator popisa više ne dobijaju 403 na stranici.
+- `popis_koordinator`: read-only `GET` na `employees`, `org-units`, `categories` (committee wizard nakon logina).
+
 ## 2026-06-23 (Režim B custody pool)
 
 - Režim B: dozvoljen `prenos` (osoba → osoba) uz isti efektivni WH nosilaca i primaoca.

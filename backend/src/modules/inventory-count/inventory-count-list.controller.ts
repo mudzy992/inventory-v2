@@ -16,13 +16,13 @@ export class InventoryCountListController {
   constructor(private readonly inventoryCountService: InventoryCountService) {}
 
   @Get('sessions')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.popis_koordinator, UserRole.user)
   findSessions(@CurrentUser() user: AuthenticatedUser, @Query() query: ListSessionsQueryDto) {
     return this.inventoryCountService.findSessionsForUser(user, query);
   }
 
   @Get('sessions/:id/committees')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.popis_koordinator, UserRole.user)
   findCommittees(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') sessionId: string,
@@ -32,7 +32,7 @@ export class InventoryCountListController {
   }
 
   @Get('committees/:id/lines')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.popis_koordinator, UserRole.user)
   findLines(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') committeeId: string,
@@ -42,7 +42,7 @@ export class InventoryCountListController {
   }
 
   @Get('committees/:id/equipment-scope')
-  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.user)
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.popis_koordinator, UserRole.user)
   findEquipmentScope(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') committeeId: string,

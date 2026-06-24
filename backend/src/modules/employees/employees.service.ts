@@ -9,12 +9,12 @@ import { EMPLOYEE_MESSAGES } from '../../common/utils/employee-messages.util';
 import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
 import { parseCategoryFields, resolveSerialNumberFromSpecifications } from '../../common/utils/category-fields.util';
 import {
-  buildContainsSearchWhere,
   buildOrderBy,
   paginate,
   parsePagination,
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
+import { buildEmployeeSearchWhere } from '../../common/utils/employee-name-search.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmployeeRelocationService } from '../employee-relocation/employee-relocation.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -122,13 +122,7 @@ export class EmployeesService {
     const term = query.q.trim();
     const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
     const scopeWhere = await this.registrarScope.buildEmployeeWhere(user);
-    const searchWhere = buildContainsSearchWhere(term, [
-      'firstName',
-      'lastName',
-      'email',
-      'title',
-      'staffNumber',
-    ]);
+    const searchWhere = buildEmployeeSearchWhere(term);
     const filters: Prisma.EmployeeWhereInput[] = [scopeWhere];
     if (query.activeOnly !== false) {
       filters.push({ isActive: true });
@@ -378,12 +372,7 @@ export class EmployeesService {
     if (query.isActive !== undefined) {
       filters.push({ isActive: query.isActive });
     }
-    const searchWhere = buildContainsSearchWhere(query.search, [
-      'firstName',
-      'lastName',
-      'email',
-      'staffNumber',
-    ]);
+    const searchWhere = buildEmployeeSearchWhere(query.search ?? '');
     if (searchWhere) {
       filters.push(searchWhere);
     }

@@ -23,23 +23,7 @@ import { PaginationControls } from './ui/pagination-controls';
 import { ModalRoot } from './ui/modal-root';
 import { EmployeeProfileDialog } from './employees/employee-profile-dialog';
 import { EquipmentCard } from './EquipmentCard';
-
-const getUserRoleLabel = (role: string): string => {
-  switch (role) {
-    case 'admin':
-      return 'Administrator';
-    case 'evidenticar':
-      return 'Evidentičar';
-    case 'skladistar':
-      return 'Skladištar';
-    case 'popis_koordinator':
-      return 'Koordinator popisa';
-    case 'moderator':
-      return 'Moderator';
-    default:
-      return 'Korisnik';
-  }
-};
+import { getRoleLabel } from '../helpers/role-display.util';
 
 export function EmployeesPage() {
   const [state] = useStore();
@@ -165,7 +149,7 @@ export function EmployeesPage() {
       setRelocationPreview(null);
       setShowDeactivateConfirm(false);
       if (result.userDeactivated && result.linkedUserRole) {
-        const roleLabel = getUserRoleLabel(result.linkedUserRole);
+        const roleLabel = getRoleLabel(result.linkedUserRole);
         toastSuccess(`Radnik je deaktiviran. Korisnički račun (${roleLabel}) je također deaktiviran.`);
         if (result.linkedUserRole !== 'user') {
           toastSuccess('Provjerite da kategorije/skladišta imaju drugog korisnika s odgovarajućom ulogom.');
@@ -581,7 +565,7 @@ export function EmployeesPage() {
                 <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 space-y-2">
                   <p className="font-medium">Potvrda deaktivacije</p>
                   <p>
-                    Korisnički račun ({getUserRoleLabel(deactivateLinkedRole ?? 'user')}) povezan s ovim radnikom
+                    Korisnički račun ({getRoleLabel(deactivateLinkedRole ?? 'user')}) povezan s ovim radnikom
                     će također biti deaktiviran.
                   </p>
                   {deactivateLinkedRole && deactivateLinkedRole !== 'user' ? (

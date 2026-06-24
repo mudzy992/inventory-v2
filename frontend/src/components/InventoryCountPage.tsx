@@ -146,7 +146,7 @@ export const InventoryCountPage = () => {
   }, [canManageCommittees, memberCommittees]);
   const loadSessions = useCallback(async () => {
     const response = await fetchInventorySessionsPageApi({
-      orgUnitId: orgUnitId || undefined,
+      orgUnitId: admin && orgUnitId ? orgUnitId : undefined,
       page: 1,
       pageSize: 100,
     });
@@ -157,7 +157,7 @@ export const InventoryCountPage = () => {
       setCommittees([]);
     }
     return response.items;
-  }, [orgUnitId, sessionId]);
+  }, [admin, orgUnitId, sessionId]);
   const loadCommittees = useCallback(async (targetSessionId: string) => {
     const rows = await fetchAllPaginatedItems((params) =>
       fetchInventoryCommitteesPageApi(targetSessionId, params),
@@ -261,7 +261,7 @@ export const InventoryCountPage = () => {
       void refreshAll();
       return;
     }
-    if (!orgUnitId) {
+    if (admin && !orgUnitId) {
       setSessions([]);
       setCommittees([]);
       setCommitteeLines([]);
@@ -273,7 +273,7 @@ export const InventoryCountPage = () => {
       return;
     }
     void refreshAll();
-  }, [canManageCommittees, orgUnitId, refreshAll, userId]);
+  }, [admin, canManageCommittees, orgUnitId, refreshAll, userId]);
   useEffect(() => {
     if (!sessionId || !canManageCommittees) {
       if (!sessionId) {
@@ -620,27 +620,36 @@ export const InventoryCountPage = () => {
       ) : null}
       {canManageCommittees ? (
         <>
-          {!rootDistribution ? (
+          {admin && !rootDistribution ? (
             <AlertBanner tone="warning">
               Krovna distribucija nije definisana u organizaciji. U modulu Organizacija dodajte jednu
               distribuciju (direktno pod direkcijom) prije kreiranja sesije popisa.
             </AlertBanner>
-          ) : (
+          ) : admin && sessions.length === 0 && rootDistribution ? (
             <>
               <p className="text-sm text-gray-600">
                 Distribucija: <strong>{rootDistribution.name}</strong>
               </p>
-              {sessions.length === 0 ? (
-                <InventorySessionEmptyState
-                  distributionName={distributionName}
-                  sessionName={sessionName}
-                  year={year}
-                  onSessionNameChange={setSessionName}
-                  onYearChange={setYear}
-                  onCreate={() => void handleCreateSession()}
-                />
-              ) : (
-                <>
+              <InventorySessionEmptyState
+                distributionName={distributionName}
+                sessionName={sessionName}
+                year={year}
+                onSessionNameChange={setSessionName}
+                onYearChange={setYear}
+                onCreate={() => void handleCreateSession()}
+              />
+            </>
+          ) : !admin && sessions.length === 0 ? (
+            <AlertBanner tone="info">
+              Nema sesija popisa. Kontaktirajte administratora da kreira sesiju prije konfiguracije komisija.
+            </AlertBanner>
+          ) : (
+            <>
+              {admin && rootDistribution ? (
+                <p className="text-sm text-gray-600">
+                  Distribucija: <strong>{rootDistribution.name}</strong>
+                </p>
+              ) : null}
                   <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" onClick={() => void refreshAll()} disabled={loading}>
                       <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -795,8 +804,6 @@ export const InventoryCountPage = () => {
                       )}
                     </>
                   ) : null}
-                </>
-              )}
             </>
           )}
         </>

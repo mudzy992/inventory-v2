@@ -17,6 +17,7 @@ import { pathToPageId } from '../routes/app-routes';
 import { SidebarNavButton } from './sidebar-nav-button';
 import { AppBrand } from './ui/app-brand';
 import type { PageId } from './page-id';
+import { getRoleBadgeClass, getRoleLabel } from '../helpers/role-display.util';
 
 const NavSection = ({
   label,
@@ -117,30 +118,8 @@ export const AppSidebarNav = ({
     }
   }, [currentPage]);
 
-  const roleLabel =
-    role === 'admin'
-      ? 'Administrator'
-      : role === 'moderator'
-        ? 'Moderator'
-      : role === 'evidenticar'
-        ? 'Evidentičar'
-        : role === 'popis_koordinator'
-          ? 'Koordinator popisa'
-        : role === 'skladistar'
-          ? 'Skladištar'
-          : 'Korisnik';
-  const roleColor =
-    role === 'admin'
-      ? 'bg-amber-500 text-amber-900'
-      : role === 'moderator'
-        ? 'bg-orange-500 text-orange-100'
-      : role === 'evidenticar'
-        ? 'bg-purple-500 text-purple-100'
-        : role === 'popis_koordinator'
-          ? 'bg-indigo-500 text-indigo-100'
-        : role === 'skladistar'
-          ? 'bg-teal-500 text-teal-900'
-          : 'bg-gray-500 text-gray-100';
+  const roleLabel = getRoleLabel(role);
+  const roleColor = getRoleBadgeClass(role);
 
   const handleLogout = () => {
     onLogout?.();

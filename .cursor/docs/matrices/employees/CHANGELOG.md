@@ -1,5 +1,10 @@
 # CHANGELOG — employees
 
+## 2026-06-24 (pretraga ime + prezime)
+
+- `EmployeesService.search` i lista: `buildEmployeeSearchWhere` — split na whitespace (`Ime Prezime` matcha `firstName` + `lastName`).
+- Shared util: `employee-name-search.util.ts` (koristi i holder search).
+
 ## 2026-06-23 (evidentičar write)
 
 - Evidentičar: `POST`/`PATCH` radnika u registrar scope-u kad je `features.evidenticar_employee_ops` uključen.

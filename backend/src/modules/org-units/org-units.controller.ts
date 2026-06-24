@@ -26,31 +26,31 @@ export class OrgUnitsController {
   constructor(private readonly orgUnitsService: OrgUnitsService) {}
 
   @Get()
-  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar, UserRole.popis_koordinator)
   findFlat(@CurrentUser() user: AuthenticatedUser) {
     return this.orgUnitsService.findFlat(user);
   }
 
   @Get('tree')
-  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar, UserRole.popis_koordinator)
   findTree(@CurrentUser() user: AuthenticatedUser) {
     return this.orgUnitsService.findTree(user);
   }
 
   @Get('search')
-  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar, UserRole.popis_koordinator)
   search(@CurrentUser() user: AuthenticatedUser, @Query() query: SearchOrgUnitsQueryDto) {
     return this.orgUnitsService.search(user, query);
   }
 
   @Get(':id/equipment-subtree-count')
-  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar, UserRole.popis_koordinator)
   countEquipmentInSubtree(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.orgUnitsService.countEquipmentInSubtree(user, id);
   }
 
   @Get(':id')
-  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar, UserRole.popis_koordinator)
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.orgUnitsService.findOne(user, id);
   }

@@ -10,6 +10,7 @@ import { isAdmin, isEvidenticar, getUserRole } from '../store';
 import { useCurrentEmployee } from '../hooks/use-current-employee';
 import { useStore } from '../useStore';
 import { getOrgUnitPath } from '../helpers';
+import { getRoleBadgeClass, getRoleLabel } from '../helpers/role-display.util';
 import { NotificationsPanel } from './NotificationsPanel';
 import { useInventoryFreezeBanner } from '../hooks/use-inventory-freeze-banner';
 import { InventoryFreezeBanner } from './inventory-count/inventory-freeze-banner';
@@ -47,22 +48,8 @@ export function Layout({ onLogout, children }: LayoutProps) {
     onLogout();
   };
 
-  const roleLabel =
-    role === 'admin'
-      ? 'Administrator'
-      : role === 'evidenticar'
-        ? 'Evidentičar'
-        : role === 'skladistar'
-          ? 'Skladištar'
-          : 'Korisnik';
-  const roleColor =
-    role === 'admin'
-      ? 'bg-amber-500 text-amber-900'
-      : role === 'evidenticar'
-        ? 'bg-purple-500 text-purple-100'
-        : role === 'skladistar'
-          ? 'bg-teal-500 text-teal-900'
-          : 'bg-gray-500 text-gray-100';
+  const roleLabel = getRoleLabel(role);
+  const roleColor = getRoleBadgeClass(role);
 
   return (
     <div className="flex h-[100dvh] bg-gray-50">

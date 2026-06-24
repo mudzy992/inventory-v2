@@ -27,25 +27,25 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Get()
-  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user, UserRole.popis_koordinator)
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListEmployeesQueryDto) {
     return this.employeesService.findAll(user, query);
   }
 
   @Get('search')
-  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.popis_koordinator)
   search(@CurrentUser() user: AuthenticatedUser, @Query() query: SearchEmployeesQueryDto) {
     return this.employeesService.search(user, query);
   }
 
   @Get(':id/profile')
-  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.popis_koordinator)
   getProfile(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.employeesService.getProfile(user, id);
   }
 
   @Get(':id')
-  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user)
+  @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar, UserRole.user, UserRole.popis_koordinator)
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.employeesService.findOne(user, id);
   }

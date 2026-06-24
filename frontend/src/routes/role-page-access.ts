@@ -63,11 +63,11 @@ export const canAccessPage = (pageId: PageId): boolean => {
   if (ADMIN_OR_EVIDENTICAR_PAGES.includes(pageId)) {
     return admin || evidenticar;
   }
-  if (ADMIN_OR_MODERATOR_PAGES.includes(pageId)) {
-    return admin;
-  }
   if (ADMIN_OR_EVIDENTICAR_INVENTORY_PAGES.includes(pageId)) {
     return admin || evidenticar || isPopisKoordinator();
+  }
+  if (ADMIN_OR_MODERATOR_PAGES.includes(pageId)) {
+    return admin;
   }
   if (pageId === 'warehouses') {
     return admin || skladistar;
