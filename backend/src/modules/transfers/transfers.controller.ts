@@ -21,6 +21,7 @@ import { CreateTransferDto } from './dto/create-transfer.dto';
 import { ListTransfersQueryDto } from './dto/list-transfers-query.dto';
 import { RecentTransfersQueryDto } from './dto/recent-transfers-query.dto';
 import { ManualPreuzeoLabelQueryDto } from './dto/manual-preuzeo-label-query.dto';
+import { SignTransferDto } from './dto/sign-transfer.dto';
 import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { TransfersService } from './transfers.service';
 
