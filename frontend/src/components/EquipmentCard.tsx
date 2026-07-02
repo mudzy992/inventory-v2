@@ -211,6 +211,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     setManualPreuzeoLabel('');
     setShowTransferModal(true);
   };
+
+  const handleDownloadQR = () => {
     const canvas = document.createElement('canvas');
     const svg = qrContainerRef.current?.querySelector('svg');
     if (!svg) return;
