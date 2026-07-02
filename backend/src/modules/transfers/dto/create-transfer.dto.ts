@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
 } from 'class-validator';
 import {
   TransferPartyType,
@@ -59,6 +60,11 @@ export class CreateTransferDto {
   @IsOptional()
   @IsBoolean()
   isCrossServiceTransfer?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  manualPreuzeoLabel?: string;
 
   @IsOptional()
   @IsUUID()

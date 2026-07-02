@@ -9,6 +9,8 @@ import { fetchTransfersPageApi } from '../api/transfers-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
+import { useAdminSettings } from '../contexts/admin-settings-context';
+import { ManualPreuzeoLabelInput } from './transfers/manual-preuzeo-label-input';
 import { getOrgUnitPath, getEmployeeFullName, formatDate, getStatusLabel, getStatusColor, getEquipmentAffiliationLabel } from '../helpers';
 import {
   getEquipmentPrimaryLabel,
@@ -23,7 +25,13 @@ import {
 } from '../helpers/equipment-display.util';
 import { buildTransferCreatePayload } from '../helpers/create-transfer-payload.util';
 import { canRegistrarCreateTransfer } from '../helpers/registrar-scope';
-import { canPerformEquipmentTransfer, canReactivateEquipment, EQUIPMENT_GUARD_MESSAGES, TRANSFER_GUARD_MESSAGES } from '../helpers/guards';
+import {
+  canPerformEquipmentTransfer,
+  canReactivateEquipment,
+  willGenerateTransferDocument,
+  EQUIPMENT_GUARD_MESSAGES,
+  TRANSFER_GUARD_MESSAGES,
+} from '../helpers/guards';
 import { X, Package, QrCode, History, ArrowRight, Download, Printer, User, Building2, FileText, AlertTriangle, CheckCircle, Warehouse, Trash2 } from 'lucide-react';
 import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
@@ -44,14 +52,23 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const refresh = useRefreshData();
   const { toastError, toastSuccess } = useToast();
   const { getBoolean } = usePublicSettings();
+  const { settings: adminSettings } = useAdminSettings();
   const disposalPreListEnabled = getBoolean('features.disposal_pre_list', true);
   const transfersEnabled = getBoolean('features.transfers', true);
+  const transferSettings = useMemo(
+    () => ({
+      'features.transfers': transfersEnabled,
+      ...adminSettings,
+    }),
+    [adminSettings, transfersEnabled],
+  );
   const qrContainerRef = useRef<HTMLDivElement>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<TransferType>('prenos');
   const [toPersonId, setToPersonId] = useState('');
   const [selectedToEmployee, setSelectedToEmployee] = useState<Employee | null>(null);
   const [reason, setReason] = useState('');
+  const [manualPreuzeoLabel, setManualPreuzeoLabel] = useState('');
   const [expandedTransferId, setExpandedTransferId] = useState<string | null>(null);
   const [showMarkDisposal, setShowMarkDisposal] = useState(false);
   const [showReactivate, setShowReactivate] = useState(false);
@@ -185,8 +202,15 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     warehouseCondition: eq.warehouseCondition,
   });
   const canReactivate = reactivateGuard.allowed;
+  const showManualPreuzeoField =
+    (transferType === 'zaduzenje' || transferType === 'razduzenje') &&
+    willGenerateTransferDocument(transferType, transferSettings);
 
-  const handleDownloadQR = () => {
+  const openTransferModal = (type: TransferType) => {
+    setTransferType(type);
+    setManualPreuzeoLabel('');
+    setShowTransferModal(true);
+  };
     const canvas = document.createElement('canvas');
     const svg = qrContainerRef.current?.querySelector('svg');
     if (!svg) return;
@@ -256,6 +280,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     setToPersonId('');
     setSelectedToEmployee(null);
     setReason('');
+    setManualPreuzeoLabel('');
   };
 
   const handleTransfer = async () => {
@@ -276,6 +301,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
       toPersonId,
       toPersonOrgUnitId: toEmployee?.orgUnitId,
       reason,
+      manualPreuzeoLabel,
       admin,
       evidenticar,
     });
@@ -553,7 +579,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
               {canAssign && (
                 <button
                   type="button"
-                  onClick={() => { setTransferType('zaduzenje'); setShowTransferModal(true); }}
+                  onClick={() => openTransferModal('zaduzenje')}
                   className="flex items-center gap-1.5 text-sm bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
                 >
                   <User size={14} /> Zaduži
@@ -564,7 +590,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   {canPrenos && (
                     <button
                       type="button"
-                      onClick={() => { setTransferType('prenos'); setShowTransferModal(true); }}
+                      onClick={() => openTransferModal('prenos')}
                       className="flex items-center gap-1.5 text-sm bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
                     >
                       <ArrowRight size={14} /> Prenesi
@@ -573,7 +599,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   {canRazduzenje && (
                     <button
                       type="button"
-                      onClick={() => { setTransferType('razduzenje'); setShowTransferModal(true); }}
+                      onClick={() => openTransferModal('razduzenje')}
                       className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       <Warehouse size={14} /> Razduži
@@ -642,6 +668,14 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
               <AlertBanner tone="info">
                 Ciljno skladište: <strong>{warehousePreview.name}</strong>
               </AlertBanner>
+            ) : null}
+
+            {showManualPreuzeoField ? (
+              <ManualPreuzeoLabelInput
+                value={manualPreuzeoLabel}
+                onChange={setManualPreuzeoLabel}
+                equipmentId={eq.id}
+              />
             ) : null}
 
             {transferType === 'razduzenje' && (

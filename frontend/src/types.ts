@@ -215,6 +215,7 @@ export interface TransferRecord {
   scannedDocUrl?: string;
   documentNumber: string;
   notes?: string;
+  manualPreuzeoLabel?: string | null;
   isCrossServiceTransfer?: boolean;
   fromWarehouseId?: string | null;
   toWarehouseId?: string | null;

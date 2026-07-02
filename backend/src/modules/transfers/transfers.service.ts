@@ -62,6 +62,9 @@ import { TransferDocumentGenerationService } from './transfer-document-generatio
 import { buildTransferRawDocumentHtml } from './utils/transfer-raw-document.util';
 import { pickRegistrarAssignmentWarehouse } from './utils/pick-registrar-assignment-warehouse.util';
 import { WarehouseTransferTemplateService } from '../warehouses/warehouse-transfer-template.service';
+import { normalizeManualPreuzeoLabel } from './utils/normalize-manual-preuzeo-label.util';
+
+const MANUAL_PREUZEO_SUGGESTIONS_LIMIT = 100;
 
 const transferInclude = {
   equipment: {
@@ -225,6 +228,36 @@ export class TransfersService {
     return this.mapTransferDocumentMeta(transfer);
   }
 
+  async getManualPreuzeoSuggestions(): Promise<string[]> {
+    const rows = await this.prisma.transfer.findMany({
+      where: {
+        manualPreuzeoLabel: { not: null },
+        NOT: { manualPreuzeoLabel: '' },
+      },
+      select: { manualPreuzeoLabel: true },
+      distinct: ['manualPreuzeoLabel'],
+      orderBy: { manualPreuzeoLabel: 'asc' },
+      take: MANUAL_PREUZEO_SUGGESTIONS_LIMIT,
+    });
+    return rows
+      .map((row) => row.manualPreuzeoLabel?.trim())
+      .filter((label): label is string => Boolean(label));
+  }
+
+  async getLastManualPreuzeoLabel(equipmentId: string): Promise<string | null> {
+    const row = await this.prisma.transfer.findFirst({
+      where: {
+        equipmentId,
+        type: { in: ['zaduzenje', 'razduzenje'] },
+        manualPreuzeoLabel: { not: null },
+        NOT: { manualPreuzeoLabel: '' },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { manualPreuzeoLabel: true },
+    });
+    return row?.manualPreuzeoLabel?.trim() ?? null;
+  }
+
   async create(user: AuthenticatedUser, dto: CreateTransferDto) {
     await this.settingsService.assertFeatureEnabled('features.transfers');
     if (user.role === 'user') {
@@ -344,6 +377,7 @@ export class TransfersService {
     const documentWarehouseId = await this.resolveDocumentWarehouseForCreate(user, dto, equipment);
     await this.assertWarehouseReadyForDocuments(documentWarehouseId);
     await this.transferTemplateService.assertWarehouseHasActiveTemplate(documentWarehouseId);
+    const manualPreuzeoLabel = normalizeManualPreuzeoLabel(dto.type, dto.manualPreuzeoLabel);
     const created = await this.prisma.$transaction(async (tx) => {
       const documentNumber = await allocateTransferDocumentNumberInTx(
         tx,
@@ -367,6 +401,7 @@ export class TransfersService {
           date: transferDate,
           reason: dto.reason,
           notes: dto.notes,
+          manualPreuzeoLabel,
           status: 'raw',
           documentNumber,
           isCrossServiceTransfer: isCrossService,

@@ -1,4 +1,5 @@
 import type { Prisma } from '../../../../generated/prisma/client';
+import { resolvePreuzeoLabel } from './build-transfer-template-data.util';
 
 type TransferForDocument = Prisma.TransferGetPayload<{
   include: {
@@ -6,6 +7,8 @@ type TransferForDocument = Prisma.TransferGetPayload<{
     signer: true;
     fromPerson: true;
     toPerson: true;
+    fromWarehouse: true;
+    toWarehouse: true;
   };
 }>;
 
@@ -15,10 +18,25 @@ export const buildTransferRawDocumentHtml = (transfer: TransferForDocument): str
     transfer.fromPerson != null
       ? `${transfer.fromPerson.firstName} ${transfer.fromPerson.lastName}`
       : transfer.fromType;
-  const toLabel =
-    transfer.toPerson != null
-      ? `${transfer.toPerson.firstName} ${transfer.toPerson.lastName}`
-      : transfer.toType;
+  const toLabel = resolvePreuzeoLabel({
+    documentNumber: transfer.documentNumber,
+    reason: transfer.reason,
+    notes: transfer.notes,
+    fromType: transfer.fromType,
+    toType: transfer.toType,
+    manualPreuzeoLabel: transfer.manualPreuzeoLabel,
+    signer: transfer.signer,
+    fromPerson: transfer.fromPerson,
+    toPerson: transfer.toPerson,
+    fromWarehouse: transfer.fromWarehouse,
+    toWarehouse: transfer.toWarehouse,
+    equipment: {
+      inventoryNumber: transfer.equipment.inventoryNumber,
+      specifications: transfer.equipment.specifications,
+      category: { name: '', fields: [], optionalFields: [] },
+      stockLot: null,
+    },
+  });
   return `<!DOCTYPE html>
 <html lang="bs">
 <head>

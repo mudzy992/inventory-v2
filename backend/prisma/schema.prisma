@@ -798,6 +798,7 @@ model Transfer {
   generatedDocxPath      String?           @db.VarChar(500)
   generatedPdfPath       String?           @db.VarChar(500)
   notes                  String?           @db.Text
+  manualPreuzeoLabel     String?           @db.VarChar(255)
   isCrossServiceTransfer Boolean           @default(false)
   inventoryLineId        String?           @unique
   createdAt              DateTime          @default(now())

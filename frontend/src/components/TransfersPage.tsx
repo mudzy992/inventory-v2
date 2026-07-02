@@ -37,10 +37,7 @@ import {
 import { EmployeeAutocomplete } from './employee-autocomplete';
 import { EquipmentAutocomplete } from './equipment-autocomplete';
 import { CustodyPoolEquipmentLookup } from './transfers/custody-pool-equipment-lookup';
-import {
-  hasRegistrarModeAAssignment,
-  hasRegistrarModeBAssignment,
-} from '../helpers/registrar-scope';
+import { ManualPreuzeoLabelInput } from './transfers/manual-preuzeo-label-input';
 
 interface TransfersPageProps {
   initialTab?: TransferModuleTab;
@@ -101,6 +98,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
   const [fReason, setFReason] = useState('');
   const [fDate, setFDate] = useState(new Date().toISOString().slice(0, 10));
   const [fNotes, setFNotes] = useState('');
+  const [fManualPreuzeoLabel, setFManualPreuzeoLabel] = useState('');
   const [zaduzenjePickMode, setZaduzenjePickMode] = useState<'list' | 'custody'>('list');
 
   const showModeAListPicker = evidenticar && hasRegistrarModeAAssignment(user);
@@ -144,6 +142,10 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     return isCrossServiceTransfer(selectedEquipHolder.orgUnitId, selectedToEmployee.orgUnitId);
   }, [fType, selectedEquipHolder, selectedToEmployee]);
 
+  const showManualPreuzeoField =
+    (fType === 'zaduzenje' || fType === 'razduzenje') &&
+    willGenerateTransferDocument(fType, transferSettings);
+
   const openForm = (type: TransferType) => {
     setFType(type);
     setFEquipmentId('');
@@ -153,6 +155,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     setFReason('');
     setFDate(new Date().toISOString().slice(0, 10));
     setFNotes('');
+    setFManualPreuzeoLabel('');
     setZaduzenjePickMode(hasRegistrarModeAAssignment(user) ? 'list' : 'custody');
     setShowForm(true);
   };
@@ -199,6 +202,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
       reason: fReason,
       date: fDate,
       notes: fNotes,
+      manualPreuzeoLabel: fManualPreuzeoLabel,
       admin,
       evidenticar,
     });
@@ -294,6 +298,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                     setFToPersonId('');
                     setSelectedToEmployee(null);
                     setSignerEmployee(null);
+                    setFManualPreuzeoLabel('');
                     if (e.target.value === 'zaduzenje') {
                       setZaduzenjePickMode(hasRegistrarModeAAssignment(user) ? 'list' : 'custody');
                     }
@@ -354,6 +359,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                     onChange={(equipmentId, equipment) => {
                       setFEquipmentId(equipmentId);
                       setSelectedEquipment(equipment);
+                      setFManualPreuzeoLabel('');
                     }}
                   />
                 ) : null}
@@ -364,6 +370,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                     onChange={(equipmentId, equipment) => {
                       setFEquipmentId(equipmentId);
                       setSelectedEquipment(equipment);
+                      setFManualPreuzeoLabel('');
                     }}
                   />
                 ) : null}
@@ -426,6 +433,14 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                     <span className="text-gray-400">Nije definisan</span>
                   )}
                 </div>
+              ) : null}
+
+              {showManualPreuzeoField && fEquipmentId ? (
+                <ManualPreuzeoLabelInput
+                  value={fManualPreuzeoLabel}
+                  onChange={setFManualPreuzeoLabel}
+                  equipmentId={fEquipmentId}
+                />
               ) : null}
 
               <div>

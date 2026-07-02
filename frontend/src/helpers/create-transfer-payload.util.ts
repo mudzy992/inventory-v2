@@ -13,6 +13,7 @@ export interface BuildTransferPayloadInput {
   reason?: string;
   date?: string;
   notes?: string;
+  manualPreuzeoLabel?: string;
   admin: boolean;
   evidenticar: boolean;
 }
@@ -64,6 +65,7 @@ export const buildTransferCreatePayload = (
     reason,
     date,
     notes,
+    manualPreuzeoLabel,
     admin,
     evidenticar,
   } = input;
@@ -106,6 +108,10 @@ export const buildTransferCreatePayload = (
       date: date ?? new Date().toISOString().slice(0, 10),
       reason: reason || undefined,
       notes: notes || undefined,
+      manualPreuzeoLabel:
+        type === 'zaduzenje' || type === 'razduzenje'
+          ? manualPreuzeoLabel?.trim() || undefined
+          : undefined,
       isCrossServiceTransfer: crossService,
       ...warehousePayload,
     },

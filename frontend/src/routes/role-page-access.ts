@@ -6,7 +6,6 @@ export const ADMIN_ONLY_PAGES: PageId[] = ['locations', 'categories', 'settings'
 export const ADMIN_OR_MODERATOR_PAGES: PageId[] = [
   'organization',
   'employees',
-  'warehouses',
   'user-management',
   'inventory-count',
   'disposal-commissions',
@@ -51,6 +50,12 @@ export const canAccessPage = (pageId: PageId): boolean => {
   if (ADMIN_ONLY_PAGES.includes(pageId)) {
     return admin;
   }
+  if (pageId === 'warehouses') {
+    return admin || skladistar || moderator;
+  }
+  if (pageId === 'warehouse-inventory') {
+    return skladistar && !admin;
+  }
   if (moderator) {
     if (ADMIN_OR_MODERATOR_PAGES.includes(pageId) || MODERATOR_READ_PAGES.includes(pageId)) {
       return true;
@@ -68,12 +73,6 @@ export const canAccessPage = (pageId: PageId): boolean => {
   }
   if (ADMIN_OR_MODERATOR_PAGES.includes(pageId)) {
     return admin;
-  }
-  if (pageId === 'warehouses') {
-    return admin || skladistar;
-  }
-  if (pageId === 'warehouse-inventory') {
-    return skladistar && !admin;
   }
   if (pageId === 'my-equipment' || pageId === 'qr-scanner') {
     return true;

@@ -7,6 +7,7 @@ type TransferForTemplate = {
   notes: string | null;
   fromType: string;
   toType: string;
+  manualPreuzeoLabel?: string | null;
   signer: { firstName: string; lastName: string };
   fromPerson: { firstName: string; lastName: string } | null;
   toPerson: { firstName: string; lastName: string } | null;
@@ -42,6 +43,14 @@ const formatParty = (
   return label || type;
 };
 
+export const resolvePreuzeoLabel = (transfer: TransferForTemplate): string => {
+  const manual = transfer.manualPreuzeoLabel?.trim();
+  if (manual) {
+    return manual;
+  }
+  return formatParty(transfer.toType, transfer.toPerson, transfer.toWarehouse);
+};
+
 export const buildTransferTemplateData = (
   transfer: TransferForTemplate,
 ): Record<string, string> => {
@@ -49,7 +58,7 @@ export const buildTransferTemplateData = (
   return {
     broj_prenosnice: transfer.documentNumber,
     predao: formatParty(transfer.fromType, transfer.fromPerson, transfer.fromWarehouse),
-    preuzeo: formatParty(transfer.toType, transfer.toPerson, transfer.toWarehouse),
+    preuzeo: resolvePreuzeoLabel(transfer),
     potpisnik: formatPerson(transfer.signer),
     inv_broj: transfer.equipment.inventoryNumber ?? '',
     naziv_opreme: buildTransferEquipmentLabel(transfer.equipment),

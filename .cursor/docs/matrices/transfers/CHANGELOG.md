@@ -1,3 +1,10 @@
+## 2026-07-02 — Manual `{preuzeo}` override na prenosnici
+
+- Novo nullable polje `Transfer.manualPreuzeoLabel` (VARCHAR 255); samo `zaduzenje` / `razduzenje`.
+- Utiče isključivo na placeholder `{preuzeo}` u generisanom dokumentu; ne mijenja poslovnu logiku transfera.
+- API: `GET /transfers/manual-preuzeo-suggestions`, `GET /transfers/manual-preuzeo-label?equipmentId=`.
+- UI: optional polje „Preuzeo (za prenosnicu)” s prefill-om i autocomplete prijedlozima.
+
 ## 2026-06-23 — Potpisnik u formi prenosa (evidentičar scope)
 
 - UI više ne učitava potpisnika preko `GET /employees/:id` (403 kad je direktor van registrar opsega).

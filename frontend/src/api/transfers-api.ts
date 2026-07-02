@@ -48,3 +48,14 @@ export const fetchRecentTransfersApi = async (limit = 5) => {
   const rows = await apiRequest<TransferApiRow[]>(`/transfers/recent?${params.toString()}`);
   return rows.map(mapTransferRow);
 };
+
+export const fetchManualPreuzeoSuggestionsApi = async (): Promise<string[]> =>
+  apiRequest<string[]>('/transfers/manual-preuzeo-suggestions');
+
+export const fetchLastManualPreuzeoLabelApi = async (equipmentId: string): Promise<string | null> => {
+  const params = new URLSearchParams({ equipmentId });
+  const response = await apiRequest<{ label: string | null }>(
+    `/transfers/manual-preuzeo-label?${params.toString()}`,
+  );
+  return response.label;
+};

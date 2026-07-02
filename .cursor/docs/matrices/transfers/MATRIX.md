@@ -54,6 +54,7 @@ Potpuno blokiranje prenosa opreme: `features.transfers=false`. Init bez prenosni
 - Aktivacija ručno: `PATCH /warehouses/:id/transfer-template/:templateId/activate` (ponovna validacija fajla na disku).
 - Skladište mora imati `orgUnitId`; `POST /transfers` (document mode) **odbija** create ako skladište nema aktivni obrazac.
 - Placeholderi u .docx: `{broj_prenosnice}`, `{predao}`, `{preuzeo}`, `{potpisnik}`, `{inv_broj}`, `{naziv_opreme}`, `{obrazlozenje}` (jednostruke vitičaste zagrade).
+- **`{preuzeo}` override (dokument-only):** opcionalno polje `manualPreuzeoLabel` na transferu (`zaduzenje` / `razduzenje` samo). Ako je postavljeno, koristi se na Word/PDF umjesto `formatParty(to)`; ne mijenja ownership, status opreme ni finalize logiku. Default bez override-a: skladište (`Skladište: …`) ili osoba. UI: forma na `TransfersPage` i `EquipmentCard` (kad je document flow); prefill posljednje vrijednosti za isti `equipmentId`; autocomplete iz unikatnih ranijih unosa (`GET /transfers/manual-preuzeo-suggestions`).
 - Template putanja: `uploads/templates/warehouses/{warehouseId}/{id}.docx`
 
 ## Broj dokumenta

@@ -20,7 +20,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { ListTransfersQueryDto } from './dto/list-transfers-query.dto';
 import { RecentTransfersQueryDto } from './dto/recent-transfers-query.dto';
-import { SignTransferDto } from './dto/sign-transfer.dto';
+import { ManualPreuzeoLabelQueryDto } from './dto/manual-preuzeo-label-query.dto';
 import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { TransfersService } from './transfers.service';
 
@@ -42,6 +42,23 @@ export class TransfersController {
   @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.user, UserRole.skladistar)
   findRecent(@CurrentUser() user: AuthenticatedUser, @Query() query: RecentTransfersQueryDto) {
     return this.transfersService.findRecent(user, query);
+  }
+
+  @Get('manual-preuzeo-suggestions')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
+  getManualPreuzeoSuggestions() {
+    return this.transfersService.getManualPreuzeoSuggestions();
+  }
+
+  @Get('manual-preuzeo-label')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
+  getLastManualPreuzeoLabel(@Query() query: ManualPreuzeoLabelQueryDto) {
+    if (!query.equipmentId) {
+      return { label: null };
+    }
+    return this.transfersService
+      .getLastManualPreuzeoLabel(query.equipmentId)
+      .then((label) => ({ label }));
   }
 
   @Get(':id')
