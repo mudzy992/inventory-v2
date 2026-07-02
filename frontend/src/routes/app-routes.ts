@@ -1,5 +1,7 @@
 import type { PageId } from '../components/page-id';
-import { isAdmin, isEvidenticar, isSkladistar } from '../store';
+import type { UserRole } from '../types';
+import { isNavPageEnabled } from '../utils/settings-feature.util';
+import { canAccessPageForRole, getDefaultPageCandidatesForRole } from './role-page-access';
 
 export const PAGE_PATHS: Record<PageId, string> = {
   dashboard: '/dashboard',
@@ -55,15 +57,24 @@ export const pathToPageId = (pathname: string): PageId | null => {
   return null;
 };
 
-export const getDefaultPathForRole = (): string => {
-  if (isAdmin() || isEvidenticar()) {
-    return PAGE_PATHS.dashboard;
-  }
-  if (isSkladistar()) {
-    return PAGE_PATHS.warehouses;
+export const resolveDefaultPath = (
+  role: UserRole | null | undefined,
+  publicSettings: Record<string, string | number | boolean>,
+  adminSettings: Record<string, string | number | boolean>,
+): string => {
+  for (const pageId of getDefaultPageCandidatesForRole(role)) {
+    if (!canAccessPageForRole(pageId, role)) {
+      continue;
+    }
+    if (!isNavPageEnabled(pageId, publicSettings, adminSettings)) {
+      continue;
+    }
+    return PAGE_PATHS[pageId];
   }
   return PAGE_PATHS['my-equipment'];
 };
+
+export { getDefaultPathForRole } from './role-page-access';
 
 export const isPublicEquipmentPath = (pathname: string): boolean => {
   const path = normalizePathname(pathname);

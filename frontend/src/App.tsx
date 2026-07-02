@@ -5,7 +5,6 @@ import { LoginPage } from './components/LoginPage';
 import { SetupWizardPage } from './components/setup/setup-wizard-page';
 import { useAuth } from './contexts/AuthContext';
 import { useData } from './contexts/DataContext';
-import { getDefaultPathForRole } from './routes/app-routes';
 import { AppRouter } from './routes/app-router';
 import { PublicEquipmentRoute } from './routes/public-equipment-route';
 import { HttpStatusPage } from './components/ui/http-status-page';
@@ -39,7 +38,7 @@ function AppShell() {
   }, []);
 
   const handleLoginSuccess = () => {
-    navigate(getDefaultPathForRole(), { replace: true });
+    navigate('/', { replace: true });
   };
 
   const handleLogout = async () => {

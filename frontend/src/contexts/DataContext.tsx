@@ -72,8 +72,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const cleared = emptyState();
       setState(cleared);
       syncAppState(cleared);
+      setIsLoading(false);
       return;
     }
+    setIsLoading(true);
     void refresh();
   }, [isAuthenticated, user, refresh]);
 

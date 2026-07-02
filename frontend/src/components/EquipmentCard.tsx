@@ -9,7 +9,6 @@ import { fetchTransfersPageApi } from '../api/transfers-api';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
-import { useAdminSettings } from '../contexts/admin-settings-context';
 import { ManualPreuzeoLabelInput } from './transfers/manual-preuzeo-label-input';
 import { getOrgUnitPath, getEmployeeFullName, formatDate, getStatusLabel, getStatusColor, getEquipmentAffiliationLabel } from '../helpers';
 import {
@@ -28,7 +27,7 @@ import { canRegistrarCreateTransfer } from '../helpers/registrar-scope';
 import {
   canPerformEquipmentTransfer,
   canReactivateEquipment,
-  willGenerateTransferDocument,
+  shouldShowManualPreuzeoField,
   EQUIPMENT_GUARD_MESSAGES,
   TRANSFER_GUARD_MESSAGES,
 } from '../helpers/guards';
@@ -52,16 +51,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const refresh = useRefreshData();
   const { toastError, toastSuccess } = useToast();
   const { getBoolean } = usePublicSettings();
-  const { settings: adminSettings } = useAdminSettings();
   const disposalPreListEnabled = getBoolean('features.disposal_pre_list', true);
   const transfersEnabled = getBoolean('features.transfers', true);
-  const transferSettings = useMemo(
-    () => ({
-      'features.transfers': transfersEnabled,
-      ...adminSettings,
-    }),
-    [adminSettings, transfersEnabled],
-  );
   const qrContainerRef = useRef<HTMLDivElement>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<TransferType>('prenos');
@@ -202,9 +193,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
     warehouseCondition: eq.warehouseCondition,
   });
   const canReactivate = reactivateGuard.allowed;
-  const showManualPreuzeoField =
-    (transferType === 'zaduzenje' || transferType === 'razduzenje') &&
-    willGenerateTransferDocument(transferType, transferSettings);
+  const showManualPreuzeoField = shouldShowManualPreuzeoField(transferType, eq);
 
   const openTransferModal = (type: TransferType) => {
     setTransferType(type);

@@ -19,6 +19,7 @@ import { useAdminSettings } from '../contexts/admin-settings-context';
 import {
   canPerformEquipmentTransfer,
   willGenerateTransferDocument,
+  shouldShowManualPreuzeoField,
   canCreateCrossServiceTransfer,
   TRANSFER_GUARD_MESSAGES,
 } from '../helpers/guards';
@@ -44,16 +45,17 @@ interface TransfersPageProps {
 }
 
 export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
-  const { getBoolean } = usePublicSettings();
+  const { settings: publicSettings, getBoolean } = usePublicSettings();
   const { settings: adminSettings } = useAdminSettings();
   const documentsEnabled = getBoolean('features.documents', true);
   const custodyPoolEnabled = getBoolean('features.registrar_mode_b_custody_pool', true);
   const transferSettings = useMemo(
     () => ({
-      'features.transfers': getBoolean('features.transfers', true),
+      ...publicSettings,
       ...adminSettings,
+      'features.transfers': getBoolean('features.transfers', true),
     }),
-    [adminSettings, getBoolean],
+    [adminSettings, getBoolean, publicSettings],
   );
   const [activeTab, setActiveTab] = useState<TransferModuleTab>(initialTab);
   const [state] = useStore();
@@ -142,9 +144,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     return isCrossServiceTransfer(selectedEquipHolder.orgUnitId, selectedToEmployee.orgUnitId);
   }, [fType, selectedEquipHolder, selectedToEmployee]);
 
-  const showManualPreuzeoField =
-    (fType === 'zaduzenje' || fType === 'razduzenje') &&
-    willGenerateTransferDocument(fType, transferSettings);
+  const showManualPreuzeoField = shouldShowManualPreuzeoField(fType, selectedEquipment);
 
   const openForm = (type: TransferType) => {
     setFType(type);
@@ -435,11 +435,11 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                 </div>
               ) : null}
 
-              {showManualPreuzeoField && fEquipmentId ? (
+              {showManualPreuzeoField ? (
                 <ManualPreuzeoLabelInput
                   value={fManualPreuzeoLabel}
                   onChange={setFManualPreuzeoLabel}
-                  equipmentId={fEquipmentId}
+                  equipmentId={fEquipmentId || undefined}
                 />
               ) : null}
 

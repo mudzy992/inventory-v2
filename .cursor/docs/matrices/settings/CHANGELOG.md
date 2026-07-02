@@ -1,5 +1,9 @@
 # Settings matrica — CHANGELOG
 
+## 2026-07-02
+
+- `transfer.generation.enabled`, `on_zaduzenje`, `on_razduzenje` → **public** scope (UI forme prenosa i upozorenje bez prenosnice za sve uloge).
+
 ## 2026-06-23
 
 - `features.registrar_mode_b_custody_pool` (public, default true) — Režim B pool vraćene opreme i zaduženje po inventurnom broju.

@@ -16,8 +16,8 @@ export const fetchBootstrap = async (role: UserRole): Promise<AppState> => {
   const loadLocations =
     role === 'admin' || role === 'moderator' || role === 'evidenticar' || role === 'skladistar';
   const [orgUnits, categories, notifications, cantons, cities, warehouses] = await Promise.all([
-    fetchOrgUnitsFlatApi(),
-    fetchCategoriesFlatApi(),
+    fetchOrgUnitsFlatApi().catch(() => []),
+    fetchCategoriesFlatApi().catch(() => []),
     fetchNotificationsApi().catch(() => [] as Notification[]),
     loadLocations ? fetchCantonsApi().catch(() => []) : Promise.resolve([]),
     loadLocations ? fetchCitiesApi().catch(() => []) : Promise.resolve([]),

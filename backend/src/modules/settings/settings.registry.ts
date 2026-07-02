@@ -466,7 +466,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
   }),
   def({
     key: 'transfer.generation.enabled',
-    scope: 'private',
+    scope: 'public',
     valueType: 'boolean',
     defaultValue: true,
     label: 'Kreiranje prenosnica (uključeno)',
@@ -486,7 +486,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
   }),
   def({
     key: 'transfer.generation.on_zaduzenje',
-    scope: 'private',
+    scope: 'public',
     valueType: 'boolean',
     defaultValue: true,
     label: 'Prenosnica: skladište → osoba',
@@ -506,7 +506,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
   }),
   def({
     key: 'transfer.generation.on_razduzenje',
-    scope: 'private',
+    scope: 'public',
     valueType: 'boolean',
     defaultValue: true,
     label: 'Prenosnica: osoba → skladište',

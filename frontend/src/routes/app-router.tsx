@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from '../components/Layout';
-import { PAGE_PATHS, getDefaultPathForRole } from './app-routes';
+import { PAGE_PATHS } from './app-routes';
+import { useRoleDefaultPath } from '../hooks/use-role-default-path';
 import {
   LazyCategoriesPage,
   LazyDashboard,
@@ -29,7 +30,10 @@ interface AppRouterProps {
   onLogout: () => void;
 }
 
-const RoleDefaultRedirect = () => <Navigate to={getDefaultPathForRole()} replace />;
+const RoleDefaultRedirect = () => {
+  const defaultPath = useRoleDefaultPath();
+  return <Navigate to={defaultPath} replace />;
+};
 
 const APP_ROUTE_DEFINITIONS = [
   { path: PAGE_PATHS.dashboard, pageId: 'dashboard' as const, Page: LazyDashboard },

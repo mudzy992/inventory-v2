@@ -43,6 +43,7 @@ export {
   canPerformEquipmentTransfer,
   canCreateTransferType,
   willGenerateTransferDocument,
+  shouldShowManualPreuzeoField,
   canCreateCrossServiceTransfer,
   canSignTransfer,
   canFinalizeTransfer,

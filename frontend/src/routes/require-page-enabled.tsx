@@ -3,8 +3,8 @@ import { Navigate } from 'react-router-dom';
 import type { PageId } from '../components/page-id';
 import { useAdminSettings } from '../contexts/admin-settings-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
+import { useRoleFallbackPath } from '../hooks/use-role-default-path';
 import { isNavPageEnabled } from '../utils/settings-feature.util';
-import { getDefaultPathForRole } from './app-routes';
 
 interface RequirePageEnabledProps {
   pageId: PageId;
@@ -14,8 +14,9 @@ interface RequirePageEnabledProps {
 export const RequirePageEnabled = ({ pageId, children }: RequirePageEnabledProps) => {
   const { settings: publicSettings } = usePublicSettings();
   const { settings: adminSettings } = useAdminSettings();
+  const fallbackPath = useRoleFallbackPath(pageId);
   if (!isNavPageEnabled(pageId, publicSettings, adminSettings)) {
-    return <Navigate to={getDefaultPathForRole()} replace />;
+    return <Navigate to={fallbackPath} replace />;
   }
   return children;
 };

@@ -1,3 +1,6 @@
+import { isAccountingTrackedEquipment } from '../equipment-accounting-tracked.util';
+import { isSettingFlagEnabled } from '../../utils/settings-feature.util';
+
 export const TRANSFER_GUARD_MESSAGES = {
   missingRecipient: 'Odaberite osobu na koju prenosite opremu.',
   crossServiceEvidenticar:
@@ -29,16 +32,26 @@ export const canPerformEquipmentTransfer = (
 
 export const willGenerateTransferDocument = (
   type: string,
-  settings: Record<string, unknown>,
+  settings: Record<string, string | number | boolean>,
 ): boolean => {
   if (type === 'rashodovanje') {
     return false;
   }
-  if (settings['transfer.generation.enabled'] === false) {
+  if (!isSettingFlagEnabled('transfer.generation.enabled', settings, true)) {
     return false;
   }
-  const typeKey = `transfer.generation.on_${type}` as const;
-  if (settings[typeKey] === false) {
+  const typeKey = `transfer.generation.on_${type}`;
+  return isSettingFlagEnabled(typeKey, settings, true);
+};
+
+export const shouldShowManualPreuzeoField = (
+  type: string,
+  equipment?: { isAccountingTracked: boolean; inventoryNumber: string | null } | null,
+): boolean => {
+  if (type !== 'zaduzenje' && type !== 'razduzenje') {
+    return false;
+  }
+  if (equipment && !isAccountingTrackedEquipment(equipment)) {
     return false;
   }
   return true;

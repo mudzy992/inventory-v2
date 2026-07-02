@@ -48,11 +48,11 @@
 | Key | Tip | Scope | Default |
 |-----|-----|-------|---------|
 | `features.cross_service_transfer` | boolean | private | true |
-| `transfer.generation.enabled` | boolean | private | true |
+| `transfer.generation.enabled` | boolean | public | true |
 | `transfer.generation.on_stock_lot_issue` | boolean | private | true |
-| `transfer.generation.on_zaduzenje` | boolean | private | true |
+| `transfer.generation.on_zaduzenje` | boolean | public | true |
 | `transfer.generation.on_prenos` | boolean | private | true |
-| `transfer.generation.on_razduzenje` | boolean | private | true |
+| `transfer.generation.on_razduzenje` | boolean | public | true |
 | `transfer.generate_print_pdf` | boolean | private | true |
 | `transfer.require_signed_pdf_upload` | boolean | private | true |
 | `transfer.allow_finalize_without_upload` | boolean | private | false |
