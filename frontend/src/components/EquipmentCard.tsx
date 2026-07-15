@@ -22,7 +22,10 @@ import {
   buildEquipmentQrUrl,
   getUniqueFieldsDisplay,
 } from '../helpers/equipment-display.util';
-import { buildTransferCreatePayload } from '../helpers/create-transfer-payload.util';
+import {
+  buildTransferCreatePayload,
+  canSignDisposalTransfer,
+} from '../helpers/create-transfer-payload.util';
 import { canRegistrarCreateTransfer } from '../helpers/registrar-scope';
 import {
   canPerformEquipmentTransfer,
