@@ -36,7 +36,7 @@ import {
 } from '../helpers/guards';
 import { X, Package, QrCode, History, ArrowRight, Download, Printer, User, Building2, FileText, AlertTriangle, CheckCircle, Warehouse, Trash2 } from 'lucide-react';
 import type { Employee, Equipment, TransferRecord, TransferType } from '../types';
-import { TransferDocumentPanel } from './TransferDocumentPanel';
+import { TransferDocumentDrawer } from './transfers/transfer-document-drawer';
 import { AlertBanner } from './ui/alert-banner';
 import { ModalRoot } from './ui/modal-root';
 import { MODAL_Z } from '../constants/modal-z-index';
@@ -63,7 +63,7 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   const [selectedToEmployee, setSelectedToEmployee] = useState<Employee | null>(null);
   const [reason, setReason] = useState('');
   const [manualPreuzeoLabel, setManualPreuzeoLabel] = useState('');
-  const [expandedTransferId, setExpandedTransferId] = useState<string | null>(null);
+  const [selectedHistoryTransferId, setSelectedHistoryTransferId] = useState<string | null>(null);
   const [showMarkDisposal, setShowMarkDisposal] = useState(false);
   const [showReactivate, setShowReactivate] = useState(false);
   const [reactivateReason, setReactivateReason] = useState('');
@@ -197,6 +197,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
   });
   const canReactivate = reactivateGuard.allowed;
   const showManualPreuzeoField = shouldShowManualPreuzeoField(transferType, eq);
+  const selectedHistoryTransfer =
+    transfers.find((row) => row.id === selectedHistoryTransferId) ?? null;
 
   const openTransferModal = (type: TransferType) => {
     setTransferType(type);
@@ -513,45 +515,34 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   <History size={16} /> Historija kretanja
                 </h3>
                 {transfers.length > 0 ? (
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto">
                     {transfers.map((t) => {
                       const from = t.fromPerson;
                       const to = t.toPerson;
                       return (
-                        <div key={t.id} className="bg-gray-50 rounded-lg p-3">
-                          <button
-                            type="button"
-                            className="w-full text-left"
-                            onClick={() =>
-                              setExpandedTransferId((prev) => (prev === t.id ? null : t.id))
-                            }
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-gray-700">{getStatusLabel(t.type)}</span>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-xs px-1.5 py-0.5 rounded ${getStatusColor(t.status)}`}>
-                                  {t.status === 'raw' ? 'RAW' : '✓'}
-                                </span>
-                                <span className="text-xs text-gray-400">{formatDate(t.date)}</span>
-                              </div>
+                        <button
+                          key={t.id}
+                          type="button"
+                          className="w-full text-left bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors"
+                          onClick={() => setSelectedHistoryTransferId(t.id)}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-gray-700">{getStatusLabel(t.type)}</span>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${getStatusColor(t.status)}`}>
+                                {t.status === 'raw' ? 'RAW' : '✓'}
+                              </span>
+                              <span className="text-xs text-gray-400">{formatDate(t.date)}</span>
                             </div>
-                            <p className="text-xs text-gray-500">
-                              {t.fromType === 'skladiste' ? 'Skladište' : from ? getEmployeeFullName(from) : '—'}
-                              {' → '}
-                              {t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : to ? getEmployeeFullName(to) : '—'}
-                            </p>
-                            <p className="text-[10px] text-gray-400 font-mono mt-0.5">{t.documentNumber}</p>
-                          </button>
-                          {expandedTransferId === t.id && (
-                            <div className="mt-2">
-                              <TransferDocumentPanel
-                                transfer={t}
-                                allowSign={canManage && canSignDisposalTransfer(t) && t.status !== 'potpisan' && t.status !== 'cancelled'}
-                                onSigned={() => void refresh().then(() => loadEquipment())}
-                              />
-                            </div>
-                          )}
-                        </div>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {t.fromType === 'skladiste' ? 'Skladište' : from ? getEmployeeFullName(from) : '—'}
+                            {' → '}
+                            {t.toType === 'skladiste' ? 'Skladište' : t.toType === 'rashod' ? 'RASHOD' : to ? getEmployeeFullName(to) : '—'}
+                          </p>
+                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">{t.documentNumber}</p>
+                          <p className="text-[10px] text-blue-600 mt-1.5">Otvori prenosnicu</p>
+                        </button>
                       );
                     })}
                   </div>
@@ -746,6 +737,25 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
           </div>
         </div>
       </ModalRoot>
+
+      {selectedHistoryTransfer ? (
+        <TransferDocumentDrawer
+          transfer={selectedHistoryTransfer}
+          previewMode={selectedHistoryTransfer.status === 'potpisan' ? 'signed' : 'generated'}
+          zIndex={MODAL_Z.nested}
+          onClose={() => setSelectedHistoryTransferId(null)}
+          allowSign={
+            canManage &&
+            canSignDisposalTransfer(selectedHistoryTransfer) &&
+            selectedHistoryTransfer.status !== 'potpisan' &&
+            selectedHistoryTransfer.status !== 'cancelled'
+          }
+          onSigned={() => {
+            setSelectedHistoryTransferId(null);
+            void refresh().then(() => loadEquipment());
+          }}
+        />
+      ) : null}
     </>
   );
 }

@@ -13,6 +13,7 @@ interface TransferDocumentDrawerProps {
   onClose: () => void;
   onSigned?: () => void;
   allowSign?: boolean;
+  zIndex?: number;
 }
 
 export const TransferDocumentDrawer = ({
@@ -21,6 +22,7 @@ export const TransferDocumentDrawer = ({
   onClose,
   onSigned,
   allowSign = false,
+  zIndex = MODAL_Z.base,
 }: TransferDocumentDrawerProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -45,7 +47,7 @@ export const TransferDocumentDrawer = ({
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0" style={{ zIndex: MODAL_Z.base }} role="presentation">
+    <div className="fixed inset-0" style={{ zIndex }} role="presentation">
       <button
         type="button"
         className={cn(
