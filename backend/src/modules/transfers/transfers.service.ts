@@ -196,12 +196,12 @@ export class TransfersService {
     if (searchTerm) {
       filters.push({
         OR: [
-          { documentNumber: { contains: searchTerm } },
-          { equipment: { inventoryNumber: { contains: searchTerm } } },
-          { fromPerson: { firstName: { contains: searchTerm } } },
-          { fromPerson: { lastName: { contains: searchTerm } } },
-          { toPerson: { firstName: { contains: searchTerm } } },
-          { toPerson: { lastName: { contains: searchTerm } } },
+          { documentNumber: { contains: searchTerm, mode: 'insensitive' } },
+          { equipment: { inventoryNumber: { contains: searchTerm, mode: 'insensitive' } } },
+          { fromPerson: { firstName: { contains: searchTerm, mode: 'insensitive' } } },
+          { fromPerson: { lastName: { contains: searchTerm, mode: 'insensitive' } } },
+          { toPerson: { firstName: { contains: searchTerm, mode: 'insensitive' } } },
+          { toPerson: { lastName: { contains: searchTerm, mode: 'insensitive' } } },
         ],
       });
     }

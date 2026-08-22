@@ -56,7 +56,7 @@ export class OrgUnitsService {
     const scopedWhere = await this.moderatorScope.buildScopedOrgUnitWhere(user);
     return this.prisma.orgUnit.findMany({
       where: {
-        name: { contains: term },
+        name: { contains: term, mode: 'insensitive' },
         ...(scopedWhere ?? {}),
       },
       orderBy: { name: 'asc' },

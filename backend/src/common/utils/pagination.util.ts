@@ -39,13 +39,13 @@ export const buildOrderBy = (
 export const buildContainsSearchWhere = (
   search: string | undefined,
   fields: string[],
-): { OR: Record<string, { contains: string }>[] } | undefined => {
+): { OR: Record<string, { contains: string; mode: 'insensitive' }>[] } | undefined => {
   const term = search?.trim();
   if (!term || fields.length === 0) {
     return undefined;
   }
   return {
-    OR: fields.map((field) => ({ [field]: { contains: term } })),
+    OR: fields.map((field) => ({ [field]: { contains: term, mode: 'insensitive' as const } })),
   };
 };
 

@@ -18,6 +18,7 @@ export const buildSpecificationTextFieldContainsFilter = (
   specifications: {
     path: buildSpecificationJsonPath(fieldId),
     string_contains: searchTerm,
+    mode: 'insensitive',
   },
 });
 
@@ -33,9 +34,9 @@ export const buildEquipmentSearchWhere = (
   }
   if (searchTerm) {
     const textClauses: Prisma.EquipmentWhereInput[] = [
-      { inventoryNumber: { contains: searchTerm } },
-      { contractNumber: { contains: searchTerm } },
-      { notes: { contains: searchTerm } },
+      { inventoryNumber: { contains: searchTerm, mode: 'insensitive' } },
+      { contractNumber: { contains: searchTerm, mode: 'insensitive' } },
+      { notes: { contains: searchTerm, mode: 'insensitive' } },
     ];
     if (input.specMatchEquipmentIds && input.specMatchEquipmentIds.length > 0) {
       textClauses.push({ id: { in: input.specMatchEquipmentIds } });

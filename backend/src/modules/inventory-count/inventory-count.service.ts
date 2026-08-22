@@ -1025,7 +1025,7 @@ export class InventoryCountService {
     }
     if (query.search?.trim()) {
       filters.push({
-        equipment: { inventoryNumber: { contains: query.search.trim() } },
+        equipment: { inventoryNumber: { contains: query.search.trim(), mode: 'insensitive' } },
       });
     }
     const where: Prisma.InventoryLineWhereInput =

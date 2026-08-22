@@ -7,7 +7,7 @@ alwaysApply: true
 # Inventory v2
 
 - Monorepo: `backend/` + `frontend/` only (no mobile).
-- Stack: NestJS, TypeScript strict, Prisma 7, MySQL (external server via env).
+- Stack: NestJS, TypeScript strict, Prisma 7, PostgreSQL (external server via env; MySQL zadržan kao backup/rollback — vidi migracija-mysql-postgres.md).
 - Frontend: React 19, Vite, Tailwind 4, BS default i18n.
 - Deploy: `evidens.ba101.top`, API prefix `/backend`, Traefik `web` + `websecure` + `le`.
 - Plan: `.cursor/plans/inventory-v2/` — plan-first for multi-phase work.

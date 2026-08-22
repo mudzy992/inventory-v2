@@ -51,7 +51,9 @@ Potpuni wipe baze (dev): `cd backend && npx prisma migrate reset`.
 ## Env
 
 1. Kopiraj `.env.example` → `.env` (već postoji template).
-2. Popuni **eksterni MySQL** (`DATABASE_HOST`, `DATABASE_URL`, …).
+2. Popuni **eksterni PostgreSQL** (`DATABASE_HOST`, `DATABASE_URL`, …) — ovo je primarna baza.
+   MySQL konfiguracija je zadržana u `.env.example` kao zakomentarisani backup/rollback — vidi
+   [migracija-mysql-postgres.md](migracija-mysql-postgres.md).
 3. Postavi `JWT_SECRET`.
 4. **Ne** stavljaj `NODE_ENV` u `.env` — Vite dev to ne podržava (koristi se samo u Dockeru).
 

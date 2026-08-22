@@ -17,7 +17,7 @@ describe('buildEquipmentSearchWhere', () => {
     });
     assert.deepEqual(where, {
       specifications: {
-        path: '$."field-uuid"',
+        path: ['field-uuid'],
         equals: 'SN-123',
       },
     });

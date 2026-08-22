@@ -43,7 +43,10 @@ export class EquipmentCatalogService {
       ...(query.categoryId ? { categoryId: query.categoryId } : {}),
       ...(searchTerm
         ? {
-            OR: [{ code: { contains: searchTerm } }, { name: { contains: searchTerm } }],
+            OR: [
+              { code: { contains: searchTerm, mode: 'insensitive' } },
+              { name: { contains: searchTerm, mode: 'insensitive' } },
+            ],
           }
         : {}),
     };

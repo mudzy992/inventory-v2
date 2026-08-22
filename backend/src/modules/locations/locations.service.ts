@@ -32,7 +32,10 @@ export class LocationsService {
     const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
     return this.prisma.canton.findMany({
       where: {
-        OR: [{ name: { contains: term } }, { code: { contains: term } }],
+        OR: [
+          { name: { contains: term, mode: 'insensitive' } },
+          { code: { contains: term, mode: 'insensitive' } },
+        ],
       },
       orderBy: { name: 'asc' },
       take: limit,
@@ -44,7 +47,10 @@ export class LocationsService {
     const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
     return this.prisma.city.findMany({
       where: {
-        OR: [{ name: { contains: term } }, { canton: { name: { contains: term } } }],
+        OR: [
+          { name: { contains: term, mode: 'insensitive' } },
+          { canton: { name: { contains: term, mode: 'insensitive' } } },
+        ],
       },
       include: { canton: true },
       orderBy: [{ canton: { name: 'asc' } }, { name: 'asc' }],

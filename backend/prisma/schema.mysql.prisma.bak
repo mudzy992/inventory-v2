@@ -1,0 +1,1281 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum UserRole {
+  admin
+  moderator
+  evidenticar
+  popis_koordinator
+  user
+  skladistar
+}
+
+enum OrgUnitType {
+  direkcija
+  distribucija
+  podrucje
+  podruznica
+  poslovna_jedinica
+  sektor
+  sluzba
+  odjeljenje
+}
+
+enum EquipmentStatus {
+  skladiste
+  zaduzeno
+  za_rashod
+  rashodovano
+}
+
+enum EquipmentAffiliation {
+  distribucija
+  snabdjevanje
+}
+
+enum WarehouseCondition {
+  na_skladistu
+  spremno_za_unistenje
+  unisteno
+}
+
+enum EquipmentEventAction {
+  unisteno
+  reaktivirano
+}
+
+enum EquipmentDisposalListStatus {
+  listed
+  withdrawn
+  assigned
+  approved
+  rejected
+}
+
+enum TransferType {
+  zaduzenje
+  razduzenje
+  rashodovanje
+  prenos
+}
+
+enum TransferPartyType {
+  skladiste
+  osoba
+}
+
+enum TransferToType {
+  skladiste
+  osoba
+  rashod
+}
+
+enum TransferStatus {
+  raw
+  printed
+  uploaded
+  potpisan
+  cancelled
+}
+
+enum NotificationType {
+  transfer_pending
+  transfer_signed_upload_pending
+  transfer_complete
+  equipment_assigned
+  disposal_pending_approval
+  disposal_approved
+  inventory_transfer_upload_pending
+  inventory_session_closed
+  disposal_approval_pending
+  warehouse_stock_received
+  employee_relocation_action_required
+  employee_relocation_incoming
+  employee_relocation_admin_alert
+  employee_relocation_resolved
+  inventory_draft_created
+  inventory_close_blocked
+  inventory_auto_closed
+  info
+  employee_deactivation_equipment_required
+}
+
+enum EmployeeGender {
+  male
+  female
+}
+
+enum EmployeeRelocationCaseStatus {
+  open
+  resolved
+  cancelled
+}
+
+enum EmployeeRelocationLineStatus {
+  pending_source
+  pending_dest
+  accepted
+  rejected
+  discharged
+}
+
+enum EmployeeRelocationSourceAction {
+  transfer
+  discharge
+}
+
+enum EmployeeRelocationEventAction {
+  case_opened
+  source_transfer
+  source_discharge
+  dest_accepted
+  dest_rejected
+  case_resolved
+  case_cancelled
+  superseded
+  catalog_mapped
+}
+
+enum WarehouseStockLotStatus {
+  ceka_specifikaciju
+  spremno_za_izdavanje
+  zatvoreno
+}
+
+enum CategoryKind {
+  ASSET
+  MAINTENANCE
+}
+
+enum WarehouseStockLotKind {
+  ISSUABLE
+  MAINTENANCE
+}
+
+enum InstalledPartStatus {
+  active
+  faulty
+  removed
+}
+
+enum InstalledPartEventAction {
+  installed
+  marked_faulty
+  removed
+  replaced
+}
+
+enum InventoryWarehouseLineStatus {
+  prisutna
+  nije_prisutna
+  ostecena
+}
+
+enum SettingScope {
+  public
+  private
+}
+
+enum SettingValueType {
+  string
+  number
+  boolean
+}
+
+enum UploadEntityType {
+  transfer
+  equipment
+  other
+}
+
+enum DisposalMemberRole {
+  predsjednik
+  clan
+}
+
+enum InventorySessionStatus {
+  draft
+  active
+  closing
+  closed
+}
+
+enum InventoryLineStatus {
+  prisutna
+  ostecena
+  promjena_lokacije
+  nije_prisutna
+  predlozen_rashod
+}
+
+enum DisposalInventoryApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum InventoryRelocationTarget {
+  skladiste
+  osoba
+}
+
+enum InventoryLineEventAction {
+  create
+  update
+}
+
+enum InventoryPendingActionKind {
+  mark_present
+  mark_damaged
+  mark_missing
+  relocate_to_warehouse
+  relocate_to_person
+  disposal
+}
+
+enum InventoryPendingActionStatus {
+  pending
+  running
+  applied
+  failed
+  skipped
+}
+
+enum InventorySessionCloseJobStatus {
+  queued
+  running
+  done
+  failed
+}
+
+model Canton {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(255)
+  code      String?  @db.VarChar(32)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cities City[]
+
+  @@map("cantons")
+}
+
+model City {
+  id        String   @id @default(uuid())
+  cantonId  String
+  name      String   @db.VarChar(255)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  canton              Canton               @relation(fields: [cantonId], references: [id], onDelete: Restrict)
+  orgUnits            OrgUnit[]            @relation("OrgUnitLocation")
+  effectiveOrgUnits   OrgUnit[]            @relation("OrgUnitEffectiveLocation")
+  warehouses          Warehouse[]
+  disposalCommissions DisposalCommission[]
+
+  @@index([cantonId])
+  @@map("cities")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  employeeId   String?   @unique
+  firstName    String?   @db.VarChar(120)
+  lastName     String?   @db.VarChar(120)
+  email        String?   @unique @db.VarChar(255)
+  username     String    @unique @db.VarChar(120)
+  passwordHash String    @db.VarChar(255)
+  role         UserRole
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  employee             Employee?              @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  registrarAssignments              RegistrarAssignment[]
+  inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
+  notifications                   Notification[]
+  savedFilters         SavedFilter[]
+  refreshTokens        RefreshToken[]
+  warehouseAssignments WarehouseKeeper[]
+  disposalInventoryApprovalsReviewed DisposalInventoryApproval[] @relation("DisposalInventoryApprovalReviewer")
+  inventoryLineEvents  InventoryLineEvent[]   @relation("InventoryLineEventActor")
+  equipmentEvents      EquipmentEvent[]       @relation("EquipmentEventActor")
+  closedInventoryCommittees InventoryCommittee[] @relation("InventoryCommitteeClosedBy")
+  inventoryPendingActions InventoryPendingAction[] @relation("InventoryPendingActionActor")
+  transfersCreated        Transfer[]               @relation("TransferCreatedBy")
+  transfersFinalized      Transfer[]               @relation("TransferFinalizedBy")
+  stockLotsReceived       WarehouseStockLot[]      @relation("StockLotReceivedBy")
+  stockLotReceiptsReceived WarehouseStockLotReceipt[] @relation("StockLotReceiptReceivedBy")
+  stockLotsSpecDefined    WarehouseStockLot[]      @relation("StockLotSpecDefinedBy")
+  closedInventoryWarehouseCommittees InventoryWarehouseCommittee[] @relation("InventoryWarehouseCommitteeClosedBy")
+  warehouseTransferTemplatesUploaded WarehouseTransferTemplate[] @relation("WarehouseTransferTemplateUploadedBy")
+  installedPartsCreated            EquipmentInstalledPart[]      @relation("InstalledPartByUser")
+  installedPartEvents                EquipmentInstalledPartEvent[] @relation("InstalledPartEventActor")
+  relocationCasesCreated           EmployeeRelocationCase[]      @relation("RelocationCaseCreatedBy")
+  relocationLinesSourceResolved    EmployeeRelocationLine[]      @relation("RelocationLineSourceResolver")
+  relocationLinesDestResolved      EmployeeRelocationLine[]      @relation("RelocationLineDestResolver")
+  relocationEvents                 EmployeeRelocationEvent[]     @relation("RelocationEventActor")
+  disposalListItemsMarked          EquipmentDisposalListItem[] @relation("DisposalListMarkedBy")
+  disposalListItemsWithdrawn       EquipmentDisposalListItem[] @relation("DisposalListWithdrawnBy")
+  moderatorOrgAssignments          ModeratorOrgAssignment[]
+  moderatorWarehouseAssignments    ModeratorWarehouseAssignment[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model RegistrarAssignment {
+  id          String   @id @default(uuid())
+  userId      String
+  warehouseId String
+  categoryId  String
+  orgUnitId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  category  Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orgUnit   OrgUnit?  @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([warehouseId])
+  @@index([categoryId])
+  @@index([orgUnitId])
+  @@map("registrar_assignments")
+}
+
+model InventoryCoordinatorAssignment {
+  id          String   @id @default(uuid())
+  userId      String
+  warehouseId String
+  orgUnitId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  orgUnit   OrgUnit?  @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, warehouseId])
+  @@index([userId])
+  @@index([warehouseId])
+  @@map("inventory_coordinator_assignments")
+}
+
+model ModeratorOrgAssignment {
+  id        String   @id @default(uuid())
+  userId    String
+  orgUnitId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgUnit OrgUnit @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgUnitId])
+  @@index([userId])
+  @@index([orgUnitId])
+  @@map("moderator_org_assignments")
+}
+
+model ModeratorWarehouseAssignment {
+  id          String   @id @default(uuid())
+  userId      String
+  warehouseId String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("moderator_warehouse_assignments")
+}
+
+model Employee {
+  id          String         @id @default(uuid())
+  firstName   String         @db.VarChar(120)
+  lastName    String         @db.VarChar(120)
+  title       String         @db.VarChar(200)
+  orgUnitId   String
+  staffNumber String?        @unique @db.VarChar(50)
+  gender      EmployeeGender @default(male)
+  isActive    Boolean        @default(true)
+  email       String?        @db.VarChar(255)
+  phone       String?        @db.VarChar(50)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  orgUnit                   OrgUnit                    @relation(fields: [orgUnitId], references: [id])
+  user                      User?
+  signedTransfers           Transfer[]                 @relation("TransferSigner")
+  heldEquipment             Equipment[]                @relation("EquipmentHolder")
+  transfersFrom             Transfer[]                 @relation("TransferFromPerson")
+  transfersTo               Transfer[]                 @relation("TransferToPerson")
+  signingOrgUnits           OrgUnit[]                  @relation("OrgUnitSigner")
+  effectiveSigningOrgUnits  OrgUnit[]                  @relation("OrgUnitEffectiveSigner")
+  disposalCommissionMembers DisposalCommissionMember[]
+  inventoryCommitteeMembers InventoryCommitteeMember[]
+  inventoryWarehouseCommitteeMembers InventoryWarehouseCommitteeMember[]
+  inventoryLineRelocations  InventoryLine[]            @relation("InventoryLineRelocationPerson")
+  relocationCases           EmployeeRelocationCase[]
+
+  @@index([orgUnitId])
+  @@map("employees")
+}
+
+model OrgUnit {
+  id                      String      @id @default(uuid())
+  name                    String      @db.VarChar(255)
+  type                    OrgUnitType
+  parentId                String?
+  signerId                String?
+  effectiveSignerId       String?
+  locationCityId          String?
+  effectiveLocationCityId String?
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  parent                OrgUnit?           @relation("OrgUnitTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children              OrgUnit[]          @relation("OrgUnitTree")
+  signer                Employee?          @relation("OrgUnitSigner", fields: [signerId], references: [id], onDelete: SetNull)
+  effectiveSigner       Employee?          @relation("OrgUnitEffectiveSigner", fields: [effectiveSignerId], references: [id], onDelete: SetNull)
+  locationCity          City?              @relation("OrgUnitLocation", fields: [locationCityId], references: [id], onDelete: SetNull)
+  effectiveLocationCity City?              @relation("OrgUnitEffectiveLocation", fields: [effectiveLocationCityId], references: [id], onDelete: SetNull)
+  employees             Employee[]
+  warehouses            Warehouse[]
+  inventorySessions               InventorySession[]
+  registrarAssignments            RegistrarAssignment[]
+  inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
+  moderatorOrgAssignments         ModeratorOrgAssignment[]
+  equipmentCustody                Equipment[]            @relation("EquipmentCustodyOrgUnit")
+
+  @@index([parentId])
+  @@index([type])
+  @@index([locationCityId])
+  @@index([effectiveLocationCityId])
+  @@index([effectiveSignerId])
+  @@map("org_units")
+}
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(255)
+  cityId    String
+  orgUnitId String?
+  address   String   @db.VarChar(500)
+  notes     String?  @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  city                 City              @relation(fields: [cityId], references: [id])
+  orgUnit              OrgUnit?          @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  keepers               WarehouseKeeper[]
+  equipment             Equipment[]
+  inventoryLineTargets  InventoryLine[]
+  registrarAssignments            RegistrarAssignment[]
+  inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
+  moderatorWarehouseAssignments   ModeratorWarehouseAssignment[]
+  transfersFrom                   Transfer[]            @relation("TransferFromWarehouse")
+  transfersTo           Transfer[]            @relation("TransferToWarehouse")
+  equipmentEvents       EquipmentEvent[]
+  stockLots             WarehouseStockLot[]
+  inventoryWarehouseCommittees InventoryWarehouseCommittee[]
+  inventoryCommittees   InventoryCommittee[]
+  transferTemplates     WarehouseTransferTemplate[]
+  transferDocumentSequences TransferDocumentSequence[]
+  documentTransfers     Transfer[] @relation("TransferDocumentWarehouse")
+  disposalListItems     EquipmentDisposalListItem[]
+
+  @@index([cityId])
+  @@index([orgUnitId])
+  @@map("warehouses")
+}
+
+model WarehouseTransferTemplate {
+  id               String   @id @default(uuid())
+  warehouseId      String
+  label            String   @db.VarChar(120)
+  templatePath     String   @db.VarChar(500)
+  isActive         Boolean  @default(false)
+  uploadedByUserId String
+  createdAt        DateTime @default(now())
+
+  warehouse  Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  uploadedBy User      @relation("WarehouseTransferTemplateUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([warehouseId, isActive])
+  @@map("warehouse_transfer_templates")
+}
+
+model TransferDocumentSequence {
+  warehouseId      String
+  year             Int
+  month            Int
+  lastNumber       Int @default(0)
+  rashodLastNumber Int @default(0)
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@id([warehouseId, year, month])
+  @@map("transfer_document_sequences")
+}
+
+model WarehouseKeeper {
+  warehouseId String
+  userId      String
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([warehouseId, userId])
+  @@map("warehouse_keepers")
+}
+
+model Category {
+  id             String       @id @default(uuid())
+  name           String       @db.VarChar(255)
+  description    String       @db.Text
+  parentId       String?
+  categoryKind   CategoryKind @default(ASSET)
+  fields         Json
+  optionalFields Json         @default("[]")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  parent              Category?            @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children            Category[]           @relation("CategoryTree")
+  equipment            Equipment[]
+  registrarAssignments RegistrarAssignment[]
+  inventoryCommittees  InventoryCommittee[]
+  stockLots            WarehouseStockLot[]
+  hostMaintenanceLinks    CategoryMaintenanceLink[] @relation("HostCategoryMaintenance")
+  linkedAsMaintenanceLeaf CategoryMaintenanceLink[] @relation("MaintenanceCategoryLink")
+  installedPartsAsType    EquipmentInstalledPart[]
+  catalogItems            EquipmentCatalogItem[]
+  disposalListItems       EquipmentDisposalListItem[]
+
+  @@index([parentId])
+  @@index([categoryKind])
+  @@map("categories")
+}
+
+model EquipmentCatalogItem {
+  id         String   @id @default(uuid())
+  code       String   @unique @db.VarChar(64)
+  name       String   @db.VarChar(255)
+  categoryId String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category   Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  stockLots  WarehouseStockLot[]
+  equipment  Equipment[]
+
+  @@index([categoryId])
+  @@index([name])
+  @@map("equipment_catalog_items")
+}
+
+model CategoryMaintenanceLink {
+  id                    String   @id @default(uuid())
+  hostCategoryId        String
+  maintenanceCategoryId String
+  createdAt             DateTime @default(now())
+
+  hostCategory        Category @relation("HostCategoryMaintenance", fields: [hostCategoryId], references: [id], onDelete: Cascade)
+  maintenanceCategory Category @relation("MaintenanceCategoryLink", fields: [maintenanceCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([hostCategoryId, maintenanceCategoryId], map: "cat_maint_links_host_maint_uq")
+  @@index([maintenanceCategoryId], map: "cat_maint_links_maint_cat_idx")
+  @@map("category_maintenance_links")
+}
+
+model Equipment {
+  id                 String              @id @default(uuid())
+  categoryId         String
+  catalogItemId      String?
+  stockLotId         String?
+  inventoryNumber    String?             @unique @db.VarChar(120)
+  isAccountingTracked Boolean            @default(true)
+  affiliation        EquipmentAffiliation @default(distribucija)
+  specifications     Json
+  status             EquipmentStatus
+  contractNumber     String?             @db.VarChar(120)
+  entryDate          DateTime            @db.Date
+  currentHolderId    String?
+  warehouseId        String?
+  warehouseCondition WarehouseCondition?
+  custodyOrgUnitId   String?
+  notes              String?             @db.Text
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  category       Category        @relation(fields: [categoryId], references: [id])
+  catalogItem    EquipmentCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  stockLot       WarehouseStockLot? @relation(fields: [stockLotId], references: [id], onDelete: SetNull)
+  currentHolder  Employee?       @relation("EquipmentHolder", fields: [currentHolderId], references: [id], onDelete: SetNull)
+  warehouse      Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  custodyOrgUnit OrgUnit?        @relation("EquipmentCustodyOrgUnit", fields: [custodyOrgUnitId], references: [id], onDelete: SetNull)
+  transfers      Transfer[]
+  inventoryLines InventoryLine[]
+  inventoryLineEvents InventoryLineEvent[]
+  inventoryPendingActions InventoryPendingAction[]
+  equipmentEvents       EquipmentEvent[]
+  disposalInventoryApprovals DisposalInventoryApproval[]
+  disposalListItems        EquipmentDisposalListItem[]
+  installedParts           EquipmentInstalledPart[]
+  relocationLines          EmployeeRelocationLine[]
+
+  @@index([categoryId])
+  @@index([catalogItemId])
+  @@index([stockLotId])
+  @@index([status])
+  @@index([affiliation])
+  @@index([isAccountingTracked])
+  @@index([currentHolderId])
+  @@index([warehouseId])
+  @@index([custodyOrgUnitId])
+  @@map("equipment")
+}
+
+model WarehouseStockLot {
+  id                  String                  @id @default(uuid())
+  warehouseId         String
+  categoryId          String
+  catalogItemId       String?
+  lotKind             WarehouseStockLotKind     @default(ISSUABLE)
+  productName         String                  @db.VarChar(255)
+  incomingRelocation  Boolean                 @default(false)
+  quantityReceived    Int
+  quantityOnHand      Int
+  status              WarehouseStockLotStatus
+  specifications      Json                    @default("{}")
+  contractNumber      String?                 @db.VarChar(120)
+  entryDate           DateTime                @db.Date
+  notes               String?                 @db.Text
+  receivedByUserId    String
+  specDefinedByUserId String?
+  specDefinedAt       DateTime?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  warehouse      Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  category       Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  catalogItem    EquipmentCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  receivedBy     User        @relation("StockLotReceivedBy", fields: [receivedByUserId], references: [id], onDelete: Restrict)
+  specDefinedBy  User?       @relation("StockLotSpecDefinedBy", fields: [specDefinedByUserId], references: [id], onDelete: SetNull)
+  receipts       WarehouseStockLotReceipt[]
+  issuedUnits      Equipment[]
+  inventoryLines   InventoryWarehouseLine[]
+  installedParts   EquipmentInstalledPart[]
+  relocationDestLines EmployeeRelocationLine[] @relation("RelocationDestStockLot")
+
+  @@index([warehouseId])
+  @@index([categoryId])
+  @@index([catalogItemId])
+  @@index([status])
+  @@index([lotKind], map: "wh_stock_lots_lotKind_idx")
+  @@map("warehouse_stock_lots")
+}
+
+model WarehouseStockLotReceipt {
+  id                String   @id @default(uuid())
+  stockLotId         String
+  quantityReceived   Int
+  quantityRemaining  Int
+  entryDate          DateTime @db.Date
+  contractNumber     String?  @db.VarChar(120)
+  notes              String?  @db.Text
+  receivedByUserId   String
+  createdAt          DateTime @default(now())
+
+  stockLot    WarehouseStockLot @relation(fields: [stockLotId], references: [id], onDelete: Cascade)
+  receivedBy  User              @relation("StockLotReceiptReceivedBy", fields: [receivedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([stockLotId, createdAt], map: "wh_stock_lot_receipts_lot_created_idx")
+  @@index([receivedByUserId], map: "wh_stock_lot_receipts_received_by_idx")
+  @@map("warehouse_stock_lot_receipts")
+}
+
+model EquipmentInstalledPart {
+  id                    String              @id @default(uuid())
+  hostEquipmentId       String
+  stockLotId            String?
+  maintenanceCategoryId String
+  quantity              Int
+  legacySpecs           Json                @default("{}")
+  status                InstalledPartStatus @default(active)
+  installedAt           DateTime            @default(now())
+  removedAt             DateTime?
+  replacedById          String?             @unique(map: "equip_inst_parts_replaced_uq")
+  notes                 String?             @db.Text
+  installedByUserId     String
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  hostEquipment       Equipment  @relation(fields: [hostEquipmentId], references: [id], onDelete: Cascade)
+  stockLot            WarehouseStockLot? @relation(fields: [stockLotId], references: [id], onDelete: SetNull)
+  maintenanceCategory Category   @relation(fields: [maintenanceCategoryId], references: [id], onDelete: Restrict)
+  installedBy         User       @relation("InstalledPartByUser", fields: [installedByUserId], references: [id], onDelete: Restrict)
+  replacedBy          EquipmentInstalledPart?  @relation("InstalledPartReplacement", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces            EquipmentInstalledPart?  @relation("InstalledPartReplacement")
+  events              EquipmentInstalledPartEvent[]
+
+  @@index([hostEquipmentId], map: "equip_inst_parts_host_idx")
+  @@index([status], map: "equip_inst_parts_status_idx")
+  @@index([maintenanceCategoryId], map: "equip_inst_parts_maint_cat_idx")
+  @@index([stockLotId], map: "equip_inst_parts_lot_idx")
+  @@map("equipment_installed_parts")
+}
+
+model EquipmentInstalledPartEvent {
+  id              String                   @id @default(uuid())
+  installedPartId String
+  actorUserId     String
+  action          InstalledPartEventAction
+  payload         Json                     @default("{}")
+  createdAt       DateTime                 @default(now())
+
+  installedPart EquipmentInstalledPart @relation(fields: [installedPartId], references: [id], onDelete: Cascade)
+  actor         User                     @relation("InstalledPartEventActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([installedPartId], map: "equip_inst_ev_part_idx")
+  @@index([actorUserId], map: "equip_inst_ev_actor_idx")
+  @@map("equipment_installed_part_events")
+}
+
+model EquipmentEvent {
+  id              String               @id @default(uuid())
+  equipmentId     String
+  warehouseId     String
+  actorUserId     String
+  action          EquipmentEventAction
+  fromCondition   WarehouseCondition?
+  toCondition     WarehouseCondition
+  createdAt       DateTime             @default(now())
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  actor     User      @relation("EquipmentEventActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([equipmentId])
+  @@index([warehouseId])
+  @@index([actorUserId])
+  @@map("equipment_events")
+}
+
+model Transfer {
+  id                     String            @id @default(uuid())
+  equipmentId            String
+  type                   TransferType
+  fromType               TransferPartyType
+  fromPersonId           String?
+  fromWarehouseId        String?
+  toType                 TransferToType
+  toPersonId             String?
+  toWarehouseId          String?
+  signerId               String
+  createdByUserId        String?
+  finalizedByUserId      String?
+  date                   DateTime          @db.Date
+  reason                 String?           @db.Text
+  status                 TransferStatus
+  scannedDocUrl          String?           @db.VarChar(500)
+  printedAt              DateTime?
+  documentNumber         String            @db.VarChar(120)
+  documentWarehouseId    String?
+  generatedDocxPath      String?           @db.VarChar(500)
+  generatedPdfPath       String?           @db.VarChar(500)
+  notes                  String?           @db.Text
+  manualPreuzeoLabel     String?           @db.VarChar(255)
+  isCrossServiceTransfer Boolean           @default(false)
+  inventoryLineId        String?           @unique
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  equipment        Equipment         @relation(fields: [equipmentId], references: [id])
+  fromWarehouse    Warehouse?        @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id], onDelete: SetNull)
+  toWarehouse      Warehouse?        @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id], onDelete: SetNull)
+  documentWarehouse Warehouse?       @relation("TransferDocumentWarehouse", fields: [documentWarehouseId], references: [id], onDelete: SetNull)
+  createdBy        User?             @relation("TransferCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  finalizedBy      User?             @relation("TransferFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: SetNull)
+  signer           Employee          @relation("TransferSigner", fields: [signerId], references: [id])
+  fromPerson       Employee?         @relation("TransferFromPerson", fields: [fromPersonId], references: [id], onDelete: SetNull)
+  toPerson         Employee?         @relation("TransferToPerson", fields: [toPersonId], references: [id], onDelete: SetNull)
+  inventoryLine    InventoryLine?    @relation(fields: [inventoryLineId], references: [id], onDelete: SetNull)
+  inventoryLineEventsGenerated InventoryLineEvent[] @relation("InventoryLineEventGeneratedTransfer")
+  disposalListRazduzenje EquipmentDisposalListItem[] @relation("DisposalListRazduzenjeTransfer")
+
+  @@index([equipmentId])
+  @@index([signerId])
+  @@index([status])
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([documentWarehouseId])
+  @@map("transfers")
+}
+
+model DisposalCommission {
+  id        String   @id @default(uuid())
+  cityId    String
+  name      String   @db.VarChar(255)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  city               City                       @relation(fields: [cityId], references: [id])
+  members            DisposalCommissionMember[]
+  inventoryCommittee InventoryCommittee?
+  inventoryApprovals DisposalInventoryApproval[]
+  disposalListItems  EquipmentDisposalListItem[]
+
+  @@index([cityId])
+  @@map("disposal_commissions")
+}
+
+model EquipmentDisposalListItem {
+  id                   String                      @id @default(uuid())
+  sessionId            String
+  equipmentId          String
+  warehouseId          String
+  categoryId           String
+  status               EquipmentDisposalListStatus @default(listed)
+  note                 String?                     @db.Text
+  markedByUserId       String
+  markedAt             DateTime                    @default(now())
+  withdrawnByUserId    String?
+  withdrawnAt          DateTime?
+  withdrawalNote       String?                     @db.Text
+  razduzenjeTransferId String?
+  disposalCommissionId String?
+  approvalId           String?                     @unique
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  session            InventorySession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  equipment          Equipment                  @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  warehouse          Warehouse                  @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  category           Category                   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  markedByUser       User                       @relation("DisposalListMarkedBy", fields: [markedByUserId], references: [id], onDelete: Restrict)
+  withdrawnByUser    User?                      @relation("DisposalListWithdrawnBy", fields: [withdrawnByUserId], references: [id], onDelete: SetNull)
+  razduzenjeTransfer Transfer?                  @relation("DisposalListRazduzenjeTransfer", fields: [razduzenjeTransferId], references: [id], onDelete: SetNull)
+  disposalCommission DisposalCommission?        @relation(fields: [disposalCommissionId], references: [id], onDelete: SetNull)
+  approval           DisposalInventoryApproval? @relation(fields: [approvalId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, equipmentId], map: "equip_disp_list_session_equip_uq")
+  @@index([sessionId, warehouseId, categoryId, status], map: "equip_disp_list_scope_idx")
+  @@map("equipment_disposal_list_items")
+}
+
+model DisposalInventoryApproval {
+  id                   String                        @id @default(uuid())
+  equipmentId          String
+  disposalCommissionId String
+  sessionId            String
+  inventoryLineId      String?                       @unique(map: "disp_inv_appr_line_uq")
+  status               DisposalInventoryApprovalStatus @default(pending)
+  reviewedByUserId     String?
+  reviewNote           String?                       @db.Text
+  reviewedAt           DateTime?
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+
+  equipment          Equipment          @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  disposalCommission DisposalCommission @relation(fields: [disposalCommissionId], references: [id], onDelete: Cascade)
+  session            InventorySession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  inventoryLine      InventoryLine?     @relation(fields: [inventoryLineId], references: [id], onDelete: SetNull)
+  reviewedByUser     User?              @relation("DisposalInventoryApprovalReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  disposalListItem   EquipmentDisposalListItem?
+
+  @@unique([equipmentId, disposalCommissionId], map: "disp_inv_appr_equip_comm_uq")
+  @@index([disposalCommissionId, status], map: "disp_inv_appr_comm_st_idx")
+  @@index([sessionId], map: "disp_inv_appr_session_idx")
+  @@map("disposal_inventory_approvals")
+}
+
+model DisposalCommissionMember {
+  commissionId String
+  employeeId   String
+  role         DisposalMemberRole
+
+  commission DisposalCommission @relation(fields: [commissionId], references: [id], onDelete: Cascade)
+  employee   Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([commissionId, employeeId])
+  @@map("disposal_commission_members")
+}
+
+model InventoryCommittee {
+  id                   String   @id @default(uuid())
+  sessionId            String
+  warehouseId          String?
+  categoryId           String
+  name                 String?  @db.VarChar(255)
+  disposalCommissionId String?  @unique
+  isClosed             Boolean  @default(false)
+  membersConfigured    Boolean  @default(false)
+  closedAt             DateTime?
+  closedByUserId       String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  session            InventorySession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  warehouse          Warehouse?                 @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  category           Category                   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  disposalCommission DisposalCommission?        @relation(fields: [disposalCommissionId], references: [id], onDelete: SetNull)
+  closedByUser       User?                      @relation("InventoryCommitteeClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
+  members            InventoryCommitteeMember[]
+  lines              InventoryLine[]
+  lineEvents         InventoryLineEvent[]
+  pendingActions     InventoryPendingAction[]
+
+  @@unique([sessionId, warehouseId, categoryId])
+  @@index([sessionId])
+  @@index([warehouseId])
+  @@index([categoryId])
+  @@map("inventory_committees")
+}
+
+model InventoryCommitteeMember {
+  committeeId String
+  employeeId  String
+  role        DisposalMemberRole
+
+  committee InventoryCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  employee  Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([committeeId, employeeId])
+  @@map("inventory_committee_members")
+}
+
+model InventorySession {
+  id        String                 @id @default(uuid())
+  name      String                 @db.VarChar(255)
+  orgUnitId String
+  year      Int
+  startDate DateTime?              @db.Date
+  endDate   DateTime?              @db.Date
+  status    InventorySessionStatus @default(draft)
+  closedAt  DateTime?
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+
+  orgUnit    OrgUnit              @relation(fields: [orgUnitId], references: [id])
+  committees InventoryCommittee[]
+  warehouseCommittees InventoryWarehouseCommittee[]
+  pendingActions InventoryPendingAction[]
+  closeJobs      InventorySessionCloseJob[]
+  disposalApprovals DisposalInventoryApproval[]
+  disposalListItems EquipmentDisposalListItem[]
+
+  @@unique([orgUnitId, year])
+  @@index([status])
+  @@index([orgUnitId])
+  @@map("inventory_sessions")
+}
+
+model InventoryLine {
+  id                    String                     @id @default(uuid())
+  committeeId           String
+  equipmentId           String
+  status                InventoryLineStatus
+  note                  String?                    @db.Text
+  relocationTargetType  InventoryRelocationTarget?
+  relocationWarehouseId String?
+  relocationToPersonId  String?
+  generatedTransfer     Transfer?
+  disposalApproval      DisposalInventoryApproval?
+  events                InventoryLineEvent[]
+  pendingAction         InventoryPendingAction?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  committee           InventoryCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  equipment           Equipment          @relation(fields: [equipmentId], references: [id])
+  relocationWarehouse Warehouse?         @relation(fields: [relocationWarehouseId], references: [id], onDelete: SetNull)
+  relocationToPerson  Employee?          @relation("InventoryLineRelocationPerson", fields: [relocationToPersonId], references: [id], onDelete: SetNull)
+
+  @@unique([committeeId, equipmentId])
+  @@index([committeeId])
+  @@map("inventory_lines")
+}
+
+model InventoryPendingAction {
+  id              String                      @id @default(uuid())
+  sessionId       String
+  committeeId     String
+  equipmentId     String
+  inventoryLineId String                      @unique
+  kind            InventoryPendingActionKind
+  payload         Json
+  status          InventoryPendingActionStatus @default(pending)
+  attempts        Int                         @default(0)
+  lastError       String?                     @db.Text
+  appliedAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  session       InventorySession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  committee     InventoryCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  equipment     Equipment          @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  inventoryLine InventoryLine      @relation(fields: [inventoryLineId], references: [id], onDelete: Cascade)
+  createdByUser User               @relation("InventoryPendingActionActor", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, status])
+  @@index([committeeId, status])
+  @@index([equipmentId])
+  @@map("inventory_pending_actions")
+}
+
+model InventorySessionCloseJob {
+  id           String                         @id @default(uuid())
+  sessionId    String                         @unique
+  status       InventorySessionCloseJobStatus @default(queued)
+  totalCount   Int                            @default(0)
+  appliedCount Int                            @default(0)
+  failedCount  Int                            @default(0)
+  skippedCount Int                            @default(0)
+  startedAt    DateTime?
+  endedAt      DateTime?
+  lastError    String?                        @db.Text
+  createdAt    DateTime                       @default(now())
+  updatedAt    DateTime                       @updatedAt
+
+  session InventorySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("inventory_session_close_jobs")
+}
+
+model InventoryLineEvent {
+  id                    String                   @id @default(uuid())
+  inventoryLineId       String?
+  committeeId           String
+  equipmentId           String
+  actorUserId           String
+  action                InventoryLineEventAction
+  fromStatus            InventoryLineStatus?
+  toStatus              InventoryLineStatus
+  fromNote              String?                  @db.Text
+  toNote                String?                  @db.Text
+  fromRelocationTarget  InventoryRelocationTarget?
+  toRelocationTarget    InventoryRelocationTarget?
+  fromRelocationWarehouseId String?
+  toRelocationWarehouseId   String?
+  fromRelocationToPersonId  String?
+  toRelocationToPersonId    String?
+  generatedTransferId   String?
+  createdAt             DateTime                 @default(now())
+
+  inventoryLine        InventoryLine?           @relation(fields: [inventoryLineId], references: [id], onDelete: SetNull)
+  committee            InventoryCommittee        @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  equipment            Equipment                 @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  actor                User                      @relation("InventoryLineEventActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+  generatedTransfer    Transfer?                 @relation("InventoryLineEventGeneratedTransfer", fields: [generatedTransferId], references: [id], onDelete: SetNull)
+
+  @@index([committeeId])
+  @@index([equipmentId])
+  @@index([actorUserId])
+  @@index([inventoryLineId])
+  @@map("inventory_line_events")
+}
+
+model InventoryWarehouseCommittee {
+  id             String   @id @default(uuid())
+  sessionId      String
+  warehouseId    String
+  isClosed       Boolean  @default(false)
+  closedAt       DateTime?
+  closedByUserId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  session      InventorySession                  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse                         @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  closedByUser User?                             @relation("InventoryWarehouseCommitteeClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
+  members      InventoryWarehouseCommitteeMember[]
+  lines        InventoryWarehouseLine[]
+
+  @@unique([sessionId, warehouseId])
+  @@index([sessionId])
+  @@index([warehouseId])
+  @@map("inventory_warehouse_committees")
+}
+
+model InventoryWarehouseCommitteeMember {
+  committeeId String
+  employeeId  String
+  role        DisposalMemberRole
+
+  committee InventoryWarehouseCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  employee  Employee                    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([committeeId, employeeId])
+  @@map("inventory_warehouse_committee_members")
+}
+
+model InventoryWarehouseLine {
+  id               String                       @id @default(uuid())
+  committeeId      String
+  stockLotId       String
+  status           InventoryWarehouseLineStatus
+  quantityCounted  Int
+  note             String?                      @db.Text
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  committee InventoryWarehouseCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  stockLot  WarehouseStockLot           @relation(fields: [stockLotId], references: [id], onDelete: Cascade)
+
+  @@unique([committeeId, stockLotId])
+  @@index([committeeId])
+  @@map("inventory_warehouse_lines")
+}
+
+model EmployeeRelocationCase {
+  id              String                     @id @default(uuid())
+  employeeId      String
+  fromOrgUnitId   String
+  toOrgUnitId     String
+  fromWarehouseId String
+  toWarehouseId   String
+  status          EmployeeRelocationCaseStatus @default(open)
+  createdByUserId String
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  resolvedAt      DateTime?
+
+  employee      Employee                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy     User                     @relation("RelocationCaseCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lines         EmployeeRelocationLine[]
+  events        EmployeeRelocationEvent[]
+
+  @@index([employeeId, status])
+  @@index([status])
+  @@map("employee_relocation_cases")
+}
+
+model EmployeeRelocationLine {
+  id                   String                        @id @default(uuid())
+  caseId               String
+  equipmentId          String
+  categoryId           String
+  status               EmployeeRelocationLineStatus  @default(pending_source)
+  sourceAction         EmployeeRelocationSourceAction?
+  sourceResolvedByUserId String?
+  destResolvedByUserId   String?
+  destStockLotId       String?
+  resolvedAt           DateTime?
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+
+  case             EmployeeRelocationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  equipment        Equipment              @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  sourceResolvedBy User?                  @relation("RelocationLineSourceResolver", fields: [sourceResolvedByUserId], references: [id], onDelete: SetNull)
+  destResolvedBy   User?                  @relation("RelocationLineDestResolver", fields: [destResolvedByUserId], references: [id], onDelete: SetNull)
+  destStockLot     WarehouseStockLot?     @relation("RelocationDestStockLot", fields: [destStockLotId], references: [id], onDelete: SetNull)
+
+  @@unique([caseId, equipmentId])
+  @@index([caseId, status])
+  @@index([equipmentId])
+  @@map("employee_relocation_lines")
+}
+
+model EmployeeRelocationEvent {
+  id        String                        @id @default(uuid())
+  caseId    String
+  lineId    String?
+  actorUserId String
+  action    EmployeeRelocationEventAction
+  payload   Json                          @default("{}")
+  createdAt DateTime                      @default(now())
+
+  case  EmployeeRelocationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  actor User                   @relation("RelocationEventActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([actorUserId])
+  @@map("employee_relocation_events")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String           @db.VarChar(255)
+  message   String           @db.Text
+  read      Boolean          @default(false)
+  relatedId String?          @db.VarChar(36)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model SavedFilter {
+  id         String   @id @default(uuid())
+  userId     String
+  name       String   @db.VarChar(255)
+  categoryId String?
+  filters    Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("saved_filters")
+}
+
+model Setting {
+  key         String           @id @db.VarChar(120)
+  scope       SettingScope
+  valueType   SettingValueType
+  value       String           @db.Text
+  description String           @db.Text
+  updatedAt   DateTime         @updatedAt
+
+  @@index([scope])
+  @@map("settings")
+}
+
+model Upload {
+  id         String           @id @default(uuid())
+  path       String           @db.VarChar(500)
+  mime       String           @db.VarChar(120)
+  sizeBytes  Int
+  entityType UploadEntityType
+  entityId   String?          @db.VarChar(36)
+  createdAt  DateTime         @default(now())
+
+  @@index([entityType, entityId])
+  @@map("uploads")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

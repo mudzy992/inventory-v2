@@ -13,13 +13,19 @@ export const buildEmployeeNameSearchWhere = (searchTerm: string): Prisma.Employe
     return {
       OR: [
         {
-          AND: [{ firstName: { contains: first } }, { lastName: { contains: last } }],
+          AND: [
+            { firstName: { contains: first, mode: 'insensitive' } },
+            { lastName: { contains: last, mode: 'insensitive' } },
+          ],
         },
         {
-          AND: [{ firstName: { contains: last } }, { lastName: { contains: first } }],
+          AND: [
+            { firstName: { contains: last, mode: 'insensitive' } },
+            { lastName: { contains: first, mode: 'insensitive' } },
+          ],
         },
-        { firstName: { contains: trimmed } },
-        { lastName: { contains: trimmed } },
+        { firstName: { contains: trimmed, mode: 'insensitive' } },
+        { lastName: { contains: trimmed, mode: 'insensitive' } },
       ],
     };
   }

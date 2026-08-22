@@ -27,7 +27,10 @@ describe('pagination.util', () => {
   it('buildContainsSearchWhere returns OR contains', () => {
     assert.equal(buildContainsSearchWhere('', ['name']), undefined);
     assert.deepEqual(buildContainsSearchWhere('abc', ['name', 'code']), {
-      OR: [{ name: { contains: 'abc' } }, { code: { contains: 'abc' } }],
+      OR: [
+        { name: { contains: 'abc', mode: 'insensitive' } },
+        { code: { contains: 'abc', mode: 'insensitive' } },
+      ],
     });
   });
 

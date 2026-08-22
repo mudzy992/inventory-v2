@@ -41,7 +41,10 @@ export class CategoriesService {
     const limit = Math.min(query.limit ?? AUTOCOMPLETE_SEARCH_LIMIT, AUTOCOMPLETE_SEARCH_LIMIT);
     return this.prisma.category.findMany({
       where: {
-        OR: [{ name: { contains: term } }, { description: { contains: term } }],
+        OR: [
+          { name: { contains: term, mode: 'insensitive' } },
+          { description: { contains: term, mode: 'insensitive' } },
+        ],
       },
       orderBy: { name: 'asc' },
       take: limit,

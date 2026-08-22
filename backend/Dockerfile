@@ -7,8 +7,10 @@ RUN npm ci
 
 FROM deps AS build
 COPY . .
-# prisma.config.ts zahtijeva DATABASE_URL pri učitavanju; generate ne spaja se na bazu
-ENV DATABASE_URL="mysql://mudzy:nije,kikiriki@sql.ba101.top:3306/inventory-v3"
+# prisma.config.ts zahtijeva DATABASE_URL pri učitavanju; generate se NE spaja na bazu,
+# pa je namjerno placeholder — pravi DATABASE_URL ide isključivo kroz runtime env_file (.env),
+# nikad hardkodiran ovdje (ranije je ovdje bila prava MySQL lozinka, što je sigurnosni propust).
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/evidens"
 RUN npx prisma generate
 RUN npm run build
 

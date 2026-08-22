@@ -1,4 +1,4 @@
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 
 interface DatabaseConnectionConfig {
@@ -17,7 +17,7 @@ const parseDatabaseUrl = (databaseUrl: string): DatabaseConnectionConfig => {
   }
   return {
     host: parsed.hostname,
-    port: parsed.port ? Number(parsed.port) : 3306,
+    port: parsed.port ? Number(parsed.port) : 5432,
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
     database,
@@ -38,7 +38,7 @@ export const resolveDatabaseConfig = (): DatabaseConnectionConfig => {
   }
   return {
     host,
-    port: Number(process.env.DATABASE_PORT ?? 3306),
+    port: Number(process.env.DATABASE_PORT ?? 5432),
     user,
     password,
     database,
@@ -47,13 +47,13 @@ export const resolveDatabaseConfig = (): DatabaseConnectionConfig => {
 
 export const createPrismaClientOptions = (): ConstructorParameters<typeof PrismaClient>[0] => {
   const config = resolveDatabaseConfig();
-  const adapter = new PrismaMariaDb({
+  const adapter = new PrismaPg({
     host: config.host,
     port: config.port,
     user: config.user,
     password: config.password,
     database: config.database,
-    connectionLimit: 10,
+    max: 10,
   });
   return { adapter };
 };
