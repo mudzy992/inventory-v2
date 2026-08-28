@@ -34,7 +34,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: ../Dockerfilefr
+      dockerfile: ../Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL}
         VITE_APP_NAME: ${VITE_APP_NAME}
