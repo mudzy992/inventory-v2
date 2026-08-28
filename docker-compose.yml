@@ -30,6 +30,8 @@ services:
     restart: unless-stopped
     expose:
       - "3000"
+    networks:
+      - db_net
 
   frontend:
     build:
@@ -42,6 +44,10 @@ services:
     restart: unless-stopped
     expose:
       - "3000"
+networks:
+  db_net:
+    external: true
+    name: db_net
 
 volumes:
   uploads_data:
