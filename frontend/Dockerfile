@@ -1,13 +1,12 @@
-# Build SPA — produkcija (serve static)
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-COPY frontend/package.json frontend/package-lock.json ./
+COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY frontend/ .
+COPY . .
 
-ARG VITE_API_URL=https://api.evidens.ba101.top
+ARG VITE_API_URL=https://evidens.ba101.top/backend
 ARG VITE_APP_NAME=Evidens
 ARG VITE_APP_URL=https://evidens.ba101.top
 

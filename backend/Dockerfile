@@ -2,13 +2,11 @@
 
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
-COPY backend/package.json backend/package-lock.json* ./
+COPY package.json package-lock.json* ./
 RUN npm ci
 
 FROM deps AS build
-COPY backend/ .
-# prisma.config.ts zahtijeva DATABASE_URL pri učitavanju; generate se NE spaja na bazu,
-# pa je placeholder namjerno tu.
+COPY . .
 ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/evidens"
 RUN npx prisma generate
 RUN npm run build
