@@ -26,7 +26,7 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN}
       - BACKEND_PORT=${BACKEND_PORT:-3000}
     volumes:
-      - uploads_data:/app/uploads
+      - /mnt/shared-app-files/inventory-v2:/app/uploads
     restart: unless-stopped
     expose:
       - "3000"
