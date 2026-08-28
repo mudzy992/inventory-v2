@@ -1,33 +1,47 @@
-# Lokalni / dev — MySQL je na eksternom serveru (DATABASE_* u .env)
 services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    env_file:
-      - .env
+      dockerfile: ../Dockerfile
     environment:
-      NODE_ENV: production
-    ports:
-      - "${BACKEND_PORT:-3000}:3000"
+      - NODE_ENV=production
+      - APP_NAME=${APP_NAME:-evidens}
+      - APP_DISPLAY_NAME=${APP_DISPLAY_NAME:-Evidens}
+      - APP_SUBTITLE=${APP_SUBTITLE:-Hijerarhijska evidencija i zaduženje opreme}
+      - APP_URL=${APP_URL}
+      - API_PREFIX=${API_PREFIX:-backend}
+      - DB_PROVIDER=${DB_PROVIDER:-postgresql}
+      - DATABASE_HOST=${DATABASE_HOST}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_USER=${DATABASE_USER}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - DATABASE_URL=${DATABASE_URL}
+      - SETUP_TOKEN=${SETUP_TOKEN}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_TTL=${JWT_ACCESS_TTL:-15m}
+      - JWT_REFRESH_TTL=${JWT_REFRESH_TTL:-7d}
+      - UPLOAD_DIR=${UPLOAD_DIR:-/app/uploads}
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-10}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - BACKEND_PORT=${BACKEND_PORT:-3000}
     volumes:
-      - backend_uploads:/app/uploads
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - uploads_data:/app/uploads
     restart: unless-stopped
+    expose:
+      - "3000"
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: ../Dockerfilefr
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/backend}
-        VITE_APP_NAME: ${VITE_APP_NAME:-Evidens}
-    ports:
-      - "8080:3000"
-    depends_on:
-      - backend
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_APP_NAME: ${VITE_APP_NAME}
+        VITE_APP_URL: ${VITE_APP_URL}
     restart: unless-stopped
+    expose:
+      - "3000"
 
 volumes:
-  backend_uploads:
+  uploads_data:
