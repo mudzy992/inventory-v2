@@ -6,7 +6,10 @@ RUN npm ci
 
 COPY . .
 
-ARG VITE_API_URL=https://evidens.ba101.top/backend
+# Ovi default-i se koriste SAMO ako build arg nije proslijeđen (npr. ručni build).
+# U Coolify-ju stvarne vrijednosti dolaze iz docker-compose.yml "args:" (VITE_API_URL
+# itd.), koji čita iz env-a — backend je na svojoj subdomeni, BEZ /backend prefiksa.
+ARG VITE_API_URL=https://api.evidens.ba101.top
 ARG VITE_APP_NAME=Evidens
 ARG VITE_APP_URL=https://evidens.ba101.top
 

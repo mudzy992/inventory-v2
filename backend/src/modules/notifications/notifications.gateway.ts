@@ -11,9 +11,23 @@ import type { Server, Socket } from 'socket.io';
 import type { JwtPayload } from '../../common/types/jwt-payload.type';
 import type { NotificationResponse } from './notifications.service';
 
+// Socket.IO path mora pratiti API_PREFIX: kad backend radi na svojoj subdomeni
+// (npr. api.evidens.ba101.top) bez prefiksa, API_PREFIX je prazan string i
+// socket put postaje "/socket.io"; ako se ikad ponovo koristi path-prefix
+// routing (npr. evidens.ba101.top/backend), put automatski postaje
+// "/backend/socket.io". Čita se direktno iz process.env jer @WebSocketGateway
+// decorator opcije se evaluiraju pri importu modula, prije nego ConfigService
+// postoji — vrijednost mora doći iz stvarnih env varijabli kontejnera
+// (Coolify injektuje env direktno, tako da je ovo pouzdano i u produkciji).
+const resolveSocketIoPath = (): string => {
+  const rawPrefix = (process.env.API_PREFIX ?? 'backend').trim();
+  const prefix = rawPrefix.replace(/^\/+|\/+$/g, '');
+  return prefix ? `/${prefix}/socket.io` : '/socket.io';
+};
+
 @WebSocketGateway({
   namespace: 'notifications',
-  path: '/backend/socket.io',
+  path: resolveSocketIoPath(),
   cors: { origin: true, credentials: true },
 })
 export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {

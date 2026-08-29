@@ -1,3 +1,10 @@
+# Coolify — Evidens
+# Frontend: https://evidens.ba101.top (domena/SSL/port se podešava u Coolify UI po servisu,
+#   container sluša na 3000; može se promijeniti na 80 u Coolify UI ako je poželjno).
+# Backend:  https://api.evidens.ba101.top (posebna subdomena, BEZ path-prefiksa — otud
+#   API_PREFIX prazan u env-u; vidi napomenu kod API_PREFIX ispod).
+# Baza: eksterni Postgres projekat na "db_net" mreži, host je container/service ime
+#   Postgres resursa u Coolify-ju (vidi DATABASE_HOST u fajl.txt).
 services:
   backend:
     build:
@@ -9,7 +16,13 @@ services:
       - APP_DISPLAY_NAME=${APP_DISPLAY_NAME:-Evidens}
       - APP_SUBTITLE=${APP_SUBTITLE:-Hijerarhijska evidencija i zaduženje opreme}
       - APP_URL=${APP_URL}
-      - API_PREFIX=${API_PREFIX:-backend}
+      # VAŽNO: koristi se "${API_PREFIX-backend}" (bez dvotačke), ne "${API_PREFIX:-backend}".
+      # Sa dvotačkom, Docker Compose (bash pravilo) vraća default "backend" i kad je
+      # API_PREFIX eksplicitno postavljen na PRAZAN string, što je tačno slučaj kad
+      # backend radi na svojoj subdomeni (api.evidens.ba101.top) bez path-prefiksa.
+      # Bez dvotačke se prazan string ispoštuje, a default se koristi samo ako
+      # varijabla uopšte nije definisana u Coolify env-u.
+      - API_PREFIX=${API_PREFIX-backend}
       - DB_PROVIDER=${DB_PROVIDER:-postgresql}
       - DATABASE_HOST=${DATABASE_HOST}
       - DATABASE_PORT=${DATABASE_PORT:-5432}
@@ -48,6 +61,3 @@ networks:
   db_net:
     external: true
     name: db_net
-
-volumes:
-  uploads_data:
