@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RedisRateLimitGuard } from '../../redis/redis-rate-limit.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -11,6 +12,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
+  @UseGuards(RedisRateLimitGuard)
   login(@Body() body: LoginDto) {
     return this.authService.login(body.username, body.password);
   }

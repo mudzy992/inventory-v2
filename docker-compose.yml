@@ -5,6 +5,11 @@
 #   API_PREFIX prazan u env-u; vidi napomenu kod API_PREFIX ispod).
 # Baza: eksterni Postgres projekat na "db_net" mreži, host je container/service ime
 #   Postgres resursa u Coolify-ju (vidi DATABASE_HOST u fajl.txt).
+# Redis: eksterna centralna Redis platforma na "redis_net" mreži (redis-core service,
+#   ACL user ograničen na REDIS_KEY_PREFIX namespace). Koristi se za: JWT/settings
+#   cache, BullMQ (inventory session close queue), Socket.IO horizontalno skaliranje,
+#   distribuirani lock za dnevni scheduler, i rate limiting na /auth/login.
+#   Vidi backend/src/redis/ i backend/src/queues/ za implementaciju.
 services:
   backend:
     build:
@@ -38,6 +43,17 @@ services:
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-10}
       - CORS_ORIGIN=${CORS_ORIGIN}
       - BACKEND_PORT=${BACKEND_PORT:-3000}
+      - INVENTORY_SCHEDULER_ENABLED=${INVENTORY_SCHEDULER_ENABLED:-false}
+      # --- Redis (centralna platforma, vidi redis-platform repo) ---
+      - REDIS_HOST=${REDIS_HOST:-redis-core}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_USERNAME=${REDIS_USERNAME:-inventory-v2}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-inventory-v2}
+      - REDIS_TLS=${REDIS_TLS:-false}
+      - RATE_LIMIT_LOGIN_MAX=${RATE_LIMIT_LOGIN_MAX:-10}
+      - RATE_LIMIT_LOGIN_WINDOW_SEC=${RATE_LIMIT_LOGIN_WINDOW_SEC:-60}
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads
     restart: unless-stopped
@@ -45,6 +61,7 @@ services:
       - "3000"
     networks:
       - db_net
+      - redis_net
 
   frontend:
     build:
@@ -61,3 +78,6 @@ networks:
   db_net:
     external: true
     name: db_net
+  redis_net:
+    external: true
+    name: redis_net

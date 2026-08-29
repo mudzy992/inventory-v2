@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import type { Setting, SettingScope } from '../../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   getSettingDefinition,
@@ -32,11 +33,43 @@ export interface SettingResponse {
 
 @Injectable()
 export class SettingsService {
+  // Settings se čitaju na skoro svakom write putu u aplikaciji (feature
+  // flag provjere, production-mode lock provjere po više org jedinica u
+  // petlji — vidi InventoryProductionModeService) ali se mijenjaju rijetko
+  // (administrator ih upisuje ručno). Kratak TTL cache-aside eliminiše
+  // veliku većinu ponovljenih upita bez primjetnog staleness rizika;
+  // eksplicitna invalidacija na svaki upis (updateValue/upsertValues)
+  // dodatno smanjuje taj prozor na praktično nulu za normalne tokove.
+  private static readonly CACHE_TTL_SECONDS = 30;
+
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
   ) {}
+
+  private static cacheKey(key: string): string {
+    return `settings:row:${key}`;
+  }
+
+  /** Cache-aside čitanje sirovog Setting reda. Javna metoda jer je i drugi
+   * servisi (npr. InventoryProductionModeService) koriste direktno umjesto
+   * da rade svoj vlastiti prisma.setting.findUnique poziv. */
+  async getRow(key: string): Promise<Pick<Setting, 'value' | 'valueType'> | null> {
+    const cached = await this.redisService.getJson<Pick<Setting, 'value' | 'valueType'> | null>(
+      SettingsService.cacheKey(key),
+    );
+    if (cached !== undefined) {
+      return cached;
+    }
+    const row = await this.prisma.setting.findUnique({
+      where: { key },
+      select: { value: true, valueType: true },
+    });
+    await this.redisService.setJson(SettingsService.cacheKey(key), row ?? null, SettingsService.CACHE_TTL_SECONDS);
+    return row;
+  }
 
   async ensureDefaults(): Promise<void> {
     for (const definition of SETTINGS_REGISTRY) {
@@ -67,7 +100,7 @@ export class SettingsService {
   }
 
   async getBooleanValue(key: string, defaultValue = false): Promise<boolean> {
-    const row = await this.prisma.setting.findUnique({ where: { key } });
+    const row = await this.getRow(key);
     if (!row) {
       return defaultValue;
     }
@@ -76,7 +109,7 @@ export class SettingsService {
   }
 
   async getNumberValue(key: string, defaultValue: number): Promise<number> {
-    const row = await this.prisma.setting.findUnique({ where: { key } });
+    const row = await this.getRow(key);
     if (!row) {
       return defaultValue;
     }
@@ -126,6 +159,7 @@ export class SettingsService {
         },
         update: { value: serialized },
       });
+      await this.redisService.del(SettingsService.cacheKey(entry.key));
     }
   }
 
@@ -142,6 +176,7 @@ export class SettingsService {
       where: { key },
       data: { value: serialized },
     });
+    await this.redisService.del(SettingsService.cacheKey(key));
     const response = this.toResponse(row);
     if (definition.scope === 'public') {
       this.notificationsService.emitPublicSettingUpdated(response.key, response.value);

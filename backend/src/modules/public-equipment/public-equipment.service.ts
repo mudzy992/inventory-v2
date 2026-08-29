@@ -6,6 +6,7 @@ import type {
   Warehouse,
 } from '../../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
 import {
   buildLabeledSpecifications,
   getUniqueFieldsDisplay,
@@ -105,7 +106,20 @@ export class PublicEquipmentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
+    private readonly redisService: RedisService,
   ) {}
+
+  // Javni, neautentifikovani, QR-kod-vođen endpoint (skeniranje sa telefona)
+  // — potencijalno najveći anonimni saobraćaj u cijeloj aplikaciji, a svaki
+  // poziv bez keša radi: 1 equipment upit sa 4 nivoa relacija (uključujući
+  // SVE transfere), + 1 NEOGRANIČEN orgUnit.findMany() (svi org unit-i u
+  // sistemu, na svaki poziv, radi izgradnje org-unit path-a). Oprema se
+  // mijenja rijetko u odnosu na potencijalnu frekvenciju QR skeniranja, pa
+  // je kratak TTL kеš ovdje čist dobitak bez praktičnog rizika po
+  // korisničko iskustvo (30-60s stara "trenutna lokacija opreme" na
+  // javnoj stranici je zanemarljivo, informativna stranica nije izvor
+  // istine za bilo kakvu poslovnu odluku).
+  private static readonly CACHE_TTL_SECONDS = 60;
 
   async findOne(id: string): Promise<PublicEquipmentResponse> {
     const lookupEnabled = await this.settingsService.isFeatureEnabled(
@@ -116,6 +130,14 @@ export class PublicEquipmentService {
       throw new NotFoundException('Public equipment lookup is disabled');
     }
 
+    return this.redisService.remember(
+      `public-equipment:${id}`,
+      PublicEquipmentService.CACHE_TTL_SECONDS,
+      () => this.buildResponse(id),
+    );
+  }
+
+  private async buildResponse(id: string): Promise<PublicEquipmentResponse> {
     const equipment = await this.prisma.equipment.findUnique({
       where: { id },
       include: {

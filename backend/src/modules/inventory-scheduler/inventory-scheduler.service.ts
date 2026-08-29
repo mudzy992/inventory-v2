@@ -7,7 +7,15 @@ import {
 } from '../../common/utils/inventory-date.util';
 import { InventoryProductionModeService } from '../../common/services/inventory-production-mode.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
 import { InventoryCountService } from '../inventory-count/inventory-count.service';
+
+const DAILY_JOB_LOCK_KEY = 'lock:inventory-scheduler:daily-jobs';
+// Dovoljno dugo da pokrije realno trajanje handleDailyInventoryJobs (upiti
+// + iteracija po distribucijama), a kratko dovoljno da se lock ne zaglavi
+// do sljedećeg dana ako proces padne usred izvršavanja bez da oslobodi lock
+// (Redis TTL ga svejedno automatski čisti).
+const DAILY_JOB_LOCK_TTL_MS = 15 * 60 * 1000;
 
 @Injectable()
 export class InventorySchedulerService {
@@ -18,6 +26,7 @@ export class InventorySchedulerService {
     private readonly prisma: PrismaService,
     private readonly productionModeService: InventoryProductionModeService,
     private readonly inventoryCountService: InventoryCountService,
+    private readonly redisService: RedisService,
   ) {}
 
   @Cron('5 0 * * *')
@@ -28,21 +37,37 @@ export class InventorySchedulerService {
     if (!(await this.productionModeService.isProductionModeEnabled())) {
       return;
     }
-    const timeZone = await this.productionModeService.getSchedulerTimezone();
-    const today = getZonedCalendarParts(new Date(), timeZone);
-    const lockDate = await this.productionModeService.getLockMonthDay();
-    const endDate = await this.productionModeService.getSessionEndMonthDay();
-    if (isOnMonthDay(today, lockDate)) {
-      await this.runLockDayJobs(today.year);
+    // Distribuirani lock: @Cron se izvršava NEZAVISNO na svakoj backend
+    // instanci — bez ovoga, dvije replike bi obje pokrenule iste dnevne
+    // poslove (duplirane draft sesije, duplirano zatvaranje) u istoj minuti.
+    // Ovo je danas "buduća zaštita" (aplikacija trenutno radi kao jedna
+    // instanca), ali je jeftina i bezopasna da se doda sad — kad god se
+    // backend skalira na više replika, ovaj cron ostaje ispravan bez
+    // dodatnih izmjena.
+    const lockToken = await this.redisService.acquireLock(DAILY_JOB_LOCK_KEY, DAILY_JOB_LOCK_TTL_MS);
+    if (!lockToken) {
+      this.logger.debug('Daily inventory job skipped — lock held by another instance.');
+      return;
     }
-    if (today.month === 12 && today.day === 1) {
-      await this.runOptionalAutoActivate(today.year);
-    }
-    if (isOnMonthDay(today, endDate)) {
-      await this.runEndDayJobs(today.year);
-    }
-    if (today.month === 1 && today.day === 1) {
-      await this.runJan1DraftJobs(today.year);
+    try {
+      const timeZone = await this.productionModeService.getSchedulerTimezone();
+      const today = getZonedCalendarParts(new Date(), timeZone);
+      const lockDate = await this.productionModeService.getLockMonthDay();
+      const endDate = await this.productionModeService.getSessionEndMonthDay();
+      if (isOnMonthDay(today, lockDate)) {
+        await this.runLockDayJobs(today.year);
+      }
+      if (today.month === 12 && today.day === 1) {
+        await this.runOptionalAutoActivate(today.year);
+      }
+      if (isOnMonthDay(today, endDate)) {
+        await this.runEndDayJobs(today.year);
+      }
+      if (today.month === 1 && today.day === 1) {
+        await this.runJan1DraftJobs(today.year);
+      }
+    } finally {
+      await this.redisService.releaseLock(DAILY_JOB_LOCK_KEY, lockToken);
     }
   }
 

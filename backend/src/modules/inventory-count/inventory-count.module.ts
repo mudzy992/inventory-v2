@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { CommonModule } from '../../common/common.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SettingsModule } from '../settings/settings.module';
@@ -8,9 +9,15 @@ import { InventoryWarehouseCommitteeController } from './inventory-warehouse-com
 import { InventoryCountService } from './inventory-count.service';
 import { InventorySessionCloseWorkerService } from './inventory-session-close-worker.service';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
+import { INVENTORY_SESSION_CLOSE_QUEUE } from './inventory-session-close.queue';
 
 @Module({
-  imports: [CommonModule, NotificationsModule, SettingsModule],
+  imports: [
+    CommonModule,
+    NotificationsModule,
+    SettingsModule,
+    BullModule.registerQueue({ name: INVENTORY_SESSION_CLOSE_QUEUE }),
+  ],
   controllers: [
     InventoryCountController,
     InventoryCountListController,

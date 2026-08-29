@@ -3,15 +3,30 @@ import { resolve } from 'node:path';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { RedisIoAdapter } from './redis/redis-io.adapter';
 
 loadEnv({ path: resolve(process.cwd(), '../.env') });
 loadEnv({ path: resolve(process.cwd(), '.env') });
 
 const bootstrap = async (): Promise<void> => {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
+
+  // Backend je uvijek iza Traefik/Coolify reverse proxyja u produkciji —
+  // bez ovoga, `request.ip` (koristi ga npr. RedisRateLimitGuard) bi
+  // vidio internu Docker network IP proxyja umjesto stvarnog klijenta.
+  app.set('trust proxy', 1);
+
+  // Socket.IO Redis adapter — omogućava da NotificationsGateway ispravno
+  // broadcast-uje evente bez obzira na broj backend replika. Bezbjedno i
+  // za single-instance deployment (graceful fallback ako Redis nije
+  // dostupan pri startu — vidi RedisIoAdapter).
+  const redisIoAdapter = new RedisIoAdapter(app);
+  await redisIoAdapter.connectToRedis();
+  app.useWebSocketAdapter(redisIoAdapter);
 
   // API_PREFIX namjerno može biti prazan string (backend na svojoj subdomeni,
   // bez path-prefiksa) — ConfigService.get koristi default SAMO ako je vrijednost

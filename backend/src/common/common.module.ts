@@ -8,9 +8,11 @@ import { InventoryProductionModeService } from './services/inventory-production-
 import { InventoryCoordinatorScopeService } from './services/inventory-coordinator-scope.service';
 import { ModeratorScopeService } from './services/moderator-scope.service';
 import { WarehouseResolutionService } from './services/warehouse-resolution.service';
+import { SettingsModule } from '../modules/settings/settings.module';
 
 @Global()
 @Module({
+  imports: [SettingsModule],
   providers: [
     OrgScopeService,
     LocationResolutionService,

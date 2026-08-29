@@ -18,6 +18,8 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
+import { authUserCacheKey } from '../auth/strategies/jwt.strategy';
 import { assertEmployeeCanDeactivateOrNotify } from '../employees/utils/employee-deactivation.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
@@ -81,6 +83,7 @@ export class UsersService {
     private readonly moderatorScope: ModeratorScopeService,
     private readonly warehouseResolution: WarehouseResolutionService,
     private readonly notifications: NotificationsService,
+    private readonly redisService: RedisService,
   ) {}
 
   async findAll(
@@ -361,6 +364,11 @@ export class UsersService {
       }
       return updated;
     });
+    // Kritično za sigurnost: uloga/isActive/pristupna prava su se možda
+    // upravo promijenili (npr. deaktivacija korisnika) — JwtStrategy kešira
+    // AuthenticatedUser do 30s (vidi jwt.strategy.ts); bez ove invalidacije
+    // deaktivirani korisnik bi zadržao pristup do isteka tog prozora.
+    await this.redisService.del(authUserCacheKey(id));
     return this.toListItem(user);
   }
 

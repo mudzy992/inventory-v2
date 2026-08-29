@@ -1,8 +1,34 @@
 # Produkcija — Traefik (mreža web), TLS le, host evidens.ba101.top
-# Prije build/up: root .env sa DATABASE_URL, JWT_SECRET, UPLOAD_DIR=/app/uploads
+# Prije build/up: root .env sa DATABASE_URL, JWT_SECRET, UPLOAD_DIR=/app/uploads,
+#   REDIS_PASSWORD (vidi backend/.env.example za pun spisak Redis varijabli)
 # Host upload: mkdir -p /mnt/shared-app-files/inventory-v2 && ./scripts/fix-upload-permissions.sh
 # Build: ./scripts/docker-prod-build.sh  (build + uklanjanje dangling image-a)
+#
+# Redis: ovaj (standalone, non-Coolify) deployment put NE oslanja se na
+# eksternu "redis_net" konvenciju (to je Coolify-specifično — vidi
+# docker-compose.yml). Umjesto toga, ovdje se pokreće SOPSTVENI Redis
+# kontejner na "internal" mreži, dovoljan za single-server standalone setup.
 services:
+  redis:
+    image: redis:7.4-alpine
+    container_name: evidens-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy volatile-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     image: inventory-v2-backend:prod
     build:
@@ -12,6 +38,12 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # Ovaj standalone Redis nema ACL (samo requirepass) — default user.
+      REDIS_USERNAME: ""
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_KEY_PREFIX: inventory-v2
     # Upload root na hostu; unutra aplikacija gradi prenosnice/, templates/, ...
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads
@@ -19,6 +51,9 @@ services:
       - web
       - internal
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
     labels:
       - traefik.enable=true
       - traefik.docker.network=web
@@ -49,6 +84,9 @@ services:
       - traefik.http.routers.evidens-web.tls=true
       - traefik.http.routers.evidens-web.tls.certresolver=le
       - traefik.http.services.evidens-web.loadbalancer.server.port=3000
+
+volumes:
+  redis_data:
 
 networks:
   web:

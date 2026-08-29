@@ -4,6 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import type {
   InventoryLineStatus,
   InventoryRelocationTarget,
@@ -29,6 +32,11 @@ import { WarehouseResolutionService } from '../../common/services/warehouse-reso
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
+import {
+  INVENTORY_SESSION_CLOSE_JOB_NAME,
+  INVENTORY_SESSION_CLOSE_QUEUE,
+  type InventorySessionCloseJobPayload,
+} from './inventory-session-close.queue';
 import { buildDisposalReportPayload } from './utils/build-disposal-report.util';
 import { executeDirectEquipmentTransferInTx } from '../transfers/utils/execute-direct-equipment-transfer.util';
 import { isTransferDocumentEnabled } from '../transfers/utils/transfer-generation-policy.util';
@@ -157,6 +165,8 @@ export class InventoryCountService {
     private readonly inventoryFreezeService: InventoryFreezeService,
     private readonly settingsService: SettingsService,
     private readonly equipmentDisposalListService: EquipmentDisposalListService,
+    @InjectQueue(INVENTORY_SESSION_CLOSE_QUEUE)
+    private readonly closeSessionQueue: Queue<InventorySessionCloseJobPayload>,
   ) {}
 
   private async assertInventoryCountEnabled(): Promise<void> {
@@ -1905,7 +1915,7 @@ export class InventoryCountService {
       where: { id: session.id },
       data: { status: 'closing' },
     });
-    return this.prisma.inventorySessionCloseJob.upsert({
+    const job = await this.prisma.inventorySessionCloseJob.upsert({
       where: { sessionId: session.id },
       create: {
         sessionId: session.id,
@@ -1923,6 +1933,27 @@ export class InventoryCountService {
         lastError: null,
       },
     });
+    // BullMQ preuzima orkestraciju izvršavanja (retry sa exponential
+    // backoff, concurrency kontrola, nema više 1200ms DB polling petlje
+    // koja je ranije trošila upit na svaku "provjeru da li ima posla" bez
+    // obzira da li stvarno ima). `inventorySessionCloseJob` DB red ostaje
+    // sistem-od-istine za progres/audit (frontend i dalje čita preko
+    // getCloseJob) — BullMQ job je samo "trigger za izvršavanje" koji
+    // referencira taj DB red preko sessionId-a.
+    //
+    // jobId je namjerno SVJEŽ nasumičan string na svaki poziv (ne
+    // session.id) — provjera dva reda iznad (existingJob.status ===
+    // 'queued'/'running' → prijevremeni return) već sprečava duplo
+    // enqueue-ovanje dok je posao u toku; da smo koristili session.id kao
+    // jobId, ponovno zatvaranje sesije NAKON što je prethodni BullMQ posao
+    // već završen (completed/failed, ali još nije obrisan retencijom) bi
+    // moglo tiho da ne kreira novi posao, zavisno od verzije BullMQ-a.
+    await this.closeSessionQueue.add(
+      INVENTORY_SESSION_CLOSE_JOB_NAME,
+      { sessionId: session.id },
+      { jobId: randomUUID() },
+    );
+    return job;
   }
 
   async getCloseJob(sessionId: string) {

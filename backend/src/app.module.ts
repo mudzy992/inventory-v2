@@ -26,6 +26,8 @@ import { EquipmentCatalogModule } from './modules/equipment-catalog/equipment-ca
 import { EmployeeRelocationModule } from './modules/employee-relocation/employee-relocation.module';
 import { NavModule } from './modules/nav/nav.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RedisModule } from './redis/redis.module';
+import { QueuesModule } from './queues/bullmq.module';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { PrismaModule } from './prisma/prisma.module';
       isGlobal: true,
       envFilePath: [resolve(process.cwd(), '../.env'), resolve(process.cwd(), '.env')],
     }),
+    RedisModule,
+    QueuesModule,
     CommonModule,
     PrismaModule,
     HealthModule,

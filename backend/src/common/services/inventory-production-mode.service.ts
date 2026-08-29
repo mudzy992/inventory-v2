@@ -5,23 +5,29 @@ import {
   parseMonthDay,
 } from '../utils/inventory-date.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
+import { SettingsService } from '../../modules/settings/settings.service';
 
 @Injectable()
 export class InventoryProductionModeService {
-  constructor(private readonly prisma: PrismaService) {}
+  // findProductionLockOrgUnitIdsForCity radi N+1 upit (jedan po distribuciji
+  // u gradu) na svaki poziv — koristi se na potencijalno vrućim putevima
+  // (equipment/transfer write provjere). Kratak TTL cache po (grad, dan)
+  // svodi to na jedan izračun po gradu po danu umjesto po svakom zahtjevu.
+  private static readonly LOCK_CACHE_TTL_SECONDS = 30;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+    private readonly redisService: RedisService,
+  ) {}
 
   async isProductionModeEnabled(): Promise<boolean> {
-    const row = await this.prisma.setting.findUnique({ where: { key: 'inventory.production_mode' } });
-    if (!row) {
-      return false;
-    }
-    return row.value === 'true';
+    return this.settingsService.getBooleanValue('inventory.production_mode', false);
   }
 
   async getSchedulerTimezone(): Promise<string> {
-    const row = await this.prisma.setting.findUnique({
-      where: { key: 'inventory.scheduler_timezone' },
-    });
+    const row = await this.settingsService.getRow('inventory.scheduler_timezone');
     if (!row || row.valueType !== 'string') {
       return 'Europe/Sarajevo';
     }
@@ -30,15 +36,13 @@ export class InventoryProductionModeService {
   }
 
   async getLockMonthDay(): Promise<{ month: number; day: number }> {
-    const row = await this.prisma.setting.findUnique({ where: { key: 'inventory.lock_date' } });
+    const row = await this.settingsService.getRow('inventory.lock_date');
     const raw = row?.valueType === 'string' && row.value.trim() ? row.value.trim() : '11-30';
     return parseMonthDay(raw);
   }
 
   async getSessionEndMonthDay(): Promise<{ month: number; day: number }> {
-    const row = await this.prisma.setting.findUnique({
-      where: { key: 'inventory.session_end_date' },
-    });
+    const row = await this.settingsService.getRow('inventory.session_end_date');
     const raw = row?.valueType === 'string' && row.value.trim() ? row.value.trim() : '12-31';
     return parseMonthDay(raw);
   }
@@ -64,17 +68,20 @@ export class InventoryProductionModeService {
   }
 
   async findProductionLockOrgUnitIdsForCity(cityId: string, date: Date = new Date()): Promise<string[]> {
-    const distributions = await this.prisma.orgUnit.findMany({
-      where: { type: 'distribucija', effectiveLocationCityId: cityId },
-      select: { id: true },
-    });
-    const locked: string[] = [];
-    for (const distribution of distributions) {
-      if (await this.isProductionLockActive(distribution.id, date)) {
-        locked.push(distribution.id);
+    const cacheKey = `inventory:prodlock:city:${cityId}:${date.toISOString().slice(0, 10)}`;
+    return this.redisService.remember(cacheKey, InventoryProductionModeService.LOCK_CACHE_TTL_SECONDS, async () => {
+      const distributions = await this.prisma.orgUnit.findMany({
+        where: { type: 'distribucija', effectiveLocationCityId: cityId },
+        select: { id: true },
+      });
+      const locked: string[] = [];
+      for (const distribution of distributions) {
+        if (await this.isProductionLockActive(distribution.id, date)) {
+          locked.push(distribution.id);
+        }
       }
-    }
-    return locked;
+      return locked;
+    });
   }
 
   async isProductionLockActiveForCity(cityId: string, date: Date = new Date()): Promise<boolean> {
