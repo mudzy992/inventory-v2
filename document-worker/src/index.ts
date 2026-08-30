@@ -29,10 +29,6 @@ const main = (): void => {
     // rekonektuje; ako konekcija stvarno propadne trajno, healthcheck
     // failovi na 'redis_not_ready' bi ionako pratili status 'close'.
   });
-  worker.on('close', () => {
-    healthState.redisReady = false;
-  });
-
   let shuttingDown = false;
   const shutdown = (signal: string): void => {
     if (shuttingDown) return;
