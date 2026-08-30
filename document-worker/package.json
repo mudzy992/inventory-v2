@@ -1,0 +1,21 @@
+{
+  "name": "@inventory-v2/document-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Evidens Document Engine worker — konzumira BullMQ `document-generation` red i konvertuje DOCX/XLSX/ODT u PDF preko LibreOffice-a (soffice --headless). Zaseban interni servis, bez javne domene, bez NestJS-a — čist Node/BullMQ Worker proces.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "bullmq": "^5.63.0",
+    "ioredis": "^5.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

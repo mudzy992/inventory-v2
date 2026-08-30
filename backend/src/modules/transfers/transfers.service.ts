@@ -417,7 +417,7 @@ export class TransfersService {
     if (requireSignedPdf) {
       await this.notificationsService.notifyTransferSignedUploadPending(created.id);
     }
-    await this.transferDocumentGeneration.generateForTransfer(created.id);
+    await this.transferDocumentGeneration.generateForTransfer(created.id, user.id);
     const transfer = await this.getTransferOrThrow(created.id);
     return { mode: 'document' as const, transfer: this.mapTransferDocumentMeta(transfer) };
   }
@@ -529,7 +529,7 @@ export class TransfersService {
       });
       return updated;
     });
-    await this.transferDocumentGeneration.generateForTransfer(signed.id);
+    await this.transferDocumentGeneration.generateForTransfer(signed.id, user.id);
     await this.notificationsService.notifyTransferSigned(signed.id);
     return this.mapTransferDocumentMeta(signed);
   }

@@ -14,10 +14,11 @@ Web aplikacija za evidenciju opreme po organizacionoj hijerarhiji — zaduženja
 
 ```
 inventory-v2/
-├── backend/     # NestJS + Prisma (faza 1+)
-├── frontend/    # React + Vite + Tailwind
-├── docker/      # rezervisano (routing isključivo preko Traefik labela)
-└── .cursor/     # plan, matrice, pravila
+├── backend/          # NestJS + Prisma (faza 1+)
+├── frontend/         # React + Vite + Tailwind
+├── document-worker/  # Document Engine — LibreOffice worker (DOCX/XLSX/ODT → PDF), zaseban interni servis
+├── docker/           # rezervisano (routing isključivo preko Traefik labela)
+└── .cursor/          # plan, matrice, pravila
 ```
 
 ## Lokalni razvoj
@@ -70,6 +71,11 @@ docker compose up --build
 # Produkcija (Traefik mreža web mora postojati)
 docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+Oba compose fajla sada uključuju i `document-worker` servis (Document
+Engine — DOCX/XLSX/ODT → PDF preko LibreOffice-a, BullMQ
+`document-generation` red). Interni je, bez javne domene — pokreće se
+automatski sa ostalim servisima. Detalji: [document-worker/README.md](document-worker/README.md).
 
 ## Plan i matrice
 

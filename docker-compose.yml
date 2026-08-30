@@ -7,9 +7,13 @@
 #   Postgres resursa u Coolify-ju (vidi DATABASE_HOST u fajl.txt).
 # Redis: eksterna centralna Redis platforma na "redis_net" mreži (redis-core service,
 #   ACL user ograničen na REDIS_KEY_PREFIX namespace). Koristi se za: JWT/settings
-#   cache, BullMQ (inventory session close queue), Socket.IO horizontalno skaliranje,
-#   distribuirani lock za dnevni scheduler, i rate limiting na /auth/login.
-#   Vidi backend/src/redis/ i backend/src/queues/ za implementaciju.
+#   cache, BullMQ (inventory session close queue, document generation queue), Socket.IO
+#   horizontalno skaliranje, distribuirani lock za dnevni scheduler, i rate limiting
+#   na /auth/login. Vidi backend/src/redis/ i backend/src/queues/ za implementaciju.
+# Document Worker: zaseban interni servis (LibreOffice) za DOCX/XLSX/ODT -> PDF
+#   konverziju, konzumira BullMQ `document-generation` red preko iste redis_net
+#   mreže/ACL usera kao backend. NEMA "expose" i NEMA domenu u Coolify-ju — čisto
+#   interni BullMQ konzument, bez javne mrežne izloženosti. Vidi document-worker/.
 services:
   backend:
     build:
@@ -74,6 +78,65 @@ services:
     networks:
       - db_net
       - redis_net
+
+  document-worker:
+    build:
+      context: ./document-worker
+      dockerfile: Dockerfile
+    environment:
+      - UPLOAD_DIR=${UPLOAD_DIR:-/app/uploads}
+      # --- Redis (ISTA platforma/ACL user kao backend — vidi napomenu na vrhu) ---
+      - REDIS_HOST=${REDIS_HOST:-redis-core}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_USERNAME=${REDIS_USERNAME:-inventory-v2}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-inventory-v2}
+      - REDIS_TLS=${REDIS_TLS:-false}
+      - DOCUMENT_QUEUE_NAME=${DOCUMENT_QUEUE_NAME:-document-generation}
+      - DOCUMENT_WORKER_CONCURRENCY=${DOCUMENT_WORKER_CONCURRENCY:-2}
+      - DOCUMENT_WORKER_CONVERT_TIMEOUT_MS=${DOCUMENT_WORKER_CONVERT_TIMEOUT_MS:-120000}
+      - DOCUMENT_WORKER_HEALTH_PORT=8080
+    volumes:
+      # ISTI host direktorij kao backend — worker čita DOCX/XLSX/ODT koje je
+      # backend upisao i piše PDF nazad na isti volume, kao "generated" izlaz.
+      - /mnt/shared-app-files/inventory-v2:/app/uploads
+    restart: unless-stopped
+    # NEMA "expose" — nema HTTP API, samo interni Redis/BullMQ konzument.
+    # NEMA "ports" — nikad ne treba biti dostupan van kontejnerske mreže.
+    networks:
+      - redis_net
+    # Resource limiti — LibreOffice je memorijski zahtjevan; ograničava
+    # "blast radius" jednog zaglavljenog/teškog konverzionog posla.
+    mem_limit: 1536m
+    cpus: 1.5
+    pids_limit: 256
+    # Sigurnosna ograničenja: read-only root fs (LibreOffice piše samo u
+    # izolovane per-job profile pod /tmp preko tmpfs-a i u UPLOAD_DIR volume),
+    # bez novih privilegija, bez Linux capability-ja (headless konverzija ih
+    # ne treba).
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Graceful shutdown čeka da se AKTIVNI soffice poziv završi (do
+    # DOCUMENT_WORKER_CONVERT_TIMEOUT_MS) prije nego container primi SIGKILL
+    # — mora biti veći od najdužeg očekivanog poziva.
+    stop_grace_period: 150s
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:8080/health',
+          r => process.exit(r.statusCode === 200 ? 0 : 1))
+          .on('error', () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
   frontend:
     build:

@@ -254,6 +254,22 @@ enum InventorySessionCloseJobStatus {
   failed
 }
 
+// Document Engine — vidi modules/documents/. Generički (sourceType/sourceId,
+// ne FK na Transfer) namjerno: isti mehanizam može kasnije poslužiti i za
+// druge tipove dokumenata (izvještaji, popisne liste, ...), ne samo prenosnice.
+enum DocumentJobStatus {
+  queued
+  running
+  done
+  failed
+}
+
+enum DocumentSourceFormat {
+  docx
+  xlsx
+  odt
+}
+
 model Canton {
   id        String   @id @default(uuid())
   name      String   @db.VarChar(255)
@@ -1057,6 +1073,40 @@ model InventorySessionCloseJob {
 
   @@index([status])
   @@map("inventory_session_close_jobs")
+}
+
+// Document Engine — perzistentni zapis jednog posla konverzije dokumenta
+// (npr. DOCX prenosnice → PDF za štampu), obrađenog na zasebnom Document
+// Worker servisu (LibreOffice), preko BullMQ `document-generation` reda
+// (vidi modules/documents/document-generation.queue.ts).
+//
+// Namjerno generički (sourceType/sourceId kao slobodan string par, BEZ
+// direktnog FK-a na Transfer) — isti model/servis/worker treba da može
+// kasnije poslužiti i za druge izvore dokumenata (izvještaji, popisne liste,
+// ugovori...) bez nove migracije, samo novi sourceType string i pozivalac.
+// requestedByUserId je namjerno BEZ FK relacije (samo audit/prikaz) da bi se
+// izbjegla dodatna izmjena User modela za ovaj usko-svrsishodan slučaj.
+model DocumentJob {
+  id                  String               @id @default(uuid())
+  sourceType          String               @db.VarChar(50)
+  sourceId            String               @db.VarChar(64)
+  sourceFormat        DocumentSourceFormat
+  targetFormat        String               @db.VarChar(10) @default("pdf")
+  sourceRelativePath  String               @db.VarChar(500)
+  resultRelativePath  String               @db.VarChar(500)
+  status              DocumentJobStatus    @default(queued)
+  bullJobId           String?              @db.VarChar(100)
+  attempts            Int                  @default(0)
+  lastError           String?              @db.Text
+  requestedByUserId   String?
+  startedAt           DateTime?
+  endedAt             DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([sourceType, sourceId])
+  @@index([status])
+  @@map("document_jobs")
 }
 
 model InventoryLineEvent {

@@ -95,6 +95,23 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.emitToUsers(userIds, 'inventory.disposal_inbox.updated', payload);
   }
 
+  /** Document Engine — status posla konverzije dokumenta (queued/running/
+   * done/failed), emitovan SAMO korisniku koji je zatražio generisanje
+   * (requestedByUserId na DocumentJob redu). Vidi
+   * modules/documents/document-conversion-events.service.ts. */
+  emitDocumentJobUpdated(
+    userId: string,
+    payload: {
+      jobId: string;
+      sourceType: string;
+      sourceId: string;
+      status: string;
+      error?: string | null;
+    },
+  ): void {
+    this.server.to(`user:${userId}`).emit('document.job.updated', payload);
+  }
+
   private resolveUserId(client: Socket): string | null {
     const token = this.extractToken(client);
     if (!token) {

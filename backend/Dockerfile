@@ -28,15 +28,13 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV HOME=/tmp
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-    libreoffice-writer \
-    libreoffice-common \
-    fontconfig \
-    fonts-dejavu-core \
-    fonts-liberation \
-    fonts-noto-core \
-  && rm -rf /var/lib/apt/lists/*
+# NAPOMENA: LibreOffice se OD SADA ne instalira ovdje — DOCX→PDF konverzija
+# radi zaseban "document-worker" servis/image (vidi ../document-worker/),
+# koji se puni preko BullMQ `document-generation` reda (vidi
+# src/modules/documents/). Backend samo enqueue-uje poslove i čita
+# rezultate sa dijeljenog uploads volume-a; nikad sam ne poziva `soffice`.
+# Ovo drži backend image manjim/bržim za build i uklanja LibreOffice napad
+# površinu iz javno-izloženog (Traefik/Coolify) kontejnera.
 
 ARG APP_UID=100
 ARG APP_GID=101

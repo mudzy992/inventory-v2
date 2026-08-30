@@ -1,9 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, HttpException, HttpStatus, NotFoundException } from '@nestjs/common';
 import Docxtemplater from 'docxtemplater';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import PizZip from 'pizzip';
 import type { Prisma } from '../../../generated/prisma/client';
+import { DocumentConversionQueueService } from '../documents/document-conversion-queue.service';
+import { DocumentJobsService } from '../documents/document-jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { WarehouseTransferTemplateService } from '../warehouses/warehouse-transfer-template.service';
@@ -12,9 +14,6 @@ import {
   buildGeneratedDocxRelativePath,
   buildGeneratedPdfRelativePath,
 } from './utils/transfer-document-path.util';
-import {
-  convertDocxToPdf,
-} from './utils/docx-to-pdf.util';
 
 const transferTemplateInclude = {
   signer: true,
@@ -25,15 +24,32 @@ const transferTemplateInclude = {
   equipment: { include: { category: true, stockLot: { select: { productName: true } } } },
 } satisfies Prisma.TransferInclude;
 
+/** `sourceType` vrijednost korištena u DocumentJob redovima za prenosnice —
+ * Document Engine je generički (vidi modules/documents/), ovo je jedini
+ * string koji ga vezuje za transfers/ domenu. */
+const DOCUMENT_SOURCE_TYPE_TRANSFER = 'transfer';
+
 @Injectable()
 export class TransferDocumentGenerationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     private readonly templateService: WarehouseTransferTemplateService,
+    private readonly documentConversionQueue: DocumentConversionQueueService,
+    private readonly documentJobs: DocumentJobsService,
   ) {}
 
-  async generateForTransfer(transferId: string): Promise<void> {
+  /**
+   * Renderuje DOCX iz aktivnog Word obrasca skladišta (docxtemplater — čist
+   * XML/ZIP rad u procesu, brzo, BEZ LibreOffice-a) i, ako je uključeno,
+   * NE-BLOKIRAJUĆI enqueue-uje PDF konverziju na Document Worker servis
+   * (BullMQ `document-generation` red). Metoda vraća se čim je DOCX upisan
+   * — HTTP zahtjev koji je pozvao ovo (kreiranje/potpisivanje prenosnice)
+   * više ne čeka LibreOffice; PDF se pojavljuje asinhrono (vidi
+   * `getGeneratedFileStream` / `getPdfJobStatus` za status polling, i
+   * `NotificationsGateway.emitDocumentJobUpdated` za push obavještenje).
+   */
+  async generateForTransfer(transferId: string, requestedByUserId?: string): Promise<void> {
     const transfer = await this.prisma.transfer.findUnique({
       where: { id: transferId },
       include: transferTemplateInclude,
@@ -62,40 +78,95 @@ export class TransferDocumentGenerationService {
     const docxAbsolute = join(this.templateService.getUploadRoot(), docxRelative);
     mkdirSync(resolve(docxAbsolute, '..'), { recursive: true });
     writeFileSync(docxAbsolute, docxBuffer);
-    let pdfRelative: string | null = null;
+
+    // PDF konverzija se resetuje na svaki novi DOCX (npr. transfer je
+    // ponovo potpisan sa izmijenjenim podacima) — stari generatedPdfPath
+    // više ne odgovara trenutnom DOCX-u, brišemo ga dok novi posao ne
+    // završi (getGeneratedFileStream i frontend to tretiraju kao
+    // "generiše se").
+    await this.prisma.transfer.update({
+      where: { id: transferId },
+      data: { generatedDocxPath: docxRelative, generatedPdfPath: null },
+    });
+
     const generatePdf = await this.settingsService.getBooleanValue(
       'transfer.generate_print_pdf',
       true,
     );
     if (generatePdf) {
-      const outDir = resolve(docxAbsolute, '..');
-      const convertedPdf = await convertDocxToPdf(docxAbsolute, outDir);
-      if (convertedPdf) {
-        pdfRelative = buildGeneratedPdfRelativePath(
-          transfer.documentWarehouseId,
-          year,
-          transfer.documentNumber,
-        );
-        const pdfAbsolute = join(this.templateService.getUploadRoot(), pdfRelative);
-        if (convertedPdf !== pdfAbsolute) {
-          writeFileSync(pdfAbsolute, readFileSync(convertedPdf));
-        }
-      }
+      const pdfRelative = buildGeneratedPdfRelativePath(
+        transfer.documentWarehouseId,
+        year,
+        transfer.documentNumber,
+      );
+      await this.documentConversionQueue.enqueuePdfConversion({
+        sourceType: DOCUMENT_SOURCE_TYPE_TRANSFER,
+        sourceId: transferId,
+        sourceFormat: 'docx',
+        sourceRelativePath: docxRelative,
+        resultRelativePath: pdfRelative,
+        requestedByUserId,
+      });
     }
-    await this.prisma.transfer.update({
+  }
+
+  /**
+   * Status trenutnog/posljednjeg PDF posla za prenosnicu — koristi ga
+   * frontend za polling dok čeka Socket.IO `document.job.updated` event
+   * (ili kao fallback ako WebSocket nije povezan).
+   */
+  async getPdfJobStatus(transferId: string): Promise<{
+    status: 'none' | 'queued' | 'running' | 'done' | 'failed';
+    jobId: string | null;
+    error: string | null;
+  }> {
+    const job = await this.documentJobs.findLatestForSource(DOCUMENT_SOURCE_TYPE_TRANSFER, transferId);
+    if (!job) {
+      return { status: 'none', jobId: null, error: null };
+    }
+    return { status: job.status, jobId: job.id, error: job.lastError };
+  }
+
+  /** Ponovo pokreće PDF konverziju nakon 'failed' statusa (ili ako iz nekog
+   * razloga nikad nije ni pokrenuta), koristeći TRENUTNI DOCX na disku. */
+  async retryPdfGeneration(transferId: string, requestedByUserId?: string): Promise<void> {
+    const transfer = await this.prisma.transfer.findUnique({
       where: { id: transferId },
-      data: {
-        generatedDocxPath: docxRelative,
-        generatedPdfPath: pdfRelative,
+      select: {
+        documentWarehouseId: true,
+        date: true,
+        documentNumber: true,
+        generatedDocxPath: true,
       },
+    });
+    if (!transfer?.documentWarehouseId || !transfer.generatedDocxPath) {
+      throw new BadRequestException('Prenosnica nema generisan DOCX — prvo ga generišite.');
+    }
+    const docxAbsolute = join(this.templateService.getUploadRoot(), transfer.generatedDocxPath);
+    if (!existsSync(docxAbsolute)) {
+      throw new NotFoundException('Generisani DOCX fajl nije pronađen na disku');
+    }
+    const pdfRelative = buildGeneratedPdfRelativePath(
+      transfer.documentWarehouseId,
+      transfer.date.getFullYear(),
+      transfer.documentNumber,
+    );
+    await this.documentConversionQueue.enqueuePdfConversion({
+      sourceType: DOCUMENT_SOURCE_TYPE_TRANSFER,
+      sourceId: transferId,
+      sourceFormat: 'docx',
+      sourceRelativePath: transfer.generatedDocxPath,
+      resultRelativePath: pdfRelative,
+      requestedByUserId,
     });
   }
 
   async getGeneratedFileStream(
     transferId: string,
     format: 'docx' | 'pdf',
+    requestedByUserId?: string,
   ): Promise<{ absolutePath: string; mime: string; filename: string }> {
-    await this.ensureGeneratedArtifacts(transferId);
+    await this.ensureDocxGenerated(transferId, requestedByUserId);
     const transfer = await this.prisma.transfer.findUnique({
       where: { id: transferId },
       select: {
@@ -107,100 +178,68 @@ export class TransferDocumentGenerationService {
     if (!transfer) {
       throw new NotFoundException('Transfer not found');
     }
-    const relativePath = format === 'pdf' ? transfer.generatedPdfPath : transfer.generatedDocxPath;
-    if (!relativePath) {
-      throw new NotFoundException(`Generated ${format} not available`);
+    if (format === 'docx') {
+      if (!transfer.generatedDocxPath) {
+        throw new NotFoundException('Generated docx not available');
+      }
+      const absolutePath = join(this.templateService.getUploadRoot(), transfer.generatedDocxPath);
+      if (!existsSync(absolutePath)) {
+        throw new NotFoundException('Generated docx file not found');
+      }
+      return {
+        absolutePath,
+        mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        filename: `${transfer.documentNumber}.docx`,
+      };
     }
-    const absolutePath = join(this.templateService.getUploadRoot(), relativePath);
-    if (!existsSync(absolutePath)) {
-      throw new NotFoundException(`Generated ${format} file not found`);
+
+    // format === 'pdf': konverzija se dešava asinhrono na Document Worker
+    // servisu — ovdje samo čitamo trenutno stanje, NIKAD ne čekamo/blokiramo
+    // HTTP zahtjev na LibreOffice.
+    if (transfer.generatedPdfPath) {
+      const absolutePath = join(this.templateService.getUploadRoot(), transfer.generatedPdfPath);
+      if (existsSync(absolutePath)) {
+        return { absolutePath, mime: 'application/pdf', filename: `${transfer.documentNumber}.pdf` };
+      }
+      // DB kaže da postoji ali fajl nedostaje (npr. obrisan sa diska) —
+      // tretiramo kao da PDF nikad nije generisan i ponovo pokrećemo ispod.
     }
-    const mime =
-      format === 'pdf'
-        ? 'application/pdf'
-        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    const filename = `${transfer.documentNumber}.${format}`;
-    return { absolutePath, mime, filename };
+    const job = await this.documentJobs.findLatestForSource(DOCUMENT_SOURCE_TYPE_TRANSFER, transferId);
+    if (!job || job.status === 'failed') {
+      await this.retryPdfGeneration(transferId, requestedByUserId);
+      throw new HttpException(
+        { status: 'processing', message: 'PDF se generiše, pokušajte ponovo za par sekundi.' },
+        HttpStatus.CONFLICT,
+      );
+    }
+    throw new HttpException(
+      { status: job.status, jobId: job.id, message: 'PDF se još generiše, pokušajte ponovo za par sekundi.' },
+      HttpStatus.CONFLICT,
+    );
   }
 
-  private async ensureGeneratedArtifacts(transferId: string): Promise<void> {
+  /** Osigurava da DOCX postoji na disku (generiše ga ako fali) — DOCX
+   * render je sinhron/jeftin (docxtemplater, bez LibreOffice-a), pa je
+   * bezbjedno raditi ga "lijeno" na download zahtjev, za razliku od PDF-a. */
+  private async ensureDocxGenerated(transferId: string, requestedByUserId?: string): Promise<void> {
     const transfer = await this.prisma.transfer.findUnique({
       where: { id: transferId },
-      select: {
-        documentNumber: true,
-        documentWarehouseId: true,
-        date: true,
-        generatedDocxPath: true,
-        generatedPdfPath: true,
-      },
+      select: { documentWarehouseId: true, generatedDocxPath: true },
     });
     if (!transfer?.documentWarehouseId) {
       return;
     }
-    const uploadRoot = this.templateService.getUploadRoot();
     const docxAbsolute = transfer.generatedDocxPath
-      ? join(uploadRoot, transfer.generatedDocxPath)
+      ? join(this.templateService.getUploadRoot(), transfer.generatedDocxPath)
       : null;
-    const pdfAbsolute = transfer.generatedPdfPath
-      ? join(uploadRoot, transfer.generatedPdfPath)
-      : null;
-    const docxOnDisk = Boolean(docxAbsolute && existsSync(docxAbsolute));
-    const pdfOnDisk = Boolean(pdfAbsolute && existsSync(pdfAbsolute));
-    if (!docxOnDisk) {
-      try {
-        await this.generateForTransfer(transferId);
-      } catch {
-        return;
-      }
+    if (docxAbsolute && existsSync(docxAbsolute)) {
       return;
     }
-    if (!pdfOnDisk && transfer.generatedDocxPath) {
-      const generatePdf = await this.settingsService.getBooleanValue(
-        'transfer.generate_print_pdf',
-        true,
-      );
-      if (generatePdf) {
-        await this.ensurePdfFromExistingDocx(transferId, {
-          documentNumber: transfer.documentNumber,
-          documentWarehouseId: transfer.documentWarehouseId,
-          date: transfer.date,
-          generatedDocxPath: transfer.generatedDocxPath,
-        });
-      }
+    try {
+      await this.generateForTransfer(transferId, requestedByUserId);
+    } catch {
+      // ostavi getGeneratedFileStream da baci odgovarajući NotFound/Conflict
     }
-  }
-
-  private async ensurePdfFromExistingDocx(
-    transferId: string,
-    transfer: {
-      documentNumber: string;
-      documentWarehouseId: string;
-      date: Date;
-      generatedDocxPath: string;
-    },
-  ): Promise<void> {
-    const docxAbsolute = join(this.templateService.getUploadRoot(), transfer.generatedDocxPath);
-    if (!existsSync(docxAbsolute)) {
-      return;
-    }
-    const outDir = resolve(docxAbsolute, '..');
-    const convertedPdf = await convertDocxToPdf(docxAbsolute, outDir);
-    if (!convertedPdf) {
-      return;
-    }
-    const pdfRelative = buildGeneratedPdfRelativePath(
-      transfer.documentWarehouseId,
-      transfer.date.getFullYear(),
-      transfer.documentNumber,
-    );
-    const pdfAbsolute = join(this.templateService.getUploadRoot(), pdfRelative);
-    if (convertedPdf !== pdfAbsolute) {
-      writeFileSync(pdfAbsolute, readFileSync(convertedPdf));
-    }
-    await this.prisma.transfer.update({
-      where: { id: transferId },
-      data: { generatedPdfPath: pdfRelative },
-    });
   }
 
   private renderDocx(templatePath: string, data: Record<string, string>): Buffer {

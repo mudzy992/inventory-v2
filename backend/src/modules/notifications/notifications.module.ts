@@ -19,6 +19,12 @@ import { NotificationsService } from './notifications.service';
   ],
   controllers: [NotificationsController],
   providers: [NotificationsGateway, NotificationsService],
-  exports: [NotificationsService],
+  // NotificationsGateway je eksportovan pored NotificationsService da bi
+  // moduli van notifications/ (npr. DocumentsModule) mogli emitovati
+  // ciljane per-user evente (npr. document.job.updated) bez prolaska kroz
+  // NotificationsService-ovu recipient-resolution logiku, koja je vezana
+  // za domenske entitete (transferi, popisi) — Document Engine je
+  // namjerno generički i ne poznaje te entitete.
+  exports: [NotificationsService, NotificationsGateway],
 })
 export class NotificationsModule {}

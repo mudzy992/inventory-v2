@@ -521,7 +521,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     defaultValue: true,
     label: 'Generiši PDF za štampu',
     description:
-      'Nakon DOCX obrazca generiše PDF za štampu (zahtijeva LibreOffice na serveru). Bez toga dostupan je samo DOCX.',
+      'Nakon DOCX obrazca asinhrono generiše PDF za štampu na zasebnom Document Worker servisu (LibreOffice). Bez toga dostupan je samo DOCX.',
     group: 'transfers',
   }),
   def({

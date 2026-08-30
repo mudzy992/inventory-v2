@@ -8,6 +8,7 @@ import { EmployeesModule } from './modules/employees/employees.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { TransfersModule } from './modules/transfers/transfers.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { DocumentsModule } from './modules/documents/documents.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { HealthModule } from './modules/health/health.module';
 import { LocationsModule } from './modules/locations/locations.module';
@@ -59,6 +60,7 @@ import { QueuesModule } from './queues/bullmq.module';
     EquipmentCatalogModule,
     EmployeeRelocationModule,
     NavModule,
+    DocumentsModule,
     TransfersModule,
     UploadsModule,
     NotificationsModule,

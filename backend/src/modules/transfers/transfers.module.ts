@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DocumentsModule } from '../documents/documents.module';
 import { InventoryCountModule } from '../inventory-count/inventory-count.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SettingsModule } from '../settings/settings.module';
@@ -13,6 +14,7 @@ import { TransfersService } from './transfers.service';
     WarehousesModule,
     NotificationsModule,
     InventoryCountModule,
+    DocumentsModule,
   ],
   controllers: [TransfersController],
   providers: [TransfersService, TransferDocumentGenerationService],

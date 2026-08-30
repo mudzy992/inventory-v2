@@ -90,12 +90,39 @@ export class TransfersController {
   ): Promise<StreamableFile> {
     await this.transfersService.findOne(user, id);
     const resolvedFormat = format === 'pdf' ? 'pdf' : 'docx';
-    const file = await this.transferDocumentGeneration.getGeneratedFileStream(id, resolvedFormat);
+    const file = await this.transferDocumentGeneration.getGeneratedFileStream(
+      id,
+      resolvedFormat,
+      user.id,
+    );
     const stream = createReadStream(file.absolutePath);
     return new StreamableFile(stream, {
       type: file.mime,
       disposition: `attachment; filename="${file.filename}"`,
     });
+  }
+
+  /**
+   * Status posla PDF konverzije (queued/running/done/failed/none) — koristi
+   * ga frontend za polling dok generisani PDF nije spreman, kao dopuna
+   * Socket.IO `document.job.updated` eventu (koristan i kad WebSocket
+   * konekcija privremeno nije uspostavljena).
+   */
+  @Get(':id/generated-document/status')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
+  async getGeneratedDocumentStatus(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    await this.transfersService.findOne(user, id);
+    return this.transferDocumentGeneration.getPdfJobStatus(id);
+  }
+
+  /** Ponovo pokreće PDF konverziju nakon neuspjeha (npr. LibreOffice
+   * timeout/crash na Document Worker servisu). */
+  @Post(':id/generated-document/retry')
+  @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
+  async retryGeneratedDocument(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    await this.transfersService.findOne(user, id);
+    await this.transferDocumentGeneration.retryPdfGeneration(id, user.id);
+    return this.transferDocumentGeneration.getPdfJobStatus(id);
   }
 
   @Patch(':id/mark-printed')

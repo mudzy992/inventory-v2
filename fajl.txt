@@ -68,4 +68,12 @@ BACKEND_PORT=3000
 # - backend/.env fajl u repou (drugi, unutar backend/ foldera) više nije
 #   potreban — sav env sada ide isključivo kroz Coolify, ne diraj/briši ga u
 #   repou ako ne smeta, samo se neće koristiti u produkciji.
+# - NOVO: docker-compose.yml sada uključuje i "document-worker" servis
+#   (LibreOffice, DOCX/XLSX/ODT -> PDF, vidi ../document-worker/). U Coolify-ju
+#   se pokreće AUTOMATSKI kao dio istog Docker Compose resursa (Coolify
+#   deployuje SVE servise iz docker-compose.yml zajedno) — nije potreban
+#   poseban Coolify resurs/aplikacija. Koristi REDIS_HOST/REDIS_PASSWORD/
+#   REDIS_USERNAME/REDIS_KEY_PREFIX iz Coolify env-a (istog Redis resursa kao
+#   backend — vidi napomenu u docker-compose.yml na vrhu). NEMA javnu domenu i
+#   NE treba mu se dodijeliti port/domena u Coolify UI-ju.
 # =========================================================================

@@ -8,6 +8,9 @@
 # eksternu "redis_net" konvenciju (to je Coolify-specifično — vidi
 # docker-compose.yml). Umjesto toga, ovdje se pokreće SOPSTVENI Redis
 # kontejner na "internal" mreži, dovoljan za single-server standalone setup.
+# Document Worker: zaseban interni servis (LibreOffice) za DOCX/XLSX/ODT ->
+# PDF konverziju (BullMQ `document-generation` red), na "internal" mreži,
+# bez Traefik labela — nikad javno dostupan. Vidi document-worker/.
 services:
   redis:
     image: redis:7.4-alpine
@@ -63,6 +66,58 @@ services:
       - traefik.http.routers.evidens-api.tls.certresolver=le
       - traefik.http.routers.evidens-api.priority=100
       - traefik.http.services.evidens-api.loadbalancer.server.port=3000
+
+  # Document Worker — zaseban interni servis (LibreOffice) za DOCX/XLSX/ODT ->
+  # PDF konverziju. Konzumira BullMQ `document-generation` red preko istog
+  # standalone Redis kontejnera kao backend (ISTI user, jer ovaj Redis nema
+  # ACL — samo requirepass). NEMA "web" mrežu, NEMA Traefik labele — nikad
+  # nije javno dostupan, samo na "internal" mreži zajedno sa Redis-om.
+  document-worker:
+    image: inventory-v2-document-worker:prod
+    build:
+      context: ./document-worker
+      dockerfile: Dockerfile
+    environment:
+      UPLOAD_DIR: /app/uploads
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_USERNAME: ""
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_KEY_PREFIX: inventory-v2
+      DOCUMENT_QUEUE_NAME: document-generation
+      DOCUMENT_WORKER_CONCURRENCY: ${DOCUMENT_WORKER_CONCURRENCY:-2}
+      DOCUMENT_WORKER_CONVERT_TIMEOUT_MS: ${DOCUMENT_WORKER_CONVERT_TIMEOUT_MS:-120000}
+      DOCUMENT_WORKER_HEALTH_PORT: "8080"
+    volumes:
+      - /mnt/shared-app-files/inventory-v2:/app/uploads
+    networks:
+      - internal
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 1536m
+    cpus: 1.5
+    pids_limit: 256
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 150s
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:8080/health',
+          r => process.exit(r.statusCode === 200 ? 0 : 1))
+          .on('error', () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
   frontend:
     image: inventory-v2-frontend:prod
