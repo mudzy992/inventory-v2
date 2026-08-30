@@ -5,3 +5,6 @@ uploads
 .env.*
 *.log
 coverage
+.git
+.gitignore
+Dockerfile*
