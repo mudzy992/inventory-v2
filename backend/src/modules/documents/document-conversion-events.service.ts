@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { InjectQueue } from '@nestjs/bullmq';
 import { QueueEvents, type Queue } from 'bullmq';
 import { buildBaseRedisOptions, readRedisConfig } from '../../redis/redis.config';
+import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { DOCUMENT_GENERATION_QUEUE, type DocumentConversionJobPayload } from './document-generation.queue';
 import { DocumentJobsService } from './document-jobs.service';
@@ -56,6 +57,7 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
     private readonly queue: Queue<DocumentConversionJobPayload>,
     private readonly documentJobs: DocumentJobsService,
     private readonly gateway: NotificationsGateway,
+    private readonly prisma: PrismaService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -124,7 +126,8 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
         }
         const state = await bullJob.getState();
         if (state === 'completed') {
-          await this.documentJobs.markDone(documentJob.id);
+          const completedJob = await this.documentJobs.markDone(documentJob.id);
+          await this.syncCompletedDocument(completedJob);
           await this.notify(documentJob.id, 'done');
         } else if (state === 'failed') {
           const attemptsMade = bullJob.attemptsMade ?? 0;
@@ -161,7 +164,8 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
 
   private async handleCompleted(jobId: string): Promise<void> {
     try {
-      await this.documentJobs.markDone(jobId);
+      const documentJob = await this.documentJobs.markDone(jobId);
+      await this.syncCompletedDocument(documentJob);
       await this.notify(jobId, 'done');
     } catch (err) {
       this.logger.warn(`handleCompleted(${jobId}) failed: ${String(err)}`);
@@ -217,5 +221,28 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
       error: error ?? null,
     });
   }
-}
 
+  private async syncCompletedDocument(documentJob: {
+    sourceType: string;
+    sourceId: string;
+    resultRelativePath: string;
+    }): Promise<void> {
+    switch (documentJob.sourceType) {
+        case 'transfer':
+        await this.prisma.transfer.update({
+            where: { id: documentJob.sourceId },
+            data: {
+            generatedPdfPath: documentJob.resultRelativePath,
+            },
+        });
+        return;
+
+        default:
+        // Document Engine podržava i buduće tipove dokumenata.
+        // Ako domena nema poseban completion sync, nema dodatnog DB upisa.
+        this.logger.debug(
+            `No domain completion sync registered for sourceType=${documentJob.sourceType}`,
+        );
+    }
+    }
+}

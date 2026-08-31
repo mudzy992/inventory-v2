@@ -227,6 +227,27 @@ export class TransferDocumentGenerationService {
         HttpStatus.CONFLICT,
       );
     }
+    if (job.status === 'done' && !transfer.generatedPdfPath) {
+        await this.prisma.transfer.update({
+            where: { id: transferId },
+            data: {
+            generatedPdfPath: job.resultRelativePath,
+            },
+        });
+
+        const absolutePath = join(
+            this.templateService.getUploadRoot(),
+            job.resultRelativePath,
+        );
+
+        if (existsSync(absolutePath)) {
+            return {
+            absolutePath,
+            mime: 'application/pdf',
+            filename: `${transfer.documentNumber}.pdf`,
+            };
+        }
+    }
     throw new HttpException(
       { status: job.status, jobId: job.id, message: 'PDF se još generiše, pokušajte ponovo za par sekundi.' },
       HttpStatus.CONFLICT,
