@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, HttpException, HttpStatus, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, HttpException, HttpStatus, Logger, NotFoundException } from '@nestjs/common';
 import Docxtemplater from 'docxtemplater';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -31,6 +31,8 @@ const DOCUMENT_SOURCE_TYPE_TRANSFER = 'transfer';
 
 @Injectable()
 export class TransferDocumentGenerationService {
+  private readonly logger = new Logger(TransferDocumentGenerationService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
@@ -99,14 +101,27 @@ export class TransferDocumentGenerationService {
         year,
         transfer.documentNumber,
       );
-      await this.documentConversionQueue.enqueuePdfConversion({
-        sourceType: DOCUMENT_SOURCE_TYPE_TRANSFER,
-        sourceId: transferId,
-        sourceFormat: 'docx',
-        sourceRelativePath: docxRelative,
-        resultRelativePath: pdfRelative,
-        requestedByUserId,
-      });
+      try {
+        await this.documentConversionQueue.enqueuePdfConversion({
+          sourceType: DOCUMENT_SOURCE_TYPE_TRANSFER,
+          sourceId: transferId,
+          sourceFormat: 'docx',
+          sourceRelativePath: docxRelative,
+          resultRelativePath: pdfRelative,
+          requestedByUserId,
+        });
+      } catch (err) {
+        // DOCX (obavezan dokument) je već uspješno sačuvan iznad — PDF je
+        // "nice to have" asinhroni dodatak. Prolazni Redis problem OVDJE
+        // NE SMIJE srušiti kreiranje/potpisivanje prenosnice (kritičnu
+        // poslovnu transakciju); enqueuePdfConversion je sam po sebi već
+        // označio DocumentJob red kao 'failed' ako je uspio da ga kreira
+        // prije pada — korisnik može ručno pokrenuti
+        // POST :id/generated-document/retry.
+        this.logger.warn(
+          `PDF enqueue failed for transfer ${transferId} (DOCX already saved, continuing): ${String(err)}`,
+        );
+      }
     }
   }
 

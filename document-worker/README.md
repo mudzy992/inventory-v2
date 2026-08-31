@@ -79,17 +79,33 @@ proširenja ACL-a** — vidi glavni `.env.example`):
   u docker-compose servisima, nema Traefik labela.
 - **Health check**: mali HTTP server vezan ISKLJUČIVO za `127.0.0.1`
   (nedostupan van kontejnera) — provjerava da je `soffice` pokretljiv i da
-  je Redis konekcija `ready`.
+  je Redis konekcija `ready`. `HOME=/tmp` je postavljen na nivou kontejnera
+  (Dockerfile) upravo zato da ovaj poziv (koji ne prosljeđuje eksplicitan
+  `-env:UserInstallation`) ima gdje upisati default profil pod `read_only:
+  true` root fs-om.
 - **Izolacija po poslu**: svaki `soffice` poziv dobija svoj
   `-env:UserInstallation` profil (mkdtemp) — bezbjedno za concurrency > 1,
   bez lock kontencije.
-- **Timeout + SIGKILL**: zaglavljeni/crashovani `soffice` proces se
-  prisilno ubija nakon `DOCUMENT_WORKER_CONVERT_TIMEOUT_MS`.
+- **Timeout + garantovan process-tree kill**: `soffice` se pokreće u
+  sopstvenoj process grupi (`spawn(..., {detached:true})`); na timeout se
+  ubija CIJELA grupa (`process.kill(-pid, 'SIGKILL')`), ne samo neposredan
+  child proces — sprečava "osirotjele" pod-procese da nastave trošiti
+  CPU/RAM nakon što worker misli da je posao ubio (vidi `convert.ts`).
 - **Garantovan cleanup**: privremeni profil/izlazni direktoriji se brišu u
-  `finally` bloku, bez obzira na ishod.
+  `finally` bloku bez obzira na ishod; LibreOffice-ov eventualni
+  `.~lock.<ime>#` fajl pored izvornog dokumenta u `UPLOAD_DIR`-u se čisti
+  best-effort prije i poslije svakog posla.
 - **Path traversal zaštita**: sve putanje iz posla se validiraju da ostaju
-  unutar `UPLOAD_DIR`, čak i pored toga što payload kontroliše backend (a
-  ne direktan korisnički unos).
+  unutar `UPLOAD_DIR`. Dodatno, `resultRelativePath` MORA imati `.pdf`
+  ekstenziju — sprečava da pogrešan/budući payload prepiše proizvoljan
+  postojeći fajl (npr. .docx obrazac) PDF bajtovima.
+- **Atomski upis**: rezultat se piše u `<cilj>.tmp-<jobId>` pa `rename`-uje
+  na konačno ime; na grešku u samom rename koraku, staging fajl se briše
+  umjesto da ostane kao smeće u dijeljenom volume-u.
+- **Nema duplih konverzija**: parcijalni unique Postgres indeks
+  (`document_jobs_active_source_unique`) sprečava dva paralelna aktivna
+  posla za isti izvor čak i pod konkurentnim HTTP zahtjevima (TOCTOU
+  zaštita — vidi `DocumentConversionQueueService`).
 - **Docker hardening**: `read_only: true` root fs + `tmpfs` na `/tmp`,
   `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`,
   `mem_limit`/`cpus`/`pids_limit` (vidi `docker-compose.yml` /
@@ -101,6 +117,16 @@ proširenja ACL-a** — vidi glavni `.env.example`):
   nove poslove i čeka da se AKTIVNI posao završi prije izlaska
   (`stop_grace_period` u compose fajlovima mora biti veći od
   `DOCUMENT_WORKER_CONVERT_TIMEOUT_MS`).
+- **Restart otpornost**: backend (`DocumentConversionEventsService`) pri
+  startu jednokratno usklađuje sve DocumentJob redove zaglavljene u
+  queued/running sa stvarnim BullMQ stanjem — poslovi čiji je
+  completed/failed event propušten dok je backend proces bio ugašen se ne
+  gube.
+- **Bez curenja apsolutnih putanja**: greške koje dopiru do
+  API-ja/frontend-a (`DocumentJob.lastError`, Socket.IO
+  `document.job.updated`) se sanitizuju (uklanjaju se apsolutne putanje
+  unutar kontejnera) prije upisa/emitovanja — puna, neredigovana poruka
+  ide isključivo u server-side log.
 
 ## Dodavanje novih tipova konverzije
 

@@ -6,6 +6,18 @@ import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { DOCUMENT_GENERATION_QUEUE, type DocumentConversionJobPayload } from './document-generation.queue';
 import { DocumentJobsService } from './document-jobs.service';
 
+/** Uklanja apsolutne putanje (unutar kontejnera) iz poruka grešaka prije
+ * nego što se upišu u `DocumentJob.lastError` (čita ga API/frontend preko
+ * getPdfJobStatus) ili emituju preko Socket.IO — container filesystem
+ * layout (/app/uploads/..., /tmp/document-worker/...) nije nešto što
+ * krajnji korisnik treba vidjeti. Puna, neredigovana poruka i dalje ide u
+ * server-side log (vidi handleFailed ispod), gdje je dostupna za
+ * dijagnostiku. */
+const CLIENT_ERROR_MAX_LENGTH = 300;
+const ABSOLUTE_PATH_RE = /\/[\w.-]+(?:\/[\w.-]+)+/g;
+const sanitizeErrorForClient = (message: string): string =>
+  message.replace(ABSOLUTE_PATH_RE, '[putanja]').slice(0, CLIENT_ERROR_MAX_LENGTH);
+
 /**
  * Most između BullMQ `document-generation` reda i:
  *  1) `DocumentJob` Postgres reda (system-od-istine za status),
@@ -21,6 +33,18 @@ import { DocumentJobsService } from './document-jobs.service';
  * mu ACL/mrežni surface ostao minimalan (samo BullMQ komande nad istim
  * Redis ACL userom kao i backend, vidi README/deploy napomene). Sav domenski
  * upis (DB, notifikacije) dešava se ovdje, u backend procesu.
+ *
+ * RESTART OTPORNOST: `QueueEvents` čita Redis Stream od trenutka
+ * konekcije — evente koji su se desili DOK je backend proces bio
+ * ugašen (restart/deploy) NEĆE dobiti (Redis stream nema perzistentan
+ * "lastEventId" preko restartova procesa). Zato `onModuleInit` prvo radi
+ * JEDNOKRATNU rekonsilijaciju: za svaki DocumentJob koji je u DB-u ostao
+ * 'queued'/'running' (npr. worker je završio posao dok je backend bio
+ * dole), direktno pita BullMQ (`queue.getJob`) za stvarno stanje i
+ * uskladi DB red PRIJE nego počne slušati nove evente. Ovo pokriva i
+ * slučaj kad je worker restartovan/crash-ovao usred posla (BullMQ ga
+ * markira 'stalled' pa ga sam re-pokuša — rekonsilijacija tada samo
+ * potvrdi da je i dalje u toku).
  */
 @Injectable()
 export class DocumentConversionEventsService implements OnModuleInit, OnModuleDestroy {
@@ -34,7 +58,9 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
     private readonly gateway: NotificationsGateway,
   ) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
+    await this.reconcileStaleJobs();
+
     const config = readRedisConfig();
     this.queueEvents = new QueueEvents(DOCUMENT_GENERATION_QUEUE, {
       connection: buildBaseRedisOptions(config),
@@ -62,13 +88,72 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
     await this.queueEvents?.close();
   }
 
+  /** Vidi napomenu o RESTART OTPORNOSTI iznad klase. Best-effort — greška
+   * ovdje NIKAD ne smije spriječiti normalan boot backend-a (npr. ako
+   * Redis trenutno nije dostupan pri startu, QueueEvents auto-retry
+   * konekcije i redovni event tok će s vremenom sam sebe uskladiti kroz
+   * naredne active/completed/failed evente). */
+  private async reconcileStaleJobs(): Promise<void> {
+    let staleJobs;
+    try {
+      staleJobs = await this.documentJobs.findActiveJobs();
+    } catch (err) {
+      this.logger.warn(`reconcileStaleJobs: could not read DocumentJob rows: ${String(err)}`);
+      return;
+    }
+    if (staleJobs.length === 0) return;
+
+    this.logger.log(`Reconciling ${staleJobs.length} DocumentJob row(s) left queued/running from before restart...`);
+    for (const documentJob of staleJobs) {
+      try {
+        // BullMQ jobId === DocumentJob.id (vidi DocumentConversionQueueService).
+        const bullJob = await this.queue.getJob(documentJob.id);
+        if (!bullJob) {
+          // Posao više NE POSTOJI u Redis-u (npr. istekao/uklonjen po
+          // removeOnComplete/removeOnFail politici prije nego smo stigli
+          // da ga uskladimo, ili je enqueue pao prije nego je ikad dodan
+          // — vidi DocumentConversionQueueService catch blok). Ne smije
+          // ostati zauvijek 'queued'/'running' bez ikoga ko će ga obraditi.
+          await this.documentJobs.markFailed(
+            documentJob.id,
+            'Posao izgubljen tokom restarta servisa. Pokušajte ponovo.',
+            documentJob.attempts,
+          );
+          await this.notify(documentJob.id, 'failed', 'Posao izgubljen tokom restarta servisa.');
+          continue;
+        }
+        const state = await bullJob.getState();
+        if (state === 'completed') {
+          await this.documentJobs.markDone(documentJob.id);
+          await this.notify(documentJob.id, 'done');
+        } else if (state === 'failed') {
+          const attemptsMade = bullJob.attemptsMade ?? 0;
+          const maxAttempts = bullJob.opts.attempts ?? 1;
+          if (attemptsMade >= maxAttempts) {
+            const reason = sanitizeErrorForClient(bullJob.failedReason ?? 'Konverzija nije uspjela.');
+            await this.documentJobs.markFailed(documentJob.id, reason, attemptsMade);
+            await this.notify(documentJob.id, 'failed', reason);
+          }
+          // else: BullMQ će sam re-pokušati — normalni 'active' event će
+          // uskoro stići preko QueueEvents, ne diramo status ovdje.
+        }
+        // state 'waiting'/'active'/'delayed'/'prioritized': DB status je
+        // već konzistentan (queued/running) — ništa za uraditi, normalan
+        // event tok će ga dalje ažurirati.
+      } catch (err) {
+        this.logger.warn(`reconcileStaleJobs: failed for DocumentJob ${documentJob.id}: ${String(err)}`);
+      }
+    }
+  }
+
   private async handleActive(jobId: string): Promise<void> {
     try {
-      const job = await this.queue.getJob(jobId);
-      if (!job) return;
-      const { documentJobId } = job.data;
-      await this.documentJobs.markRunning(documentJobId);
-      await this.notify(documentJobId, 'running');
+      // BullMQ jobId === DocumentJob.id (vidi DocumentConversionQueueService)
+      // — direktna upotreba bez queue.getJob() poziva: manje Redis
+      // round-trip-ova i nema race-a ako bi posao već bio uklonjen prije
+      // nego stignemo da ga pročitamo.
+      await this.documentJobs.markRunning(jobId);
+      await this.notify(jobId, 'running');
     } catch (err) {
       this.logger.warn(`handleActive(${jobId}) failed: ${String(err)}`);
     }
@@ -76,11 +161,8 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
 
   private async handleCompleted(jobId: string): Promise<void> {
     try {
-      const job = await this.queue.getJob(jobId);
-      if (!job) return;
-      const { documentJobId } = job.data;
-      await this.documentJobs.markDone(documentJobId);
-      await this.notify(documentJobId, 'done');
+      await this.documentJobs.markDone(jobId);
+      await this.notify(jobId, 'done');
     } catch (err) {
       this.logger.warn(`handleCompleted(${jobId}) failed: ${String(err)}`);
     }
@@ -88,22 +170,29 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
 
   private async handleFailed(jobId: string, failedReason: string): Promise<void> {
     try {
+      // Za attemptsMade/maxAttempts MORAMO pitati BullMQ direktno (ti
+      // podaci nisu dio QueueEvents 'failed' payload-a).
       const job = await this.queue.getJob(jobId);
-      if (!job) return;
-      const { documentJobId } = job.data;
-      const attemptsMade = job.attemptsMade ?? 0;
-      const maxAttempts = job.opts.attempts ?? 1;
-      await this.documentJobs.incrementAttempts(documentJobId);
+      const attemptsMade = job?.attemptsMade ?? 0;
+      const maxAttempts = job?.opts.attempts ?? 1;
+      const sanitizedReason = sanitizeErrorForClient(failedReason);
       if (attemptsMade >= maxAttempts) {
         // Konačan neuspjeh — BullMQ neće više retry-ovati ovaj posao.
-        await this.documentJobs.markFailed(documentJobId, failedReason, attemptsMade);
-        await this.notify(documentJobId, 'failed', failedReason);
+        // markFailed upisuje i attempts=attemptsMade direktno, pa nema
+        // potrebe za odvojenim incrementAttempts pozivom ovdje (izbjegava
+        // suvišan drugi UPDATE za isti red).
+        await this.documentJobs.markFailed(jobId, sanitizedReason, attemptsMade);
+        await this.notify(jobId, 'failed', sanitizedReason);
       } else {
-        // BullMQ će sam re-pokušati (exponential/fixed backoff, vidi
+        // BullMQ će sam re-pokušati (fiksni backoff, vidi
         // DocumentConversionQueueService) — status ostaje 'queued'/'running'
-        // do sljedećeg pokušaja, korisniku se ne prijavljuje lažni "failed".
+        // do sljedećeg pokušaja (naredni 'active' event ga potvrđuje),
+        // korisniku se ne prijavljuje lažni "failed". Bilježimo samo
+        // attempts counter radi vidljivosti u DB-u dok se ne desi sljedeći
+        // pokušaj.
+        await this.documentJobs.incrementAttempts(jobId);
         this.logger.debug(
-          `Document job ${documentJobId} attempt ${attemptsMade}/${maxAttempts} failed, BullMQ will retry: ${failedReason}`,
+          `Document job ${jobId} attempt ${attemptsMade}/${maxAttempts} failed, BullMQ will retry: ${failedReason}`,
         );
       }
     } catch (err) {
@@ -129,3 +218,4 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
     });
   }
 }
+

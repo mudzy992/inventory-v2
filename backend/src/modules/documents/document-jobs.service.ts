@@ -56,6 +56,17 @@ export class DocumentJobsService {
     });
   }
 
+  /** Svi redovi zaglavljeni u 'queued'/'running' — koristi
+   * DocumentConversionEventsService.reconcileStaleJobs() jednom pri
+   * startu backend-a da uskladi DB status sa stvarnim BullMQ stanjem za
+   * poslove čiji je event (completed/failed) možda propušten dok je
+   * backend proces bio ugašen (restart/deploy). */
+  async findActiveJobs(): Promise<DocumentJob[]> {
+    return this.prisma.documentJob.findMany({
+      where: { status: { in: ['queued', 'running'] } },
+    });
+  }
+
   async markRunning(id: string): Promise<void> {
     await this.prisma.documentJob.update({
       where: { id },

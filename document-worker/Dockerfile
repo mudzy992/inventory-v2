@@ -29,6 +29,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
+# KRITIČNO pod `read_only: true` root fs (vidi docker-compose*.yml): default
+# HOME korisnika `app` bi inače bio /app (dio read-only root fs-a, ne
+# volume) — soffice bi na PRVI poziv bez eksplicitnog -env:UserInstallation
+# (npr. HEALTHCHECK-ov `soffice --version`, vidi src/health-server.ts)
+# pokušao kreirati default profil pod $HOME/.config/libreoffice i pao sa
+# "Permission denied", čineći healthcheck trajno crvenim. /tmp je tmpfs
+# (writable) po docker-compose konfiguraciji ovog servisa.
+ENV HOME=/tmp
 
 # LibreOffice (headless konverzija) + minimalan font set (dovoljan za
 # korektan izgled DOCX/XLSX obrazaca korišćenih u Evidensu). libreoffice-writer
@@ -43,7 +51,6 @@ RUN apt-get update \
     fonts-dejavu-core \
     fonts-liberation \
     fonts-noto-core \
-    curl \
   && rm -rf /var/lib/apt/lists/* \
   && fc-cache -f
 

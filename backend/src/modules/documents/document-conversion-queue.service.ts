@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
-import { randomUUID } from 'node:crypto';
 import type { DocumentJob, DocumentSourceFormat } from '../../../generated/prisma/client';
 import {
   DOCUMENT_CONVERT_JOB_NAME,
@@ -18,6 +17,9 @@ export interface EnqueueConversionInput {
   resultRelativePath: string;
   requestedByUserId?: string | null;
 }
+
+const isUniqueConstraintError = (err: unknown): boolean =>
+  typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2002';
 
 /**
  * Enqueue sloj Document Engine-a. Namjerno tanak — sva "da li već treba
@@ -41,7 +43,16 @@ export class DocumentConversionQueueService {
    * Vraća postojeći aktivni (queued/running) posao za taj izvor ako
    * postoji — ne dupla enqueue dok je prethodni u toku (isti obrazac kao
    * InventoryCountService.requestSessionClose — provjera DB reda PRIJE
-   * poziva queue.add, ne oslanjanje na BullMQ deterministički jobId).
+   * poziva queue.add).
+   *
+   * Provjera-pa-upis (findLatestForSource + create) je TOCTOU-podložna pod
+   * konkurentnim pozivima (npr. dva brza klika/dva paralelna zahtjeva) —
+   * zaštićeno DODATNO na DB nivou parcijalnim unique indeksom
+   * `document_jobs_active_source_unique` (vidi migraciju
+   * 20260831062751_*), koji odbija DRUGI red sa istim (sourceType,
+   * sourceId) dok je prvi još queued/running. Na P2002 (unique violation)
+   * ovdje se NE baca greška pozivaocu — vraća se postojeći (pobjednički)
+   * posao, isto kao da smo ga zatekli pre-check-om.
    */
   async enqueuePdfConversion(input: EnqueueConversionInput): Promise<DocumentJob> {
     const existing = await this.documentJobs.findLatestForSource(input.sourceType, input.sourceId);
@@ -52,16 +63,39 @@ export class DocumentConversionQueueService {
       return existing;
     }
 
-    const documentJob = await this.documentJobs.create({
-      sourceType: input.sourceType,
-      sourceId: input.sourceId,
-      sourceFormat: input.sourceFormat,
-      targetFormat: 'pdf',
-      sourceRelativePath: input.sourceRelativePath,
-      resultRelativePath: input.resultRelativePath,
-      requestedByUserId: input.requestedByUserId,
-    });
+    let documentJob: DocumentJob;
+    try {
+      documentJob = await this.documentJobs.create({
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        sourceFormat: input.sourceFormat,
+        targetFormat: 'pdf',
+        sourceRelativePath: input.sourceRelativePath,
+        resultRelativePath: input.resultRelativePath,
+        requestedByUserId: input.requestedByUserId,
+      });
+    } catch (err) {
+      if (isUniqueConstraintError(err)) {
+        // Neko drugi je "pobijedio" trku između našeg findLatestForSource
+        // provjere i ovog create() poziva — DB indeks je to spriječio.
+        // Vraćamo pobjednički (upravo kreirani) red umjesto duple konverzije.
+        const winner = await this.documentJobs.findLatestForSource(input.sourceType, input.sourceId);
+        if (winner) {
+          this.logger.debug(
+            `Concurrent enqueue detected for ${input.sourceType}:${input.sourceId}, reusing winning job ${winner.id}`,
+          );
+          return winner;
+        }
+      }
+      throw err;
+    }
 
+    // BullMQ jobId == DocumentJob.id (namjerno deterministički, NE
+    // randomUUID()) — QueueEvents handleri (active/completed) time mogu
+    // koristiti jobId direktno kao documentJobId, bez dodatnog
+    // queue.getJob() poziva (manje Redis round-trip-ova, i nema race-a
+    // ako bi posao već bio uklonjen/istekao prije nego stignemo da ga
+    // pročitamo). Kolizija je nemoguća — documentJob.id je svježi UUID.
     const payload: DocumentConversionJobPayload = {
       documentJobId: documentJob.id,
       sourceFormat: input.sourceFormat,
@@ -70,18 +104,36 @@ export class DocumentConversionQueueService {
       resultRelativePath: input.resultRelativePath,
     };
 
-    const bullJob = await this.queue.add(DOCUMENT_CONVERT_JOB_NAME, payload, {
-      jobId: randomUUID(),
-      // LibreOffice greške su rijetko prolazne mrežne "hiccups" — 2 pokušaja
-      // (umjesto globalnog default-a od 3, vidi QueuesModule) drži worst-case
-      // vrijeme do konačnog 'failed' statusa razumnim, uz kratki fiksni
-      // razmak (posao koji je pao zbog zaglavljenog soffice procesa neće se
-      // popraviti čekanjem duže od par sekundi).
-      attempts: 2,
-      backoff: { type: 'fixed', delay: 10_000 },
-    });
+    try {
+      const bullJob = await this.queue.add(DOCUMENT_CONVERT_JOB_NAME, payload, {
+        jobId: documentJob.id,
+        // LibreOffice greške su rijetko prolazne mrežne "hiccups" — 2
+        // pokušaja (umjesto globalnog default-a od 3, vidi QueuesModule)
+        // drži worst-case vrijeme do konačnog 'failed' statusa razumnim,
+        // uz kratki fiksni razmak (posao koji je pao zbog zaglavljenog
+        // soffice procesa neće se popraviti čekanjem duže od par sekundi).
+        attempts: 2,
+        backoff: { type: 'fixed', delay: 10_000 },
+      });
+      await this.documentJobs.attachBullJobId(documentJob.id, bullJob.id ?? documentJob.id);
+    } catch (err) {
+      // Ako Redis/BullMQ zakaže TAČNO ovdje (nakon što je DB red već
+      // kreiran kao 'queued'), red NE SMIJE ostati zauvijek "queued" bez
+      // ikoga ko će ga ikad obraditi (i, zbog unique indeksa, blokirati
+      // SVAKI budući pokušaj generisanja za taj izvor). Odmah ga
+      // označavamo 'failed' sa jasnom porukom — retry endpoint ga onda
+      // može normalno ponovo zakazati.
+      this.logger.error(
+        `queue.add failed after DocumentJob ${documentJob.id} was created — marking as failed: ${String(err)}`,
+      );
+      await this.documentJobs.markFailed(
+        documentJob.id,
+        'Zakazivanje posla nije uspjelo (Redis nedostupan). Pokušajte ponovo.',
+        0,
+      );
+      throw err;
+    }
 
-    await this.documentJobs.attachBullJobId(documentJob.id, bullJob.id ?? '');
     return documentJob;
   }
 
@@ -99,3 +151,4 @@ export class DocumentConversionQueueService {
     });
   }
 }
+

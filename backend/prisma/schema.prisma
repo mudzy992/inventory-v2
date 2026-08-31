@@ -1086,6 +1086,14 @@ model InventorySessionCloseJob {
 // ugovori...) bez nove migracije, samo novi sourceType string i pozivalac.
 // requestedByUserId je namjerno BEZ FK relacije (samo audit/prikaz) da bi se
 // izbjegla dodatna izmjena User modela za ovaj usko-svrsishodan slučaj.
+//
+// NAPOMENA: postoji dodatni PARCIJALNI unique indeks
+// `document_jobs_active_source_unique` na (sourceType, sourceId) WHERE
+// status IN ('queued','running'), definisan SAMO u migraciji
+// 20260831062751_document_jobs_active_source_unique (Prisma DSL ne
+// podržava WHERE na @@unique/@@index) — sprečava dva paralelna aktivna
+// posla za isti izvor (TOCTOU race). NE brisati/ignorisati ga pri budućim
+// `prisma migrate dev` schema-drift provjerama.
 model DocumentJob {
   id                  String               @id @default(uuid())
   sourceType          String               @db.VarChar(50)
