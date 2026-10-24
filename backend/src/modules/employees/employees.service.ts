@@ -16,6 +16,8 @@ import {
 } from '../../common/utils/pagination.util';
 import { buildEmployeeSearchWhere } from '../../common/utils/employee-name-search.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
+import { authUserCacheKey } from '../auth/strategies/jwt.strategy';
 import { EmployeeRelocationService } from '../employee-relocation/employee-relocation.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
@@ -89,6 +91,7 @@ export class EmployeesService {
     private readonly settingsService: SettingsService,
     private readonly employeeRelocationService: EmployeeRelocationService,
     private readonly notifications: NotificationsService,
+    private readonly redisService: RedisService,
   ) {}
 
   async findAll(
@@ -312,6 +315,9 @@ export class EmployeesService {
       );
     }
     if (isDeactivating && linkedUser) {
+      const cacheInvalidation = this.redisService.del(authUserCacheKey(linkedUser.id));
+      this.notifications.disconnectUserSockets(linkedUser.id);
+      await cacheInvalidation;
       return {
         ...updated,
         userDeactivated: true,

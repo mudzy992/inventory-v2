@@ -369,7 +369,11 @@ export class UsersService {
     // upravo promijenili (npr. deaktivacija korisnika) — JwtStrategy kešira
     // AuthenticatedUser do 30s (vidi jwt.strategy.ts); bez ove invalidacije
     // deaktivirani korisnik bi zadržao pristup do isteka tog prozora.
-    await this.redisService.del(authUserCacheKey(id));
+    const cacheInvalidation = this.redisService.del(authUserCacheKey(id));
+    if (isDeactivatingUser) {
+      this.notifications.disconnectUserSockets(id);
+    }
+    await cacheInvalidation;
     return this.toListItem(user);
   }
 

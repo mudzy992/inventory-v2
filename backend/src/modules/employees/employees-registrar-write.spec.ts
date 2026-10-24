@@ -98,7 +98,8 @@ const createService = (options?: {
     {} as never,
     settingsService as never,
     { handleOrgUnitChange: async () => undefined } as never,
-    {} as never,
+    { disconnectUserSockets: () => undefined } as never,
+    { del: async () => undefined } as never,
   );
 };
 

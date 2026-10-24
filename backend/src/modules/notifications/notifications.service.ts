@@ -70,6 +70,10 @@ export class NotificationsService {
     private readonly settingsService: SettingsService,
   ) {}
 
+  disconnectUserSockets(userId: string): void {
+    this.gateway.disconnectUser(userId);
+  }
+
   async findAllForUser(
     user: AuthenticatedUser,
     query: ListNotificationsQueryDto,

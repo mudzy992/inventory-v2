@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Server, Socket } from 'socket.io';
 import type { JwtPayload } from '../../common/types/jwt-payload.type';
+import { PrismaService } from '../../prisma/prisma.service';
 import type { NotificationResponse } from './notifications.service';
 
 // Socket.IO path mora pratiti API_PREFIX: kad backend radi na svojoj subdomeni
@@ -39,10 +40,11 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
-    const userId = this.resolveUserId(client);
+    const userId = await this.resolveUserId(client);
     if (!userId) {
       client.disconnect(true);
       return;
@@ -57,6 +59,10 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     if (userId) {
       this.logger.debug(`Client disconnected: user=${userId}`);
     }
+  }
+
+  disconnectUser(userId: string): void {
+    this.server?.in(`user:${userId}`).disconnectSockets(true);
   }
 
   emitNotificationCreated(userId: string, notification: NotificationResponse): void {
@@ -112,7 +118,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.server.to(`user:${userId}`).emit('document.job.updated', payload);
   }
 
-  private resolveUserId(client: Socket): string | null {
+  private async resolveUserId(client: Socket): Promise<string | null> {
     const token = this.extractToken(client);
     if (!token) {
       return null;
@@ -121,7 +127,11 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
       const payload = this.jwtService.verify<JwtPayload>(token, {
         secret: this.configService.getOrThrow<string>('JWT_SECRET'),
       });
-      return payload.sub;
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { isActive: true },
+      });
+      return user?.isActive ? payload.sub : null;
     } catch {
       return null;
     }
