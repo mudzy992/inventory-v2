@@ -1,11 +1,13 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   StreamableFile,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { hasPdfSignature } from '../../common/utils/file-signature.util';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
@@ -18,6 +20,8 @@ const SIGNED_TRANSFER_MIME_TYPES = new Set(['application/pdf']);
 
 @Injectable()
 export class UploadsService {
+  private readonly logger = new Logger(UploadsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
@@ -50,30 +54,53 @@ export class UploadsService {
       throw new BadRequestException('Transfer has no document warehouse configured');
     }
     const year = transfer.date.getFullYear();
+    const uploadId = randomUUID();
     const relativePath = buildSignedPdfRelativePath(
       transfer.documentWarehouseId,
       year,
       transfer.documentNumber,
+      uploadId,
     );
     const absolutePath = join(this.getUploadRoot(), relativePath);
-    mkdirSync(resolve(absolutePath, '..'), { recursive: true });
-    writeFileSync(absolutePath, file.buffer);
+    const temporaryPath = `${absolutePath}.${uploadId}.tmp`;
     const normalizedPath = relativePath.replace(/\\/g, '/');
-    const upload = await this.prisma.upload.create({
-      data: {
-        path: normalizedPath,
-        mime: file.mimetype,
-        sizeBytes: file.size,
-        entityType: 'transfer',
-        entityId: transferId,
-      },
-    });
-    await this.prisma.transfer.update({
-      where: { id: transferId },
-      data: { scannedDocUrl: normalizedPath },
-    });
-    await this.transfersService.markUploadedAfterScan(transferId);
-    return upload;
+    mkdirSync(resolve(absolutePath, '..'), { recursive: true });
+
+    let promoted = false;
+    try {
+      writeFileSync(temporaryPath, file.buffer, { flag: 'wx', mode: 0o600 });
+      renameSync(temporaryPath, absolutePath);
+      promoted = true;
+
+      return await this.prisma.$transaction(async (tx) => {
+        const upload = await tx.upload.create({
+          data: {
+            path: normalizedPath,
+            mime: file.mimetype,
+            sizeBytes: file.size,
+            entityType: 'transfer',
+            entityId: transferId,
+          },
+        });
+        await tx.transfer.update({
+          where: { id: transferId },
+          data: { scannedDocUrl: normalizedPath },
+        });
+        await this.transfersService.markUploadedAfterScan(transferId, tx);
+        return upload;
+      });
+    } catch (error) {
+      for (const path of [temporaryPath, ...(promoted ? [absolutePath] : [])]) {
+        try {
+          rmSync(path, { force: true });
+        } catch (cleanupError) {
+          this.logger.error(
+            `Failed to clean up an incomplete transfer upload: ${String(cleanupError)}`,
+          );
+        }
+      }
+      throw error;
+    }
   }
 
   async getFileStream(user: AuthenticatedUser, uploadId: string): Promise<StreamableFile> {

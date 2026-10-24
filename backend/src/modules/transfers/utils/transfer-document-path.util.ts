@@ -29,10 +29,11 @@ export const buildSignedPdfRelativePath = (
   warehouseId: string,
   year: number,
   documentNumber: string,
+  uploadId: string,
 ): string =>
   join(
     'prenosnice',
     warehouseId,
     String(year),
-    `${sanitizeDocumentNumberForFilename(documentNumber)}-signed.pdf`,
+    `${sanitizeDocumentNumberForFilename(documentNumber)}-${uploadId}-signed.pdf`,
   ).replace(/\\/g, '/');

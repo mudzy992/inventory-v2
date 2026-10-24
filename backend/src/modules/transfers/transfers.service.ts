@@ -107,20 +107,14 @@ export class TransfersService {
     private readonly transferTemplateService: WarehouseTransferTemplateService,
   ) {}
 
-  async markUploadedAfterScan(transferId: string): Promise<void> {
-    const transfer = await this.prisma.transfer.findUnique({
-      where: { id: transferId },
-      select: { status: true },
+  async markUploadedAfterScan(
+    transferId: string,
+    transferStore: Pick<PrismaService, 'transfer'> = this.prisma,
+  ): Promise<void> {
+    await transferStore.transfer.updateMany({
+      where: { id: transferId, status: { in: ['raw', 'printed'] } },
+      data: { status: 'uploaded' },
     });
-    if (!transfer || transfer.status === 'potpisan' || transfer.status === 'cancelled') {
-      return;
-    }
-    if (transfer.status === 'raw' || transfer.status === 'printed') {
-      await this.prisma.transfer.update({
-        where: { id: transferId },
-        data: { status: 'uploaded' },
-      });
-    }
   }
 
   async findAll(
