@@ -62,7 +62,8 @@ proširenja ACL-a** — vidi glavni `.env.example`):
 | `REDIS_PASSWORD` | — | |
 | `REDIS_DB` | `0` | |
 | `REDIS_KEY_PREFIX` | `inventory-v2` | Isti namespace kao backend |
-| `REDIS_TLS` | `false` | |
+| `REDIS_TLS` | `false` | Uključiti (`true`) kada Redis zahtijeva TLS. |
+| `REDIS_CA_CERT_PATH` | — | Opcionalna putanja do Redis CA PEM certifikata unutar kontejnera; npr. `/run/secrets/redis-ca.crt`. Mora biti montiran/readable u backendu i workeru. |
 | `DOCUMENT_QUEUE_NAME` | `document-generation` | Mora biti identično backend-ovom `DOCUMENT_GENERATION_QUEUE` |
 | `UPLOAD_DIR` | `/app/uploads` | Isti volume kao backend |
 | `DOCUMENT_WORKER_TMP_DIR` | `/tmp/document-worker` | Privremeni radni prostor — ODVOJEN od `UPLOAD_DIR` (zahtjev: temp ≠ generated) |
@@ -70,6 +71,12 @@ proširenja ACL-a** — vidi glavni `.env.example`):
 | `DOCUMENT_WORKER_CONVERT_TIMEOUT_MS` | `120000` | Tvrdi timeout po konverziji (SIGKILL nakon isteka) |
 | `DOCUMENT_WORKER_HEALTH_PORT` | `8080` | Interni health port (127.0.0.1 SAMO) |
 | `DOCUMENT_WORKER_SOFFICE_BIN` | `soffice` | Putanja do soffice binarnog fajla (rijetko potrebno mijenjati) |
+
+Ako Redis koristi interni/self-signed CA, postaviti `REDIS_TLS=true` i
+`REDIS_CA_CERT_PATH=/run/secrets/redis-ca.crt`, te montirati CA fajl kao
+read-only secret na tu putanju u **oba** servisa (backend i worker). Bez
+`REDIS_CA_CERT_PATH`, TLS koristi Node.js sistemski trust store. Verifikacija
+certifikata i hostname-a ostaje uključena; nemojte je isključivati globalno.
 
 ## Sigurnost / produkcijska otpornost
 

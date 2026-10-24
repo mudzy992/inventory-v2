@@ -1,8 +1,8 @@
 /**
  * Env varijable namjerno IMENOVANE ISTO kao u backend/src/redis/redis.config.ts
  * (REDIS_HOST, REDIS_PORT, REDIS_USERNAME, REDIS_PASSWORD, REDIS_DB,
- * REDIS_KEY_PREFIX, REDIS_TLS) — worker se povezuje na ISTU Redis platformu,
- * ISTIM ACL userom (inventory-v2), u ISTOM `${REDIS_KEY_PREFIX}:*` namespace-u
+ * REDIS_KEY_PREFIX, REDIS_TLS, REDIS_CA_CERT_PATH) — worker se povezuje na ISTU
+ * Redis platformu ISTIM ACL userom (inventory-v2), u ISTOM `${REDIS_KEY_PREFIX}:*` namespace-u
  * kao i backend. Nema potrebe za novim ACL userom niti proširenjem ACL
  * dozvola — worker je, sa stanovišta Redisa, samo dodatni BullMQ konzument
  * u istom namespace-u (koncepcijski ekvivalentno horizontalnom skaliranju
@@ -17,6 +17,7 @@ export interface WorkerConfig {
     db: number;
     keyPrefix: string;
     tls: boolean;
+    caCertPath?: string;
   };
   queueName: string;
   uploadDir: string;
@@ -45,6 +46,7 @@ export const loadConfig = (): WorkerConfig => {
       db: readInt('REDIS_DB', 0),
       keyPrefix: `${keyPrefix}:`,
       tls: process.env.REDIS_TLS === 'true',
+      caCertPath: process.env.REDIS_CA_CERT_PATH?.trim() || undefined,
     },
     // Mora biti identično DOCUMENT_GENERATION_QUEUE u
     // backend/src/modules/documents/document-generation.queue.ts.

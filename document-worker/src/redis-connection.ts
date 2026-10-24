@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { RedisOptions } from 'ioredis';
 import type { WorkerConfig } from './config';
 
@@ -13,7 +14,13 @@ export const buildRedisOptions = (config: WorkerConfig['redis']): RedisOptions =
   username: config.username,
   password: config.password,
   db: config.db,
-  tls: config.tls ? {} : undefined,
+  // Preserve Node's normal certificate and hostname verification. When a
+  // private CA is supplied, use it as the trust anchor for this TLS socket.
+  tls: config.tls
+    ? config.caCertPath
+      ? { ca: readFileSync(config.caCertPath) }
+      : {}
+    : undefined,
   // Identično backend/src/redis/redis.config.ts::buildBaseRedisOptions —
   // namjerno ista retry strategija/limit kao ostatak aplikacije koja se
   // povezuje na istu Redis platformu/ACL usera.

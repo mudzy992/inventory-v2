@@ -47,6 +47,8 @@ services:
       REDIS_USERNAME: ""
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_KEY_PREFIX: inventory-v2
+      REDIS_TLS: ${REDIS_TLS:-false}
+      REDIS_CA_CERT_PATH: ${REDIS_CA_CERT_PATH:-}
     # Upload root na hostu; unutra aplikacija gradi prenosnice/, templates/, ...
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads
@@ -84,6 +86,8 @@ services:
       REDIS_USERNAME: ""
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_KEY_PREFIX: inventory-v2
+      REDIS_TLS: ${REDIS_TLS:-false}
+      REDIS_CA_CERT_PATH: ${REDIS_CA_CERT_PATH:-}
       DOCUMENT_QUEUE_NAME: document-generation
       DOCUMENT_WORKER_CONCURRENCY: ${DOCUMENT_WORKER_CONCURRENCY:-2}
       DOCUMENT_WORKER_CONVERT_TIMEOUT_MS: ${DOCUMENT_WORKER_CONVERT_TIMEOUT_MS:-120000}

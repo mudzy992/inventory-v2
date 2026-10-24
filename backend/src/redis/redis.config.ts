@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { RedisOptions } from 'ioredis';
 
 /**
@@ -23,6 +24,7 @@ export interface RedisAppConfig {
   db: number;
   keyPrefix: string;
   tls: boolean;
+  caCertPath?: string;
 }
 
 export const readRedisConfig = (): RedisAppConfig => {
@@ -35,6 +37,7 @@ export const readRedisConfig = (): RedisAppConfig => {
     db: Number(process.env.REDIS_DB ?? 0),
     keyPrefix: `${keyPrefix}:`,
     tls: process.env.REDIS_TLS === 'true',
+    caCertPath: process.env.REDIS_CA_CERT_PATH?.trim() || undefined,
   };
 };
 
@@ -47,7 +50,14 @@ export const buildBaseRedisOptions = (config: RedisAppConfig): RedisOptions => (
   username: config.username,
   password: config.password,
   db: config.db,
-  tls: config.tls ? {} : undefined,
+  // Do not disable certificate/hostname verification. When a private CA is
+  // configured, pass it as a trust anchor; otherwise Node's system trust store
+  // is used. This is shared by plain ioredis, BullMQ and Socket.IO clients.
+  tls: config.tls
+    ? config.caCertPath
+      ? { ca: readFileSync(config.caCertPath) }
+      : {}
+    : undefined,
   // Robusna retry strategija — bitno jer ova aplikacija ima kritične puteve
   // (login rate-limit, BullMQ, Socket.IO) koji zavise od Redis-a; brz
   // ali ograničen retry umjesto default ponašanja koje odustaje.
