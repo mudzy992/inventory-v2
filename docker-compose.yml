@@ -60,6 +60,7 @@ services:
       - RATE_LIMIT_LOGIN_WINDOW_SEC=${RATE_LIMIT_LOGIN_WINDOW_SEC:-60}
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads
+      - /data/coolify/ssl/coolify-ca.crt:/etc/ssl/certs/coolify-ca.crt:ro
     restart: unless-stopped
     expose:
       - "3000"
@@ -74,7 +75,7 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
-    
+
     networks:
       - db_net
       - redis_net
@@ -101,6 +102,7 @@ services:
       # ISTI host direktorij kao backend — worker čita DOCX/XLSX/ODT koje je
       # backend upisao i piše PDF nazad na isti volume, kao "generated" izlaz.
       - /mnt/shared-app-files/inventory-v2:/app/uploads
+      - /data/coolify/ssl/coolify-ca.crt:/etc/ssl/certs/coolify-ca.crt:ro
     restart: unless-stopped
     # NEMA "expose" — nema HTTP API, samo interni Redis/BullMQ konzument.
     # NEMA "ports" — nikad ne treba biti dostupan van kontejnerske mreže.
@@ -149,6 +151,8 @@ services:
     restart: unless-stopped
     expose:
       - "80"
+    volumes:
+      - /data/coolify/ssl/coolify-ca.crt:/etc/ssl/certs/coolify-ca.crt:ro
     healthcheck:
       test:
         - CMD-SHELL
