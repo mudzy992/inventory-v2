@@ -13,6 +13,7 @@ import { SettingsService } from '../settings/settings.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { SearchCategoriesQueryDto } from './dto/search-categories-query.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { wouldCreateCategoryCycle } from './utils/category-cycle.util';
 
 export interface CategoryTreeNode {
   id: string;
@@ -87,26 +88,35 @@ export class CategoriesService {
   async update(id: string, dto: UpdateCategoryDto): Promise<Category> {
     await this.settingsService.assertFeatureEnabled('features.categories');
     await this.findOne(id);
-    if (dto.parentId) {
-      if (dto.parentId === id) {
-        throw new BadRequestException('Category cannot be its own parent');
-      }
-      await this.findOne(dto.parentId);
-    }
     const normalizedFields = dto.fields ? normalizeUnitCategoryFields(dto.fields) : undefined;
     const normalizedOptionalFields = dto.optionalFields
       ? normalizeLotCategoryFields(dto.optionalFields)
       : undefined;
-    return this.prisma.category.update({
-      where: { id },
-      data: {
-        name: dto.name,
-        description: dto.description,
-        parentId: dto.parentId,
-        categoryKind: dto.categoryKind,
-        fields: normalizedFields as unknown as Prisma.InputJsonValue | undefined,
-        optionalFields: normalizedOptionalFields as unknown as Prisma.InputJsonValue | undefined,
-      },
+    const data: Prisma.CategoryUpdateInput = {
+      name: dto.name,
+      description: dto.description,
+      parentId: dto.parentId,
+      categoryKind: dto.categoryKind,
+      fields: normalizedFields as unknown as Prisma.InputJsonValue | undefined,
+      optionalFields: normalizedOptionalFields as unknown as Prisma.InputJsonValue | undefined,
+    };
+
+    if (dto.parentId === undefined) {
+      return this.prisma.category.update({ where: { id }, data });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize tree reparent operations so concurrent updates cannot each
+      // validate against a stale hierarchy and jointly introduce a cycle.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(1800043170, 24681)`;
+      const categories = await tx.category.findMany({ select: { id: true, parentId: true } });
+      if (dto.parentId && !categories.some((category) => category.id === dto.parentId)) {
+        throw new NotFoundException('Category not found');
+      }
+      if (wouldCreateCategoryCycle(id, dto.parentId, categories)) {
+        throw new BadRequestException('Category hierarchy cannot contain a cycle');
+      }
+      return tx.category.update({ where: { id }, data });
     });
   }
 
