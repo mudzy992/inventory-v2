@@ -1,6 +1,6 @@
 # Backend — detaljan plan implementacije audita
 
-**Status:** implementacija u toku — prenosnica escape-uje dinamički HTML; ranjivi proxy/Multer/Socket.IO dependency lanac je patchovan; user scope izmjene i refresh rotacija su transakcijski zaštićene; uploadi imaju pre-parser byte/field/count limite, a DOCX validator odbija prevelike ZIP entry-je i omjere kompresije.
+**Status:** implementacija u toku — prenosnica escape-uje dinamički HTML; ranjivi proxy/Multer/Socket.IO dependency lanac je patchovan; user scope izmjene i refresh rotacija su transakcijski zaštićene; uploadi imaju pre-parser limite, PDF signature provjeru i DOCX ZIP budget.
 **Osnova:** [`backend-audit.md`](./backend-audit.md), koji sadrži nalaze, izvore u kodu i početnu faznu podjelu
 **Opseg:** backend API, PostgreSQL/Prisma, Redis/BullMQ/Socket.IO, uploadi, background poslovi, sigurnost, testovi i operativna spremnost.
 

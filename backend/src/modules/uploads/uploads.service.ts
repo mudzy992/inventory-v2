@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { hasPdfSignature } from '../../common/utils/file-signature.util';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -34,6 +35,9 @@ export class UploadsService {
     }
     if (!SIGNED_TRANSFER_MIME_TYPES.has(file.mimetype)) {
       throw new BadRequestException('Potpisana prenosnica mora biti PDF');
+    }
+    if (!file.buffer || !hasPdfSignature(file.buffer)) {
+      throw new BadRequestException('Sadržaj datoteke nije validan PDF');
     }
     const envMaxMb = Number(this.configService.get<string>('MAX_UPLOAD_MB', '10'));
     const maxMb = await this.settingsService.getNumberValue('upload.max_mb', envMaxMb);
