@@ -1,5 +1,6 @@
 # Backend — inventar, audit i fazni plan
 
+**Pregled:** drugi, produbljeni prolaz statičkog audita (nakon prvog inventara)
 **Datum pregleda:** 24.10.2026.  
 **Izvor istine:** kod u `backend/src`, `backend/prisma/schema.prisma`, PostgreSQL migracije, `backend/package.json`/lockfile, Docker konfiguracija.  
 **Opseg:** statički pregled backend arhitekture, modula, ključnih tokova, autorizacije, validacije, transakcija, background poslova, baze, Redis-a, upload-a, testova i deployment konfiguracije. Nisu pregledani produkcijski podaci, runtime konfiguracija Coolify-ja, mrežni firewall niti izvršen penetracijski test. Nalazi koji zavise od načina deploymenta označeni su kao provjere, a ne kao potvrđeni incidenti.
@@ -10,7 +11,7 @@
 
 Backend je funkcionalno bogat, modularizovan NestJS 11 servis sa Prisma 7 i PostgreSQL-om. Dobar temelj čine tipizovani DTO-i, centralna autorizacija po rolama i scope-u, jasno izdvojeni domenski utili, trajni DB zapisi za važne asinhrone poslove, selektivno korištenje transakcija, Redis cache-aside i dosta testova za čiste poslovne funkcije.
 
-Glavni dug nije nedostatak poslovne funkcionalnosti, nego **pouzdanost rubnih slučajeva i sigurnosna disciplina**: upload konfiguracija, atomarnost nekih višekoračnih promjena, ponovni pokušaji i oporavak queue poslova, produkcijski defaulti, te neravnomjerna pokrivenost integracionim testovima. Najveći servis `InventoryCountService` ima oko 2.875 linija; više drugih domenskih servisa ima 500–1.100 linija. To otežava promjene koje prelaze granice domena.
+Glavni dug nije nedostatak poslovne funkcionalnosti, nego **pouzdanost rubnih slučajeva i sigurnosna disciplina**: upload konfiguracija, neescape-ovan HTML/CSV izlaz, atomarnost nekih višekoračnih promjena, ciklična kategorijska hijerarhija, ponovni pokušaji i oporavak queue poslova, produkcijski defaulti, te neravnomjerna pokrivenost integracionim testovima. Najveći servis `InventoryCountService` ima oko 2.875 linija; više drugih domenskih servisa ima 500–1.100 linija. To otežava promjene koje prelaze granice domena.
 
 ### Ocjena
 
@@ -24,7 +25,7 @@ Glavni dug nije nedostatak poslovne funkcionalnosti, nego **pouzdanost rubnih sl
 | Testovi | 6.5/10 | `npm run test:unit`: 261 test prošao u 53 suite-a kroz 36 fajlova. Repo sadrži 54 `*.spec.ts`, ali je većina testova util/scope funkcija, a malo je controller/DB/integration testova. |
 | Sigurnost zavisnosti | 5.5/10 | `npm audit` na backend lockfile-u je prijavio 24 nalaza (1 critical, 17 high, 5 moderate, 1 low) u trenutno instaliranom stablu; postoje ispravke za prijavljene pakete. |
 | Operativna vidljivost | 6.0/10 | Postoje health endpoint, logovi i servisni healthcheck-i, ali backend `/health` provjerava samo DB, ne i Redis/queue kritične putanje. |
-| **Kompletan backend** | **6.8/10** | Dobar i aktivno korišten poslovni temelj; sigurnost i integritet su dovoljno ozbiljni da idu prije feature nadogradnji. |
+| **Kompletan backend** | **6.6/10** | Dobar i aktivno korišten poslovni temelj; drugi prolaz je otkrio i stored-XSS put kroz HTML prenosnice, uz već navedene integritetske i upload rizike. |
 
 Ocjene su heurističke, kodne ocjene za planiranje rada — nisu procjena dostupnosti produkcije niti potvrda eksploatabilnosti svakog nalaza.
 
@@ -83,6 +84,7 @@ Root modul je `backend/src/app.module.ts`; globalni prefix je konfigurabilan pre
 5. **BullMQ retry zatvaranja sesije je u konfliktu sa DB claim statusom.** Worker claim radi samo `status: 'queued'`; pri exception-u status postaje `failed`, zatim se greška baca radi BullMQ retry-a. Sljedeći BullMQ attempt vidi DB status `failed`, ne preuzima posao i završava ga bez stvarnog retry-a. Treba definisati jednu autoritativnu retry politiku i atomarni claim/state machine.
 6. **DB TLS konfiguracija nije eksplicitna u vidljivom adapter kodu.** `parseDatabaseUrl()` iz `DATABASE_URL` izdvaja samo host/port/user/password/database; query parametri se odbacuju. `PrismaPg` se konstruiše bez `ssl`/CA opcije. Pošto je runtime TLS izvan koda moguć kroz drugi PG mehanizam, ovo je nalaz za provjeru, ne tvrdnja da produkcija trenutno nema TLS. Prije daljeg DB rada napraviti test koji dokazuje da se peer cert validira u stvarnom deploymentu i prenijeti TLS parametre eksplicitno kroz konfiguraciju/secret ako test to ne potvrdi.
 7. **Početni setup je javno dostupan ako `SETUP_TOKEN` nije postavljen.** To je namjerna bootstrap mogućnost, ali inicijalizacija zavisi od javnog poziva. Provjera `user.count()` u `SetupService` je van bootstrap transakcije; unutrašnja provjera je u transakciji, ali bez zaključavanja/serializacije praznog users skupa dvije paralelne inicijalizacije sa različitim username-ima mogu proći count provjere. Učiniti setup token obaveznim u produkciji i zaštititi inicijalizaciju DB-level/advisory lock-om ili izolacijom koja garantuje jedan pobjednički bootstrap. Upis company settings-a nakon bootstrap transakcije takođe treba spojiti ili imati oporavak.
+**Stored XSS provjera — P1 ako je isti browser origin.** `buildTransferRawDocumentHtml()` interpolira vrijednosti iz baze direktno u HTML tekst (`reason`, `notes`, imena, label-e i inventurni broj); transfer DTO dozvoljava slobodne stringove za `reason`/`notes`. Kontroler vraća rezultat kao `text/html`, bez vidljivog escaping-a ili attachment zaglavlja. Ako se ruta servira pod istim originom kao aplikacija, korisnik sa pravom kreiranja prenosnice može sačuvati HTML/JS, a skripta se izvršava u originu korisnika koji otvori dokument. Potvrditi origin/proxy u deployment-u; bez obzira na to, escape-ovati svaki tekstualni čvor (ili generisati bezbjedan PDF/attachment) i dodati regression test sa `<script>`, `</td><script>` i atributnim payload-ima.
 
 ### P2 — zatvoriti u narednom ciklusu
 
@@ -95,13 +97,17 @@ Root modul je `backend/src/app.module.ts`; globalni prefix je konfigurabilan pre
 14. **Cache invalidacija / side-effect granice nisu svugdje jedinstvene.** Settings/defaults se inicijalizuju pojedinačnim upisima na `OnModuleInit`; kod multi-instance starta moguće su konkurentne inicijalizacije. Redis cache je best-effort (što je ispravno za čitanja), ali autorizacijski cache zahtijeva dosljednu invalidaciju kroz sve puteve promjene usera.
 15. **DB state transition-i često provjeravaju stanje pa ažuriraju kasnije.** Transfer `finalize`, inventory `closeCommittee/closeSession`, dio employee/org promjena i lot dekrementiranja čitaju status/balans prije write-a. Transakcije postoje na važnim tokovima, ali ne svuda su uslovi statusa/balansa ponovo provjereni u atomarnom `updateMany` ili zaključani. Treba concurrency testirati i dodati DB constraint/conditional update za tokove gdje dva istovremena zahtjeva mogu duplirati poslovni efekat.
 16. **Fajl i DB nisu jedna transakcija.** Upload/template zapisuju fajl pa zatim DB metapodatke/status. DB greška ostavlja orphan fajl; write je direktan, ne temp+rename. Template upload validira DOCX strukturu i generated path koristi determinističku sanitizaciju, što je dobar početak, ali treba atomic file write/cleanup i reconciler za orphan-e.
+17. **CSV export je ranjiv na formula injection i nema gornju granicu redova.** `escape()` štiti CSV delimitere/quote/newline, ali ne neutralizuje ćelije koje počinju sa `=`, `+`, `-`, `@` ili tabom; Excel/Calc može takvu vrijednost tretirati kao formulu. Uz to, export radi `findMany()` bez limit/paginacije i gradi cijeli CSV string u memoriji. Dodati spreadsheet-safe escaping i streaming ili obavezni server-side limit + paginaciju.
+18. **DOCX template ZIP validacija nema dekompresijski budžet.** Template validator prima cijeli upload u memoriji, PizZip otvara ZIP i čita `word/document.xml`, pa radi dry-run render. Route nema eksplicitni Multer `limits`; čak i kada se postavi compressed file size limit, ZIP bomb može imati znatno veći uncompressed size. Dodati limite na veličinu prije bufferovanja, broj entries/uncompressed bytes/ratio i test sa kompresionim bomb payload-om.
+19. **Numeric settings nisu strogo ograničene na finite i per-key opseg.** `serializeValue()` odbacuje samo `NaN`, ali prihvata `Infinity`/`-Infinity` i proizvoljne decimalne/ekstremne vrijednosti. Registry sadrži `upload.max_mb`, `lists.default_page_size` i `lists.max_page_size`, pa pogrešna admin vrijednost može ukloniti očekivane granice. Uvesti per-key min/max/integer constraints, `Number.isFinite()` i validaciju odnosa default/max page size.
+20. **Kategorija može dobiti descendant kao parent i ciklizovati hijerarhiju.** `CategoriesService.update()` odbacuje samo self-parent, a ne provjerava da je novi parent izvan podstabla kategorije. Npr. `A.parent=B` pa `B.parent=A` može napraviti ciklus; parent postoji, ali `buildCategoryTree()` više nema root za taj ciklus i čvorovi mogu nestati iz tree response-a. Provjeriti ancestor chain unutar transakcijskog/zaštićenog update-a i dodati ciklus/regression test.
 
 ### P3 — održivost i kapacitet
 
-17. **Nedostaje API-level/integration test sloj.** Većina od 261 testa pokriva čiste util-e i mock scope servise. Potrebni su testovi sa stvarnim PostgreSQL-om za migrations, unique constraint-e, transakcije i konkurentne zahtjeve; testovi Nest HTTP guards/DTO-a; Redis/BullMQ recovery testovi.
-18. **Velike domenske klase su teško održive.** Posebno `InventoryCountService` (~2.875 LOC), `EmployeeRelocationService` (~989), `WarehouseStockService` (~865), `TransfersService` (~829), `NotificationsService` (~627), `EquipmentService` (~641), `MaintenancePartsService` (~564), `EmployeesService` (~539). Izdvajati use-case servise po odvojenim state transition-ima, ali tek uz karakterizacione testove.
-19. **Dokumentacija migracija je zastarjela.** `backend/prisma/migrations/README.md` opisuje folder kao prazan, a postoje PostgreSQL migracije. Uskladiti README sa stvarnim istorijatom i dodati automatizovan schema/migration drift check.
-20. **Opservabilnost je log-centric.** Dodati request/correlation ID, strukturirane logove bez osjetljivih vrijednosti, metrike za queue lag/retry/failed jobs, DB pool, Redis ready stanje, upload odbijanja i poslovne state transition-e.
+21. **Nedostaje API-level/integration test sloj.** Većina od 261 testa pokriva čiste util-e i mock scope servise. Potrebni su testovi sa stvarnim PostgreSQL-om za migrations, unique constraint-e, transakcije i konkurentne zahtjeve; testovi Nest HTTP guards/DTO-a; Redis/BullMQ recovery testovi.
+22. **Velike domenske klase su teško održive.** Posebno `InventoryCountService` (~2.875 LOC), `EmployeeRelocationService` (~989), `WarehouseStockService` (~865), `TransfersService` (~829), `NotificationsService` (~627), `EquipmentService` (~641), `MaintenancePartsService` (~564), `EmployeesService` (~539). Izdvajati use-case servise po odvojenim state transition-ima, ali tek uz karakterizacione testove.
+23. **Dokumentacija migracija je zastarjela.** `backend/prisma/migrations/README.md` opisuje folder kao prazan, a postoje PostgreSQL migracije. Uskladiti README sa stvarnim istorijatom i dodati automatizovan schema/migration drift check.
+24. **Opservabilnost je log-centric.** Dodati request/correlation ID, strukturirane logove bez osjetljivih vrijednosti, metrike za queue lag/retry/failed jobs, DB pool, Redis ready stanje, upload odbijanja i poslovne state transition-e.
 
 ### Tragovi u kodu za glavne nalaze
 
@@ -119,6 +125,11 @@ Root modul je `backend/src/app.module.ts`; globalni prefix je konfigurabilan pre
 | Javni QR vraća punu transfer historiju/lične podatke | `backend/src/modules/public-equipment/public-equipment.service.ts:140-168`, `:201-245`. |
 | Health testira samo Postgres | `backend/src/modules/health/health.controller.ts:4-31`. |
 | CORS fail-open default | `backend/src/main.ts:37-53`. |
+| RAW HTML prenosnica interpolacija bez escape | `backend/src/modules/transfers/utils/transfer-raw-document.util.ts:15-65`; endpoint `transfers.controller.ts:77-81`; DTO `transfers/dto/create-transfer.dto.ts` (`reason`, `notes`). |
+| CSV formula injection i neograničen export | `backend/src/modules/equipment/equipment.service.ts:578-627`; odgovor se sklapa cijeli u memoriji u `equipment.controller.ts:54-65`. |
+| DOCX ZIP validation bez dekompresijskog budgeta | `backend/src/modules/warehouses/utils/validate-transfer-template.util.ts:35-74`; upload route `warehouses.controller.ts:100-109` (`FileInterceptor('file')` bez `limits`). |
+| Category descendant-parent ciklus | `backend/src/modules/categories/categories.service.ts:87-107`. |
+| Numeric settings dozvoljavaju non-finite i bez key-specific bounds | `backend/src/modules/settings/settings.service.ts:205-225`; registry numeric keys `settings.registry.ts:550-602`. |
 
 ## 4. Detaljna ocjena po modulu
 
@@ -150,13 +161,13 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Plan:** P1 obavezni production token + atomic singleton/advisory lock + transakcijski upis settings-a; P2 smoke test dvije paralelne inicijalizacije i prekid usred setup-a.
 
-### 4.4 Settings — **6.5/10**
+### 4.4 Settings — **6.0/10**
 
 **Uloga:** registry-driven javna/privatna podešavanja, feature flags, Redis cache-aside i socket event za javne promjene. Privatni GET i PATCH su admin-only.
 
 **Dobro:** definicije vrijednosti centralizovane u registry-ju; key se ne može mijenjati ako nije registrovan/admin-editable; cache se invalidira na upis.
 
-**Rizici:** PATCH koristi `interface UpdateSettingBody`, pa payload ne dobija standardnu class-validator validaciju (nalaz 8). `serializeValue()` za boolean pretvara sve osim `true`/`"true"` u `false`; to može sakriti neispravan input umjesto da ga odbije. `ensureDefaults()` radi mnogo pojedinačnih upisa bez jedne transakcije i može se takmičiti na startu više replika.
+**Rizici:** PATCH koristi `interface UpdateSettingBody`, pa payload ne dobija standardnu class-validator validaciju (P2 nalaz 8). `serializeValue()` za boolean pretvara sve osim `true`/`"true"` u `false`; to može sakriti neispravan input umjesto da ga odbije. Numeric serializer dozvoljava `Infinity` i nema per-key opseg za upload/page-size settings (nalaz 19). `ensureDefaults()` radi mnogo pojedinačnih upisa bez jedne transakcije i može se takmičiti na startu više replika.
 
 **Plan:** P1 DTO + stroga validacija po setting type-u; P2 transakcijski/upsert defaults i multi-instance startup test.
 
@@ -220,13 +231,13 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Plan:** P1 shared user-deactivation invalidator; P2 org change + relocation transactional/outbox ili retryable state; test profile privacy i deactivation.
 
-### 4.11 Categories — **7.5/10**
+### 4.11 Categories — **6.8/10**
 
 **Uloga:** kategorijska hijerarhija, ASSET/MAINTENANCE tip, polja opreme/optional lot specifications, tree i search.
 
 **Dobro:** normalizacija JSON fields kroz util-e; leaf category enforcement u domenima; admin-only CRUD; testovi za category fields.
 
-**Rizici:** parent-cycle provjera u update-u pokriva self-parent, ali ne vidim u ovom toku punu ancestor-cycle provjeru kao kod OrgUnits; update može teorijski postaviti predka kao dijete i stvoriti ciklus. Takođe parent `categoryKind` kompatibilnost i promjena definicije polja kad postojeća sredstva već koriste stari JSON format traže migration policy.
+**Rizici:** parent-cycle provjera u update-u pokriva self-parent, ali ne descendant-parent (nalaz 20); update može teorijski stvoriti ciklus. Takođe parent `categoryKind` kompatibilnost i promjena definicije polja kad postojeća sredstva već koriste stari JSON format traže migration policy.
 
 **Plan:** P2 test/zaštita ciklusa i ASSET/MAINTENANCE nasljeđivanja; P2 versioning ili migracija specifikacija prije promjene polja; unique category semantics.
 
@@ -240,13 +251,13 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Plan:** P2 pregled svih referenci/unique indeksa; test P2002 race i in-use delete.
 
-### 4.13 Equipment — **7.0/10**
+### 4.13 Equipment — **6.3/10**
 
 **Uloga:** centralni registar sredstava, role-aware read/write, search/summaries/CSV/QR/check endpoints, status/reactivation i custody.
 
 **Dobro:** access helper jasno razlikuje admin, moderator, registrar, warehouse keeper i self-held user; unique spec validation i accounting upgrade util-i; inventory freeze integration.
 
-**Rizici:** 641 LOC servis i 103 LOC access utility bez direktnog unit test fajla za glavne authorization grane; CSV može biti velik ako nema čvrst page cap; uniqueness check endpointi su samo UX provjera, ne zaštita od race-a — unique indeks mora biti finalna garancija. Create je namjerno blokiran/route-ovan kroz stock flow, što treba dokumentovati za API korisnike.
+**Rizici:** 641 LOC servis i 103 LOC access utility bez direktnog unit test fajla za glavne authorization grane; CSV export je neograničen u memoriji i ćelije nisu zaštićene od formula injection (nalaz 17); uniqueness check endpointi su samo UX provjera, ne zaštita od race-a — unique indeks mora biti finalna garancija. Create je namjerno blokiran/route-ovan kroz stock flow, što treba dokumentovati za API korisnike.
 
 **Plan:** P1 test matrica access; P2 state mutation testovi/unique constraints; P3 razdvojiti query/report/export od write use-case-a.
 
@@ -276,17 +287,17 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Dobro:** moderator/keeper access check, transfer template validacija DOCX ZIP strukture, rotacija aktivnog obrasca kroz DB transakciju i relative paths.
 
-**Rizici:** upload koristi neograničeni `FileInterceptor` prije size check-a (nalaz 2); fajl se piše prije DB transakcije (nalaz 16). `resolveTemplateAbsolutePath()` samo `join()`-uje DB putanju sa upload root-om; sada se putanja generiše interno iz UUID-a, ali defense-in-depth containment check bi štitio od oštećenog DB reda. Keeper assignment delete/create pattern i destroy equipment flow zaslužuju transaction/concurrency testove.
+**Rizici:** upload koristi neograničeni `FileInterceptor` prije size check-a (nalazi 2 i 18); PizZip/Docxtemplater obrađuju arhivu bez vidljivog uncompressed-size budžeta. Fajl se piše prije DB transakcije (nalaz 16). `resolveTemplateAbsolutePath()` samo `join()`-uje DB putanju sa upload root-om; sada se putanja generiše interno iz UUID-a, ali defense-in-depth containment check bi štitio od oštećenog DB reda. Keeper assignment delete/create pattern i destroy equipment flow zaslužuju transaction/concurrency testove.
 
 **Plan:** P1 zajednički upload policy; P2 path containment + file/db reconciliation; test template rollback/activation paralelno.
 
-### 4.17 Transfers — **7.0/10**
+### 4.17 Transfers — **6.3/10**
 
 **Uloga:** prenosnice zaduženja/razduženja/prenosa, scope validation, document number allocation, statusne promjene, potpis, PDF upload policy i document generation.
 
 **Dobro:** jaka domenska provjera warehouse/person/signer alignment; transfer broj se alocira u transakciji; promjena transfer + equipment na finalizaciji je transakcijska; document generation je odvojena i ima status/retry API; cross-service transfer ograničen.
 
-**Rizici:** servis 829 LOC plus document service 299 LOC. Finalize/markPrinted/cancel prvo učitavaju status pa zatim ažuriraju; konkurentna finalizacija može proći dvije provjere prije prvog commita. Post-create notification/document generation je izvan transfer DB create tx, pa job/notification failure može ostaviti validan transfer bez pratećeg side effect-a (Document Engine oporavlja neke tokove). Dodati state version/conditional write i outbox/retry.
+**Rizici:** servis 829 LOC plus document service 299 LOC. Finalize/markPrinted/cancel prvo učitavaju status pa zatim ažuriraju; konkurentna finalizacija može proći dvije provjere prije prvog commita. RAW HTML dokument direktno interpolira DB/DTO vrijednosti bez escaping-a (P1 provjera istog browser origin-a, iznad). Post-create notification/document generation je izvan transfer DB create tx, pa job/notification failure može ostaviti validan transfer bez pratećeg side effect-a (Document Engine oporavlja neke tokove). Dodati state version/conditional write i outbox/retry.
 
 **Plan:** P1 concurrency/idempotency tests i conditional status update; P2 outbox dla notification/document enqueue; P3 razdvojiti policy, status transitions i report queries.
 
@@ -413,8 +424,9 @@ Faze su namjerno inkrementalne. Svaka faza završava testovima i produkcijskim r
 5. **Validated DTO contract:** zamijeniti inline/interface body-je sa class DTO-ima i testirati `whitelist/forbidNonWhitelisted`.
 6. **WS identity:** provjera aktivnog usera i revocation/sesije; invalidacija iz employee deactivation; test da disabled user odmah gubi socket pristup.
 7. **Database TLS proof:** eksplicitna SSL/CA konfiguracija ili dokumentovano odobrenje runtime mehanizma nakon testa; nikada isključiti cert verifikaciju.
+8. **RAW HTML XSS:** potvrditi origin u produkcijskom reverse-proxy setup-u; escape-ovati sva interpolirana polja i dodati regression test, bez obzira na origin izolaciju.
 
-**Exit kriterij:** nema critical/high dependency advisories bez dokumentovanog risk acceptance-a; P1 testovi prolaze; upload ima strogi hard limit prije bufferinga; assignment update i setup su atomarni.
+**Exit kriterij:** nema critical/high dependency advisories bez dokumentovanog risk acceptance-a; P1 testovi prolaze; upload ima strogi hard limit prije bufferinga; assignment update i setup su atomarni; RAW dokument ne dopušta HTML/JS injection.
 
 ### Faza 2 — durable async state i recovery
 
@@ -432,8 +444,10 @@ Faze su namjerno inkrementalne. Svaka faza završava testovima i produkcijskim r
 2. Dodati unique constraint-e za svaku poslovnu uniqueness garanciju koja se trenutno radi samo check-then-create; mapirati P2002 u stabilne API poruke.
 3. Dogovoriti javni QR data contract: koje lične podatke/historiju je dopušteno objaviti, koliko historije, rate limit i anti-enumeration.
 4. Uskladiti feature flag enforcement za čitanje i pisanje; dokumentovati namjerne exceptions.
+5. Neutralisati spreadsheet formula injection u CSV exportu i zaštititi category parent update od descendant ciklusa.
+6. Validirati numeric setting opsege po ključu i enforce-ovati finite/integer/relational constraints.
 
-**Exit kriterij:** race testovi paralelnih upisa daju jedan jedini uspješan state transition; privacy review odobrio public response.
+**Exit kriterij:** race testovi paralelnih upisa daju jedan jedini uspješan state transition; privacy review odobrio public response; CSV ćelije ne izvršavaju formule i category tree ostaje acikličan.
 
 ### Faza 4 — testovi, health i observability
 
@@ -449,7 +463,7 @@ Faze su namjerno inkrementalne. Svaka faza završava testovima i produkcijskim r
 ### Faza 5 — održivost i performanse
 
 1. Razdvajati velike servise po use-case/state machine, sa characterization testom prije svakog izdvajanja. Predloženi red: Inventory Count → Transfers → Warehouse Stock → Employee Relocation → Notifications/Equipment.
-2. Pregledati query planove/indexe na produkcijski anonimizovanoj kopiji; batch-ovati N+1 scope/recipient lookup-e; ograničiti javnu historiju i `skip` paginaciju; cursor pagination za velike tabele.
+2. Pregledati query planove/indexe na produkcijski anonimizovanoj kopiji; batch-ovati N+1 scope/recipient lookup-e; ograničiti javnu historiju i `skip` paginaciju; cursor pagination za velike tabele; CSV export streaming/row limit implementirati prije velikih dataset-a.
 3. Izračunati Postgres pool ukupno za broj replika i process-a; dodati load test za popularne list/search/export rute i QR endpoint.
 4. Ukloniti `Settings ↔ Notifications` circular module dependency kroz port/event dispatcher/outbox.
 
@@ -467,7 +481,7 @@ Faze su namjerno inkrementalne. Svaka faza završava testovima i produkcijskim r
 | 6 | Prisma/DB connection | Dokazati TLS/CA, migration drift i connection budget. | P1 |
 | 7 | Settings + API DTO + Health | Validacija body-ja, secure CORS default, readiness. | P2 |
 | 8 | Public Equipment | Privacy contract, list cap, rate limiting. | P2 |
-| 9 | Transfers + Warehouse Stock + Maintenance Parts | Atomarni state/balance checks i integration coverage. | P2 |
+| 9 | Transfers + Equipment + Categories + Warehouse Stock | RAW HTML escaping, CSV formula safety/streaming, category-cycle guard, atomarni state/balance checks i integration coverage. | P1/P2 |
 | 10 | Remaining CRUD/read modules | Tests/constraints/response contracts. | P2/P3 |
 | 11 | Refactor/performance | Tek nakon characterization tests + baseline metrics. | P3 |
 
@@ -479,4 +493,4 @@ Faze su namjerno inkrementalne. Svaka faza završava testovima i produkcijskim r
 - Nisu izvršeni live DB/Redis, load, chaos, backup restore ili penetration testovi.
 - Svaki nalaz koji se tiče production konekcije/TLS treba potvrditi prema stvarnom deployment-u, jer kod može primati dodatne Node/PG env konfiguracije koje nisu dio repozitorija.
 
-**Zaključna ocjena:** backend ima kvalitetnu poslovnu osnovu i značajan dio zaštitnih util-a već postoji; trenutno ga ocjenjujem sa **6.8/10**. Najveći brzi dobitak je zatvaranje dependency/upload/setup/assignment/queue rupa. Nakon Faza 1–2, ponovna procjena bi trebala biti bliža **8/10**, uz pretpostavku da integration testovi potvrde DB/Redis TLS i state recovery.
+**Zaključna ocjena nakon drugog prolaza:** backend ima kvalitetnu poslovnu osnovu i značajan dio zaštitnih util-a već postoji; ukupnu ocjenu revidiram sa početnih 6.8 na **6.6/10** zbog dodatno potvrđenih HTML injection/CSV export rizika, ciklične kategorijske hijerarhije i slabih numeric-setting granica. Najveći brzi dobitak je zatvaranje dependency/upload/setup/assignment/queue/XSS rupa. Nakon Faza 1–3 i potvrde integration testovima, ponovna procjena bi trebala biti bliža **8/10**, uz pretpostavku da testovi potvrde DB/Redis TLS i state recovery.
