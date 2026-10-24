@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -152,6 +153,8 @@ type UpdateCommitteeInput = Omit<CreateCommitteeInput, 'sessionId'>;
 
 @Injectable()
 export class InventoryCountService {
+  private readonly logger = new Logger(InventoryCountService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly locationResolutionService: LocationResolutionService,
@@ -1885,10 +1888,7 @@ export class InventoryCountService {
     await this.assertInventoryCountEnabled();
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: sessionId },
-      include: {
-        committees: true,
-        closeJobs: true,
-      },
+      include: { closeJobs: true },
     });
     if (!session) {
       throw new NotFoundException('Session not found');
@@ -1896,63 +1896,61 @@ export class InventoryCountService {
     if (session.status !== 'active') {
       throw new BadRequestException('Only active sessions can be closed');
     }
-    const openCommitteeIds = session.committees.filter((committee) => !committee.isClosed).map((c) => c.id);
-    if (openCommitteeIds.length > 0) {
-      await this.prisma.inventoryCommittee.updateMany({
-        where: { id: { in: openCommitteeIds } },
-        data: { isClosed: true, closedAt: new Date(), closedByUserId: user.id },
-      });
-    }
     const existingJob = session.closeJobs[0] ?? null;
     if (existingJob && (existingJob.status === 'queued' || existingJob.status === 'running')) {
       return existingJob;
     }
-    await this.assertRelocateLinesHaveUpload(session.id);
-    const totalCount = await this.prisma.inventoryPendingAction.count({
-      where: { sessionId: session.id, status: 'pending' },
+
+    const job = await this.prisma.$transaction(async (tx) => {
+      const claimedSession = await tx.inventorySession.updateMany({
+        where: { id: session.id, status: 'active' },
+        data: { status: 'closing' },
+      });
+      if (claimedSession.count !== 1) {
+        throw new BadRequestException('Only active sessions can be closed');
+      }
+
+      await this.assertRelocateLinesHaveUpload(session.id, tx);
+      await tx.inventoryCommittee.updateMany({
+        where: { sessionId: session.id, isClosed: false },
+        data: { isClosed: true, closedAt: new Date(), closedByUserId: user.id },
+      });
+      const totalCount = await tx.inventoryPendingAction.count({
+        where: { sessionId: session.id, status: 'pending' },
+      });
+      return tx.inventorySessionCloseJob.upsert({
+        where: { sessionId: session.id },
+        create: {
+          sessionId: session.id,
+          status: 'queued',
+          totalCount,
+        },
+        update: {
+          status: 'queued',
+          totalCount,
+          appliedCount: 0,
+          failedCount: 0,
+          skippedCount: 0,
+          startedAt: null,
+          endedAt: null,
+          lastError: null,
+        },
+      });
     });
-    await this.prisma.inventorySession.update({
-      where: { id: session.id },
-      data: { status: 'closing' },
-    });
-    const job = await this.prisma.inventorySessionCloseJob.upsert({
-      where: { sessionId: session.id },
-      create: {
-        sessionId: session.id,
-        status: 'queued',
-        totalCount,
-      },
-      update: {
-        status: 'queued',
-        totalCount,
-        appliedCount: 0,
-        failedCount: 0,
-        skippedCount: 0,
-        startedAt: null,
-        endedAt: null,
-        lastError: null,
-      },
-    });
-    // BullMQ preuzima orkestraciju izvršavanja (retry sa exponential
-    // backoff, concurrency kontrola, nema više 1200ms DB polling petlje
-    // koja je ranije trošila upit na svaku "provjeru da li ima posla" bez
-    // obzira da li stvarno ima). `inventorySessionCloseJob` DB red ostaje
-    // sistem-od-istine za progres/audit (frontend i dalje čita preko
-    // getCloseJob) — BullMQ job je samo "trigger za izvršavanje" koji
-    // referencira taj DB red preko sessionId-a.
-    //
-    // jobId je namjerno SVJEŽ nasumičan string na svaki poziv (ne
-    // session.id) — provjera dva reda iznad (existingJob.status ===
-    // 'queued'/'running' → prijevremeni return) već sprečava duplo
-    // enqueue-ovanje dok je posao u toku; da smo koristili session.id kao
-    // jobId, ponovno zatvaranje sesije NAKON što je prethodni BullMQ posao
-    // već završen (completed/failed, ali još nije obrisan retencijom) bi
-    // moglo tiho da ne kreira novi posao, zavisno od verzije BullMQ-a.
-    await this.closeSessionQueue.add(
-      INVENTORY_SESSION_CLOSE_JOB_NAME,
-      { sessionId: session.id },
-      { jobId: randomUUID() },
-    );
+
+    // The DB job is the durable outbox record. If Redis is unavailable, the
+    // reconciler will enqueue this still-queued job on its next pass.
+    try {
+      await this.closeSessionQueue.add(
+        INVENTORY_SESSION_CLOSE_JOB_NAME,
+        { sessionId: session.id },
+        { jobId: randomUUID() },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Inventory close job persisted but enqueue failed for session ${session.id}: ${String(error)}`,
+      );
+    }
     return job;
   }
 
@@ -2275,8 +2273,11 @@ export class InventoryCountService {
     void this.notificationsService.emitInventoryDisposalInboxRefresh(committee.session.id);
   }
 
-  private async assertRelocateLinesHaveUpload(sessionId: string): Promise<void> {
-    const lines = await this.prisma.inventoryLine.findMany({
+  private async assertRelocateLinesHaveUpload(
+    sessionId: string,
+    inventoryLineStore: Pick<PrismaService, 'inventoryLine'> = this.prisma,
+  ): Promise<void> {
+    const lines = await inventoryLineStore.inventoryLine.findMany({
       where: { committee: { sessionId }, status: 'promjena_lokacije' },
       include: { generatedTransfer: true, equipment: { select: { inventoryNumber: true } } },
     });
