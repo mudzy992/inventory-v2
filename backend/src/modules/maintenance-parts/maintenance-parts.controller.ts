@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { InstallMaintenancePartDto } from './dto/install-part.dto';
+import { UpdateMaintenancePartNoteDto } from './dto/update-maintenance-part-note.dto';
 import { ReceiveMaintenanceLotDto } from './dto/receive-maintenance-lot.dto';
 import { ReplaceMaintenancePartDto } from './dto/replace-part.dto';
 import { MaintenanceConsumptionQueryDto } from './dto/consumption-query.dto';
@@ -112,7 +113,7 @@ export class MaintenancePartsController {
   markFaulty(
     @CurrentUser() user: AuthenticatedUser,
     @Param('partId') partId: string,
-    @Body() body: { note?: string },
+    @Body() body: UpdateMaintenancePartNoteDto,
   ) {
     return this.maintenancePartsService.markPartFaulty(user, partId, body.note);
   }
@@ -122,7 +123,7 @@ export class MaintenancePartsController {
   removePart(
     @CurrentUser() user: AuthenticatedUser,
     @Param('partId') partId: string,
-    @Body() body: { note?: string },
+    @Body() body: UpdateMaintenancePartNoteDto,
   ) {
     return this.maintenancePartsService.removePart(user, partId, body.note);
   }

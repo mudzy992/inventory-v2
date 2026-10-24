@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { InventoryCountService } from './inventory-count.service';
+import { RecordWarehouseInventoryLineDto } from './dto/record-warehouse-inventory-line.dto';
 
 @Controller('inventory-warehouse-committees')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -29,13 +30,7 @@ export class InventoryWarehouseCommitteeController {
   recordLine(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body()
-    body: {
-      stockLotId: string;
-      status: 'prisutna' | 'nije_prisutna' | 'ostecena';
-      quantityCounted: number;
-      note?: string;
-    },
+    @Body() body: RecordWarehouseInventoryLineDto,
   ) {
     return this.inventoryCountService.recordWarehouseLine(
       user,

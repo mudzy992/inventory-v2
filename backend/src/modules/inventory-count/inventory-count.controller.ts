@@ -6,6 +6,10 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
+import { CreateInventorySessionDto } from './dto/create-inventory-session.dto';
+import { ManageInventoryCommitteeDto } from './dto/manage-inventory-committee.dto';
+import { RecordInventoryLineDto } from './dto/record-inventory-line.dto';
+import { ReviewDisposalApprovalDto } from './dto/review-disposal-approval.dto';
 import { InventoryCountService } from './inventory-count.service';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 import { MarkDisposalListDto, WithdrawDisposalListDto } from './dto/mark-disposal-list.dto';
@@ -21,12 +25,7 @@ export class InventoryCountController {
   @Post()
   @Roles(UserRole.admin)
   createSession(
-    @Body()
-    body: {
-      name: string;
-      orgUnitId: string;
-      year: number;
-    },
+    @Body() body: CreateInventorySessionDto,
   ) {
     return this.inventoryCountService.createSession(body);
   }
@@ -105,14 +104,7 @@ export class InventoryCountController {
   createCommittee(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') sessionId: string,
-    @Body()
-    body: {
-      warehouseId: string;
-      categoryId: string;
-      name?: string;
-      inventoryMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
-      disposalMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
-    },
+    @Body() body: ManageInventoryCommitteeDto,
   ) {
     return this.inventoryCountService.createCommittee(
       {
@@ -132,14 +124,7 @@ export class InventoryCountController {
   updateCommittee(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') committeeId: string,
-    @Body()
-    body: {
-      warehouseId: string;
-      categoryId: string;
-      name?: string;
-      inventoryMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
-      disposalMembers: { employeeId: string; role: 'predsjednik' | 'clan' }[];
-    },
+    @Body() body: ManageInventoryCommitteeDto,
   ) {
     return this.inventoryCountService.updateCommittee(committeeId, body, user);
   }
@@ -179,15 +164,7 @@ export class InventoryCountController {
   recordLine(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body()
-    body: {
-      equipmentId: string;
-      status: 'prisutna' | 'ostecena' | 'promjena_lokacije' | 'nije_prisutna' | 'predlozen_rashod';
-      note?: string;
-      relocationTargetType?: 'skladiste' | 'osoba';
-      relocationWarehouseId?: string;
-      relocationToPersonId?: string;
-    },
+    @Body() body: RecordInventoryLineDto,
   ) {
     const relocation =
       body.relocationTargetType !== undefined
@@ -275,7 +252,7 @@ export class InventoryCountController {
   reviewDisposalApproval(
     @CurrentUser() user: AuthenticatedUser,
     @Param('approvalId') approvalId: string,
-    @Body() body: { approved: boolean; note?: string },
+    @Body() body: ReviewDisposalApprovalDto,
   ) {
     return this.inventoryCountService.reviewDisposalApproval(
       user,
