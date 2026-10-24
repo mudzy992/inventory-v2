@@ -1,12 +1,22 @@
 import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
+import { DOCUMENT_GENERATION_QUEUE } from '../documents/document-generation.queue';
+import { INVENTORY_SESSION_CLOSE_QUEUE } from '../inventory-count/inventory-session-close.queue';
+
+const PROBE_TIMEOUT_MS = 1_000;
 
 @Controller('health')
 export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    @InjectQueue(INVENTORY_SESSION_CLOSE_QUEUE)
+    private readonly inventoryCloseQueue: Queue,
+    @InjectQueue(DOCUMENT_GENERATION_QUEUE)
+    private readonly documentGenerationQueue: Queue,
   ) {}
 
   @Get()
@@ -40,33 +50,49 @@ export class HealthController {
     status: string;
     database: string;
     redis: string;
+    queues: { inventoryClose: string; documentGeneration: string };
     timestamp: string;
   }> {
-    const [databaseResult, redisResult] = await Promise.allSettled([
-      this.prisma.$queryRaw`SELECT 1`,
-      this.pingRedisWithTimeout(),
-    ]);
+    const [databaseResult, redisResult, inventoryQueueResult, documentQueueResult] =
+      await Promise.allSettled([
+        this.probe(() => this.prisma.$queryRaw`SELECT 1`, 'database'),
+        this.probe(() => this.redisService.getClient().ping(), 'Redis'),
+        this.probe(() => this.inventoryCloseQueue.getJobCounts('waiting', 'active'), 'inventory-close queue'),
+        this.probe(
+          () => this.documentGenerationQueue.getJobCounts('waiting', 'active'),
+          'document-generation queue',
+        ),
+      ]);
+
     const database = databaseResult.status === 'fulfilled' ? 'connected' : 'disconnected';
     const redis = redisResult.status === 'fulfilled' ? 'connected' : 'disconnected';
-    const response = {
-      status: database === 'connected' && redis === 'connected' ? 'ok' : 'degraded',
-      database,
-      redis,
-      timestamp: new Date().toISOString(),
+    const queues = {
+      inventoryClose: inventoryQueueResult.status === 'fulfilled' ? 'connected' : 'disconnected',
+      documentGeneration: documentQueueResult.status === 'fulfilled' ? 'connected' : 'disconnected',
     };
-    if (response.status !== 'ok') {
+    const status =
+      database === 'connected' &&
+      redis === 'connected' &&
+      queues.inventoryClose === 'connected' &&
+      queues.documentGeneration === 'connected'
+        ? 'ok'
+        : 'degraded';
+    const response = { status, database, redis, queues, timestamp: new Date().toISOString() };
+    if (status !== 'ok') {
       throw new HttpException(response, HttpStatus.SERVICE_UNAVAILABLE);
     }
     return response;
   }
 
-  private async pingRedisWithTimeout(): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Redis readiness probe timed out')), 1000);
+  private async probe<T>(operation: () => Promise<T>, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error(`${label} readiness probe timed out`)),
+        PROBE_TIMEOUT_MS,
+      );
       void Promise.resolve()
-        .then(() => this.redisService.getClient().ping())
-        .then(() => resolve())
-        .catch(reject)
+        .then(operation)
+        .then(resolve, reject)
         .finally(() => clearTimeout(timeout));
     });
   }
