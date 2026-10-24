@@ -8,6 +8,7 @@ import { InventoryCountListController } from './inventory-count-list.controller'
 import { InventoryWarehouseCommitteeController } from './inventory-warehouse-committee.controller';
 import { InventoryCountService } from './inventory-count.service';
 import { InventorySessionCloseWorkerService } from './inventory-session-close-worker.service';
+import { InventorySessionCloseReconcilerService } from './inventory-session-close-reconciler.service';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 import { INVENTORY_SESSION_CLOSE_QUEUE } from './inventory-session-close.queue';
 
@@ -23,7 +24,12 @@ import { INVENTORY_SESSION_CLOSE_QUEUE } from './inventory-session-close.queue';
     InventoryCountListController,
     InventoryWarehouseCommitteeController,
   ],
-  providers: [InventoryCountService, InventorySessionCloseWorkerService, EquipmentDisposalListService],
+  providers: [
+    InventoryCountService,
+    InventorySessionCloseWorkerService,
+    InventorySessionCloseReconcilerService,
+    EquipmentDisposalListService,
+  ],
   exports: [InventoryCountService, EquipmentDisposalListService],
 })
 export class InventoryCountModule {}
