@@ -111,7 +111,15 @@ describe('SetupBootstrapService', () => {
     const prisma = {
       $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
     };
-    return { service: new SetupBootstrapService(prisma as never), tx, getUserCreateCount: () => userCreateCount };
+    const settingsService = {
+      upsertValuesInTransaction: async () => undefined,
+      invalidateValues: async () => undefined,
+    };
+    return {
+      service: new SetupBootstrapService(prisma as never, settingsService as never),
+      tx,
+      getUserCreateCount: () => userCreateCount,
+    };
   };
 
   it('rejects duplicate usernames', async () => {
@@ -123,7 +131,8 @@ describe('SetupBootstrapService', () => {
 
   it('creates bootstrap entities in transaction', async () => {
     const { service, getUserCreateCount } = createService();
-    const actual = await service.bootstrap(buildDto());
+    const dto = buildDto();
+    const actual = await service.bootstrap(dto, service.buildCompanySettingsEntries(dto));
     assert.equal(getUserCreateCount(), 5);
     assert.equal(actual.usernames.length, 5);
     assert.equal(actual.warehouseId, 'wh-1');

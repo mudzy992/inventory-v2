@@ -1,7 +1,8 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { buildEffectiveSignerMap } from '../../common/utils/resolve-effective-signer.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import type { InitializeSetupDto } from './dto/initialize-setup.dto';
 import { EVIDENS_APP_NAME, collectUsernames, slugifyCatalogCode } from './utils/setup-bootstrap.util';
 
@@ -18,9 +19,17 @@ export interface SetupBootstrapResult {
 
 @Injectable()
 export class SetupBootstrapService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(SetupBootstrapService.name);
 
-  async bootstrap(dto: InitializeSetupDto): Promise<SetupBootstrapResult> {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+  ) {}
+
+  async bootstrap(
+    dto: InitializeSetupDto,
+    companySettings: { key: string; value: string | boolean }[],
+  ): Promise<SetupBootstrapResult> {
     try {
       collectUsernames([
         dto.admin.username,
@@ -40,7 +49,7 @@ export class SetupBootstrapService {
       bcrypt.hash(dto.roles.user.password, 10),
     ]);
     const catalogCode = dto.catalog.code?.trim() || slugifyCatalogCode(dto.catalog.name);
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Serialize the first bootstrap across backend replicas. The inner count
       // then runs after the previous transaction commits or rolls back.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(1800043170, 13579)`;
@@ -235,6 +244,7 @@ export class SetupBootstrapService {
           orgUnitId: direkcija.id,
         },
       });
+      await this.settingsService.upsertValuesInTransaction(companySettings, tx);
       return {
         cantonId: canton.id,
         cityIds: cities.map((c) => c.id),
@@ -252,6 +262,12 @@ export class SetupBootstrapService {
         ],
       };
     });
+    try {
+      await this.settingsService.invalidateValues(companySettings);
+    } catch (error) {
+      this.logger.warn(`Initial setup committed but settings cache invalidation failed: ${String(error)}`);
+    }
+    return result;
   }
 
   buildCompanySettingsEntries(dto: InitializeSetupDto): { key: string; value: string | boolean }[] {

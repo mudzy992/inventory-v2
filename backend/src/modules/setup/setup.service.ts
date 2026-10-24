@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SettingsService } from '../settings/settings.service';
 import { InitializeSetupDto } from './dto/initialize-setup.dto';
 import { SetupBootstrapService } from './setup-bootstrap.service';
 import { getSetupTokenFailure } from './utils/setup-auth.util';
@@ -24,7 +23,6 @@ export interface SetupInitializeResponse {
 export class SetupService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly settingsService: SettingsService,
     private readonly configService: ConfigService,
     private readonly bootstrapService: SetupBootstrapService,
   ) {}
@@ -50,8 +48,8 @@ export class SetupService {
     if (userCount > 0) {
       throw new ConflictException('Application is already initialized');
     }
-    const result = await this.bootstrapService.bootstrap(dto);
-    await this.settingsService.upsertValues(this.bootstrapService.buildCompanySettingsEntries(dto));
+    const companySettings = this.bootstrapService.buildCompanySettingsEntries(dto);
+    const result = await this.bootstrapService.bootstrap(dto, companySettings);
     return { success: true, usernames: result.usernames };
   }
 }

@@ -142,13 +142,34 @@ export class SettingsService {
   async upsertValues(
     entries: { key: string; value: string | number | boolean }[],
   ): Promise<void> {
+    await this.writeValues(entries, this.prisma);
+    await this.invalidateValues(entries);
+  }
+
+  async upsertValuesInTransaction(
+    entries: { key: string; value: string | number | boolean }[],
+    settingStore: Pick<PrismaService, 'setting'>,
+  ): Promise<void> {
+    await this.writeValues(entries, settingStore);
+  }
+
+  async invalidateValues(entries: { key: string }[]): Promise<void> {
+    for (const entry of entries) {
+      await this.redisService.del(SettingsService.cacheKey(entry.key));
+    }
+  }
+
+  private async writeValues(
+    entries: { key: string; value: string | number | boolean }[],
+    settingStore: Pick<PrismaService, 'setting'>,
+  ): Promise<void> {
     for (const entry of entries) {
       const definition = getSettingDefinition(entry.key);
       if (!definition) {
         throw new NotFoundException(`Unknown setting key: ${entry.key}`);
       }
       const serialized = this.serializeValue(entry.value, definition.valueType);
-      await this.prisma.setting.upsert({
+      await settingStore.setting.upsert({
         where: { key: entry.key },
         create: {
           key: entry.key,
@@ -159,7 +180,6 @@ export class SettingsService {
         },
         update: { value: serialized },
       });
-      await this.redisService.del(SettingsService.cacheKey(entry.key));
     }
   }
 
