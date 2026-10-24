@@ -2,6 +2,11 @@ import { BadRequestException } from '@nestjs/common';
 import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
 import {
+  getDocxZipBudgetError,
+  getDocxZipEntryCountError,
+  type ZipEntryBudget,
+} from './docx-zip-budget.util';
+import {
   TRANSFER_TEMPLATE_PLACEHOLDER_KEYS,
   TRANSFER_TEMPLATE_SAMPLE_DATA,
   type TransferTemplatePlaceholderKey,
@@ -14,6 +19,22 @@ export interface TransferTemplateValidationResult {
 }
 
 const PLACEHOLDER_PATTERN = /\{([a-z_]+)\}/g;
+
+const getZipEntryBudgets = (zip: PizZip): ZipEntryBudget[] =>
+  Object.values(zip.files).map((entry) => {
+    if (entry.dir) {
+      return { name: entry.name, isDirectory: true, compressedBytes: 0, uncompressedBytes: 0 };
+    }
+    const entryWithSizes = entry as PizZip.ZipObject & {
+      _data?: { compressedSize?: number; uncompressedSize?: number };
+    };
+    return {
+      name: entry.name,
+      isDirectory: false,
+      compressedBytes: entryWithSizes._data?.compressedSize ?? Number.NaN,
+      uncompressedBytes: entryWithSizes._data?.uncompressedSize ?? Number.NaN,
+    };
+  });
 
 const extractDocumentXmlText = (zip: PizZip): string => {
   const entry = zip.file('word/document.xml');
@@ -52,6 +73,14 @@ const renderTemplateDryRun = (buffer: Buffer): string | undefined => {
 export const validateTransferTemplateBuffer = (
   buffer: Buffer,
 ): TransferTemplateValidationResult => {
+  const entryCountError = getDocxZipEntryCountError(buffer);
+  if (entryCountError) {
+    return {
+      valid: false,
+      missingPlaceholders: [],
+      renderError: entryCountError,
+    };
+  }
   let zip: PizZip;
   try {
     zip = new PizZip(buffer.toString('binary'));
@@ -60,6 +89,14 @@ export const validateTransferTemplateBuffer = (
       valid: false,
       missingPlaceholders: [...TRANSFER_TEMPLATE_PLACEHOLDER_KEYS],
       renderError: 'Datoteka nije validan Word (.docx) obrazac',
+    };
+  }
+  const zipBudgetError = getDocxZipBudgetError(getZipEntryBudgets(zip));
+  if (zipBudgetError) {
+    return {
+      valid: false,
+      missingPlaceholders: [],
+      renderError: zipBudgetError,
     };
   }
   const documentXml = extractDocumentXmlText(zip);
