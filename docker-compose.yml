@@ -56,12 +56,13 @@ services:
       - REDIS_DB=${REDIS_DB:-0}
       - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-inventory-v2}
       - REDIS_TLS=${REDIS_TLS:-false}
-      - REDIS_CA_CERT_PATH=${REDIS_CA_CERT_PATH:-}
+      - REDIS_CA_CERT_PATH=${REDIS_CA_CERT_PATH:-/run/secrets/redis-ca.crt}
       - RATE_LIMIT_LOGIN_MAX=${RATE_LIMIT_LOGIN_MAX:-10}
       - RATE_LIMIT_LOGIN_WINDOW_SEC=${RATE_LIMIT_LOGIN_WINDOW_SEC:-60}
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads
       - /data/coolify/ssl/coolify-ca.crt:/etc/ssl/certs/coolify-ca.crt:ro
+      - /data/coolify/ssl/redis-core/redis-ca.crt:/run/secrets/redis-ca.crt:ro
     restart: unless-stopped
     expose:
       - "3000"
@@ -95,7 +96,7 @@ services:
       - REDIS_DB=${REDIS_DB:-0}
       - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-inventory-v2}
       - REDIS_TLS=${REDIS_TLS:-false}
-      - REDIS_CA_CERT_PATH=${REDIS_CA_CERT_PATH:-}
+      - REDIS_CA_CERT_PATH=${REDIS_CA_CERT_PATH:-/run/secrets/redis-ca.crt}
       - DOCUMENT_QUEUE_NAME=${DOCUMENT_QUEUE_NAME:-document-generation}
       - DOCUMENT_WORKER_CONCURRENCY=${DOCUMENT_WORKER_CONCURRENCY:-2}
       - DOCUMENT_WORKER_CONVERT_TIMEOUT_MS=${DOCUMENT_WORKER_CONVERT_TIMEOUT_MS:-120000}
@@ -105,6 +106,7 @@ services:
       # backend upisao i piše PDF nazad na isti volume, kao "generated" izlaz.
       - /mnt/shared-app-files/inventory-v2:/app/uploads
       - /data/coolify/ssl/coolify-ca.crt:/etc/ssl/certs/coolify-ca.crt:ro
+      - /data/coolify/ssl/redis-core/redis-ca.crt:/run/secrets/redis-ca.crt:ro
     restart: unless-stopped
     # NEMA "expose" — nema HTTP API, samo interni Redis/BullMQ konzument.
     # NEMA "ports" — nikad ne treba biti dostupan van kontejnerske mreže.
