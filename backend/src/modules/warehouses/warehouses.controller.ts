@@ -11,8 +11,8 @@ import {
   UseInterceptors,
   StreamableFile,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '../../../generated/prisma/client';
+import { SettingsLimitedFileInterceptor } from '../../common/interceptors/settings-limited-file.interceptor';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -99,7 +99,7 @@ export class WarehousesController {
 
   @Post(':id/transfer-template')
   @Roles(UserRole.admin, UserRole.moderator)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(SettingsLimitedFileInterceptor('file'))
   uploadTransferTemplate(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,

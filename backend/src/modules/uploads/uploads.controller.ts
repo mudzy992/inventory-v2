@@ -9,13 +9,13 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '../../../generated/prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { SettingsLimitedFileInterceptor } from '../../common/interceptors/settings-limited-file.interceptor';
 import { UploadTransferDocumentDto } from './dto/upload-transfer-document.dto';
 import { UploadsService } from './uploads.service';
 
@@ -26,7 +26,7 @@ export class UploadsController {
 
   @Post()
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(SettingsLimitedFileInterceptor('file'))
   upload(
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: UploadTransferDocumentDto,
