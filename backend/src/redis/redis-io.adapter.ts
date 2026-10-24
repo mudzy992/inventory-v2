@@ -4,6 +4,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import type { ServerOptions } from 'socket.io';
+import type { CorsOriginPolicy } from '../common/utils/cors-origins.util';
 import { buildBaseRedisOptions, readRedisConfig } from './redis.config';
 
 /**
@@ -28,7 +29,10 @@ export class RedisIoAdapter extends IoAdapter {
   private readonly logger = new Logger('SocketIO/RedisAdapter');
   private adapterConstructor?: ReturnType<typeof createAdapter>;
 
-  constructor(app: INestApplicationContext) {
+  constructor(
+    app: INestApplicationContext,
+    private readonly corsOrigin: CorsOriginPolicy = true,
+  ) {
     super(app);
   }
 
@@ -64,7 +68,14 @@ export class RedisIoAdapter extends IoAdapter {
   }
 
   createIOServer(port: number, options?: ServerOptions): unknown {
-    const server = super.createIOServer(port, options);
+    const server = super.createIOServer(port, {
+      ...options,
+      cors: {
+        ...(options?.cors ?? {}),
+        origin: this.corsOrigin,
+        credentials: true,
+      },
+    });
     if (this.adapterConstructor) {
       server.adapter(this.adapterConstructor);
     }

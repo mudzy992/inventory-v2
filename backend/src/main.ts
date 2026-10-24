@@ -6,6 +6,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
+import { resolveCorsOriginPolicy } from './common/utils/cors-origins.util';
 
 loadEnv({ path: resolve(process.cwd(), '../.env') });
 loadEnv({ path: resolve(process.cwd(), '.env') });
@@ -20,11 +21,17 @@ const bootstrap = async (): Promise<void> => {
   // vidio internu Docker network IP proxyja umjesto stvarnog klijenta.
   app.set('trust proxy', 1);
 
+  const corsOrigin = resolveCorsOriginPolicy(
+    configService.get<string>('CORS_ORIGIN'),
+    configService.get<string>('NODE_ENV') === 'production',
+  );
+
   // Socket.IO Redis adapter — omogućava da NotificationsGateway ispravno
   // broadcast-uje evente bez obzira na broj backend replika. Bezbjedno i
   // za single-instance deployment (graceful fallback ako Redis nije
-  // dostupan pri startu — vidi RedisIoAdapter).
-  const redisIoAdapter = new RedisIoAdapter(app);
+  // dostupan pri startu — vidi RedisIoAdapter). Ista allow-lista važi za
+  // HTTP i WebSocket handshakes.
+  const redisIoAdapter = new RedisIoAdapter(app, corsOrigin);
   await redisIoAdapter.connectToRedis();
   app.useWebSocketAdapter(redisIoAdapter);
 
@@ -34,23 +41,9 @@ const bootstrap = async (): Promise<void> => {
   const apiPrefix = configService.get<string>('API_PREFIX', 'backend');
   app.setGlobalPrefix(apiPrefix);
 
-  // CORS_ORIGIN podržava jednu ili više (zarezom odvojenih) dozvoljenih domena.
-  // Ako varijabla uopšte nije definisana, fallback je "true" (reflektuje Origin
-  // header — dozvoljeno sve, korisno samo za dev/debug, NIKAD ne kombinovati
-  // wildcard "*" sa credentials:true jer je to nevažeća CORS kombinacija koju
-  // browser odbija).
-  const rawCorsOrigin = configService.get<string>('CORS_ORIGIN');
-  const corsOrigins = rawCorsOrigin
-    ?.split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  const corsOrigin: boolean | string | string[] =
-    corsOrigins && corsOrigins.length > 0 ? corsOrigins : true;
-
-  app.enableCors({
-    origin: corsOrigin,
-    credentials: true,
-  });
+  // U produkciji resolveCorsOriginPolicy odbija praznu/wildcard allow-listu;
+  // samo dev režim smije reflektovati Origin radi lokalnog razvoja.
+  app.enableCors({ origin: corsOrigin, credentials: true });
 
   // Namjerno logovano pri svakom pokretanju — najbrži način da se u Coolify
   // logovima potvrdi da su API_PREFIX i CORS_ORIGIN stvarno stigli iz env-a
