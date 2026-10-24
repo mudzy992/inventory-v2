@@ -38,6 +38,7 @@ import {
   resolveListPageSize,
 } from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { escapeCsvCell } from '../../common/utils/csv-cell.util';
 import { SettingsService } from '../settings/settings.service';
 import { WarehousesService } from '../warehouses/warehouses.service';
 import { CategoriesService } from '../categories/categories.service';
@@ -597,20 +598,10 @@ export class EquipmentService {
       'Datum unosa',
       'Bilješke',
     ];
-    const escape = (v: string | null | undefined) => {
-      const s = v ?? '';
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    };
-    const lines: string[] = [headers.map(escape).join(',')];
+    const lines: string[] = [headers.map(escapeCsvCell).join(',')];
     for (const row of rows) {
       const holder = row.currentHolder
         ? `${row.currentHolder.firstName} ${row.currentHolder.lastName}`.trim()
-        : '';
-      const specs = typeof row.specifications === 'object' && row.specifications !== null
-        ? Object.values(row.specifications as Record<string, string>).filter(Boolean).join('; ')
         : '';
       lines.push(
         [
@@ -623,10 +614,9 @@ export class EquipmentService {
           row.entryDate ? row.entryDate.toISOString().slice(0, 10) : '',
           row.notes ?? '',
         ]
-          .map(escape)
+          .map(escapeCsvCell)
           .join(','),
       );
-      void specs;
     }
     return lines.join('\r\n');
   }
