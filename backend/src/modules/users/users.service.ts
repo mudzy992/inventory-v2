@@ -306,11 +306,12 @@ export class UsersService {
       }
     }
     const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : undefined;
-    await this.prisma.registrarAssignment.deleteMany({ where: { userId: id } });
-    await this.prisma.inventoryCoordinatorAssignment.deleteMany({ where: { userId: id } });
-    await this.prisma.moderatorOrgAssignment.deleteMany({ where: { userId: id } });
-    await this.prisma.moderatorWarehouseAssignment.deleteMany({ where: { userId: id } });
     const user = await this.prisma.$transaction(async (tx) => {
+      await tx.registrarAssignment.deleteMany({ where: { userId: id } });
+      await tx.inventoryCoordinatorAssignment.deleteMany({ where: { userId: id } });
+      await tx.moderatorOrgAssignment.deleteMany({ where: { userId: id } });
+      await tx.moderatorWarehouseAssignment.deleteMany({ where: { userId: id } });
+
       const updated = await tx.user.update({
         where: { id },
         data: {

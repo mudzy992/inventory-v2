@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import type { JwtPayload } from '../../common/types/jwt-payload.type';
 import { PrismaService } from '../../prisma/prisma.service';
+import { claimRefreshTokenForRotation } from './refresh-token-rotation.util';
 
 export interface AuthTokens {
   accessToken: string;
@@ -80,11 +81,14 @@ export class AuthService {
     if (!stored || stored.revokedAt || stored.expiresAt < new Date() || !stored.user.isActive) {
       throw new UnauthorizedException('Invalid refresh token');
     }
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date() },
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await claimRefreshTokenForRotation(tx, stored.id, now);
+      if (!claimed) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      return this.issueTokens(stored.user.id, stored.user.username, stored.user.role, tx);
     });
-    return this.issueTokens(stored.user.id, stored.user.username, stored.user.role);
   }
 
   async logout(refreshToken: string): Promise<void> {
@@ -115,13 +119,18 @@ export class AuthService {
     );
   }
 
-  private async issueTokens(userId: string, username: string, role: JwtPayload['role']): Promise<AuthTokens> {
+  private async issueTokens(
+    userId: string,
+    username: string,
+    role: JwtPayload['role'],
+    refreshTokenStore: Pick<PrismaService, 'refreshToken'> = this.prisma,
+  ): Promise<AuthTokens> {
     const payload: JwtPayload = { sub: userId, username, role };
     const accessToken = await this.jwtService.signAsync(payload);
     const refreshToken = randomBytes(48).toString('hex');
     const refreshTtl = this.configService.get<string>('JWT_REFRESH_TTL', '7d');
     const expiresAt = this.resolveExpiry(refreshTtl);
-    await this.prisma.refreshToken.create({
+    await refreshTokenStore.refreshToken.create({
       data: {
         userId,
         tokenHash: this.hashToken(refreshToken),

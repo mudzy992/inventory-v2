@@ -1,6 +1,6 @@
 # Backend — detaljan plan implementacije audita
 
-**Status:** implementacija započeta — prvi batch zatvara HTML injection u prenosnici i ažurira dvije ranjive runtime zavisnosti.
+**Status:** implementacija u toku — prenosnica escape-uje dinamički HTML; dependency lanac za Nest/Multer, proxy-addr i Socket.IO je patchovan; user scope izmjene i refresh rotacija sada koriste transakcijske/conditional zaštite.
 **Osnova:** [`backend-audit.md`](./backend-audit.md), koji sadrži nalaze, izvore u kodu i početnu faznu podjelu
 **Opseg:** backend API, PostgreSQL/Prisma, Redis/BullMQ/Socket.IO, uploadi, background poslovi, sigurnost, testovi i operativna spremnost.
 
