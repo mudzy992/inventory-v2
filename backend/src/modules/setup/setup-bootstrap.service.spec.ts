@@ -64,8 +64,19 @@ const buildDto = (): InitializeSetupDto => ({
 
 describe('SetupBootstrapService', () => {
   const createService = () => {
+    let setupLockAcquired = false;
     const tx = {
-      user: { count: async () => 0, create: async () => ({ id: 'user' }) },
+      $queryRaw: async () => {
+        setupLockAcquired = true;
+        return [];
+      },
+      user: {
+        count: async () => {
+          assert.equal(setupLockAcquired, true);
+          return 0;
+        },
+        create: async () => ({ id: 'user' }),
+      },
       canton: { create: async () => ({ id: 'canton-1' }) },
       city: { create: async () => ({ id: 'city-1' }) },
       orgUnit: {

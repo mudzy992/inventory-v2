@@ -41,6 +41,9 @@ export class SetupBootstrapService {
     ]);
     const catalogCode = dto.catalog.code?.trim() || slugifyCatalogCode(dto.catalog.name);
     return this.prisma.$transaction(async (tx) => {
+      // Serialize the first bootstrap across backend replicas. The inner count
+      // then runs after the previous transaction commits or rolls back.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(1800043170, 13579)`;
       const existing = await tx.user.count();
       if (existing > 0) {
         throw new ConflictException('Application is already initialized');

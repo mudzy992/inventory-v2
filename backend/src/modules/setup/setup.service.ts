@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { InitializeSetupDto } from './dto/initialize-setup.dto';
 import { SetupBootstrapService } from './setup-bootstrap.service';
+import { getSetupTokenFailure } from './utils/setup-auth.util';
 
 export interface SetupStatusResponse {
   needsSetup: boolean;
@@ -33,11 +35,16 @@ export class SetupService {
   }
 
   async initialize(dto: InitializeSetupDto): Promise<SetupInitializeResponse> {
-    const configuredToken = this.configService.get<string>('SETUP_TOKEN');
-    if (configuredToken && configuredToken.length > 0) {
-      if (!dto.setupToken || dto.setupToken !== configuredToken) {
-        throw new UnauthorizedException('Invalid setup token');
-      }
+    const tokenFailure = getSetupTokenFailure(
+      this.configService.get<string>('SETUP_TOKEN'),
+      dto.setupToken,
+      this.configService.get<string>('NODE_ENV') === 'production',
+    );
+    if (tokenFailure === 'missing-production-token') {
+      throw new ServiceUnavailableException('SETUP_TOKEN must be configured before production setup');
+    }
+    if (tokenFailure === 'invalid-token') {
+      throw new UnauthorizedException('Invalid setup token');
     }
     const userCount = await this.prisma.user.count();
     if (userCount > 0) {
