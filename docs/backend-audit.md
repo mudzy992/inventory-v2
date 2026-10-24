@@ -1,11 +1,13 @@
 # Backend — inventar, audit i fazni plan
 
 **Pregled:** drugi, produbljeni prolaz statičkog audita (nakon prvog inventara)
-**Datum pregleda:** 24.10.2026.  
-**Izvor istine:** kod u `backend/src`, `backend/prisma/schema.prisma`, PostgreSQL migracije, `backend/package.json`/lockfile, Docker konfiguracija.  
+**Datum pregleda:** 24.10.2026.
+**Izvor istine:** kod u `backend/src`, `backend/prisma/schema.prisma`, PostgreSQL migracije, `backend/package.json`/lockfile, Docker konfiguracija.
 **Opseg:** statički pregled backend arhitekture, modula, ključnih tokova, autorizacije, validacije, transakcija, background poslova, baze, Redis-a, upload-a, testova i deployment konfiguracije. Nisu pregledani produkcijski podaci, runtime konfiguracija Coolify-ja, mrežni firewall niti izvršen penetracijski test. Nalazi koji zavise od načina deploymenta označeni su kao provjere, a ne kao potvrđeni incidenti.
 
 > Ovaj dokument je početni plan za buduće iterativne popravke. Ne mijenja ponašanje aplikacije. Prioritet je prvo zatvoriti sigurnosne i integritetske rizike, a tek zatim raditi veće refaktore.
+>
+> Detaljna implementacijska razrada, uključujući zavisnosti između paketa, kriterije prihvatanja, testne scenarije, rollout/rollback i poslovne odluke, nalazi se u [`backend-implementation-plan.md`](./backend-implementation-plan.md).
 
 ## 1. Sažetak za odluku
 

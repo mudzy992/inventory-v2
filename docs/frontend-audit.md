@@ -1,17 +1,19 @@
 # Frontend — inventar, audit i fazni plan
 
-**Pregled:** statički audit React/TypeScript frontend-a (kod, zavisnosti, test/build konfiguracija i frontend Docker/Nginx)  
-**Datum pregleda:** 24.10.2026.  
-**Izvor istine:** `frontend/src`, `frontend/package.json`/lockfile, `frontend/tsconfig.json`, Vite, Docker i Nginx konfiguracija.  
+**Pregled:** drugi, detaljniji prolaz statičkog audita React/TypeScript frontend-a; dodatno provjereni HTML sink-ovi, cross-tab auth, notification state i TypeScript greške
+**Datum pregleda:** 24.10.2026.
+**Izvor istine:** `frontend/src`, `frontend/package.json`/lockfile, `frontend/tsconfig.json`, Vite, Docker i Nginx konfiguracija.
 **Opseg:** analiza autentikacije/tokena, API klijenta, ruta i UI autorizacije, globalnog stanja, glavnih domena, HTML/print tokova, zavisnosti, testova, build-a i isporuke SPA-a. Nisu pregledani produkcijski response headers, CORS/TLS/firewall, browser telemetry niti izvršen penetration test.
 
 > Ovo je preventivni plan na osnovu repozitorija; ne mijenja aplikacijski kod i ne potvrđuje ponašanje stvarnog deployment-a. Autoritativna kontrola pristupa i validacija moraju ostati na backendu.
+>
+> Detaljna implementacijska razrada, kriteriji prihvatanja, testni scenariji i release gate nalaze se u [`frontend-implementation-plan.md`](./frontend-implementation-plan.md).
 
 ## 1. Sažetak za odluku
 
 Frontend je sadržajno bogat SPA: React 19, TypeScript sa `strict: true`, Vite 7, React Router 7 i Tailwind 4. Ima centralni API klijent sa Bearer tokenima, osvježavanje tokena sa single-flight zaštitom, lazy loading stranica i centralne UI role/feature guards. Uređeni DOM prikazi koriste React tekstualno renderovanje; inventory print helper zasebno escape-uje HTML vrijednosti — dobar obrazac koji treba primijeniti svuda gdje se pravi HTML string.
 
-Najvažniji problemi su konkretni, ne samo stilski: dva `document.write()` print toka interpoliraju nepouzdane poslovne podatke bez HTML escaping-a; `TransfersPage` referencira neimportovane funkcije i nepostojeći setter, a TypeScript provjera trenutno prijavljuje **98 grešaka**. Vite produkcijski build ipak prolazi jer `vite build` transpilira TS, ali ne izvršava `tsc`. Nema frontend test/lint/typecheck skripte, a runtime dependency audit prijavljuje critical/high advisories.
+Najvažniji problemi su konkretni, ne samo stilski: dva `document.write()` print toka interpoliraju nepouzdane poslovne podatke bez HTML escaping-a; `TransfersPage` referencira neimportovane funkcije i nepostojeći setter, a TypeScript provjera trenutno prijavljuje **98 grešaka**. Drugi prolaz je našao i pogrešno ažuriranje unread badge-a kada server emituje read event prema istom klijentu, propuštene notification poruke zbog FE/BE polja `body`/`message`, te nedostajući `ApiError` import u maintenance-parts error handlerima. Vite produkcijski build ipak prolazi jer `vite build` transpilira TS, ali ne izvršava `tsc`. Nema frontend test/lint/typecheck skripte, a runtime dependency audit prijavljuje critical/high advisories.
 
 ### Ocjena
 
@@ -27,7 +29,7 @@ Najvažniji problemi su konkretni, ne samo stilski: dva `document.write()` print
 | Testovi | 3.0/10 | Nema `test`, lint ili typecheck npm skripte; postoji jedan `node:test` spec fajl (~10 testova), bez integracionih/browser testova. |
 | UI performanse | 5.5/10 | Stranice se lazy-loaduju, ali `InventoryCountPage` chunk je oko 495 kB prije gzip-a / 157 kB poslije gzip-a; veliki page moduli otežavaju dalje cijepanje. |
 | Isporuka / sigurnosni browser header-i | 5.0/10 | Docker multi-stage build je razumljiv; repo Nginx config ne postavlja CSP ni druge browser security headers. Edge/proxy može ih dodavati — potvrditi produkciju. |
-| **Kompletan frontend** | **5.4/10** | Funkcionalno širok SPA sa korisnom osnovom; XSS sink-ovi, TypeScript/runtime greške i nedostatak automatske provjere su release rizici. |
+| **Kompletan frontend** | **5.2/10** | Funkcionalno širok SPA sa korisnom osnovom; XSS sink-ovi, TypeScript/runtime greške, cross-tab auth gap i notification state/DTO regressions povećavaju release rizik. |
 
 Ocjene su heurističke i služe za prioritizaciju popravki, ne predstavljaju runtime pentest niti tvrdnju da je svaki npm advisory eksploatabilan u ovoj konfiguraciji.
 
@@ -56,19 +58,22 @@ Ocjene su heurističke i služe za prioritizaciju popravki, ne predstavljaju run
 
 ### P2 — zatvoriti u narednom ciklusu
 
-6. **Access i refresh tokeni se čuvaju dugoročno u `localStorage`.** `token-storage.ts` migrira vrijednosti iz `sessionStorage` u `localStorage`, a zatim čita/piše oba tokena u persistent storage. Browser JavaScript i svaki same-origin XSS mogu ih pročitati; migracija dodatno uklanja session-only ponašanje. Preferirati HttpOnly, Secure, SameSite cookie/BFF dizajn ako deployment to podržava. Ako se Bearer token model zadrži, smanjiti refresh token izloženost/TTL gdje je moguće, primijeniti strogi CSP i tretirati svaki HTML sink kao security-critical.
+6. **Access i refresh tokeni se čuvaju dugoročno u `localStorage`.** `token-storage.ts` migrira vrijednosti iz `sessionStorage` u `localStorage`, a zatim čita/piše oba tokena u persistent storage. Browser JavaScript i svaki same-origin XSS mogu ih pročitati; migracija dodatno uklanja session-only ponašanje. `refreshInFlight` je samo modul-lokalan, a token store nema `storage`/`BroadcastChannel` listener: druga otvorena kartica ne prima logout event u `AuthContext`, pa može zadržati prikazan privatni state nakon što prva kartica ukloni tokene. Paralelni refreshi iz više kartica takođe nisu koordinisani (backend refresh race je zasebno zabilježen). Preferirati HttpOnly, Secure, SameSite cookie/BFF dizajn ako deployment to podržava. Ako se Bearer token model zadrži, sinhronizovati session invalidation/token rotation među karticama, smanjiti refresh token izloženost/TTL gdje je moguće, primijeniti strogi CSP i tretirati svaki HTML sink kao security-critical.
 7. **Nginx frontend config ne postavlja browser security headers.** `frontend/nginx.conf` sadrži samo SPA fallback i statički `/health`; nema CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` ni `frame-ancestors` zaštite. TLS/HSTS treba postavljati na TLS terminatoru, a CSP/ostale headere u Nginx-u ili provjerenom edge proxy-ju. Pošto proxy nije u scope-u, potvrditi stvarni production response headers prije klasifikacije kao aktivne izloženosti. CSP treba biti kompatibilan sa Vite buildom i ukloniti inline script iz QR print template-a.
 8. **Bootstrap reference-data greške se tiho prikazuju kao uspješan prazan dataset.** `fetchBootstrap()` dodaje `.catch(() => [])` za org units, kategorije, obavijesti, lokacije i skladišta. API outage/403 tako može završiti kao prazan izbor/lista, a `DataContext` ne postavi error jer `fetchBootstrap` resolve-a. To otežava dijagnostiku i može dovesti do pogrešnog rada korisnika. Razlikovati obavezne od opcionalnih poziva, prikazati partial-load warning i zadržati razlog/endpoint/status; ne pretvarati sve greške u `[]`.
 9. **Setup status failure se tretira kao „setup nije potreban“.** `App.tsx` hvata svaki `fetchSetupStatusApi()` error i postavlja `needsSetup=false`; backend outage, CORS greška ili 5xx zato izgledaju kao normalna login stranica, bez mogućnosti korisniku da razlikuje problem servisa. Dodati `status error` state/retry poruku umjesto lažnog uspjeha.
 10. **Malo testova i nema UI/API ugovornog testa.** Jedini spec testira čiste guard/helper funkcije; nema testova za AuthContext/refresh races, route role matrix, form submit, print/XSS, API error/loading state, real browser, responsive layout ili end-to-end glavne tokove. Uvesti Vitest + React Testing Library za unit/component i Playwright smoke za login → zaduženje → print/upload, plus regresije za P1.
 11. **Deployment base URL ima više podržanih oblika koji traže env test.** `api-base.ts` vraća `/backend` u dev-u i `VITE_API_URL`/fallback u productionu; compose production podešava same-origin `/backend`, dok Dockerfile default postavlja zasebni `api.evidens.ba101.top`. Socket origin/path se izvode iz istog URL-a, što je dobar obrazac, ali CORS, cookie/origin granice i socket putanja zavise od toga koji build/deployment preset je zaista aktivan. Uvesti smoke test za compose/proxy i fail-fast validaciju production `VITE_API_URL` umjesto tihog fallback-a.
+12. **Maintenance-parts error handleri referenciraju neimportovani `ApiError`.** `equipment-installed-parts-panel.tsx` koristi `err instanceof ApiError` u catch blokovima, ali modul ne importuje `ApiError`. Kada API poziv padne, sam error handler baca `ReferenceError` umjesto da prikaže originalnu grešku/toast; to se odnosi na load/catalog/lots/install/replace/fault/remove putanje. Dodati import i testirati offline/4xx/5xx slučajeve.
+13. **Notification read badge može se umanjiti dva puta; notification message se ne prikazuje.** FE `markRead()` smanjuje broj lokalno, a backend nakon mark-read emituje `notification.read` i nazad istoj korisničkoj sobi. Ako REST odgovor stigne prije Socket eventa, `SocketContext` prvo umanji badge u `markRead`, pa handler umanji opet bez provjere prethodnog read stanja; rezultat je povremeno prenizak unread count. Učiniti transition idempotentnim (decrement samo za unread→read) ili nakon eventa reconciliati count sa serverom. Dodatno, backend/`Notification` DTO polje je `message`, a `NotificationsPanel` čita `body`, pa se tekst poruke ne prikazuje; `getNotificationTypeMeta()` ne vraća `badgeClass`, ali UI ga koristi. Uskladiti DTO i UI, uz event-sequence/component test.
+14. **Nema cross-tab auth invalidation-a.** Logout uklanja tokene u shared `localStorage`, ali `AuthProvider` sluša samo lokalni `CustomEvent`; `token-storage` ne obrađuje browser `storage` event. Druga kartica zato može ostati u memoriji sa starim `user` i privatnim bootstrap sadržajem dok sama ne dobije 401/navigaciju ili se ne osvježi. Propagirati logout/expiry preko `storage` eventa ili `BroadcastChannel`, očistiti DataContext/Socket state i dodati test za dvije kartice.
 
 ### P3 — performanse i održivost
 
-12. **Velike page komponente i chunkovi.** Top-level stranice uključuju `EquipmentByCategoryPage` (~886 LOC), `InventoryCountPage` (~862), `registrar-stock-page` (~857), `EquipmentPage` (~807), `EquipmentCard` (~761), `EmployeesPage` (~675), `OrganizationPage` (~621) i `CategoriesPage` (~535). Build generiše `InventoryCountPage` chunk od ~495 kB / ~157 kB gzip. Nastaviti code splitting po tabu/print/export flow-u i izvlačiti use-case/UI komponente uz testove i mjerenje bundle-a.
-13. **API DTO-i su ručno duplirani bez contract check-a.** Frontend tipovi su lokalni, `apiRequest<T>` radi compile-time cast bez runtime validacije; veliki broj TS grešaka pokazuje drift/nekonzistentne DTO oblike. Razmotriti OpenAPI client generation ili zajednički schema contract, a za najvažnije write/read payload-e validirati granice runtime-om.
-14. **Klijentske role guards su samo navigacijski sloj.** `RequireRole` i `RequirePageEnabled` pravilno ograničavaju UI i route, ali ne mogu zaštititi podatke ni endpoint. Svaki write/read endpoint mora server-side autorizovati request; frontend ne smije tretirati skriveni link ili feature flag kao dozvolu.
-15. **Print implementacije nisu ujednačene.** Inventory print helper escape-uje vrijednosti, ali Disposal Report i QR print koriste inline template string/`document.write()`. Uvesti jednu testiranu print abstraction koja default-escape-uje tekst i ne prihvata raw HTML; svaku iznimku učiniti eksplicitnom.
+15. **Velike page komponente i chunkovi.** Top-level stranice uključuju `EquipmentByCategoryPage` (~886 LOC), `InventoryCountPage` (~862), `registrar-stock-page` (~857), `EquipmentPage` (~807), `EquipmentCard` (~761), `EmployeesPage` (~675), `OrganizationPage` (~621) i `CategoriesPage` (~535). Build generiše `InventoryCountPage` chunk od ~495 kB / ~157 kB gzip. Nastaviti code splitting po tabu/print/export flow-u i izvlačiti use-case/UI komponente uz testove i mjerenje bundle-a.
+16. **API DTO-i su ručno duplirani bez contract check-a.** Frontend tipovi su lokalni, `apiRequest<T>` radi compile-time cast bez runtime validacije; veliki broj TS grešaka pokazuje drift/nekonzistentne DTO oblike. Razmotriti OpenAPI client generation ili zajednički schema contract, a za najvažnije write/read payload-e validirati granice runtime-om.
+17. **Klijentske role guards su samo navigacijski sloj.** `RequireRole` i `RequirePageEnabled` pravilno ograničavaju UI i route, ali ne mogu zaštititi podatke ni endpoint. Svaki write/read endpoint mora server-side autorizovati request; frontend ne smije tretirati skriveni link ili feature flag kao dozvolu.
+18. **Print implementacije nisu ujednačene.** Inventory print helper escape-uje vrijednosti, ali Disposal Report i QR print koriste inline template string/`document.write()`. Uvesti jednu testiranu print abstraction koja default-escape-uje tekst i ne prihvata raw HTML; svaku iznimku učiniti eksplicitnom.
 
 ### Tragovi u kodu za ključne nalaze
 
@@ -84,7 +89,10 @@ Ocjene su heurističke i služe za prioritizaciju popravki, ne predstavljaju run
 | Versioni na dependency audit-u | `frontend/package.json:14-33`; resolved verzije preko `frontend/package-lock.json`; dependency stablo potvrđeno sa `npm ls`. |
 | Nedostaju browser security headers u repo Nginx config-u | `frontend/nginx.conf:1-17`. |
 | Različiti API base URL deployment režimi | `frontend/src/api/api-base.ts:1-11`; `frontend/Dockerfile:13-19`; `docker-compose.prod.yml:126-135`; Socket origin/path u `frontend/src/api/socket-client.ts:10-38`. |
-| Inventory print helper koji escape-uje HTML | `frontend/src/components/inventory-count/inventory-print-document.util.ts:32-44`, `:181-223`. |
+| Inventory print helper koji escape-uje HTML | `frontend/src/components/inventory-count/inventory-print-document.util.ts:43-48`, `:181-223`. |
+| Missing `ApiError` import u maintenance-parts catch blokovima | `frontend/src/components/maintenance-parts/equipment-installed-parts-panel.tsx:1-14`, upotrebe `:77`, `:104`, `:122`, `:181`, `:196`, `:211`. |
+| Read badge double decrement / message DTO mismatch | `frontend/src/contexts/SocketContext.tsx:128-138`, `:203-209`; BE emits read event nakon REST mark-read: `backend/src/modules/notifications/notifications.service.ts:98-108`, `notifications.gateway.ts:66-68`; FE `Notification.message`: `frontend/src/types.ts:234-243`, UI koristi `body`/`badgeClass`: `NotificationsPanel.tsx:109-132`, helper meta shape `notification-type.util.ts:4-19`. |
+| Cross-tab logout nije propagiran u AuthContext | `frontend/src/api/token-storage.ts:23-53` (in-memory listeners/local custom event); `frontend/src/contexts/AuthContext.tsx:46-53` (ne sluša `storage` event). |
 
 ## 4. Ocjena po frontend modulu
 
@@ -92,11 +100,11 @@ Ocjene su za kvalitet implementacije u repozitoriju (sigurnost, ispravnost, pokr
 
 | Modul / površina | Ocjena | Kratak nalaz |
 |---|---:|---|
-| Auth context + token storage | 5.5/10 | Refresh/clear flow centralizovan; storage u `localStorage` povećava XSS impact. |
+| Auth context + token storage | 5.0/10 | Refresh/clear flow centralizovan, ali nema cross-tab logout invalidation-a; `localStorage` povećava XSS impact. |
 | API client + refresh | 6.8/10 | Centralni fetch, Bearer header, single-flight refresh; DTO runtime validation nedostaje. |
 | Routing + role guards | 7.0/10 | Lazy routing i centralna matrix su dobri; ostaju UX-only, ne server security. |
 | App bootstrap + DataContext | 5.5/10 | Jednostavan provider model; bootstrap greške se maskiraju praznim kolekcijama. |
-| Socket/notifications | 6.5/10 | Dijeljeni socket, reconnect i polling fallback; testovi/multi-session edge cases nedostaju. |
+| Socket/notifications | 5.5/10 | Dijeljeni socket i polling fallback postoje; read event može duplo umanjiti badge, a UI očekuje pogrešno DTO polje za message. |
 | Settings contexts + feature flags | 6.0/10 | Javni/privatni settings su odvojeni; fail-open fallback/default ponašanje treba prikazati kao degradaciju. |
 | Setup wizard + login | 6.3/10 | Tokovi su jasni; setup-status network greška se maskira kao normalna login putanja. |
 | Public equipment/QR view | 6.8/10 | Zasebna javna ruta i lazy page; privacy/access rate limits zavise od backend-a. |
@@ -109,7 +117,7 @@ Ocjene su za kvalitet implementacije u repozitoriju (sigurnost, ispravnost, pokr
 | Disposal commissions/report | 4.3/10 | Report HTML print direktno interpolira poslovne vrijednosti; XSS P1. |
 | Warehouses + templates | 6.5/10 | Detail/stock/template UI podijeljen po komponentama; upload limit/provjera stvarnog fajla ostaje backend odgovornost. |
 | Warehouse stock + registrar stock | 6.0/10 | Velik page i kompleksne forme; DTO type mismatches i integration testovi nedostaju. |
-| Maintenance parts | 5.8/10 | Izdvojen domain folder, ali typecheck prijavljuje nedostajuće `ApiError` reference. |
+| Maintenance parts | 5.0/10 | Izdvojen domain folder, ali catch handleri bacaju `ReferenceError` zbog neimportovanog `ApiError`. |
 | Org units + locations | 6.3/10 | Page-level CRUD i autocomplete; typecheck prijavljuje neispravne API import/use i unknown response. |
 | User management + scope UI | 6.2/10 | Scope forme dobro izdvojene; type contract i end-to-end role matrix treba potvrditi. |
 | Shared UI + accessibility | 6.3/10 | Reusable table/modal/button/layout primitives; formalni accessibility audit nije rađen. |
@@ -144,7 +152,7 @@ Faze su inkrementalne; ne raditi dependency update, XSS fix i velike UI refaktor
 
 1. Dodati `typecheck` (`tsc --noEmit`) i CI gate; prvo riješiti direktne runtime greške, zatim sve compile greške po domenskim paketima.
 2. Dodati `test` skriptu (Vitest/RTL ili Node test runner sa stabilnim TS loaderom) i pokrenuti postojeći guard spec.
-3. Uvesti unit/component tests za API refresh/logout, `RequireRole` matrix, `fetchBootstrap` partial error, form guard funkcije i P1 print sanitization.
+3. Uvesti unit/component tests za API refresh/logout i multi-tab invalidation, `RequireRole` matrix, `fetchBootstrap` partial error, notification read event idempotency, maintenance error paths, form guard funkcije i P1 print sanitization.
 4. Dodati lint script s dogovorenim formatter/eslint pravilima; ne uvoditi auto-fix koji mijenja cijeli frontend zajedno sa funkcionalnim popravkama.
 
 **Exit kriterij:** clean typecheck, deterministički unit/component suite u CI, `vite build` nakon testova.
@@ -152,9 +160,11 @@ Faze su inkrementalne; ne raditi dependency update, XSS fix i velike UI refaktor
 ### Faza 3 — pouzdanost podataka i browser tokovi
 
 1. Razdvojiti obavezne od opcionalnih bootstrap poziva; partial errors prikazati sa retry akcijom i ne zamijeniti ih neprimjetno praznim podacima.
-2. Dodati testove auth refresh race, logout tokom in-flight fetch-a, socket reconnect i korisničku promjenu; prekinuti/ignorirati stale fetch rezultate nakon unmount/logout-a gdje je potrebno.
-3. Dodati Playwright smoke/e2e: login po rolama, list/detail, transfer, upload/preview, inventory print, disposal report, public QR.
-4. Validirati role/feature route matrix kao UX; paralelno provjeriti backend endpoint matrix — sakrivanje rute nije autorizacija.
+2. Dodati testove auth refresh race preko više kartica, logout tokom in-flight fetch-a, cross-tab invalidation, socket reconnect i korisničku promjenu; prekinuti/ignorirati stale fetch rezultate nakon unmount/logout-a gdje je potrebno.
+3. Učiniti notification unread count idempotentnim za kombinaciju REST response + Socket event i testirati oba redoslijeda; uskladiti `Notification.message` DTO sa panel renderom.
+4. Dodati testove svih maintenance-parts catch putanja tako da error reporting ne baca dodatni exception.
+5. Dodati Playwright smoke/e2e: login po rolama, list/detail, transfer, upload/preview, inventory print, disposal report, public QR.
+6. Validirati role/feature route matrix kao UX; paralelno provjeriti backend endpoint matrix — sakrivanje rute nije autorizacija.
 
 **Exit kriterij:** nema uncaught UI errors u definisanim top workflow-ima; bootstrap degradacija je vidljiva; browser smoke prolazi za glavne role.
 
@@ -184,8 +194,8 @@ Faze su inkrementalne; ne raditi dependency update, XSS fix i velike UI refaktor
 | 2 | Transfers | Import registrar helpera, ukloniti nedostajući setter, role-based component test. | P1 |
 | 3 | Frontend dependencies | Patch runtime critical/high, pa dev advisories; `npm audit` + lockfile review. | P1 |
 | 4 | TypeScript/CI | Dodati `typecheck`, popraviti 98 grešaka, zabraniti build bez typecheck-a. | P1 |
-| 5 | Token/Auth | Procijeniti HttpOnly cookie/BFF ili smanjiti residual token exposure i uvesti CSP. | P2 |
-| 6 | Bootstrap/API client | Partial-error model, retry i response DTO contract. | P2 |
+| 5 | Token/Auth | Procijeniti HttpOnly cookie/BFF; propagirati logout/token expiry među karticama i uvesti CSP. | P2 |
+| 6 | Bootstrap/API/Notifications | Partial-error model, retry, DTO `message` prikaz i idempotent unread counter. | P2 |
 | 7 | Nginx/deployment | Dokazati production response headers, URL mode i socket connectivity. | P2 |
 | 8 | Test infrastructure | Test runner, component suite i Playwright smoke najvažnijih workflow-a. | P2 |
 | 9 | Inventory/Equipment/Registrar pages | Chunk budget + page decomposition uz karakterizacione testove. | P2/P3 |
@@ -198,7 +208,7 @@ Faze su inkrementalne; ne raditi dependency update, XSS fix i velike UI refaktor
 - `npx tsc --noEmit` pao je sa **98** dijagnostika kroz API, routes i komponente; puna lista trenutno je u `/tmp/frontend-tsc-errors.txt` u ovom sandboxu (privremeni fajl, nije dio deliverable-a).
 - `npm audit --omit=dev`: **6** dependency advisories (1 critical, 4 high, 1 moderate), fixes su označeni kao dostupni. Cijeli dependency tree: **13** (1 critical, 9 high, 2 moderate, 1 low). Ponoviti audit nakon update-a.
 - Paket nema `test`, `lint` ni `typecheck` npm skriptu. Jedan Node test fajl postoji, ali tokom ovog audita nije izvršen jer nema repo test runner skripte.
-- Nisu izvršeni browser E2E, accessibility, live API, production response-header, CORS, performance/real-device ili penetration testovi.
+- U drugom prolazu dodatno su pretraženi svi `document.write`/`innerHTML`/dynamic HTML sink-ovi, token/cross-tab događaji i notification state tokovi; nađeni su gore navedeni dodatni nalazi. Nisu izvršeni browser E2E, accessibility, live API, production response-header, CORS, performance/real-device ili penetration testovi.
 - Osim repozitorijskog Nginx-a, reverse proxy/TLS termination konfiguracija nije dostupna u ovom scope-u; security-header i origin nalazi su provjere deployment-a gdje je tako označeno.
 
-**Zaključna ocjena:** frontend ocjenjujem sa **5.4/10**. Brzi dobitak su XSS popravke na print tokovima, funkcionalni fix Transfers stranice, dependency update i obavezni typecheck/CI. Povećavati ocjenu tek nakon potvrđenog clean typecheck-a, regression/browser testova i pregleda stvarnih production security headers/origin podešavanja.
+**Zaključna ocjena nakon drugog prolaza:** frontend ocjenjujem sa **5.2/10** (prva procjena 5.4/10). Dodatno potvrđeni problemi su missing `ApiError` import u maintenance catch putanjama, notification badge race/message DTO mismatch i nedostatak cross-tab logout sinhronizacije. Drugi pass je proširio prioritetne popravke i test plan; ne mijenja činjenicu da nema runtime/browser testova. Brzi dobitak su XSS popravke na print tokovima, Transfers/maintenance runtime fix, dependency update i obavezni typecheck/CI. Povećavati ocjenu tek nakon clean typecheck-a, regression/browser testova i pregleda stvarnih production security headers/origin podešavanja.
