@@ -1,6 +1,6 @@
 # Backend — detaljan plan implementacije audita
 
-**Status:** planirano; implementacija nije započeta ovim dokumentom
+**Status:** implementacija započeta — prvi batch zatvara HTML injection u prenosnici i ažurira dvije ranjive runtime zavisnosti.
 **Osnova:** [`backend-audit.md`](./backend-audit.md), koji sadrži nalaze, izvore u kodu i početnu faznu podjelu
 **Opseg:** backend API, PostgreSQL/Prisma, Redis/BullMQ/Socket.IO, uploadi, background poslovi, sigurnost, testovi i operativna spremnost.
 

@@ -12,6 +12,17 @@ type TransferForDocument = Prisma.TransferGetPayload<{
   };
 }>;
 
+const HTML_TEXT_ESCAPE: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+export const escapeHtmlText = (value: string): string =>
+  value.replace(/[&<>"']/g, (character) => HTML_TEXT_ESCAPE[character] ?? character);
+
 export const buildTransferRawDocumentHtml = (transfer: TransferForDocument): string => {
   const signerName = `${transfer.signer.firstName} ${transfer.signer.lastName}`;
   const fromLabel =
@@ -41,7 +52,7 @@ export const buildTransferRawDocumentHtml = (transfer: TransferForDocument): str
 <html lang="bs">
 <head>
   <meta charset="utf-8" />
-  <title>Prenosnica ${transfer.documentNumber}</title>
+  <title>Prenosnica ${escapeHtmlText(transfer.documentNumber)}</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 2rem; color: #111; }
     h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
@@ -51,17 +62,17 @@ export const buildTransferRawDocumentHtml = (transfer: TransferForDocument): str
   </style>
 </head>
 <body>
-  <h1>Prenosnica (RAW) — ${transfer.type}</h1>
-  <p>Broj dokumenta: <strong>${transfer.documentNumber}</strong></p>
-  <p>Status: ${transfer.status}</p>
+  <h1>Prenosnica (RAW) — ${escapeHtmlText(transfer.type)}</h1>
+  <p>Broj dokumenta: <strong>${escapeHtmlText(transfer.documentNumber)}</strong></p>
+  <p>Status: ${escapeHtmlText(transfer.status)}</p>
   <table>
-    <tr><th>Inventurni broj</th><td>${transfer.equipment.inventoryNumber}</td></tr>
-    <tr><th>Datum</th><td>${transfer.date.toISOString().slice(0, 10)}</td></tr>
-    <tr><th>Predao / iz</th><td>${fromLabel}</td></tr>
-    <tr><th>Preuzeo / u</th><td>${toLabel}</td></tr>
-    <tr><th>Ovjerio</th><td>${signerName}</td></tr>
-    ${transfer.reason ? `<tr><th>Razlog</th><td>${transfer.reason}</td></tr>` : ''}
-    ${transfer.notes ? `<tr><th>Napomena</th><td>${transfer.notes}</td></tr>` : ''}
+    <tr><th>Inventurni broj</th><td>${escapeHtmlText(transfer.equipment.inventoryNumber ?? '')}</td></tr>
+    <tr><th>Datum</th><td>${escapeHtmlText(transfer.date.toISOString().slice(0, 10))}</td></tr>
+    <tr><th>Predao / iz</th><td>${escapeHtmlText(fromLabel)}</td></tr>
+    <tr><th>Preuzeo / u</th><td>${escapeHtmlText(toLabel)}</td></tr>
+    <tr><th>Ovjerio</th><td>${escapeHtmlText(signerName)}</td></tr>
+    ${transfer.reason ? `<tr><th>Razlog</th><td>${escapeHtmlText(transfer.reason)}</td></tr>` : ''}
+    ${transfer.notes ? `<tr><th>Napomena</th><td>${escapeHtmlText(transfer.notes)}</td></tr>` : ''}
   </table>
 </body>
 </html>`;

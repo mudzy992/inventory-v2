@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsOptional, IsString, MinLength, ValidateNested } from 'class-validator';
+import { IsOptional, IsString, ValidateNested } from 'class-validator';
 import { SetupAdminDto } from './setup-admin.dto';
 import { SetupCatalogDto } from './setup-catalog-item.dto';
 import { SetupCategoryDto } from './setup-catalog.dto';
