@@ -8,6 +8,7 @@ import {
   INVENTORY_SESSION_CLOSE_QUEUE,
   type InventorySessionCloseJobPayload,
 } from './inventory-session-close.queue';
+import { isFinalInventoryCloseAttempt } from './utils/inventory-close-retry.util';
 
 const ACTION_THROTTLE_MS = 250;
 
@@ -20,9 +21,9 @@ const ACTION_THROTTLE_MS = 250;
  * blocking mehanizam iznutra) — nula idle DB opterećenja.
  *
  * Dodatna dobit u odnosu na raniju implementaciju:
- *  - automatski retry sa exponential backoff (definisano globalno u
- *    QueuesModule: 3 pokušaja) ako process() baci grešku prije nego što
- *    stigne da upiše 'failed' status u DB red;
+ *  - DB status ostaje 'queued' između BullMQ pokušaja, tako da naredni
+ *    retry može ponovo preuzeti posao; 'failed' se upisuje tek nakon
+ *    posljednjeg konfigurisanog pokušaja;
  *  - `concurrency: 2` — do dvije sesije se mogu zatvarati paralelno umjesto
  *    striktno sekvencijalno, bez dodatnog koda za to;
  *  - neuspjeli poslovi ostaju vidljivi u BullMQ failed setu (dead-letter
@@ -77,9 +78,14 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
       await this.emitCloseJobUpdate(sessionId, doneJob);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const finalAttempt = isFinalInventoryCloseAttempt(job.attemptsMade, job.opts.attempts);
       const failedJob = await this.prisma.inventorySessionCloseJob.update({
         where: { id: dbJob.id },
-        data: { status: 'failed', endedAt: new Date(), lastError: message },
+        data: {
+          status: finalAttempt ? 'failed' : 'queued',
+          endedAt: finalAttempt ? new Date() : null,
+          lastError: message,
+        },
       });
       await this.emitCloseJobUpdate(sessionId, failedJob);
       throw err; // BullMQ retry/backoff preuzima odavde (vidi QueuesModule).
