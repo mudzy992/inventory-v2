@@ -104,6 +104,17 @@ jobs:
           status=$?
           cat "$RUNNER_TEMP/backend-tsc.log"
           if [ "$status" -ne 0 ]; then
+            node <<'NODE'
+          const fs = require('node:fs');
+          const log = fs.readFileSync(`${process.env.RUNNER_TEMP}/backend-tsc.log`, 'utf8');
+          for (const diagnostic of log.split(/\r?\n/)) {
+            const match = diagnostic.match(/^(.+)\((\d+),(\d+)\): error (TS\d+): (.*)$/);
+            if (match) {
+              const [, file, line, column, code, message] = match;
+              console.log(`::error file=backend/${file},line=${line},col=${column},title=${code}::${message}`);
+            }
+          }
+          NODE
             {
               echo '### Backend TypeScript diagnostics'
               echo '```text'

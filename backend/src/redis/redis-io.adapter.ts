@@ -26,7 +26,7 @@ import { buildBaseRedisOptions, readRedisConfig } from './redis.config';
  * Redis prekida, single-instance Socket.IO ponašanje je i dalje funkcionalno.
  */
 export class RedisIoAdapter extends IoAdapter {
-  private readonly logger = new Logger('SocketIO/RedisAdapter');
+  protected readonly logger = new Logger('SocketIO/RedisAdapter');
   private adapterConstructor?: ReturnType<typeof createAdapter>;
 
   constructor(
