@@ -85,6 +85,17 @@ const transferInclude = {
   toWarehouse: true,
 } satisfies Prisma.TransferInclude;
 
+type TransferResponse = Omit<
+  Transfer,
+  | 'generatedDocxPath'
+  | 'generatedPdfPath'
+  | 'generatedDocxStatus'
+  | 'generatedDocxAttempts'
+  | 'generatedDocxLeaseToken'
+  | 'generatedDocxLeaseUntil'
+  | 'generatedDocxError'
+> & { hasGeneratedDocument: boolean; documentGenerationStatus: string };
+
 const TRANSFER_SORT_FIELDS: Record<string, string> = {
   createdAt: 'createdAt',
   date: 'date',
@@ -122,7 +133,7 @@ export class TransfersService {
   async findAll(
     user: AuthenticatedUser,
     query: ListTransfersQueryDto,
-  ): Promise<PaginatedResponse<Transfer>> {
+  ): Promise<PaginatedResponse<TransferResponse>> {
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
     const { page, take } = parsePagination(query, { defaultPageSize: pageSize, maxPageSize });
     const where = await this.buildListWhere(user, query);
