@@ -19,6 +19,11 @@ export class HealthController {
     private readonly documentGenerationQueue: Queue,
   ) {}
 
+  @Get('live')
+  getLiveness(): { status: 'ok'; timestamp: string } {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  }
+
   @Get()
   async getHealth(): Promise<{
     status: string;

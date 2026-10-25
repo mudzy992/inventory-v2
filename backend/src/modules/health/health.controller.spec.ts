@@ -16,6 +16,18 @@ const createController = (
     { getJobCounts: documentQueueProbe } as never,
   );
 
+test('liveness is process-only and does not probe dependencies', () => {
+  const controller = createController(
+    () => Promise.reject(new Error('Redis down')),
+    () => Promise.reject(new Error('queue down')),
+    () => Promise.reject(new Error('queue down')),
+    () => Promise.reject(new Error('database down')),
+  );
+  const result = controller.getLiveness();
+  assert.equal(result.status, 'ok');
+  assert.equal(new Date(result.timestamp).toISOString(), result.timestamp);
+});
+
 test('keeps legacy health as a database-only probe', async () => {
   const controller = createController(() => Promise.reject(new Error('Redis down')));
   const result = await controller.getHealth();

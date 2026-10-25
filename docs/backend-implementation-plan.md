@@ -265,6 +265,12 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 
 ### 5.2 Health i runtime observability
 
+#### Liveness and readiness probes (P2 — implementation added)
+
+- `GET /health/live` je process-only liveness endpoint i ne zavisi od DB/Redis/queue dostupnosti. `GET /health/ready` ostaje readiness provjera PostgreSQL-a, shared Redis-a i obje kritične BullMQ queue konekcije, sa timeout-om po provjeri.
+- Legacy `GET /health` zadržava postojeći DB-only ugovor radi kompatibilnosti; deployment healthcheck konfiguracija treba koristiti `/health/live` za liveness i `/health/ready` za prijem saobraćaja.
+- Unit test potvrđuje da liveness ostaje `ok` i kada su sve zavisnosti nedostupne.
+
 #### Login rate-limit resilience (P2 — implementation added)
 
 - `RedisService.incrementRateLimitCounter()` koristi jednu Lua skriptu za `INCR` i TTL; ključevi bez TTL-a iz ranijih verzija popravljaju se pri narednom hitu, bez promjene fixed-window semantics.
