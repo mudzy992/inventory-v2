@@ -361,7 +361,7 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Rizici:** javno vraća holder puno ime/titulu/org put i cijelu historiju svih transfera; nema rate limit-a/anti-enumeration. Query učitava sve transfere i cijeli org unit set. Potencijalna privatnost i DoS/expensive query su P2.
 
-**Plan:** product/privacy odluka; minimalni public response, ograničenje posljednjih N kretanja, anon rate-limit, 404/enum zaštita i performance test.
+**Remediation update:** odvojeni Redis rate limit po IP-u uveden je na javni QR endpoint (podrazumijevano 60 zahtjeva/60 sekundi, konfigurabilan i u Compose fajlovima); regression test pokriva 429 i outage policy. Historijska i dalje otvorena stavka: product/privacy odluka o identitetu i broju javno prikazanih transfera, anti-enumeration i performance/load testovi.
 
 ### 4.24 Documents — **8.0/10**
 
@@ -395,9 +395,9 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Vrijednost:** Redis config je centralizovan, TLS CA path je sada podržan za backend i document worker; shared ioredis options služe RedisService, BullMQ i QueueEvents; key prefix/BullMQ-native prefix su namjerno razdvojeni; cache-aside degradira na miss; lock ima safe token release.
 
-**Rizici:** login rate-limit je fail-open i `INCR`/`EXPIRE` nisu atomski; auth scope cache mora biti invalidiran svim putanjama; `RedisIoAdapter` ima fallback na in-memory mode, ali `/health` to ne pokazuje. Inventory close queue recovery trenutno slabiji od Documents. Ovaj audit ne provjerava live Redis ACL/ACL key pattern niti stvarno učitavanje Coolify secret-a.
+**Rizici:** login rate-limit fail-open je konfigurabilan; auth scope cache mora biti invalidiran svim putanjama; `RedisIoAdapter` ima fallback na in-memory mode, ali readiness ne dokazuje da je adapter u shared Redis modu. Inventory close queue recovery trenutno slabiji od Documents. Ovaj audit ne provjerava live Redis ACL/ACL key pattern niti stvarno učitavanje Coolify secret-a.
 
-**Plan:** P1 test Redis TLS sa stvarnim chain-om i Node hostname verification; P2 rate-limit Lua; queue health/recovery; multi-instance test Socket.IO room i key prefix.
+**Remediation update:** `INCR` i TTL sada su atomski preko Lua; login guard je registrovan u `AuthModule`, a javni QR dobio je zaseban Redis IP bucket (60/min default). P1 test Redis TLS sa stvarnim chain-om i Node hostname verification, queue recovery integration i multi-instance Socket.IO room/key-prefix testovi ostaju otvoreni.
 
 ### API bootstrap / HTTP — **6.0/10**
 

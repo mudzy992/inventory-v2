@@ -49,6 +49,9 @@ services:
       REDIS_KEY_PREFIX: inventory-v2
       REDIS_TLS: ${REDIS_TLS:-false}
       REDIS_CA_CERT_PATH: ${REDIS_CA_CERT_PATH:-}
+      RATE_LIMIT_PUBLIC_EQUIPMENT_MAX: ${RATE_LIMIT_PUBLIC_EQUIPMENT_MAX:-60}
+      RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC: ${RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC:-60}
+      RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED: ${RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED:-false}
     # Upload root na hostu; unutra aplikacija gradi prenosnice/, templates/, ...
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads

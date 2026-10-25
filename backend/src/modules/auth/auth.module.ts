@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
+import { RedisRateLimitGuard } from '../../redis/redis-rate-limit.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -23,7 +24,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, RefreshTokenCleanupService],
+  providers: [AuthService, JwtStrategy, RefreshTokenCleanupService, RedisRateLimitGuard],
   exports: [AuthService],
 })
 export class AuthModule {}

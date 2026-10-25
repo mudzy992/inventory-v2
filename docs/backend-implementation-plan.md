@@ -242,7 +242,14 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 - CSV: zaštititi ćelije koje spreadsheet može tretirati kao formulu (`=`, `+`, `-`, `@` i relevantni leading control/whitespace slučajevi), uz test Excel/LibreOffice kompatibilnosti; escaping delimitera sam po sebi nije dovoljan.
 - Ograničiti broj export redova ili koristiti streaming; definisati timeout/memorijski budžet. Testirati response prekid i velika, ali dozvoljena izvlačenja.
 - Javni QR: vlasnik procesa treba odobriti tačan DTO — puno ime, titula, org putanja i historija transfera; predložiti minimizaciju i maksimum posljednjih kretanja.
-- Uvesti rate limit i anti-enumeration bez nepotrebnog odavanja da li ID postoji; load test na cache miss-u.
+- Anti-enumeration bez nepotrebnog odavanja da li ID postoji; load test na cache miss-u.
+
+#### Javni QR rate limit (P2 — implementation added)
+
+- `GET /public/equipment/:id` sada koristi poseban Redis fixed-window bucket po klijentskoj IP adresi, nezavisan od login bucket-a; podrazumijevano 60 zahtjeva u 60 sekundi, višak dobija 429.
+- `RATE_LIMIT_PUBLIC_EQUIPMENT_MAX`, `RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC` i `RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED` dokumentovani su u `.env.example` i proslijeđeni kroz oba Compose deploymenta; konfiguracija se strogo validira. Outage ponašanje je fail-open po defaultu, uz opciju 503 fail-closed.
+- Guardovi su registrovani u odgovarajućim Nest modulima za dependency injection; testovi pokrivaju route guard metadata, odvojene Redis ključeve, prag/prozor, neispravnu konfiguraciju i Redis outage policy.
+- Privacy odluka o poljima i neograničenoj historiji transfera, kao i anti-enumeration/load test, ostaju otvoreni; rate limit ne mijenja postojeći response DTO.
 
 **Prihvatanje:** export ne izvršava formule i ima predvidivu gornju granicu; javni QR response je dokumentovan i privacy-odobren.
 
@@ -275,6 +282,7 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 
 #### Login rate-limit resilience (P2 — implementation added)
 
+- `RedisRateLimitGuard` je eksplicitno registrovan u `AuthModule` (isto kao public QR guard u svom modulu), tako da Nest može injektovati Redis servis u rutu označenu sa `@UseGuards`.
 - `RedisService.incrementRateLimitCounter()` koristi jednu Lua skriptu za `INCR` i TTL; ključevi bez TTL-a iz ranijih verzija popravljaju se pri narednom hitu, bez promjene fixed-window semantics.
 - `RATE_LIMIT_LOGIN_FAIL_CLOSED=false` zadržava postojeći fail-open default; `true` vraća 503 kad Redis nije dostupan. Max/window i policy vrijednosti se validiraju pri pokretanju.
 - Unit testovi pokrivaju Lua poziv, input/response validaciju i oba outage režima; branch CI izvršava i live Redis test sa paralelnim inkrementima, expiry provjerom i legacy TTL repair.
