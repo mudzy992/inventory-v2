@@ -140,18 +140,29 @@ export class RedisService {
   // ---------------------------------------------------------------------
 
   /**
-   * Fixed-window brojač: INCR + EXPIRE-na-prvom-hitu. Vraća trenutni broj
-   * pogodaka u prozoru. Namjerno fixed-window (ne sliding) — jednostavnije,
-   * atomično sa dvije komande, i dovoljno precizno za brute-force zaštitu
-   * (dozvoljava kratkotrajni "burst" na granici prozora, što je prihvatljiv
-   * kompromis za login endpoint, ne za npr. finansijske transakcije).
-   * Fail-closed: greška Redis-a propagira se pozivaocu (guard odlučuje
-   * kako reagovati — vidi RedisRateLimitGuard).
+   * Atomarni fixed-window brojač. INCR i postavljanje expiry-ja izvršavaju
+   * se u jednoj Lua operaciji, tako prekid između naredbi ne može ostaviti
+   * rate-limit ključ bez TTL-a. Ključevi bez TTL-a iz ranijih verzija se
+   * takođe popravljaju pri sljedećem hitu. Fixed-window namjerno dopušta
+   * kratak burst na granici prozora — prihvatljiv kompromis za login endpoint.
+   * Greška Redis-a propagira se pozivaocu (guard bira fail-open/fail-closed).
    */
   async incrementRateLimitCounter(key: string, windowSeconds: number): Promise<number> {
-    const count = await this.client.incr(key);
-    if (count === 1) {
-      await this.client.expire(key, windowSeconds);
+    if (!Number.isSafeInteger(windowSeconds) || windowSeconds < 1) {
+      throw new RangeError('windowSeconds must be a positive safe integer');
+    }
+
+    const script = `
+      local count = redis.call('INCR', KEYS[1])
+      if redis.call('TTL', KEYS[1]) < 0 then
+        redis.call('EXPIRE', KEYS[1], ARGV[1])
+      end
+      return count
+    `;
+    const result: unknown = await this.client.eval(script, 1, key, windowSeconds);
+    const count = Number(result);
+    if (!Number.isSafeInteger(count) || count < 1) {
+      throw new Error('Redis returned an invalid rate-limit counter value');
     }
     return count;
   }

@@ -241,6 +241,13 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 
 ### 5.2 Health i runtime observability
 
+#### Login rate-limit resilience (P2 — implementation added)
+
+- `RedisService.incrementRateLimitCounter()` koristi jednu Lua skriptu za `INCR` i TTL; ključevi bez TTL-a iz ranijih verzija popravljaju se pri narednom hitu, bez promjene fixed-window semantics.
+- `RATE_LIMIT_LOGIN_FAIL_CLOSED=false` zadržava postojeći fail-open default; `true` vraća 503 kad Redis nije dostupan. Max/window i policy vrijednosti se validiraju pri pokretanju.
+- Unit testovi pokrivaju Lua poziv, input/response validaciju i oba outage režima; branch CI izvršava i live Redis test sa paralelnim inkrementima, expiry provjerom i legacy TTL repair.
+- Failure se trenutno bilježi preko warn/error loga; zasebna rate-limit Redis failure metrika ostaje otvorena uz širu observability implementaciju.
+
 - Razdvojiti liveness (proces/event loop) i readiness (zavisnosti potrebne za prijem saobraćaja).
 - Odrediti šta se smatra obaveznim za readiness: DB svakako; Redis/queue prema degradacijskom ugovoru pojedinih funkcija. Ne označavati cijeli servis unhealthy zbog opcionalnog feature-a ako aplikacija može sigurno degradirati.
 - Dodati metrike: DB pool/latency, Redis ready/reconnect, queue depth/lag/retry/failed jobs, upload reject counts, inventory close age/status, request latency/error rate.

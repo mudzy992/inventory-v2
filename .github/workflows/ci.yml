@@ -96,6 +96,10 @@ jobs:
           });
           NODE
 
+      - name: Verify atomic Redis rate-limit integration
+        working-directory: backend
+        run: npm run test:integration:redis-rate-limit
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

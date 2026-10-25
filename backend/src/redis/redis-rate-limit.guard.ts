@@ -5,6 +5,7 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { RedisService } from './redis.service';
@@ -16,23 +17,45 @@ import { RedisService } from './redis.service';
  * obrazac (IP + route → brojač u prozoru), pa je jednostavniji, direktno
  * čitljiv Redis poziv bolji izbor od dodatne apstrakcije.
  *
- * Fail-closed prema Redis-u JE namjerno drugačije od cache-aside metoda u
- * RedisService: ako Redis nije dostupan, request se PROPUŠTA (fail-open)
- * uz upozorenje u logu — jer je posljedica fail-closed ponašanja ovdje
- * (blokiranje svih login pokušaja zbog pada Redis-a) gora od privremenog
- * gubitka brute-force zaštite. Odluka se svjesno razlikuje od
- * `acquireLock`, gdje je duplo izvršavanje cron posla gori ishod.
+ * Redis outage policy is configurable with RATE_LIMIT_LOGIN_FAIL_CLOSED.
+ * Default false preserves availability (fail-open); true rejects login with
+ * 503 until Redis recovers. This is deliberately distinct from cache-aside
+ * behavior, and independent from the security-sensitive distributed lock.
  */
+const readPositiveInteger = (name: string, fallback: number): number => {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const normalized = raw.trim();
+  if (!/^\d+$/u.test(normalized)) {
+    throw new Error(`${name} must be a positive safe integer`);
+  }
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error(`${name} must be a positive safe integer`);
+  }
+  return parsed;
+};
+
+const readFailClosed = (): boolean => {
+  const raw = process.env.RATE_LIMIT_LOGIN_FAIL_CLOSED;
+  if (raw === undefined || raw.trim() === '') return false;
+  if (raw.trim() === 'true') return true;
+  if (raw.trim() === 'false') return false;
+  throw new Error('RATE_LIMIT_LOGIN_FAIL_CLOSED must be either "true" or "false"');
+};
+
 @Injectable()
 export class RedisRateLimitGuard implements CanActivate {
   private readonly logger = new Logger(RedisRateLimitGuard.name);
   private readonly limit: number;
   private readonly windowSeconds: number;
+  private readonly failClosed: boolean;
   private readonly keyPrefix: string;
 
   constructor(private readonly redisService: RedisService) {
-    this.limit = Number(process.env.RATE_LIMIT_LOGIN_MAX ?? 10);
-    this.windowSeconds = Number(process.env.RATE_LIMIT_LOGIN_WINDOW_SEC ?? 60);
+    this.limit = readPositiveInteger('RATE_LIMIT_LOGIN_MAX', 10);
+    this.windowSeconds = readPositiveInteger('RATE_LIMIT_LOGIN_WINDOW_SEC', 60);
+    this.failClosed = readFailClosed();
     this.keyPrefix = 'ratelimit:login';
   }
 
@@ -57,7 +80,10 @@ export class RedisRateLimitGuard implements CanActivate {
       if (err instanceof HttpException) {
         throw err;
       }
-      // Redis nedostupan — fail-open (vidi obrazloženje iznad klase).
+      if (this.failClosed) {
+        this.logger.error(`Rate limit check failed; rejecting login while Redis is unavailable: ${String(err)}`);
+        throw new ServiceUnavailableException('Prijava trenutno nije dostupna. Pokušajte ponovo.');
+      }
       this.logger.warn(`Rate limit check failed, allowing request through: ${String(err)}`);
       return true;
     }
