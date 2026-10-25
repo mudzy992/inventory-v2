@@ -237,88 +237,98 @@ export class NotificationsService {
     return { count: unread.length };
   }
 
-  async notifyTransferPending(transferId: string): Promise<void> {
-    if (!(await this.areNotificationsEnabled())) {
+  async enqueueTransferOutboxEventsInTx(
+    tx: Prisma.TransactionClient,
+    transferId: string,
+    action: 'created' | 'signed',
+    options: { notificationsEnabled: boolean; includeUploadPending?: boolean },
+  ): Promise<void> {
+    if (!options.notificationsEnabled) {
       return;
     }
-    const transfer = await this.loadTransferContext(transferId);
-    const recipients = await collectTransferPendingRecipients(
-      this.prisma,
-      this.registrarScope,
-      await this.buildRecipientContext(transfer),
-    );
-    const equipmentLabel = transfer.equipment.inventoryNumber;
-    await this.createForUsers(recipients, {
-      type: 'transfer_pending',
-      title: 'Novi prenos na potpis',
-      message: `Prenos opreme ${equipmentLabel} (${transfer.documentNumber}) čeka potpis.`,
-      relatedId: transfer.id,
-    });
-  }
-
-  async notifyTransferSignedUploadPending(transferId: string): Promise<void> {
-    if (!(await this.areNotificationsEnabled())) {
-      return;
-    }
-    const transfer = await this.prisma.transfer.findUnique({
+    const transfer = await tx.transfer.findUnique({
       where: { id: transferId },
-      select: {
-        id: true,
-        documentNumber: true,
-        scannedDocUrl: true,
-        status: true,
-        equipment: { select: { inventoryNumber: true } },
+      include: {
+        equipment: { include: { currentHolder: true, warehouse: true } },
+        fromPerson: true,
+        toPerson: true,
       },
     });
-    if (!transfer || transfer.scannedDocUrl || transfer.status !== 'raw') {
+    if (!transfer) {
       return;
     }
-    const fullTransfer = await this.loadTransferContext(transferId);
-    const recipients = await collectTransferPendingRecipients(
-      this.prisma,
-      this.registrarScope,
-      await this.buildRecipientContext(fullTransfer),
-    );
+    const recipientContext = await this.buildRecipientContext(transfer);
+    const rows: Prisma.NotificationOutboxCreateManyInput[] = [];
     const equipmentLabel = transfer.equipment.inventoryNumber;
-    await this.createForUsers(recipients, {
-      type: 'transfer_signed_upload_pending',
-      title: 'Prenosnica čeka potpisani PDF',
-      message: `Upload potpisane prenosnice ${transfer.documentNumber} (${equipmentLabel}).`,
-      relatedId: transfer.id,
-    });
-  }
-
-  async notifyTransferSigned(transferId: string): Promise<void> {
-    if (!(await this.areNotificationsEnabled())) {
-      return;
-    }
-    const transfer = await this.loadTransferContext(transferId);
-    const context = await this.buildRecipientContext(transfer);
-    const recipients = await collectTransferSignedRecipients(
-      this.prisma,
-      this.registrarScope,
-      context,
-    );
-    const equipmentLabel = transfer.equipment.inventoryNumber;
-    await this.createForUsers(recipients, {
-      type: 'transfer_complete',
-      title: 'Prenos potpisan',
-      message: `Prenos opreme ${equipmentLabel} (${transfer.documentNumber}) je potpisan.`,
-      relatedId: transfer.id,
-    });
-    if (transfer.toPersonId && transfer.toType === 'osoba') {
-      const assignee = await this.prisma.user.findFirst({
-        where: { employeeId: transfer.toPersonId, isActive: true },
-        select: { id: true },
-      });
-      if (assignee) {
-        await this.createForUsers([assignee.id], {
-          type: 'equipment_assigned',
-          title: 'Nova oprema zadužena',
-          message: `Zaduženi ste opremom ${equipmentLabel}.`,
-          relatedId: transfer.equipmentId,
+    const addEvent = (
+      userIds: string[],
+      type: NotificationType,
+      title: string,
+      message: string,
+      relatedId: string,
+    ) => {
+      for (const userId of new Set(userIds)) {
+        rows.push({
+          idempotencyKey: `transfer:${transfer.id}:${type}:${userId}`,
+          userId,
+          type,
+          title,
+          message,
+          relatedId,
         });
       }
+    };
+
+    if (action === 'created') {
+      const recipients = await collectTransferPendingRecipients(tx, this.registrarScope, recipientContext);
+      addEvent(
+        recipients,
+        'transfer_pending',
+        'Novi prenos na potpis',
+        `Prenos opreme ${equipmentLabel} (${transfer.documentNumber}) čeka potpis.`,
+        transfer.id,
+      );
+      if (options.includeUploadPending && !transfer.scannedDocUrl && transfer.status === 'raw') {
+        addEvent(
+          recipients,
+          'transfer_signed_upload_pending',
+          'Prenosnica čeka potpisani PDF',
+          `Upload potpisane prenosnice ${transfer.documentNumber} (${equipmentLabel}).`,
+          transfer.id,
+        );
+      }
+    } else {
+      const recipients = await collectTransferSignedRecipients(
+        tx,
+        this.registrarScope,
+        recipientContext,
+      );
+      addEvent(
+        recipients,
+        'transfer_complete',
+        'Prenos potpisan',
+        `Prenos opreme ${equipmentLabel} (${transfer.documentNumber}) je potpisan.`,
+        transfer.id,
+      );
+      if (transfer.toPersonId && transfer.toType === 'osoba') {
+        const assignee = await tx.user.findFirst({
+          where: { employeeId: transfer.toPersonId, isActive: true },
+          select: { id: true },
+        });
+        if (assignee) {
+          addEvent(
+            [assignee.id],
+            'equipment_assigned',
+            'Nova oprema zadužena',
+            `Zaduženi ste opremom ${equipmentLabel}.`,
+            transfer.equipmentId,
+          );
+        }
+      }
+    }
+
+    if (rows.length > 0) {
+      await tx.notificationOutbox.createMany({ data: rows, skipDuplicates: true });
     }
   }
 
@@ -630,21 +640,6 @@ export class NotificationsService {
       throw new NotFoundException('Notification not found');
     }
     return row;
-  }
-
-  private async loadTransferContext(transferId: string) {
-    const transfer = await this.prisma.transfer.findUnique({
-      where: { id: transferId },
-      include: {
-        equipment: { include: { currentHolder: true, warehouse: true } },
-        fromPerson: true,
-        toPerson: true,
-      },
-    });
-    if (!transfer) {
-      throw new NotFoundException('Transfer not found');
-    }
-    return transfer;
   }
 
   private async buildRecipientContext(transfer: TransferRecipientSource) {

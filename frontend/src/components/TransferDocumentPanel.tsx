@@ -1,6 +1,6 @@
-import { CheckCircle, Download, Eye, FileText, Upload } from 'lucide-react';
+import { CheckCircle, Download, Eye, FileText, RefreshCw, Upload } from 'lucide-react';
 import type { InventorySessionStatus } from '../api/inventory-api';
-import { fetchAuthenticatedBlob, getApiBaseUrl } from '../api/client';
+import { apiRequest, fetchAuthenticatedBlob, getApiBaseUrl } from '../api/client';
 import { signTransferApi, uploadTransferDocumentApi } from '../api/data-api';
 import type { TransferRecord } from '../types';
 import {
@@ -14,7 +14,7 @@ import {
 } from './transfers/use-transfer-document-preview';
 import { cn } from '../utils/cn';
 import { useAdminSettings } from '../contexts/admin-settings-context';
-import { isAdmin } from '../store';
+import { isAdmin, isEvidenticar, isModerator } from '../store';
 import { useToast } from '../contexts/toast-context';
 import {
   canFinalizeTransfer,
@@ -23,7 +23,7 @@ import {
   canShowTransferGeneratedPdf,
 } from '../helpers/guards';
 import { ApiError } from '../api/client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface TransferDocumentPanelProps {
   transfer: TransferRecord;
@@ -53,7 +53,43 @@ export const TransferDocumentPanel = ({
     isAdmin() && getBoolean('transfer.allow_finalize_without_upload', false);
   const requireSignedPdf = getBoolean('transfer.require_signed_pdf_upload', true);
   const [isLoading, setIsLoading] = useState(false);
+  const [docxStatus, setDocxStatus] = useState<
+    'not_requested' | 'queued' | 'running' | 'done' | 'failed'
+  >(transfer.documentGenerationStatus ?? 'not_requested');
+  const [hasGeneratedDocx, setHasGeneratedDocx] = useState(transfer.hasGeneratedDocument === true);
   const isDrawer = layout === 'drawer';
+
+  useEffect(() => {
+    setDocxStatus(transfer.documentGenerationStatus ?? 'not_requested');
+    setHasGeneratedDocx(transfer.hasGeneratedDocument === true);
+  }, [transfer.id, transfer.documentGenerationStatus, transfer.hasGeneratedDocument]);
+
+  useEffect(() => {
+    if (docxStatus !== 'queued' && docxStatus !== 'running') {
+      return;
+    }
+    let disposed = false;
+    const refreshStatus = async () => {
+      try {
+        const status = await apiRequest<{
+          docxStatus: typeof docxStatus;
+          hasGeneratedDocument: boolean;
+        }>(`/transfers/${transfer.id}/generated-document/status`);
+        if (!disposed) {
+          setDocxStatus(status.docxStatus);
+          setHasGeneratedDocx(status.hasGeneratedDocument);
+        }
+      } catch {
+        // Keep the last known state; status polling is best-effort.
+      }
+    };
+    void refreshStatus();
+    const interval = window.setInterval(() => void refreshStatus(), 3_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [docxStatus, transfer.id]);
   const effectiveAutoPreview = isDrawer ? autoPreview : false;
 
   const {
@@ -111,6 +147,22 @@ export const TransferDocumentPanel = ({
           ? err.message
           : 'Obrazac nije generisan — provjerite aktivni .docx template skladišta.';
       toastError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRetryGeneratedDocument = async () => {
+    setIsLoading(true);
+    try {
+      const status = await apiRequest<{
+        docxStatus: typeof docxStatus;
+        hasGeneratedDocument: boolean;
+      }>(`/transfers/${transfer.id}/generated-document/retry`, { method: 'POST' });
+      setDocxStatus(status.docxStatus);
+      setHasGeneratedDocx(status.hasGeneratedDocument);
+    } catch (err) {
+      toastError(err instanceof ApiError ? err.message : 'Ponovni pokušaj generisanja nije uspio.');
     } finally {
       setIsLoading(false);
     }
@@ -181,10 +233,11 @@ export const TransferDocumentPanel = ({
       allowFinalizeWithoutUpload,
     }).allowed &&
     (Boolean(transfer.scannedDocUrl) || allowFinalizeWithoutUpload);
+  const generatedDocumentState = { ...transfer, hasGeneratedDocument: hasGeneratedDocx };
   const canShowDocx =
-    canShowTransferGeneratedDocx(transfer) && (inventoryMode || isRaw);
+    canShowTransferGeneratedDocx(generatedDocumentState) && (inventoryMode || isRaw);
   const canShowPdf =
-    canShowTransferGeneratedPdf(transfer, adminSettings) && (inventoryMode || isRaw);
+    canShowTransferGeneratedPdf(generatedDocumentState, adminSettings) && (inventoryMode || isRaw);
   const showAutoPreview = Boolean(effectiveAutoPreview);
   const showSignedDownload = isDrawer && effectiveAutoPreview === 'signed' && uploadMeta;
   const badgeClass =
@@ -270,6 +323,18 @@ export const TransferDocumentPanel = ({
           className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs border rounded-lg bg-white hover:bg-gray-50"
         >
           <Download size={14} /> Obrazac (DOCX)
+        </button>
+      ) : null}
+      {!inventoryMode &&
+      (isAdmin() || isEvidenticar() || isModerator()) &&
+      docxStatus === 'failed' ? (
+        <button
+          type="button"
+          onClick={() => void handleRetryGeneratedDocument()}
+          disabled={isLoading}
+          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs border rounded-lg bg-white hover:bg-gray-50"
+        >
+          <RefreshCw size={14} /> Ponovi generisanje DOCX-a
         </button>
       ) : null}
       {canShowPdf ? (
@@ -471,7 +536,24 @@ export const TransferDocumentPanel = ({
             : null}
         </p>
       ) : null}
-      {!inventoryMode && isRaw && transfer.hasGeneratedDocument === false ? (
+      {!inventoryMode &&
+      !hasGeneratedDocx &&
+      (docxStatus === 'queued' || docxStatus === 'running') ? (
+        <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
+          Word obrazac se generiše; pokušajte preuzeti ponovo za nekoliko sekundi.
+        </p>
+      ) : null}
+      {!inventoryMode &&
+      !hasGeneratedDocx &&
+      docxStatus === 'failed' ? (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+          Generisanje Word obrasca nije uspjelo — provjerite aktivni .docx predložak i ponovite pokušaj.
+        </p>
+      ) : null}
+      {!inventoryMode &&
+      isRaw &&
+      !hasGeneratedDocx &&
+      docxStatus === 'not_requested' ? (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
           Generisani obrazac još nije dostupan — provjerite aktivni .docx template skladišta povezanog
           s prenosom.

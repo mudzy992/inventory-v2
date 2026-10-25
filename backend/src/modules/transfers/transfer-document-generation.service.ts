@@ -1,4 +1,14 @@
-import { BadRequestException, Injectable, HttpException, HttpStatus, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
+import { randomUUID } from 'node:crypto';
 import Docxtemplater from 'docxtemplater';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -28,9 +38,12 @@ const transferTemplateInclude = {
  * Document Engine je generički (vidi modules/documents/), ovo je jedini
  * string koji ga vezuje za transfers/ domenu. */
 const DOCUMENT_SOURCE_TYPE_TRANSFER = 'transfer';
+const DOCX_RECONCILE_INTERVAL_MS = 5_000;
+const DOCX_LEASE_DURATION_MS = 2 * 60_000;
+const DOCX_RECONCILE_BATCH_SIZE = 20;
 
 @Injectable()
-export class TransferDocumentGenerationService {
+export class TransferDocumentGenerationService implements OnModuleInit {
   private readonly logger = new Logger(TransferDocumentGenerationService.name);
 
   constructor(
@@ -40,6 +53,53 @@ export class TransferDocumentGenerationService {
     private readonly documentConversionQueue: DocumentConversionQueueService,
     private readonly documentJobs: DocumentJobsService,
   ) {}
+
+  private reconcilingDocxJobs = false;
+
+  onModuleInit(): void {
+    void this.reconcileQueuedDocxGenerations();
+  }
+
+  @Interval(DOCX_RECONCILE_INTERVAL_MS)
+  async reconcileQueuedDocxGenerations(): Promise<void> {
+    if (this.reconcilingDocxJobs) {
+      return;
+    }
+    this.reconcilingDocxJobs = true;
+    try {
+      const now = new Date();
+      const transfers = await this.prisma.transfer.findMany({
+        where: {
+          OR: [
+            { generatedDocxStatus: 'queued' },
+            {
+              generatedDocxStatus: 'running',
+              OR: [
+                { generatedDocxLeaseUntil: null },
+                { generatedDocxLeaseUntil: { lte: now } },
+              ],
+            },
+          ],
+        },
+        select: { id: true, createdByUserId: true },
+        orderBy: { updatedAt: 'asc' },
+        take: DOCX_RECONCILE_BATCH_SIZE,
+      });
+      for (const transfer of transfers) {
+        await this.generateForTransfer(transfer.id, transfer.createdByUserId ?? undefined).catch(
+          (error: unknown) => {
+            this.logger.warn(
+              `Queued DOCX generation failed for transfer ${transfer.id}: ${String(error)}`,
+            );
+          },
+        );
+      }
+    } catch (error) {
+      this.logger.error(`DOCX generation reconciliation failed: ${String(error)}`);
+    } finally {
+      this.reconcilingDocxJobs = false;
+    }
+  }
 
   /**
    * Renderuje DOCX iz aktivnog Word obrasca skladišta (docxtemplater — čist
@@ -52,77 +112,157 @@ export class TransferDocumentGenerationService {
    * `NotificationsGateway.emitDocumentJobUpdated` za push obavještenje).
    */
   async generateForTransfer(transferId: string, requestedByUserId?: string): Promise<void> {
-    const transfer = await this.prisma.transfer.findUnique({
-      where: { id: transferId },
-      include: transferTemplateInclude,
+    const now = new Date();
+    const leaseToken = randomUUID();
+    const claimed = await this.prisma.transfer.updateMany({
+      where: {
+        id: transferId,
+        status: { not: 'cancelled' },
+        OR: [
+          { generatedDocxStatus: 'queued' },
+          {
+            generatedDocxStatus: 'running',
+            OR: [
+              { generatedDocxLeaseUntil: null },
+              { generatedDocxLeaseUntil: { lte: now } },
+            ],
+          },
+        ],
+      },
+      data: {
+        generatedDocxStatus: 'running',
+        generatedDocxLeaseToken: leaseToken,
+        generatedDocxLeaseUntil: new Date(now.getTime() + DOCX_LEASE_DURATION_MS),
+        generatedDocxAttempts: { increment: 1 },
+        generatedDocxError: null,
+      },
     });
-    if (!transfer?.documentWarehouseId) {
-      throw new BadRequestException('Transfer nema povezano skladište za generisanje prenosnice');
+    if (claimed.count !== 1) {
+      return;
     }
-    const template = await this.templateService.getActiveTemplate(transfer.documentWarehouseId);
-    if (!template) {
-      throw new BadRequestException(
-        'Skladište nema aktivni obrazac prenosnice — uploadujte .docx u Kontekst skladišta',
-      );
-    }
-    const year = transfer.date.getFullYear();
-    const templateAbsolute = this.templateService.resolveTemplateAbsolutePath(template.templatePath);
-    if (!existsSync(templateAbsolute)) {
-      throw new BadRequestException('Aktivni obrazac prenosnice nije pronađen na disku');
-    }
-    const data = buildTransferTemplateData(transfer);
-    const docxBuffer = this.renderDocx(templateAbsolute, data);
-    const docxRelative = buildGeneratedDocxRelativePath(
-      transfer.documentWarehouseId,
-      year,
-      transfer.documentNumber,
-    );
-    const docxAbsolute = join(this.templateService.getUploadRoot(), docxRelative);
-    mkdirSync(resolve(docxAbsolute, '..'), { recursive: true });
-    writeFileSync(docxAbsolute, docxBuffer);
 
-    // PDF konverzija se resetuje na svaki novi DOCX (npr. transfer je
-    // ponovo potpisan sa izmijenjenim podacima) — stari generatedPdfPath
-    // više ne odgovara trenutnom DOCX-u, brišemo ga dok novi posao ne
-    // završi (getGeneratedFileStream i frontend to tretiraju kao
-    // "generiše se").
-    await this.prisma.transfer.update({
-      where: { id: transferId },
-      data: { generatedDocxPath: docxRelative, generatedPdfPath: null },
-    });
-
-    const generatePdf = await this.settingsService.getBooleanValue(
-      'transfer.generate_print_pdf',
-      true,
-    );
-    if (generatePdf) {
-      const pdfRelative = buildGeneratedPdfRelativePath(
+    try {
+      const transfer = await this.prisma.transfer.findUnique({
+        where: { id: transferId },
+        include: transferTemplateInclude,
+      });
+      if (!transfer?.documentWarehouseId) {
+        throw new BadRequestException('Transfer nema povezano skladište za generisanje prenosnice');
+      }
+      const template = await this.templateService.getActiveTemplate(transfer.documentWarehouseId);
+      if (!template) {
+        throw new BadRequestException(
+          'Skladište nema aktivni obrazac prenosnice — uploadujte .docx u Kontekst skladišta',
+        );
+      }
+      const year = transfer.date.getFullYear();
+      const templateAbsolute = this.templateService.resolveTemplateAbsolutePath(template.templatePath);
+      if (!existsSync(templateAbsolute)) {
+        throw new BadRequestException('Aktivni obrazac prenosnice nije pronađen na disku');
+      }
+      const data = buildTransferTemplateData(transfer);
+      const docxBuffer = this.renderDocx(templateAbsolute, data);
+      const docxRelative = buildGeneratedDocxRelativePath(
         transfer.documentWarehouseId,
         year,
         transfer.documentNumber,
       );
+      const docxAbsolute = join(this.templateService.getUploadRoot(), docxRelative);
+      mkdirSync(resolve(docxAbsolute, '..'), { recursive: true });
+      writeFileSync(docxAbsolute, docxBuffer);
+
+      const completed = await this.prisma.transfer.updateMany({
+        where: { id: transferId, generatedDocxStatus: 'running', generatedDocxLeaseToken: leaseToken },
+        data: {
+          generatedDocxPath: docxRelative,
+          generatedPdfPath: null,
+          generatedDocxStatus: 'done',
+          generatedDocxLeaseToken: null,
+          generatedDocxLeaseUntil: null,
+          generatedDocxError: null,
+        },
+      });
+      if (completed.count !== 1) {
+        throw new Error(`DOCX generation lease was lost for transfer ${transferId}`);
+      }
+
       try {
-        await this.documentConversionQueue.enqueuePdfConversion({
-          sourceType: DOCUMENT_SOURCE_TYPE_TRANSFER,
-          sourceId: transferId,
-          sourceFormat: 'docx',
-          sourceRelativePath: docxRelative,
-          resultRelativePath: pdfRelative,
-          requestedByUserId,
-        });
-      } catch (err) {
-        // DOCX (obavezan dokument) je već uspješno sačuvan iznad — PDF je
-        // "nice to have" asinhroni dodatak. Prolazni Redis problem OVDJE
-        // NE SMIJE srušiti kreiranje/potpisivanje prenosnice (kritičnu
-        // poslovnu transakciju); enqueuePdfConversion je sam po sebi već
-        // označio DocumentJob red kao 'failed' ako je uspio da ga kreira
-        // prije pada — korisnik može ručno pokrenuti
-        // POST :id/generated-document/retry.
+        const generatePdf = await this.settingsService.getBooleanValue(
+          'transfer.generate_print_pdf',
+          true,
+        );
+        if (generatePdf) {
+          const pdfRelative = buildGeneratedPdfRelativePath(
+            transfer.documentWarehouseId,
+            year,
+            transfer.documentNumber,
+          );
+          await this.documentConversionQueue.enqueuePdfConversion({
+            sourceType: DOCUMENT_SOURCE_TYPE_TRANSFER,
+            sourceId: transferId,
+            sourceFormat: 'docx',
+            sourceRelativePath: docxRelative,
+            resultRelativePath: pdfRelative,
+            requestedByUserId,
+          });
+        }
+      } catch (error) {
         this.logger.warn(
-          `PDF enqueue failed for transfer ${transferId} (DOCX already saved, continuing): ${String(err)}`,
+          `PDF enqueue failed for transfer ${transferId} (DOCX saved): ${String(error)}`,
         );
       }
+    } catch (error) {
+      await this.prisma.transfer.updateMany({
+        where: { id: transferId, generatedDocxStatus: 'running', generatedDocxLeaseToken: leaseToken },
+        data: {
+          generatedDocxStatus: 'failed',
+          generatedDocxError: error instanceof Error ? error.message : String(error),
+          generatedDocxLeaseToken: null,
+          generatedDocxLeaseUntil: null,
+        },
+      });
+      throw error;
     }
+  }
+
+  async tryGenerateForTransfer(transferId: string, requestedByUserId?: string): Promise<void> {
+    try {
+      await this.generateForTransfer(transferId, requestedByUserId);
+    } catch (error) {
+      this.logger.warn(`DOCX generation failed for committed transfer ${transferId}: ${String(error)}`);
+    }
+  }
+
+  async retryDocxGeneration(transferId: string, requestedByUserId?: string): Promise<void> {
+    const queued = await this.prisma.transfer.updateMany({
+      where: {
+        id: transferId,
+        status: { not: 'cancelled' },
+        documentWarehouseId: { not: null },
+        generatedDocxStatus: { in: ['not_requested', 'failed', 'done'] },
+      },
+      data: {
+        generatedDocxStatus: 'queued',
+        generatedDocxPath: null,
+        generatedPdfPath: null,
+        generatedDocxLeaseToken: null,
+        generatedDocxLeaseUntil: null,
+        generatedDocxError: null,
+      },
+    });
+    if (queued.count === 0) {
+      const transfer = await this.prisma.transfer.findUnique({
+        where: { id: transferId },
+        select: { generatedDocxStatus: true },
+      });
+      if (!transfer) {
+        throw new NotFoundException('Transfer not found');
+      }
+      if (transfer.generatedDocxStatus !== 'queued' && transfer.generatedDocxStatus !== 'running') {
+        throw new BadRequestException('DOCX generation is not available for this transfer');
+      }
+    }
+    await this.generateForTransfer(transferId, requestedByUserId);
   }
 
   /**
@@ -134,32 +274,73 @@ export class TransferDocumentGenerationService {
     status: 'none' | 'queued' | 'running' | 'done' | 'failed';
     jobId: string | null;
     error: string | null;
+    docxStatus: 'not_requested' | 'queued' | 'running' | 'done' | 'failed';
+    docxError: string | null;
+    hasGeneratedDocument: boolean;
   }> {
-    const job = await this.documentJobs.findLatestForSource(DOCUMENT_SOURCE_TYPE_TRANSFER, transferId);
-    if (!job) {
-      return { status: 'none', jobId: null, error: null };
-    }
-    return { status: job.status, jobId: job.id, error: job.lastError };
+    const [job, transfer] = await Promise.all([
+      this.documentJobs.findLatestForSource(DOCUMENT_SOURCE_TYPE_TRANSFER, transferId),
+      this.prisma.transfer.findUnique({
+        where: { id: transferId },
+        select: { generatedDocxStatus: true, generatedDocxPath: true },
+      }),
+    ]);
+    return {
+      status: job?.status ?? 'none',
+      jobId: job?.id ?? null,
+      error: job?.lastError ?? null,
+      docxStatus: transfer?.generatedDocxStatus ?? 'not_requested',
+      docxError:
+        transfer?.generatedDocxStatus === 'failed'
+          ? 'Generisanje Word obrasca nije uspjelo. Provjerite aktivni predložak i pokušajte ponovo.'
+          : null,
+      hasGeneratedDocument: Boolean(transfer?.generatedDocxPath),
+    };
   }
 
   /** Ponovo pokreće PDF konverziju nakon 'failed' statusa (ili ako iz nekog
    * razloga nikad nije ni pokrenuta), koristeći TRENUTNI DOCX na disku. */
   async retryPdfGeneration(transferId: string, requestedByUserId?: string): Promise<void> {
-    const transfer = await this.prisma.transfer.findUnique({
+    let transfer = await this.prisma.transfer.findUnique({
       where: { id: transferId },
       select: {
         documentWarehouseId: true,
         date: true,
         documentNumber: true,
         generatedDocxPath: true,
+        generatedDocxStatus: true,
       },
     });
+    if (!transfer) {
+      throw new NotFoundException('Transfer not found');
+    }
+    if (!transfer.generatedDocxPath) {
+      await this.retryDocxGeneration(transferId, requestedByUserId);
+      transfer = await this.prisma.transfer.findUnique({
+        where: { id: transferId },
+        select: {
+          documentWarehouseId: true,
+          date: true,
+          documentNumber: true,
+          generatedDocxPath: true,
+          generatedDocxStatus: true,
+        },
+      });
+      if (transfer?.generatedDocxPath) {
+        return; // DOCX generation already enqueued its PDF conversion.
+      }
+    }
     if (!transfer?.documentWarehouseId || !transfer.generatedDocxPath) {
-      throw new BadRequestException('Prenosnica nema generisan DOCX — prvo ga generišite.');
+      throw new BadRequestException(
+        transfer?.generatedDocxStatus === 'failed'
+          ? 'DOCX generisanje nije uspjelo; provjerite predložak i pokušajte ponovo.'
+          : 'DOCX generisanje je još u toku.',
+      );
     }
     const docxAbsolute = join(this.templateService.getUploadRoot(), transfer.generatedDocxPath);
     if (!existsSync(docxAbsolute)) {
-      throw new NotFoundException('Generisani DOCX fajl nije pronađen na disku');
+      await this.retryDocxGeneration(transferId, requestedByUserId);
+      return; // DOCX generation handles the corresponding PDF enqueue.
     }
     const pdfRelative = buildGeneratedPdfRelativePath(
       transfer.documentWarehouseId,
@@ -188,6 +369,7 @@ export class TransferDocumentGenerationService {
         documentNumber: true,
         generatedDocxPath: true,
         generatedPdfPath: true,
+        generatedDocxStatus: true,
       },
     });
     if (!transfer) {
@@ -195,6 +377,17 @@ export class TransferDocumentGenerationService {
     }
     if (format === 'docx') {
       if (!transfer.generatedDocxPath) {
+        if (transfer.generatedDocxStatus === 'queued' || transfer.generatedDocxStatus === 'running') {
+          throw new HttpException(
+            { status: transfer.generatedDocxStatus, message: 'Word obrazac se generiše.' },
+            HttpStatus.CONFLICT,
+          );
+        }
+        if (transfer.generatedDocxStatus === 'failed') {
+          throw new BadRequestException(
+            'Word obrazac nije generisan; provjerite predložak i pokrenite ponovni pokušaj.',
+          );
+        }
         throw new NotFoundException('Generated docx not available');
       }
       const absolutePath = join(this.templateService.getUploadRoot(), transfer.generatedDocxPath);
@@ -260,7 +453,11 @@ export class TransferDocumentGenerationService {
   private async ensureDocxGenerated(transferId: string, requestedByUserId?: string): Promise<void> {
     const transfer = await this.prisma.transfer.findUnique({
       where: { id: transferId },
-      select: { documentWarehouseId: true, generatedDocxPath: true },
+      select: {
+        documentWarehouseId: true,
+        generatedDocxPath: true,
+        generatedDocxStatus: true,
+      },
     });
     if (!transfer?.documentWarehouseId) {
       return;
@@ -272,9 +469,9 @@ export class TransferDocumentGenerationService {
       return;
     }
     try {
-      await this.generateForTransfer(transferId, requestedByUserId);
-    } catch {
-      // ostavi getGeneratedFileStream da baci odgovarajući NotFound/Conflict
+      await this.retryDocxGeneration(transferId, requestedByUserId);
+    } catch (error) {
+      this.logger.warn(`Lazy DOCX generation failed for transfer ${transferId}: ${String(error)}`);
     }
   }
 

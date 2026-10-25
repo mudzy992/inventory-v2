@@ -84,6 +84,14 @@ enum TransferStatus {
   cancelled
 }
 
+enum TransferDocxGenerationStatus {
+  not_requested
+  queued
+  running
+  done
+  failed
+}
+
 enum NotificationOutboxStatus {
   pending
   running
@@ -819,8 +827,13 @@ model Transfer {
   printedAt              DateTime?
   documentNumber         String            @db.VarChar(120)
   documentWarehouseId    String?
-  generatedDocxPath      String?           @db.VarChar(500)
-  generatedPdfPath       String?           @db.VarChar(500)
+  generatedDocxPath       String?                       @db.VarChar(500)
+  generatedDocxStatus     TransferDocxGenerationStatus  @default(not_requested)
+  generatedDocxAttempts   Int                           @default(0)
+  generatedDocxLeaseToken String?
+  generatedDocxLeaseUntil DateTime?
+  generatedDocxError     String?                       @db.Text
+  generatedPdfPath        String?                       @db.VarChar(500)
   notes                  String?           @db.Text
   manualPreuzeoLabel     String?           @db.VarChar(255)
   isCrossServiceTransfer Boolean           @default(false)
@@ -847,6 +860,7 @@ model Transfer {
   @@index([fromWarehouseId])
   @@index([toWarehouseId])
   @@index([documentWarehouseId])
+  @@index([generatedDocxStatus, generatedDocxLeaseUntil], map: "transfers_docx_status_lease_idx")
   @@map("transfers")
 }
 

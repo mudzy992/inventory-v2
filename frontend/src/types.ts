@@ -223,6 +223,7 @@ export interface TransferRecord {
   inventoryLineId?: string | null;
   documentWarehouseId?: string | null;
   hasGeneratedDocument?: boolean;
+  documentGenerationStatus?: 'not_requested' | 'queued' | 'running' | 'done' | 'failed';
   equipment?: Pick<Equipment, 'id' | 'inventoryNumber' | 'status' | 'warehouseId' | 'categoryId'> & {
     currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId' | 'title'>;
     warehouse?: Pick<Warehouse, 'id' | 'name' | 'cityId'>;

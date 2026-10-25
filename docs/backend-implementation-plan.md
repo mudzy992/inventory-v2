@@ -198,11 +198,12 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 
 - Conditional status transition za finalize/cancel/markPrinted već koristi affected-row count; unit testovi `claim-transfer-finalize.util.spec.ts` pokrivaju otvoreni claim, uže tranzicije i odbijanje nakon konkurentne terminalne promjene.
 - Gdje stanje više redova mora mijenjati zajedno, koristiti transakciju i dosljedan lock/update redoslijed.
-- **Potvrđeni post-commit rizik:** u `TransfersService.create()` transfer commit-uje prije `notifyTransferPending()`, `notifyTransferSignedUploadPending()` i DOCX generisanja; u `finalize()` status/oprema commit-uju prije DOCX regenerisanja i `notifyTransferSigned()`. Greška u kasnijem koraku može vratiti HTTP grešku iako je transfer već kreiran/finaliziran, a sequential notification loop može ostaviti djelimične obavijesti. `TransferDocumentGenerationService` hvata PDF queue enqueue greške, ali DOCX render/write/database greške propagira; eksplicitni `generated-document/retry` route retry-a PDF, dok se DOCX pokušava regenerisati samo kroz download putanju. Postojeći testovi ne fault-injectuju ove post-commit granice.
-- Za create/finalize notification/document side effecte koristiti outbox/retry gdje su poslovno obavezni, ali prije mijenjanja HTTP ugovora odrediti smije li transfer ostati uspješno kreiran/finaliziran kad je samo dokument/notifikacija neuspješna.
-- Testirati dvije istovremene finalizacije, finalize naspram cancel, retry istog requesta i document failure poslije uspješnog transfer commita.
+- **Post-commit rizik — implementirano, čeka hosted CI:** transfer create/finalize sada atomarno upisuje notification outbox događaje u istoj transakciji kao poslovnu promjenu; stock-lot issue radi isto. Primaoci dobijaju idempotentne `transfer:<id>:<type>:<userId>` ključeve, a postojeći relay pravi trajne Notification zapise prije ponovljivog Socket.IO signala. Direktni post-commit notification loopovi su uklonjeni.
+- Odabrani ugovor je da poslovni commit pobjeđuje: DOCX render više ne blokira/poništava create/finalize. Migracija dodaje DOCX status, pokušaje, lease token/expiry i grešku; queued/stale-running poslovi se obrađuju kroz 5-sekundni reconciler, a lease claim je atomaran. Greške prelaze u `failed`, HTTP transfer akcija ostaje uspješna, a postojeći retry endpoint ponavlja DOCX kada nedostaje/neuspješan je pa PDF konverziju. Status endpoint sada vraća DOCX state i dostupnost, a `TransferDocumentPanel` prikazuje stanje, poll-uje queued/running i nudi ručni retry za failed.
+- Uklonjena je pre-commit provjera aktivnog predloška: nedostajući/neispravan predložak je dokumentacijski neuspjeh koji se evidentira nakon commita. API DTO ne izlaže lease token, pokušaje, interne greške ni generated file paths. Otkazani transferi se ne claim-uju za DOCX generisanje.
+- Dodan unit test za stabilne per-recipient transfer outbox ključeve. Lokalno su prošli backend lint, svih 434 backend unit testa i frontend production build. Lokalni Prisma generate/backend typecheck/build nije moguć jer schema-engine preuzimanje sa `binaries.prisma.sh` pada TLS handshake-om; migration/schema/typecheck/build i PostgreSQL/Redis CI validacija ostaju obavezni prije zatvaranja nalaza.
 
-**Prihvatanje:** samo jedan zahtjev može izvršiti state transition; prateći dokument/notifikacija je eventualno pouzdana ili jasno označena kao neuspjela.
+**Prihvatanje:** poslovni commit ostaje uspješan uz kasniji notification/DOCX kvar; outbox je trajan i idempotentan, DOCX status/retry je vidljiv, a CI potvrđuje migraciju, typecheck/build i konkurentnost.
 
 ### 4.2 Warehouse stock i maintenance lotovi
 
@@ -370,7 +371,7 @@ Prije implementacije ovih tačaka tražiti izričitu potvrdu:
 1. **Riješeno:** inventurna sesija se zatvara i uz pending-action greške; svaka trajna/neispravljiva greška ostaje evidentirana kao failed.
 2. Koji podaci i koliko historije treba javni QR prikazati neautentifikovanom korisniku?
 3. Koje su maksimalne legitimne PDF/DOCX veličine i šta korisnik treba vidjeti pri odbijanju?
-4. **Djelimično riješeno:** notification događaji disposal-approval-pending i inventory-session-closed imaju durable outbox; Socket.IO emit ostaje at-least-once signal. Ostali transfer/document/notification side effecti trebaju zasebnu obaveznost/best-effort odluku.
+4. **Riješeno za transfer i inventory close:** korisnik odabrao trajni outbox za notification događaje, uz Socket.IO kao ponovljiv signal; transfer DOCX/PDF dokumentacijski rad ima trajni status i zaseban retry, a transfer poslovni commit pobjeđuje naknadni document/notification kvar.
 5. **Riješeno:** automatski retry je ograničen na allowlistu prolaznih grešaka (maksimum 3 pokušaja, 250/500 ms backoff); ručni retry close joba dozvoljen je samo administratoru, traži razlog i audit zapis, i ne može ponovo otvoriti zatvorenu sesiju.
 6. Koje vrijeme (timezone) je autoritativno za automatsko otvaranje/zatvaranje inventurnih perioda?
 7. Koji je dozvoljeni recovery prozor za deaktiviran korisnički pristup preko postojećih WS konekcija i tokena?

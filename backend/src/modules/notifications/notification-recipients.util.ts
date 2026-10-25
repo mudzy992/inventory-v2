@@ -1,4 +1,4 @@
-import type { PrismaService } from '../../prisma/prisma.service';
+import type { Prisma } from '../../../generated/prisma/client';
 import type { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 
 interface TransferRecipientContext {
@@ -10,7 +10,7 @@ interface TransferRecipientContext {
 }
 
 export const collectTransferPendingRecipients = async (
-  prisma: PrismaService,
+  prisma: Prisma.TransactionClient,
   registrarScope: RegistrarScopeService,
   context: TransferRecipientContext,
 ): Promise<string[]> => {
@@ -42,7 +42,7 @@ export const collectTransferPendingRecipients = async (
 };
 
 export const collectTransferSignedRecipients = async (
-  prisma: PrismaService,
+  prisma: Prisma.TransactionClient,
   registrarScope: RegistrarScopeService,
   context: TransferRecipientContext,
 ): Promise<string[]> => {
@@ -83,7 +83,7 @@ export const collectTransferSignedRecipients = async (
 };
 
 const findEvidenticarUserIds = async (
-  prisma: PrismaService,
+  prisma: Prisma.TransactionClient,
   registrarScope: RegistrarScopeService,
   cityId: string | null,
   categoryId: string,

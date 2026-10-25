@@ -630,6 +630,7 @@ export class WarehouseStockService {
         transferDate: dto.date ? new Date(dto.date) : new Date(),
       };
     }
+    const notificationsEnabled = await this.notificationsService.notificationsEnabled().catch(() => true);
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         const receipt = await consumeStockLotReceiptFifoInTx(tx, lot.id);
@@ -640,6 +641,14 @@ export class WarehouseStockService {
               ...transferIssueInput,
             })
           : await executeStockLotIssueDirectInTx(tx, { ...issueBase, receipt });
+        if (issued.transferId) {
+          await this.notificationsService.enqueueTransferOutboxEventsInTx(
+            tx,
+            issued.transferId,
+            'signed',
+            { notificationsEnabled },
+          );
+        }
         await decrementStockLotOnHandInTx(tx, lotId);
         if (isCrossWarehouse && destWarehouseId && lot.catalogItemId) {
           await applyCrossWarehouseIssueLotUpdatesInTx(tx, {
@@ -658,8 +667,7 @@ export class WarehouseStockService {
         return issued;
       });
       if (result.transferId) {
-        await this.transferDocumentGeneration.generateForTransfer(result.transferId);
-        await this.notificationsService.notifyTransferSigned(result.transferId);
+        await this.transferDocumentGeneration.tryGenerateForTransfer(result.transferId, user.id);
       }
       return this.findOne(user, lotId);
     } catch (err) {

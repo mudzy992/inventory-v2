@@ -131,6 +131,73 @@ test('upserts the durable notification by outbox id before emitting repeatable s
   ]);
 });
 
+test('enqueues transfer-created notifications with stable per-recipient idempotency keys', async () => {
+  let inserted: { data: Array<Record<string, unknown>>; skipDuplicates: boolean } | undefined;
+  const transfer = {
+    id: 'transfer-1',
+    status: 'raw',
+    scannedDocUrl: null,
+    signerId: 'employee-signer',
+    fromPersonId: null,
+    toPersonId: null,
+    toType: 'skladiste',
+    documentNumber: 'TR-2026-1',
+    equipmentId: 'equipment-1',
+    equipment: {
+      inventoryNumber: 'INV-1',
+      categoryId: 'category-1',
+      currentHolder: { orgUnitId: 'org-1' },
+      warehouse: null,
+      warehouseId: null,
+    },
+  };
+  const tx = {
+    transfer: { findUnique: async () => transfer },
+    user: {
+      findMany: async (args: { where?: { role?: string } }) =>
+        args.where?.role === 'admin' ? [{ id: 'admin-user' }] : [],
+      findFirst: async () => ({ id: 'signer-user' }),
+    },
+    notificationOutbox: {
+      createMany: async (args: { data: Array<Record<string, unknown>>; skipDuplicates: boolean }) => {
+        inserted = args;
+        return { count: args.data.length };
+      },
+    },
+  };
+  const service = new NotificationsService(
+    {} as never,
+    { resolveExpandedScopes: async () => ({ cityIds: new Set(['city-1']), categoryIds: new Set(['category-1']) }) } as never,
+    { getEffectiveLocationForOrgUnit: async () => 'city-1' } as never,
+    {} as never,
+    {} as never,
+  );
+
+  await service.enqueueTransferOutboxEventsInTx(tx as never, transfer.id, 'created', {
+    notificationsEnabled: true,
+    includeUploadPending: true,
+  });
+
+  assert.equal(inserted?.skipDuplicates, true);
+  assert.deepEqual(
+    inserted?.data.map((row) => [row.idempotencyKey, row.userId, row.type]),
+    [
+      ['transfer:transfer-1:transfer_pending:admin-user', 'admin-user', 'transfer_pending'],
+      ['transfer:transfer-1:transfer_pending:signer-user', 'signer-user', 'transfer_pending'],
+      [
+        'transfer:transfer-1:transfer_signed_upload_pending:admin-user',
+        'admin-user',
+        'transfer_signed_upload_pending',
+      ],
+      [
+        'transfer:transfer-1:transfer_signed_upload_pending:signer-user',
+        'signer-user',
+        'transfer_signed_upload_pending',
+      ],
+    ],
+  );
+});
+
 test('keeps failed outbox rows durable and schedules an exponential retry', async () => {
   const writes: Array<Record<string, unknown>> = [];
   const row = {

@@ -65,7 +65,6 @@ import { resolveDocumentWarehouseId } from './utils/resolve-document-warehouse.u
 import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { buildTransferRawDocumentHtml } from './utils/transfer-raw-document.util';
 import { pickRegistrarAssignmentWarehouse } from './utils/pick-registrar-assignment-warehouse.util';
-import { WarehouseTransferTemplateService } from '../warehouses/warehouse-transfer-template.service';
 import { normalizeManualPreuzeoLabel } from './utils/normalize-manual-preuzeo-label.util';
 
 const MANUAL_PREUZEO_SUGGESTIONS_LIMIT = 100;
@@ -108,7 +107,6 @@ export class TransfersService {
     private readonly inventoryFreeze: InventoryFreezeService,
     private readonly warehouseResolutionService: WarehouseResolutionService,
     private readonly transferDocumentGeneration: TransferDocumentGenerationService,
-    private readonly transferTemplateService: WarehouseTransferTemplateService,
   ) {}
 
   async markUploadedAfterScan(
@@ -374,8 +372,12 @@ export class TransfersService {
     const transferDate = new Date(dto.date);
     const documentWarehouseId = await this.resolveDocumentWarehouseForCreate(user, dto, equipment);
     await this.assertWarehouseReadyForDocuments(documentWarehouseId);
-    await this.transferTemplateService.assertWarehouseHasActiveTemplate(documentWarehouseId);
     const manualPreuzeoLabel = normalizeManualPreuzeoLabel(dto.type, dto.manualPreuzeoLabel);
+    const requireSignedPdf = await this.settingsService.getBooleanValue(
+      'transfer.require_signed_pdf_upload',
+      true,
+    );
+    const notificationsEnabled = await this.notificationsService.notificationsEnabled().catch(() => true);
     const created = await this.prisma.$transaction(async (tx) => {
       const documentNumber = await allocateTransferDocumentNumberInTx(
         tx,
@@ -383,7 +385,7 @@ export class TransfersService {
         transferDate,
         false,
       );
-      return tx.transfer.create({
+      const transfer = await tx.transfer.create({
         data: {
           equipmentId: dto.equipmentId,
           type: dto.type,
@@ -401,21 +403,21 @@ export class TransfersService {
           notes: dto.notes,
           manualPreuzeoLabel,
           status: 'raw',
+          generatedDocxStatus: 'queued',
           documentNumber,
           isCrossServiceTransfer: isCrossService,
         },
         include: transferInclude,
       });
+      await this.notificationsService.enqueueTransferOutboxEventsInTx(
+        tx,
+        transfer.id,
+        'created',
+        { notificationsEnabled, includeUploadPending: requireSignedPdf },
+      );
+      return transfer;
     });
-    await this.notificationsService.notifyTransferPending(created.id);
-    const requireSignedPdf = await this.settingsService.getBooleanValue(
-      'transfer.require_signed_pdf_upload',
-      true,
-    );
-    if (requireSignedPdf) {
-      await this.notificationsService.notifyTransferSignedUploadPending(created.id);
-    }
-    await this.transferDocumentGeneration.generateForTransfer(created.id, user.id);
+    await this.transferDocumentGeneration.tryGenerateForTransfer(created.id, user.id);
     const transfer = await this.getTransferOrThrow(created.id);
     return { mode: 'document' as const, transfer: this.mapTransferDocumentMeta(transfer) };
   }
@@ -435,7 +437,8 @@ export class TransfersService {
       { status: 'printed', printedAt: new Date() },
       TRANSFER_MESSAGES.markPrintedNotAllowed,
     );
-    return this.getTransferOrThrow(id);
+    const updated = await this.getTransferOrThrow(id);
+    return this.mapTransferDocumentMeta(updated);
   }
 
   async cancel(user: AuthenticatedUser, id: string) {
@@ -450,10 +453,17 @@ export class TransfersService {
       this.prisma,
       id,
       ['raw', 'printed', 'uploaded'],
-      { status: 'cancelled' },
+      {
+        status: 'cancelled',
+        generatedDocxStatus: transfer.generatedDocxPath ? 'done' : 'not_requested',
+        generatedDocxLeaseToken: null,
+        generatedDocxLeaseUntil: null,
+        generatedDocxError: null,
+      },
       TRANSFER_MESSAGES.cancelNotAllowed,
     );
-    return this.getTransferOrThrow(id);
+    const updated = await this.getTransferOrThrow(id);
+    return this.mapTransferDocumentMeta(updated);
   }
 
   async getRawDocumentHtml(user: AuthenticatedUser, id: string): Promise<string> {
@@ -495,6 +505,7 @@ export class TransfersService {
       transfer.documentWarehouseId ??
       (await this.resolveDocumentWarehouseForTransfer(user, transfer));
     await this.assertWarehouseReadyForDocuments(documentWarehouseId);
+    const notificationsEnabled = await this.notificationsService.notificationsEnabled().catch(() => true);
     const equipmentUpdate = {
       ...buildEquipmentUpdateOnFinalize(
         transfer.type,
@@ -517,6 +528,12 @@ export class TransfersService {
         : transfer.documentNumber;
       await claimTransferForFinalizeInTx(tx, id, {
         status: 'potpisan',
+        generatedDocxPath: null,
+        generatedPdfPath: null,
+        generatedDocxStatus: 'queued',
+        generatedDocxLeaseToken: null,
+        generatedDocxLeaseUntil: null,
+        generatedDocxError: null,
         signerId,
         date: signDate,
         documentNumber,
@@ -531,10 +548,15 @@ export class TransfersService {
         where: { id: transfer.equipmentId },
         data: equipmentUpdate,
       });
+      await this.notificationsService.enqueueTransferOutboxEventsInTx(
+        tx,
+        signed.id,
+        'signed',
+        { notificationsEnabled },
+      );
       return updated;
     });
-    await this.transferDocumentGeneration.generateForTransfer(signed.id, user.id);
-    await this.notificationsService.notifyTransferSigned(signed.id);
+    await this.transferDocumentGeneration.tryGenerateForTransfer(signed.id, user.id);
     return this.mapTransferDocumentMeta(signed);
   }
 
@@ -789,12 +811,41 @@ export class TransfersService {
     return line.committee.members.some((member) => member.employeeId === actor.employeeId);
   }
 
-  private mapTransferDocumentMeta<T extends { generatedDocxPath?: string | null }>(
-    transfer: T,
-  ): T & { hasGeneratedDocument: boolean } {
+  private mapTransferDocumentMeta<
+    T extends {
+      generatedDocxPath?: string | null;
+      generatedPdfPath?: string | null;
+      generatedDocxStatus?: string;
+      generatedDocxAttempts?: number;
+      generatedDocxLeaseToken?: string | null;
+      generatedDocxLeaseUntil?: Date | null;
+      generatedDocxError?: string | null;
+    },
+  >(transfer: T): Omit<
+    T,
+    | 'generatedDocxPath'
+    | 'generatedPdfPath'
+    | 'generatedDocxStatus'
+    | 'generatedDocxAttempts'
+    | 'generatedDocxLeaseToken'
+    | 'generatedDocxLeaseUntil'
+    | 'generatedDocxError'
+  > & { hasGeneratedDocument: boolean; documentGenerationStatus: string } {
+    const {
+      generatedDocxPath,
+      generatedPdfPath,
+      generatedDocxStatus,
+      generatedDocxAttempts,
+      generatedDocxLeaseToken,
+      generatedDocxLeaseUntil,
+      generatedDocxError,
+      ...publicTransfer
+    } = transfer;
+    void [generatedPdfPath, generatedDocxAttempts, generatedDocxLeaseToken, generatedDocxLeaseUntil, generatedDocxError];
     return {
-      ...transfer,
-      hasGeneratedDocument: Boolean(transfer.generatedDocxPath),
+      ...publicTransfer,
+      hasGeneratedDocument: Boolean(generatedDocxPath),
+      documentGenerationStatus: generatedDocxStatus ?? 'not_requested',
     };
   }
 

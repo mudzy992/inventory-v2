@@ -115,8 +115,8 @@ export class TransfersController {
     return this.transferDocumentGeneration.getPdfJobStatus(id);
   }
 
-  /** Ponovo pokreće PDF konverziju nakon neuspjeha (npr. LibreOffice
-   * timeout/crash na Document Worker servisu). */
+  /** Ponovo pokreće generisanje DOCX-a ako nedostaje/neuspjelo je, pa zatim
+   * PDF konverziju ako DOCX već postoji. */
   @Post(':id/generated-document/retry')
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
   async retryGeneratedDocument(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {

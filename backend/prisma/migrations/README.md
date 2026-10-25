@@ -8,6 +8,7 @@ Ovaj direktorij sadrži istoriju migracija koju koristi `prisma migrate deploy`:
 4. `20261025180000_add_refresh_token_expiry_index` — složeni indeks na `RefreshToken.expiresAt`/`id` za efikasno, batch-ovano uklanjanje isteklih refresh-token zapisa.
 5. `20261025190000_add_inventory_close_leases` — lease tokeni/expiry za oporavak worker-a i pending akcija koje su ostale `running` nakon isteka vlasništva.
 6. `20261025200000_add_notification_outbox_and_close_retry_audit` — idempotentni notification outbox i veza prema trajnom Notification zapisu, plus audit tabela admin retry zahtjeva za inventory close job.
+7. `20261025210000_add_transfer_docx_generation_state` — trajni DOCX status, lease/attempt/error polja i backfill postojećih prenosnica za sigurnu asinhronu generaciju i zaseban retry.
 
 Posljednji indeks namjerno postoji samo u SQL migraciji jer Prisma schema DSL ne može izraziti njegov `WHERE` uslov. Ne uklanjati ga radi usklađivanja sa `schema.prisma`; indeks štiti od TOCTOU race-a pri konkurentnom enqueue-u. Promjene koje ga mijenjaju moraju uključiti novu pregledanu SQL migraciju i regresioni test.
 

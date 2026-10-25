@@ -96,6 +96,7 @@ export const executeStockLotIssueWithTransferInTx = async (
       finalizedByUserId: input.createdByUserId,
       date: input.transferDate,
       status: 'potpisan',
+      generatedDocxStatus: 'queued',
       documentNumber,
     },
   });
