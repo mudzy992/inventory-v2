@@ -98,7 +98,20 @@ jobs:
 
       - name: Typecheck backend
         working-directory: backend
-        run: npx tsc --noEmit
+        run: |
+          set +e
+          npx tsc --noEmit --pretty false > "$RUNNER_TEMP/backend-tsc.log" 2>&1
+          status=$?
+          cat "$RUNNER_TEMP/backend-tsc.log"
+          if [ "$status" -ne 0 ]; then
+            {
+              echo '### Backend TypeScript diagnostics'
+              echo '```text'
+              cat "$RUNNER_TEMP/backend-tsc.log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
 
       - name: Run backend unit specs
         working-directory: backend
