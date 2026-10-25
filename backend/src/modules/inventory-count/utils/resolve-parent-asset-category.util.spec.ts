@@ -1,27 +1,28 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { resolveParentAssetCategoryId } from './resolve-parent-asset-category.util';
 
 describe('resolveParentAssetCategoryId', () => {
-  const reader = {
-    findUnique: jest.fn(),
-  };
-
-  beforeEach(() => {
-    reader.findUnique.mockReset();
-  });
-
   it('returns parent when equipment is on leaf category', async () => {
-    reader.findUnique
-      .mockResolvedValueOnce({ id: 'leaf', parentId: 'parent', categoryKind: 'ASSET' })
-      .mockResolvedValueOnce({ id: 'parent', parentId: null, categoryKind: 'ASSET' });
+    const categories = new Map([
+      ['leaf', { id: 'leaf', parentId: 'parent', categoryKind: 'ASSET' }],
+      ['parent', { id: 'parent', parentId: null, categoryKind: 'ASSET' }],
+    ]);
+    const reader = {
+      findUnique: async ({ where }: { where: { id: string } }) => categories.get(where.id) ?? null,
+    };
 
-    const actual = await resolveParentAssetCategoryId(reader, 'leaf');
-    expect(actual).toBe('parent');
+    assert.equal(await resolveParentAssetCategoryId(reader, 'leaf'), 'parent');
   });
 
   it('returns same id when already parent category', async () => {
-    reader.findUnique.mockResolvedValueOnce({ id: 'parent', parentId: null, categoryKind: 'ASSET' });
+    const categories = new Map([
+      ['parent', { id: 'parent', parentId: null, categoryKind: 'ASSET' }],
+    ]);
+    const reader = {
+      findUnique: async ({ where }: { where: { id: string } }) => categories.get(where.id) ?? null,
+    };
 
-    const actual = await resolveParentAssetCategoryId(reader, 'parent');
-    expect(actual).toBe('parent');
+    assert.equal(await resolveParentAssetCategoryId(reader, 'parent'), 'parent');
   });
 });

@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import {
   assertEquipmentAccountingFields,
   assertEquipmentAccountingUpgrade,
@@ -9,58 +11,61 @@ import {
 
 describe('equipment-accounting-tracked.util', () => {
   it('normalizes empty inventory number to null', () => {
-    expect(normalizeInventoryNumber('')).toBeNull();
-    expect(normalizeInventoryNumber('  ')).toBeNull();
-    expect(normalizeInventoryNumber('INV-1')).toBe('INV-1');
+    assert.equal(normalizeInventoryNumber(''), null);
+    assert.equal(normalizeInventoryNumber('  '), null);
+    assert.equal(normalizeInventoryNumber('INV-1'), 'INV-1');
   });
 
   it('detects accounting-tracked equipment', () => {
-    expect(
+    assert.equal(
       isAccountingTrackedEquipment({ isAccountingTracked: true, inventoryNumber: 'INV-1' }),
-    ).toBe(true);
-    expect(
+      true,
+    );
+    assert.equal(
       isAccountingTrackedEquipment({ isAccountingTracked: false, inventoryNumber: null }),
-    ).toBe(false);
-    expect(
+      false,
+    );
+    assert.equal(
       requiresTransferDocument({ isAccountingTracked: true, inventoryNumber: null }),
-    ).toBe(false);
+      false,
+    );
   });
 
   it('resolves issue fields with defaults', () => {
-    expect(resolveIssueAccountingFields({ inventoryNumber: ' INV-1 ' })).toEqual({
+    assert.deepEqual(resolveIssueAccountingFields({ inventoryNumber: ' INV-1 ' }), {
       isAccountingTracked: true,
       inventoryNumber: 'INV-1',
     });
-    expect(resolveIssueAccountingFields({ isAccountingTracked: false })).toEqual({
+    assert.deepEqual(resolveIssueAccountingFields({ isAccountingTracked: false }), {
       isAccountingTracked: false,
       inventoryNumber: null,
     });
   });
 
   it('asserts tracked and untracked invariants', () => {
-    expect(() =>
+    assert.throws(() =>
       assertEquipmentAccountingFields({ isAccountingTracked: true, inventoryNumber: null }),
-    ).toThrow();
-    expect(() =>
+    );
+    assert.throws(() =>
       assertEquipmentAccountingFields({ isAccountingTracked: false, inventoryNumber: 'INV-1' }),
-    ).toThrow();
-    expect(() =>
+    );
+    assert.doesNotThrow(() =>
       assertEquipmentAccountingFields({ isAccountingTracked: true, inventoryNumber: 'INV-1' }),
-    ).not.toThrow();
+    );
   });
 
   it('blocks downgrade and allows upgrade', () => {
-    expect(() =>
+    assert.throws(() =>
       assertEquipmentAccountingUpgrade({
         existing: { isAccountingTracked: true, inventoryNumber: 'INV-1' },
         next: { isAccountingTracked: false, inventoryNumber: null },
       }),
-    ).toThrow();
-    expect(() =>
+    );
+    assert.doesNotThrow(() =>
       assertEquipmentAccountingUpgrade({
         existing: { isAccountingTracked: false, inventoryNumber: null },
         next: { isAccountingTracked: true, inventoryNumber: 'INV-2' },
       }),
-    ).not.toThrow();
+    );
   });
 });

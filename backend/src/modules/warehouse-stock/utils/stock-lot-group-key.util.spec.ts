@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { buildStockLotGroupKey, buildStockLotGroupWhere } from './stock-lot-group-key.util';
 
 describe('stock-lot-group-key.util', () => {
@@ -7,8 +9,8 @@ describe('stock-lot-group-key.util', () => {
       categoryId: 'cat-1',
       productName: 'HP ProDesk',
     });
-    expect(key).toBe('catalog:abc-123');
-    expect(buildStockLotGroupWhere(key)).toEqual({ catalogItemId: 'abc-123' });
+    assert.equal(key, 'catalog:abc-123');
+    assert.deepEqual(buildStockLotGroupWhere(key), { catalogItemId: 'abc-123' });
   });
 
   it('builds product group key from category and normalized name', () => {
@@ -17,8 +19,8 @@ describe('stock-lot-group-key.util', () => {
       categoryId: 'cat-1',
       productName: '  HP ProDesk  ',
     });
-    expect(key).toBe('product:cat-1::hp prodesk');
-    expect(buildStockLotGroupWhere(key)).toEqual({
+    assert.equal(key, 'product:cat-1::hp prodesk');
+    assert.deepEqual(buildStockLotGroupWhere(key), {
       categoryId: 'cat-1',
       productName: { equals: 'hp prodesk', mode: 'insensitive' },
     });
