@@ -246,6 +246,11 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 - Proći kroz scope-sensitive list/detail/write rute: testirati drugi tenant/org/warehouse i potvrditi da se ne može doći do podataka preko ID-a ili relacije.
 - Uskladiti query string enum/ID tipove i explicit allow-list za generičke upload/entity rute.
 
+#### Bounded pagination offsets (P2 — implementation added)
+
+- `parsePagination()` i direktni `paginate()` pozivi sada odbijaju `skip` iznad 100.000 redova sa HTTP 400; neskalabilan offset više ne može postati neograničen DB scan.
+- Testovi pokrivaju granicu, prevelike/nesigurne page vrijednosti i potvrđuju da direktni `paginate()` odbije zahtjev prije bilo kojeg DB upita. Za dublje navigacije treba uvesti cursor-based endpoint, ne povećavati limit bez mjerenja.
+
 ### 5.2 Health i runtime observability
 
 #### Login rate-limit resilience (P2 — implementation added)

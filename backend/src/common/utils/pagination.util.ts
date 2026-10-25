@@ -1,6 +1,9 @@
+import { BadRequestException } from '@nestjs/common';
 import type { PaginatedQueryDto } from '../dto/paginated-query.dto';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '../dto/paginated-query.dto';
 import { buildPaginatedResponse, type PaginatedResponse } from '../types/paginated-response.type';
+
+export const MAX_PAGE_OFFSET = 100_000;
 
 export interface ParsedPagination {
   page: number;
@@ -8,6 +11,23 @@ export interface ParsedPagination {
   skip: number;
   take: number;
 }
+
+const calculatePageSkip = (page: number, pageSize: number): number => {
+  const skip = (page - 1) * pageSize;
+  if (
+    !Number.isSafeInteger(page) ||
+    page < 1 ||
+    !Number.isSafeInteger(pageSize) ||
+    pageSize < 1 ||
+    !Number.isSafeInteger(skip) ||
+    skip > MAX_PAGE_OFFSET
+  ) {
+    throw new BadRequestException(
+      `Requested page exceeds the maximum offset of ${MAX_PAGE_OFFSET}. Reduce the page number or narrow the results.`,
+    );
+  }
+  return skip;
+};
 
 export const parsePagination = (
   query: Pick<PaginatedQueryDto, 'page' | 'pageSize'>,
@@ -18,10 +38,11 @@ export const parsePagination = (
   const page = Math.max(1, query.page ?? DEFAULT_PAGE);
   const rawSize = query.pageSize ?? defaultPageSize;
   const pageSize = Math.min(maxPageSize, Math.max(1, rawSize));
+  const skip = calculatePageSkip(page, pageSize);
   return {
     page,
     pageSize,
-    skip: (page - 1) * pageSize,
+    skip,
     take: pageSize,
   };
 };
@@ -71,7 +92,7 @@ export const paginate = async <T, W = object>(
   args: PaginateArgs<T, W>,
 ): Promise<PaginatedResponse<T>> => {
   const { findMany, count, where, orderBy, page, pageSize } = args;
-  const skip = (page - 1) * pageSize;
+  const skip = calculatePageSkip(page, pageSize);
   const [items, total] = await Promise.all([
     findMany({ where, orderBy, skip, take: pageSize }),
     count({ where }),

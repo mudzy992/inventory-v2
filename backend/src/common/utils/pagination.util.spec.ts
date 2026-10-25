@@ -1,9 +1,12 @@
 import 'reflect-metadata';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { BadRequestException } from '@nestjs/common';
 import {
   buildContainsSearchWhere,
   buildOrderBy,
+  MAX_PAGE_OFFSET,
+  paginate,
   parsePagination,
   resolveListPageSize,
 } from './pagination.util';
@@ -16,6 +19,41 @@ describe('pagination.util', () => {
     assert.equal(result.pageSize, 50);
     assert.equal(result.skip, 0);
     assert.equal(result.take, 50);
+  });
+
+  it('allows offsets at the configured ceiling and rejects deeper or unsafe pages', () => {
+    const lastAllowed = parsePagination({ page: 1001, pageSize: 100 });
+    assert.equal(lastAllowed.skip, MAX_PAGE_OFFSET);
+
+    assert.throws(
+      () => parsePagination({ page: 1002, pageSize: 100 }),
+      BadRequestException,
+    );
+    assert.throws(
+      () => parsePagination({ page: Number.MAX_SAFE_INTEGER, pageSize: 500 }),
+      BadRequestException,
+    );
+    assert.throws(() => parsePagination({ page: Number.POSITIVE_INFINITY, pageSize: 25 }), BadRequestException);
+  });
+
+  it('rejects deep offsets from direct paginate callers before querying', async () => {
+    let queryCalls = 0;
+    await assert.rejects(
+      paginate({
+        findMany: async () => {
+          queryCalls += 1;
+          return [];
+        },
+        count: async () => {
+          queryCalls += 1;
+          return 0;
+        },
+        page: 1002,
+        pageSize: 100,
+      }),
+      BadRequestException,
+    );
+    assert.equal(queryCalls, 0);
   });
 
   it('buildOrderBy uses whitelist and sortDir', () => {
