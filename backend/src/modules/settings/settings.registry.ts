@@ -20,6 +20,9 @@ export interface SettingDefinition {
   description: string;
   group: SettingGroup;
   adminEditable: boolean;
+  minValue?: number;
+  maxValue?: number;
+  integer?: boolean;
 }
 
 const def = (
@@ -551,6 +554,9 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     scope: 'private',
     valueType: 'number',
     defaultValue: 10,
+    minValue: 1,
+    maxValue: 100,
+    integer: true,
     label: 'Maksimalna veličina datoteke',
     description: 'Gornja granica uploada potpisane prenosnice (megabajti).',
     group: 'uploads',
@@ -588,6 +594,9 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     scope: 'private',
     valueType: 'number',
     defaultValue: 25,
+    minValue: 1,
+    maxValue: 100,
+    integer: true,
     label: 'Veličina stranice (liste)',
     description: 'Podrazumijevani broj redova po stranici u tabelarnim prikazima.',
     group: 'lists',
@@ -597,6 +606,9 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     scope: 'private',
     valueType: 'number',
     defaultValue: 100,
+    minValue: 1,
+    maxValue: 500,
+    integer: true,
     label: 'Maks. veličina stranice',
     description: 'Gornja granica pageSize parametra na list API-jima.',
     group: 'lists',

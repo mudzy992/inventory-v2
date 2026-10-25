@@ -6,9 +6,14 @@ import { NotificationsService } from '../notifications/notifications.service';
 import {
   getSettingDefinition,
   SETTINGS_REGISTRY,
+  type SettingDefinition,
   type SettingGroup,
 } from './settings.registry';
 import { getSettingUiMetadata } from './settings-ui-metadata';
+import {
+  assertPageSizeSettingRelationship,
+  parseAndValidateNumericSetting,
+} from './utils/numeric-setting-validation.util';
 
 export interface SettingDependsOn {
   key: string;
@@ -92,7 +97,7 @@ export class SettingsService {
           key: definition.key,
           scope: definition.scope,
           valueType: definition.valueType,
-          value: this.serializeValue(definition.defaultValue, definition.valueType),
+          value: this.serializeValue(definition.defaultValue, definition),
           description: definition.description,
         },
       });
@@ -114,7 +119,7 @@ export class SettingsService {
       return defaultValue;
     }
     const parsed = this.parseValue(row.value, row.valueType);
-    return typeof parsed === 'number' && !Number.isNaN(parsed) ? parsed : defaultValue;
+    return typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : defaultValue;
   }
 
   async isFeatureEnabled(key: string, defaultValue = true): Promise<boolean> {
@@ -168,7 +173,7 @@ export class SettingsService {
       if (!definition) {
         throw new NotFoundException(`Unknown setting key: ${entry.key}`);
       }
-      const serialized = this.serializeValue(entry.value, definition.valueType);
+      const serialized = this.serializeValue(entry.value, definition);
       await settingStore.setting.upsert({
         where: { key: entry.key },
         create: {
@@ -191,7 +196,10 @@ export class SettingsService {
     if (!definition.adminEditable) {
       throw new BadRequestException(`Setting cannot be edited: ${key}`);
     }
-    const serialized = this.serializeValue(rawValue, definition.valueType);
+    const serialized = this.serializeValue(rawValue, definition);
+    if (key === 'lists.default_page_size' || key === 'lists.max_page_size') {
+      await this.assertPageSizeRelationship(key, Number(serialized));
+    }
     const row = await this.prisma.setting.update({
       where: { key },
       data: { value: serialized },
@@ -222,16 +230,33 @@ export class SettingsService {
     };
   }
 
-  private serializeValue(value: string | number | boolean, valueType: string): string {
-    if (valueType === 'boolean') {
-      return value === true || value === 'true' ? 'true' : 'false';
+  private async assertPageSizeRelationship(key: string, value: number): Promise<void> {
+    const otherKey =
+      key === 'lists.default_page_size' ? 'lists.max_page_size' : 'lists.default_page_size';
+    const otherDefinition = getSettingDefinition(otherKey);
+    if (!otherDefinition) {
+      throw new BadRequestException(`Missing related setting definition: ${otherKey}`);
     }
-    if (valueType === 'number') {
-      const numeric = typeof value === 'number' ? value : Number(value);
-      if (Number.isNaN(numeric)) {
-        throw new BadRequestException('Invalid number value');
+    const otherRow = await this.prisma.setting.findUnique({
+      where: { key: otherKey },
+      select: { value: true },
+    });
+    const otherValue = otherRow ? Number(otherRow.value) : Number(otherDefinition.defaultValue);
+    assertPageSizeSettingRelationship(key, value, otherValue);
+  }
+
+  private serializeValue(value: string | number | boolean, definition: SettingDefinition): string {
+    if (definition.valueType === 'boolean') {
+      if (typeof value === 'boolean') {
+        return value ? 'true' : 'false';
       }
-      return String(numeric);
+      if (value === 'true' || value === 'false') {
+        return value;
+      }
+      throw new BadRequestException(`Invalid boolean value for setting: ${definition.key}`);
+    }
+    if (definition.valueType === 'number') {
+      return String(parseAndValidateNumericSetting(value, definition));
     }
     return String(value);
   }

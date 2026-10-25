@@ -216,7 +216,8 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 ### 4.4 Kategorije i numeric settings
 
 - Parent promjena u kategoriji mora odbiti izbor vlastitog descendant-a. Provjera mora biti zaštićena od paralelnih promjena; dodati testove self, descendant, validan reparent i dva paralelna reparent-a.
-- Settings registry-ju dodati validatore po ključu: finite number, integer/decimal, min/max i cross-field pravila kao `default_page_size <= max_page_size`.
+- `upload.max_mb`, `lists.default_page_size` i `lists.max_page_size` sada odbijaju non-finite vrijednosti, pogrešan tip, decimale i vrijednosti izvan key-specific raspona; dodatno se provjerava `default_page_size <= max_page_size`. Boolean settings odbijaju neprepoznate stringove umjesto da ih tiho pretvore u `false`.
+- Svaki novi numeric setting mora deklarisati odgovarajući min/max/integer policy u registry-ju.
 - Boolean parser treba odbiti nepoznatu vrijednost umjesto da je tiho pretvori u `false`.
 
 **Prihvatanje:** kategorijsko stablo je aciklično; nevažeći setting se odbija sa field-level 400 prije upisa/cache invalidacije.
