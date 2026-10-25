@@ -6,6 +6,23 @@ import { RegistrarScopeService } from './registrar-scope.service';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import type { RegistrarScopeAssignment } from '../types/registrar-scope.type';
 
+
+const EQUIPMENT_FIXTURE_DEFAULTS = {
+  catalogItemId: null,
+  stockLotId: null,
+  isAccountingTracked: true,
+  affiliation: 'distribucija',
+  contractNumber: null,
+  custodyOrgUnitId: null,
+  notes: null,
+} satisfies Pick<Equipment, 'catalogItemId' | 'stockLotId' | 'isAccountingTracked' | 'affiliation' | 'contractNumber' | 'custodyOrgUnitId' | 'notes'>;
+
+const EMPLOYEE_FIXTURE_DEFAULTS = {
+  staffNumber: null,
+  gender: 'male',
+  isActive: true,
+} satisfies Pick<Employee, 'staffNumber' | 'gender' | 'isActive'>;
+
 const categories = [
   { id: 'cat-root', parentId: null },
   { id: 'cat-child', parentId: 'cat-root' },
@@ -311,6 +328,7 @@ describe('RegistrarScopeService', () => {
   describe('canAccessEquipment', () => {
     const equipmentOnWarehouse: Equipment = {
       id: 'eq-1',
+      ...EQUIPMENT_FIXTURE_DEFAULTS,
       inventoryNumber: 'INV-1',
       categoryId: 'cat-child',
       status: 'skladiste',
@@ -363,6 +381,7 @@ describe('RegistrarScopeService', () => {
         lastName: 'B',
         title: 'Radnik',
         orgUnitId: 'ou-child',
+        ...EMPLOYEE_FIXTURE_DEFAULTS,
         email: null,
         phone: null,
         createdAt: new Date(),
@@ -410,6 +429,7 @@ describe('RegistrarScopeService', () => {
   describe('canCreateTransferForEquipment', () => {
     const zaduzenoEquipment: Equipment = {
       id: 'eq-z',
+      ...EQUIPMENT_FIXTURE_DEFAULTS,
       inventoryNumber: 'INV-Z',
       categoryId: 'cat-child',
       status: 'zaduzeno',
@@ -427,6 +447,7 @@ describe('RegistrarScopeService', () => {
       lastName: 'B',
       title: 'Radnik',
       orgUnitId: 'ou-child',
+      ...EMPLOYEE_FIXTURE_DEFAULTS,
       email: null,
       phone: null,
       createdAt: new Date(),
@@ -478,6 +499,7 @@ describe('RegistrarScopeService', () => {
       const scopes = [{ warehouseId: 'wh-a', categoryId: 'cat-root', orgUnitId: 'ou-root' }];
       const poolEquipment: Equipment = {
         id: 'eq-pool',
+        ...EQUIPMENT_FIXTURE_DEFAULTS,
         inventoryNumber: 'INV-POOL',
         categoryId: 'cat-child',
         status: 'skladiste',
@@ -547,6 +569,7 @@ describe('RegistrarScopeService', () => {
         lastName: 'D',
         title: 'Radnik',
         orgUnitId: 'sluzba-ed',
+        ...EMPLOYEE_FIXTURE_DEFAULTS,
         email: null,
         phone: null,
         createdAt: new Date(),
@@ -556,6 +579,7 @@ describe('RegistrarScopeService', () => {
         authUser('evidenticar'),
         {
           id: 'eq-ed',
+          ...EQUIPMENT_FIXTURE_DEFAULTS,
           inventoryNumber: 'INV-ED',
           categoryId: 'cat-child',
           status: 'zaduzeno',
@@ -581,6 +605,7 @@ describe('RegistrarScopeService', () => {
         lastName: 'D',
         title: 'Radnik',
         orgUnitId: 'sluzba-ed',
+        ...EMPLOYEE_FIXTURE_DEFAULTS,
         email: null,
         phone: null,
         createdAt: new Date(),
@@ -590,6 +615,7 @@ describe('RegistrarScopeService', () => {
         authUser('evidenticar'),
         {
           id: 'eq-ed',
+          ...EQUIPMENT_FIXTURE_DEFAULTS,
           inventoryNumber: 'INV-ED',
           categoryId: 'cat-child',
           status: 'zaduzeno',
@@ -669,6 +695,7 @@ describe('RegistrarScopeService', () => {
         lastName: 'Registrar',
         title: 'Evidentičar',
         orgUnitId: 'sluzba-ed',
+        ...EMPLOYEE_FIXTURE_DEFAULTS,
         email: null,
         phone: null,
         createdAt: new Date(),
@@ -692,6 +719,7 @@ describe('RegistrarScopeService', () => {
         lastName: 'Scope',
         title: 'Radnik',
         orgUnitId: 'ou-other',
+        ...EMPLOYEE_FIXTURE_DEFAULTS,
         email: null,
         phone: null,
         createdAt: new Date(),
@@ -719,6 +747,7 @@ describe('RegistrarScopeService', () => {
         }),
         {
           id: 'eq-self',
+          ...EQUIPMENT_FIXTURE_DEFAULTS,
           inventoryNumber: 'INV-SELF',
           categoryId: 'cat-other',
           status: 'zaduzeno',
@@ -736,6 +765,7 @@ describe('RegistrarScopeService', () => {
           lastName: 'Registrar',
           title: 'Evidentičar',
           orgUnitId: 'sluzba-ed',
+          ...EMPLOYEE_FIXTURE_DEFAULTS,
           email: null,
           phone: null,
           createdAt: new Date(),
@@ -763,6 +793,7 @@ describe('RegistrarScopeService', () => {
   describe('canAccessTransfer', () => {
     const zaduzenoEquipment: Equipment = {
       id: 'eq-cross',
+      ...EQUIPMENT_FIXTURE_DEFAULTS,
       inventoryNumber: 'INV-CROSS',
       categoryId: 'cat-child',
       status: 'zaduzeno',
@@ -780,6 +811,7 @@ describe('RegistrarScopeService', () => {
       lastName: 'Worker',
       title: 'Radnik',
       orgUnitId: 'ou-other',
+      ...EMPLOYEE_FIXTURE_DEFAULTS,
       email: null,
       phone: null,
       createdAt: new Date(),
