@@ -1037,6 +1037,7 @@ model InventoryPendingAction {
   payload         Json
   status          InventoryPendingActionStatus @default(pending)
   attempts        Int                         @default(0)
+  leaseToken      String?
   lastError       String?                     @db.Text
   appliedAt       DateTime?
   createdByUserId String
@@ -1065,6 +1066,8 @@ model InventorySessionCloseJob {
   skippedCount Int                            @default(0)
   startedAt    DateTime?
   endedAt      DateTime?
+  leaseToken   String?
+  leaseUntil   DateTime?
   lastError    String?                        @db.Text
   createdAt    DateTime                       @default(now())
   updatedAt    DateTime                       @updatedAt
@@ -1072,6 +1075,7 @@ model InventorySessionCloseJob {
   session InventorySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([status])
+  @@index([status, leaseUntil], map: "inventory_session_close_jobs_status_lease_idx")
   @@map("inventory_session_close_jobs")
 }
 

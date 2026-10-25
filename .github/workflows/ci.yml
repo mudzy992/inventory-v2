@@ -88,6 +88,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:disposal-approval-race
 
+      - name: Verify expired inventory close lease recovery
+        working-directory: backend
+        run: npm run test:integration:inventory-close-lease-recovery
+
       - name: Verify temporary Redis service
         working-directory: backend
         run: |

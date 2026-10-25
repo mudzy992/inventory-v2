@@ -34,8 +34,17 @@ export class InventorySessionCloseReconcilerService implements OnModuleInit {
     }
     this.reconciliationRunning = true;
     try {
+      const now = new Date();
       const jobs = await this.prisma.inventorySessionCloseJob.findMany({
-        where: { status: 'queued' },
+        where: {
+          OR: [
+            { status: 'queued' },
+            {
+              status: 'running',
+              OR: [{ leaseUntil: { lte: now } }, { leaseUntil: null }],
+            },
+          ],
+        },
         orderBy: { createdAt: 'asc' },
         take: RECONCILE_BATCH_SIZE,
         select: { id: true, sessionId: true, updatedAt: true },

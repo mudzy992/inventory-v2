@@ -1,5 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -13,9 +14,21 @@ import {
   getPendingActionRetryDelayMs,
   isRetryablePendingActionError,
 } from './utils/classify-pending-action-error.util';
+import {
+  buildInventoryCloseJobClaimWhere,
+  getInventoryCloseLeaseUntil,
+  INVENTORY_CLOSE_HEARTBEAT_MS,
+} from './utils/inventory-close-lease.util';
 
 const ACTION_THROTTLE_MS = 250;
 const MAX_PENDING_ACTION_ATTEMPTS = 3;
+
+class InventoryCloseLeaseLostError extends Error {
+  constructor() {
+    super('Inventory close worker lease was lost');
+    this.name = 'InventoryCloseLeaseLostError';
+  }
+}
 
 /**
  * BullMQ worker za zatvaranje inventurne sesije — zamjenjuje raniju
@@ -26,19 +39,15 @@ const MAX_PENDING_ACTION_ATTEMPTS = 3;
  * blocking mehanizam iznutra) — nula idle DB opterećenja.
  *
  * Dodatna dobit u odnosu na raniju implementaciju:
- *  - DB status ostaje 'queued' između BullMQ pokušaja, tako da naredni
- *    retry može ponovo preuzeti posao; 'failed' se upisuje tek nakon
- *    posljednjeg konfigurisanog pokušaja;
- *  - `concurrency: 2` — do dvije sesije se mogu zatvarati paralelno umjesto
- *    striktno sekvencijalno, bez dodatnog koda za to;
- *  - neuspjeli poslovi ostaju vidljivi u BullMQ failed setu (dead-letter
- *    ponašanje "besplatno", uz retenciju definisanu u QueuesModule).
+ *  - DB lease token + expiry dozvoljavaju preuzimanje posla koji je ostao
+ *    'running' nakon pada procesa; heartbeat sprečava normalno aktivan
+ *    worker da izgubi vlasništvo, a reconciler ponovo enqueue-a istekle lease-ove;
+ *  - stale pending-action statusi se atomarno vraćaju u 'pending' pri takeover-u;
+ *  - terminalne/failed akcije ostaju evidentirane, a idempotentni side effecti
+ *    čine replay nakon prekida sigurnim.
  *
- * Logika same obrade (claimed = updateMany where status='pending', throttle
- * između akcija) je NAMJERNO zadržana identična ranijoj implementaciji —
- * to je zaštita od duple obrade iste akcije ako BullMQ ikad redeliveruje
- * isti posao (npr. worker restart usred obrade), ne nešto specifično za
- * stari polling model.
+ * BullMQ i dalje upravlja retry/backoff-om samog close joba, dok lease expiry
+ *    pruža DB-side recovery kada worker proces ne može izvršiti svoj catch block.
  */
 @Processor(INVENTORY_SESSION_CLOSE_QUEUE, { concurrency: 2 })
 export class InventorySessionCloseWorkerService extends WorkerHost {
@@ -59,41 +68,119 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
       this.logger.warn(`No inventorySessionCloseJob DB row found for session ${sessionId}, skipping.`);
       return;
     }
-    // Isti optimistic-claim obrazac kao ranije: samo jedan worker (od
-    // potencijalno više concurrency slotova/instanci) smije preuzeti posao
-    // koji je u 'queued' stanju.
-    const claimed = await this.prisma.inventorySessionCloseJob.updateMany({
-      where: { id: dbJob.id, status: 'queued' },
-      data: { status: 'running', startedAt: new Date(), lastError: null },
+
+    const leaseToken = randomUUID();
+    const claimedAt = new Date();
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.inventorySessionCloseJob.updateMany({
+        where: buildInventoryCloseJobClaimWhere(dbJob.id, claimedAt),
+        data: {
+          status: 'running',
+          leaseToken,
+          leaseUntil: getInventoryCloseLeaseUntil(claimedAt),
+          startedAt: claimedAt,
+          endedAt: null,
+          lastError: null,
+        },
+      });
+      if (claim.count !== 1) {
+        return false;
+      }
+      // Any running action belongs to the expired/abandoned close-job lease.
+      // Requeue it atomically with takeover; side effects are idempotent.
+      await tx.inventoryPendingAction.updateMany({
+        where: { sessionId, status: 'running' },
+        data: { status: 'pending', leaseToken: null },
+      });
+      return true;
     });
-    if (claimed.count !== 1) {
-      this.logger.debug(`Session ${sessionId} close job already claimed/processed, skipping.`);
+    if (!claimed) {
+      this.logger.debug(`Session ${sessionId} close job is already claimed or terminal; skipping.`);
       return;
     }
-    try {
-      await this.applyPendingActions(sessionId);
-      await this.prisma.inventorySession.update({
-        where: { id: sessionId },
-        data: { status: 'closed', closedAt: new Date() },
+
+    let leaseLost = false;
+    let heartbeatInFlight = false;
+    const renewLease = async (): Promise<boolean> => {
+      if (leaseLost) {
+        return false;
+      }
+      const result = await this.prisma.inventorySessionCloseJob.updateMany({
+        where: { id: dbJob.id, status: 'running', leaseToken },
+        data: { leaseUntil: getInventoryCloseLeaseUntil() },
       });
-      const doneJob = await this.prisma.inventorySessionCloseJob.update({
-        where: { id: dbJob.id },
-        data: { status: 'done', endedAt: new Date() },
+      if (result.count !== 1) {
+        leaseLost = true;
+        return false;
+      }
+      return true;
+    };
+    const assertLease = async (): Promise<void> => {
+      if (!(await renewLease())) {
+        throw new InventoryCloseLeaseLostError();
+      }
+    };
+    const heartbeat = setInterval(() => {
+      if (heartbeatInFlight || leaseLost) {
+        return;
+      }
+      heartbeatInFlight = true;
+      void renewLease()
+        .catch((error: unknown) => {
+          leaseLost = true;
+          this.logger.error(`Inventory close lease renewal failed for session ${sessionId}: ${String(error)}`);
+        })
+        .finally(() => {
+          heartbeatInFlight = false;
+        });
+    }, INVENTORY_CLOSE_HEARTBEAT_MS);
+    heartbeat.unref?.();
+
+    try {
+      await this.applyPendingActions(sessionId, leaseToken, assertLease);
+      await assertLease();
+      const doneJob = await this.prisma.$transaction(async (tx) => {
+        const finalized = await tx.inventorySessionCloseJob.updateMany({
+          where: { id: dbJob.id, status: 'running', leaseToken },
+          data: {
+            status: 'done',
+            endedAt: new Date(),
+            leaseToken: null,
+            leaseUntil: null,
+          },
+        });
+        if (finalized.count !== 1) {
+          throw new InventoryCloseLeaseLostError();
+        }
+        await tx.inventorySession.update({
+          where: { id: sessionId },
+          data: { status: 'closed', closedAt: new Date() },
+        });
+        return tx.inventorySessionCloseJob.findUniqueOrThrow({ where: { id: dbJob.id } });
       });
       await this.emitCloseJobUpdate(sessionId, doneJob);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const finalAttempt = isFinalInventoryCloseAttempt(job.attemptsMade, job.opts.attempts);
-      const failedJob = await this.prisma.inventorySessionCloseJob.update({
-        where: { id: dbJob.id },
+      const released = await this.prisma.inventorySessionCloseJob.updateMany({
+        where: { id: dbJob.id, status: 'running', leaseToken },
         data: {
           status: finalAttempt ? 'failed' : 'queued',
           endedAt: finalAttempt ? new Date() : null,
           lastError: message,
+          leaseToken: null,
+          leaseUntil: null,
         },
       });
-      await this.emitCloseJobUpdate(sessionId, failedJob);
-      throw err; // BullMQ retry/backoff preuzima odavde (vidi QueuesModule).
+      if (released.count === 1) {
+        const failedJob = await this.prisma.inventorySessionCloseJob.findUniqueOrThrow({
+          where: { id: dbJob.id },
+        });
+        await this.emitCloseJobUpdate(sessionId, failedJob);
+      }
+      throw err; // BullMQ retry/backoff preuzima odavde; expired lease pokriva crash recovery.
+    } finally {
+      clearInterval(heartbeat);
     }
   }
 
@@ -114,8 +201,13 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
     });
   }
 
-  private async applyPendingActions(sessionId: string): Promise<void> {
+  private async applyPendingActions(
+    sessionId: string,
+    leaseToken: string,
+    assertLease: () => Promise<void>,
+  ): Promise<void> {
     while (true) {
+      await assertLease();
       const action = await this.prisma.inventoryPendingAction.findFirst({
         where: { sessionId, status: 'pending' },
         orderBy: { createdAt: 'asc' },
@@ -123,17 +215,33 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
       if (!action) {
         break;
       }
-      const claimed = await this.prisma.inventoryPendingAction.updateMany({
-        where: { id: action.id, status: 'pending' },
-        data: { status: 'running', attempts: { increment: 1 }, lastError: null },
+      const claimed = await this.prisma.$transaction(async (tx) => {
+        const owner = await tx.inventorySessionCloseJob.findFirst({
+          where: { sessionId, status: 'running', leaseToken },
+          select: { id: true },
+        });
+        if (!owner) {
+          return false;
+        }
+        const result = await tx.inventoryPendingAction.updateMany({
+          where: { id: action.id, sessionId, status: 'pending' },
+          data: {
+            status: 'running',
+            leaseToken,
+            attempts: { increment: 1 },
+            lastError: null,
+          },
+        });
+        return result.count === 1;
       });
-      if (claimed.count !== 1) {
+      if (!claimed) {
         continue;
       }
+      await assertLease();
+
       let applied = false;
       let actionError: unknown;
       let retryCount = 0;
-
       while (true) {
         try {
           await this.inventoryCountService.applyPendingAction(action.id);
@@ -157,35 +265,71 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
         }
       }
 
-      const retryAttemptCount = retryCount > 0 ? { attempts: { increment: retryCount } } : {};
-      if (applied) {
-        await this.prisma.inventoryPendingAction.update({
-          where: { id: action.id },
-          data: {
-            status: 'applied',
-            appliedAt: new Date(),
-            lastError: null,
-            ...retryAttemptCount,
-          },
-        });
-        const progressJob = await this.prisma.inventorySessionCloseJob.update({
-          where: { sessionId },
-          data: { appliedCount: { increment: 1 } },
-        });
-        await this.emitCloseJobUpdate(sessionId, progressJob);
-      } else {
-        const message = actionError instanceof Error ? actionError.message : String(actionError);
-        await this.prisma.inventoryPendingAction.update({
-          where: { id: action.id },
-          data: { status: 'failed', lastError: message, ...retryAttemptCount },
-        });
-        const failedProgressJob = await this.prisma.inventorySessionCloseJob.update({
-          where: { sessionId },
-          data: { failedCount: { increment: 1 } },
-        });
-        await this.emitCloseJobUpdate(sessionId, failedProgressJob);
-      }
+      const progressJob = await this.finalizePendingAction({
+        actionId: action.id,
+        sessionId,
+        leaseToken,
+        status: applied ? 'applied' : 'failed',
+        lastError: applied
+          ? null
+          : actionError instanceof Error
+            ? actionError.message
+            : String(actionError),
+        retryCount,
+      });
+      await this.emitCloseJobUpdate(sessionId, progressJob);
       await new Promise((resolve) => setTimeout(resolve, ACTION_THROTTLE_MS));
     }
+  }
+
+  private async finalizePendingAction(input: {
+    actionId: string;
+    sessionId: string;
+    leaseToken: string;
+    status: 'applied' | 'failed';
+    lastError: string | null;
+    retryCount: number;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const retryAttemptCount =
+        input.retryCount > 0 ? { attempts: { increment: input.retryCount } } : {};
+      const actionUpdate = await tx.inventoryPendingAction.updateMany({
+        where: {
+          id: input.actionId,
+          status: 'running',
+          leaseToken: input.leaseToken,
+        },
+        data: {
+          status: input.status,
+          appliedAt: input.status === 'applied' ? new Date() : null,
+          lastError: input.lastError,
+          leaseToken: null,
+          ...retryAttemptCount,
+        },
+      });
+      if (actionUpdate.count !== 1) {
+        throw new InventoryCloseLeaseLostError();
+      }
+
+      const progressUpdate = await tx.inventorySessionCloseJob.updateMany({
+        where: {
+          sessionId: input.sessionId,
+          status: 'running',
+          leaseToken: input.leaseToken,
+        },
+        data: {
+          ...(input.status === 'applied'
+            ? { appliedCount: { increment: 1 } }
+            : { failedCount: { increment: 1 } }),
+          leaseUntil: getInventoryCloseLeaseUntil(),
+        },
+      });
+      if (progressUpdate.count !== 1) {
+        throw new InventoryCloseLeaseLostError();
+      }
+      return tx.inventorySessionCloseJob.findUniqueOrThrow({
+        where: { sessionId: input.sessionId },
+      });
+    });
   }
 }

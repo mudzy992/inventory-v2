@@ -128,6 +128,53 @@ const INVENTORY_LINE_SORT_FIELDS: Record<string, string> = {
   status: 'status',
 };
 
+const PENDING_ACTION_RESPONSE_SELECT = {
+  id: true,
+  sessionId: true,
+  committeeId: true,
+  equipmentId: true,
+  inventoryLineId: true,
+  kind: true,
+  payload: true,
+  status: true,
+  attempts: true,
+  lastError: true,
+  appliedAt: true,
+  createdByUserId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.InventoryPendingActionSelect;
+
+type InventoryCloseJobResponseInput = {
+  id: string;
+  sessionId: string;
+  status: string;
+  totalCount: number;
+  appliedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  lastError: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+const toPublicInventoryCloseJob = (job: InventoryCloseJobResponseInput) => ({
+  id: job.id,
+  sessionId: job.sessionId,
+  status: job.status,
+  totalCount: job.totalCount,
+  appliedCount: job.appliedCount,
+  failedCount: job.failedCount,
+  skippedCount: job.skippedCount,
+  startedAt: job.startedAt,
+  endedAt: job.endedAt,
+  lastError: job.lastError,
+  createdAt: job.createdAt,
+  updatedAt: job.updatedAt,
+});
+
 const EQUIPMENT_SCOPE_SORT_FIELDS: Record<string, string> = {
   inventoryNumber: 'inventoryNumber',
   entryDate: 'entryDate',
@@ -1849,6 +1896,7 @@ export class InventoryCountService {
           kind,
           payload,
           status: 'pending',
+          leaseToken: null,
           lastError: null,
           appliedAt: null,
         },
@@ -1867,7 +1915,7 @@ export class InventoryCountService {
       return tx.inventoryLine.findUnique({
         where: { id: line.id },
         include: {
-          pendingAction: true,
+          pendingAction: { select: PENDING_ACTION_RESPONSE_SELECT },
           generatedTransfer: true,
           equipment: { include: { category: true, currentHolder: true } },
         },
@@ -1941,7 +1989,7 @@ export class InventoryCountService {
     }
     const existingJob = session.closeJobs[0] ?? null;
     if (existingJob && (existingJob.status === 'queued' || existingJob.status === 'running')) {
-      return existingJob;
+      return toPublicInventoryCloseJob(existingJob);
     }
 
     const job = await this.prisma.$transaction(async (tx) => {
@@ -1976,6 +2024,8 @@ export class InventoryCountService {
           skippedCount: 0,
           startedAt: null,
           endedAt: null,
+          leaseToken: null,
+          leaseUntil: null,
           lastError: null,
         },
       });
@@ -1994,7 +2044,7 @@ export class InventoryCountService {
         `Inventory close job persisted but enqueue failed for session ${session.id}: ${String(error)}`,
       );
     }
-    return job;
+    return toPublicInventoryCloseJob(job);
   }
 
   async getCloseJob(sessionId: string) {
@@ -2006,7 +2056,7 @@ export class InventoryCountService {
     const remaining = await this.prisma.inventoryPendingAction.count({
       where: { sessionId, status: 'pending' },
     });
-    return { ...job, remaining };
+    return { ...toPublicInventoryCloseJob(job), remaining };
   }
 
   async assertTransfersAllowedForEquipment(equipmentId: string): Promise<void> {
@@ -2155,7 +2205,7 @@ export class InventoryCountService {
             category: true,
             lines: {
               include: {
-                pendingAction: true,
+                pendingAction: { select: PENDING_ACTION_RESPONSE_SELECT },
                 equipment: { include: { category: true, currentHolder: true, warehouse: true } },
               },
             },

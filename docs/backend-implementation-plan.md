@@ -160,12 +160,12 @@ Prije implementacije dogovoriti tačno značenje i prelaze za inventory close, n
 
 **Pending-action retry implementacija:** `applyPendingAction()` sada ponavlja samo eksplicitno allowlistane prolazne Prisma/PostgreSQL/network greške, najviše 3 pokušaja ukupno, uz 250/500 ms backoff. Trajne, business i nepoznate greške ne dobijaju retry: akcija se bilježi kao `failed`, a close worker nastavlja i zatvara sesiju uz `failedCount > 0`, po odobrenoj poslovnoj odluci. Pokušaji uključuju početni claim i dodatne retry pokušaje. Relocation finalize već je idempotentan preko terminalnog transfer statusa; direktni relocation retry prepoznaje ciljano warehouse/person stanje nakon mogućeg ambiguous commit-a. Disposal retry u istoj sesiji sada ne resetuje terminalni review status i za pending zapis mijenja samo line link pod uslovom da status i dalje `pending`; nova sesija i dalje otvara novi pending review.
 
-Dodani su unit testovi za allowlist/backoff, worker retry success/budget exhaustion i disposal/relocation idempotency. PostgreSQL integration script `prisma/check-disposal-approval-race.ts` dodatno provjerava da retry u istoj sesiji čuva review, a nova sesija ponovo otvara approval; oba scenarija su prošla u CI `40230286269`. Ručni retry endpoint, crash/stale-`running` recovery, lease/heartbeat i fault injection nakon procesa/DB commita ostaju odvojeni otvoreni radovi.
+Dodani su unit testovi za retry, lease claim i reconciler te PostgreSQL integration test koji simulira close posao i pending action ostavljene `running` sa isteklim lease-om; worker ih preuzima i završava. CI provjera ovog scenarija čeka naredni push. Ručni retry endpoint i fault-injection sa stvarnim kill-om procesa nakon side effect commita ostaju otvoreni.
 
-- DB claim mora uspjeti samo za dozvoljeni status i lease koji je istekao; koristiti conditional update/claim token, ne read-then-write.
-- Worker side effects moraju biti idempotentni po session/action ID. Ponovni attempt ne smije duplirati movement, disposal record, notification ili inventory mutation.
-- Ako se DB queued zapis kreira, a `queue.add()` padne, status mora ostati retryable i biti ponovo enqueue-ovan.
-- Startup/periodični reconciler traži DB poslove bez BullMQ job-a, expired leases i DB/Bull status mismatch; operacija mora biti sigurna kad je pokrene više instanci.
+- Implementirano: conditional DB claim uz unikatni lease token, expiry od 2 minute i heartbeat svakih 30 sekundi. Pri takeover-u se pending actions ostavljene `running` atomarno vraćaju u `pending`; terminalne akcije se ne diraju.
+- Progress brojači i terminalni action status se commituju u jednoj transakciji pod istim lease tokenom; close-job finalizacija i session zatvaranje su također transakcijski. API response mapperi izostavljaju interne lease kolone, pa response shape ostaje nepromijenjen.
+- Relocation/disposal DB promjene su zaštićene replayom; notification side effecti i dalje su best-effort i nisu exactly-once/outbox garantovani — poslovna odluka iz sekcije 12 ostaje otvorena.
+- Ako se DB queued zapis kreira, a `queue.add()` padne, status ostaje retryable; startup/periodični reconciler sada traži queued poslove i running poslove sa isteklim ili starim null lease-om, uz deterministički recovery job ID.
 - Administrativni retry mora imati audit trail i ne smije vratiti već kompletiranu sesiju u `queued`.
 
 ### 3.3 Fault-injection i prihvatanje

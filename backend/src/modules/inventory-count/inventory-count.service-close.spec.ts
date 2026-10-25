@@ -3,7 +3,22 @@ import test from 'node:test';
 import { InventoryCountService } from './inventory-count.service';
 
 const createService = () => {
-  const job = { id: 'close-job-1', sessionId: 'session-1', status: 'queued' };
+  const job = {
+    id: 'close-job-1',
+    sessionId: 'session-1',
+    status: 'queued',
+    totalCount: 2,
+    appliedCount: 0,
+    failedCount: 0,
+    skippedCount: 0,
+    startedAt: null,
+    endedAt: null,
+    leaseToken: 'internal-token',
+    leaseUntil: new Date('2026-10-25T20:00:00.000Z'),
+    lastError: null,
+    createdAt: new Date('2026-10-25T19:00:00.000Z'),
+    updatedAt: new Date('2026-10-25T19:00:00.000Z'),
+  };
   const writes: string[] = [];
   const tx = {
     inventorySession: {
@@ -61,7 +76,22 @@ const createService = () => {
 test('persists close state before enqueue and leaves a durable job when Redis is unavailable', async () => {
   const { service, job, writes, getEnqueueAttempts } = createService();
   const result = await service.closeSession({ id: 'admin-1' } as never, 'session-1');
-  assert.equal(result, job);
+  assert.deepEqual(result, {
+    id: job.id,
+    sessionId: job.sessionId,
+    status: job.status,
+    totalCount: job.totalCount,
+    appliedCount: job.appliedCount,
+    failedCount: job.failedCount,
+    skippedCount: job.skippedCount,
+    startedAt: job.startedAt,
+    endedAt: job.endedAt,
+    lastError: job.lastError,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  });
+  assert.equal('leaseToken' in result, false);
+  assert.equal('leaseUntil' in result, false);
   assert.deepEqual(writes, ['session:closing', 'committees:closed', 'job:queued']);
   assert.equal(getEnqueueAttempts(), 1);
 });
