@@ -144,6 +144,37 @@ jobs:
         working-directory: backend
         run: npm audit --audit-level=low
 
+  document-worker:
+    name: Document worker checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: document-worker/package-lock.json
+
+      - name: Install document worker dependencies
+        working-directory: document-worker
+        run: npm ci
+
+      - name: Run document worker unit specs
+        working-directory: document-worker
+        run: npm run test:unit
+
+      - name: Build document worker
+        working-directory: document-worker
+        run: npm run build
+
+      - name: Audit document worker dependencies
+        working-directory: document-worker
+        run: npm audit --audit-level=low
+
   frontend:
     name: Frontend checks
     runs-on: ubuntu-24.04

@@ -31,8 +31,10 @@ export interface WorkerConfig {
 const readInt = (name: string, fallback: number): number => {
   const raw = process.env[name];
   if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  const normalized = raw.trim();
+  if (!/^\d+$/u.test(normalized)) return fallback;
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
 export const loadConfig = (): WorkerConfig => {
