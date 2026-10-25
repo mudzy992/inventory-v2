@@ -92,7 +92,7 @@ export class CategoriesService {
     const normalizedOptionalFields = dto.optionalFields
       ? normalizeLotCategoryFields(dto.optionalFields)
       : undefined;
-    const data: Prisma.CategoryUpdateInput = {
+    const data: Prisma.CategoryUncheckedUpdateInput = {
       name: dto.name,
       description: dto.description,
       parentId: dto.parentId,
@@ -104,16 +104,17 @@ export class CategoriesService {
     if (dto.parentId === undefined) {
       return this.prisma.category.update({ where: { id }, data });
     }
+    const parentId = dto.parentId;
 
     return this.prisma.$transaction(async (tx) => {
       // Serialize tree reparent operations so concurrent updates cannot each
       // validate against a stale hierarchy and jointly introduce a cycle.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(1800043170, 24681)`;
       const categories = await tx.category.findMany({ select: { id: true, parentId: true } });
-      if (dto.parentId && !categories.some((category) => category.id === dto.parentId)) {
+      if (parentId && !categories.some((category) => category.id === parentId)) {
         throw new NotFoundException('Category not found');
       }
-      if (wouldCreateCategoryCycle(id, dto.parentId, categories)) {
+      if (wouldCreateCategoryCycle(id, parentId, categories)) {
         throw new BadRequestException('Category hierarchy cannot contain a cycle');
       }
       return tx.category.update({ where: { id }, data });

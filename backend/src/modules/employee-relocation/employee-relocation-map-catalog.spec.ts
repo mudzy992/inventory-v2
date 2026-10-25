@@ -44,7 +44,7 @@ const baseLine = {
 };
 
 const createService = (options: {
-  line?: typeof baseLine;
+  line?: Omit<typeof baseLine, 'status'> & { status: 'pending_source' | 'pending_dest' };
   catalogItem?: { id: string; categoryId: string; isActive: boolean } | null;
   leafError?: Error;
 }) => {

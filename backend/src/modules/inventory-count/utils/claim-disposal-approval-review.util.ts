@@ -4,7 +4,7 @@ import type { Prisma } from '../../../../generated/prisma/client';
 export const claimDisposalApprovalReviewInTx = async (
   tx: Prisma.TransactionClient,
   approvalId: string,
-  data: Prisma.DisposalInventoryApprovalUpdateManyMutationInput,
+  data: Prisma.DisposalInventoryApprovalUncheckedUpdateManyInput,
 ): Promise<void> => {
   const claim = await tx.disposalInventoryApproval.updateMany({
     where: { id: approvalId, status: 'pending' },

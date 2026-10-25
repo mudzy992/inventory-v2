@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { AuthenticatedUser } from '../types/authenticated-user.type';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 
 /** Mirrors evidentičar branch in WarehousesService.buildListWhere */
 const buildEvidenticarWarehouseScope = (

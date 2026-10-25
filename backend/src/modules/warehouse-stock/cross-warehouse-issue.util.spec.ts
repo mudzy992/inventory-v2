@@ -279,7 +279,7 @@ describe('applyCrossWarehouseIssueLotUpdatesInTx', () => {
       catalogItemId: 'catalog-1',
       catalogItemName: 'Laptop',
       actorUserId: 'user-1',
-      fields: [{ id: 'field1', label: 'Field', type: 'text', unique: false, required: true }],
+      fields: [{ id: 'field1', name: 'Field', type: 'text' as const, unique: false, required: true }],
       optionalFields: [],
     };
 
@@ -327,7 +327,7 @@ describe('applyCrossWarehouseIssueLotUpdatesInTx', () => {
       catalogItemId: 'catalog-1',
       catalogItemName: 'Laptop',
       actorUserId: 'user-1',
-      fields: [{ id: 'field1', label: 'Field', type: 'text', unique: false, required: true }],
+      fields: [{ id: 'field1', name: 'Field', type: 'text' as const, unique: false, required: true }],
       optionalFields: [],
     };
 

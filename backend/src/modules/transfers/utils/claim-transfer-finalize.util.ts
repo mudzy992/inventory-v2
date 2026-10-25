@@ -8,7 +8,7 @@ export const transitionOpenTransferInTx = async (
   transferStore: TransferStore,
   transferId: string,
   allowedStatuses: readonly TransferOpenStatus[],
-  data: Prisma.TransferUpdateManyMutationInput,
+  data: Prisma.TransferUncheckedUpdateManyInput,
   errorMessage: string,
 ): Promise<void> => {
   const transition = await transferStore.transfer.updateMany({
@@ -23,7 +23,7 @@ export const transitionOpenTransferInTx = async (
 export const claimTransferForFinalizeInTx = async (
   transferStore: TransferStore,
   transferId: string,
-  data: Prisma.TransferUpdateManyMutationInput,
+  data: Prisma.TransferUncheckedUpdateManyInput,
 ): Promise<void> =>
   transitionOpenTransferInTx(
     transferStore,
