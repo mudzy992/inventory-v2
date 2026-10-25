@@ -158,6 +158,8 @@ Prije implementacije dogovoriti tačno značenje i prelaze za inventory close, n
 
 ### 3.2 Atomarni claim, idempotency i recovery
 
+**Nalaz pri pregledu pending-action retry toka (još nije riješen):** worker trenutno atomarno claim-a samo akcije sa statusom `pending`; ako `applyPendingAction()` baci grešku, akcija postaje `failed`, worker nastavlja dalje, a close posao može završiti kao `done` i sesija kao `closed` uz `failedCount > 0`. Ta akcija se više ne bira za automatsku obradu/retry. Dodan je unit regression test koji bilježi postojeće ponašanje (`inventory-session-close-worker.spec.ts`); nije mijenjan statusni ni poslovni ishod. Automatski retry ne treba uvoditi prije provjere idempotency-ja za transfer/disposal side effecte i odluke vlasnika procesa o djelimičnoj uspješnosti (odluke 1 i 5 u sekciji 12). Retry za `failed` akcije, ručni retry endpoint i integration/fault-injection dokaz ostaju otvoreni.
+
 - DB claim mora uspjeti samo za dozvoljeni status i lease koji je istekao; koristiti conditional update/claim token, ne read-then-write.
 - Worker side effects moraju biti idempotentni po session/action ID. Ponovni attempt ne smije duplirati movement, disposal record, notification ili inventory mutation.
 - Ako se DB queued zapis kreira, a `queue.add()` padne, status mora ostati retryable i biti ponovo enqueue-ovan.
