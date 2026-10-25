@@ -10,6 +10,7 @@ import { RecordWarehouseInventoryLineDto } from '../../modules/inventory-count/d
 import { ReviewDisposalApprovalDto } from '../../modules/inventory-count/dto/review-disposal-approval.dto';
 import { UpdateMaintenancePartNoteDto } from '../../modules/maintenance-parts/dto/update-maintenance-part-note.dto';
 import { UpdateSettingDto } from '../../modules/settings/dto/update-setting.dto';
+import { UploadTransferTemplateDto } from '../../modules/warehouses/dto/upload-transfer-template.dto';
 
 const validatePayload = async <T extends object>(
   type: new () => T,
@@ -75,4 +76,15 @@ test('optional maintenance notes must be bounded strings', async () => {
     (await validatePayload(UpdateMaintenancePartNoteDto, { note: 'x'.repeat(1001) })).length,
     0,
   );
+});
+
+test('transfer template label is an optional bounded string and rejects unknown keys', async () => {
+  assert.equal((await validatePayload(UploadTransferTemplateDto, {})).length, 0);
+  assert.equal((await validatePayload(UploadTransferTemplateDto, { label: 'Form' })).length, 0);
+  assert.notEqual((await validatePayload(UploadTransferTemplateDto, { label: 5 })).length, 0);
+  assert.notEqual(
+    (await validatePayload(UploadTransferTemplateDto, { label: 'x'.repeat(121) })).length,
+    0,
+  );
+  assert.notEqual((await validatePayload(UploadTransferTemplateDto, { label: 'Form', extra: true })).length, 0);
 });

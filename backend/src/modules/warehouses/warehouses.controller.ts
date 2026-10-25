@@ -21,6 +21,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
 import { ListWarehousesQueryDto } from './dto/list-warehouses-query.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
+import { UploadTransferTemplateDto } from './dto/upload-transfer-template.dto';
 import { WarehouseTransferTemplateService } from './warehouse-transfer-template.service';
 import { WarehousesService } from './warehouses.service';
 
@@ -104,9 +105,9 @@ export class WarehousesController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body('label') label?: string,
+    @Body() body: UploadTransferTemplateDto,
   ) {
-    return this.transferTemplateService.uploadTemplate(user, id, file, label ?? '');
+    return this.transferTemplateService.uploadTemplate(user, id, file, body.label ?? '');
   }
 
   @Patch(':id/transfer-template/:templateId/activate')

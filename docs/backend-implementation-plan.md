@@ -253,6 +253,11 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 - Proći kroz scope-sensitive list/detail/write rute: testirati drugi tenant/org/warehouse i potvrditi da se ne može doći do podataka preko ID-a ili relacije.
 - Uskladiti query string enum/ID tipove i explicit allow-list za generičke upload/entity rute.
 
+#### Transfer-template upload DTO (P2 — implementation added)
+
+- Multipart `label` se sada validira kroz DTO: optional string, najviše 120 znakova, a nepoznata polja se odbijaju. Time se sprečava 500 greška zbog pogrešnog tipa ili prekoračenja PostgreSQL `VarChar(120)` limita.
+- Unit test pokriva odsutan/validan label, pogrešan tip, predugu vrijednost i nepoznato polje.
+
 #### Bounded pagination offsets (P2 — implementation added)
 
 - `parsePagination()` i direktni `paginate()` pozivi sada odbijaju `skip` iznad 100.000 redova sa HTTP 400; neskalabilan offset više ne može postati neograničen DB scan.
