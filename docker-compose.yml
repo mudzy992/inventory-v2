@@ -73,9 +73,11 @@ services:
       test:
         - CMD-SHELL
         - >-
-          node -e "require('http').get('http://127.0.0.1:3000/health',
-          r => process.exit(r.statusCode === 200 ? 0 : 1))
-          .on('error', () => process.exit(1))"
+          node -e 'const http=require("node:http"); const raw=process.env.API_PREFIX;
+          const prefix=(raw===undefined?"backend":raw).trim().replace(/^\/+|\/+$/g,"");
+          const path=(prefix?"/"+prefix:"")+"/health/ready";
+          http.get({host:"127.0.0.1",port:3000,path},r=>process.exit(r.statusCode===200?0:1))
+          .on("error",()=>process.exit(1))'
       interval: 30s
       timeout: 5s
       start_period: 30s

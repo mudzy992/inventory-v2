@@ -268,7 +268,7 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 #### Liveness and readiness probes (P2 — implementation added)
 
 - `GET /health/live` je process-only liveness endpoint i ne zavisi od DB/Redis/queue dostupnosti. `GET /health/ready` ostaje readiness provjera PostgreSQL-a, shared Redis-a i obje kritične BullMQ queue konekcije, sa timeout-om po provjeri.
-- Legacy `GET /health` zadržava postojeći DB-only ugovor radi kompatibilnosti; deployment healthcheck konfiguracija treba koristiti `/health/live` za liveness i `/health/ready` za prijem saobraćaja.
+- Legacy `GET /health` zadržava postojeći DB-only ugovor radi kompatibilnosti; Compose healthchecks u oba deployment fajla koriste `/health/ready` i računaju globalni `API_PREFIX` (uključujući prazan prefix). Orkestrator može koristiti `/health/live` za liveness i `/health/ready` za prijem saobraćaja.
 - Unit test potvrđuje da liveness ostaje `ok` i kada su sve zavisnosti nedostupne; testovi, typecheck i build prošli su u CI run-u `40224257666`.
 
 #### Login rate-limit resilience (P2 — implementation added)

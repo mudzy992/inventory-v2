@@ -59,6 +59,21 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          const http=require('node:http'); const raw=process.env.API_PREFIX;
+          const prefix=(raw===undefined?'backend':raw).trim().replace(/^\/+|\/+$/g,'');
+          const path=(prefix?'/'+prefix:'')+'/health/ready';
+          http.get({host:'127.0.0.1',port:3000,path},r=>process.exit(r.statusCode===200?0:1))
+          .on('error',()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     labels:
       - traefik.enable=true
       - traefik.docker.network=web
