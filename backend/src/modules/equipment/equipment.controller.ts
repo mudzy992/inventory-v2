@@ -10,6 +10,8 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import type { Response } from 'express';
 import { UserRole } from '../../../generated/prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -58,10 +60,9 @@ export class EquipmentController {
     @Query() query: ListEquipmentQueryDto,
     @Res() res: Response,
   ) {
-    const csv = await this.equipmentService.exportCsv(user, query);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="oprema.csv"');
-    res.send('\uFEFF' + csv);
+    await pipeline(Readable.from(this.equipmentService.exportCsv(user, query)), res);
   }
 
   @Get('check/inventory-number')

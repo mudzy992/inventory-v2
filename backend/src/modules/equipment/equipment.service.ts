@@ -39,6 +39,7 @@ import {
 } from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { escapeCsvCell } from '../../common/utils/csv-cell.util';
+import { iterateCursorPages } from '../../common/utils/cursor-pages.util';
 import { SettingsService } from '../settings/settings.service';
 import { WarehousesService } from '../warehouses/warehouses.service';
 import { CategoriesService } from '../categories/categories.service';
@@ -576,18 +577,9 @@ export class EquipmentService {
     return this.registrarScope.buildEquipmentWhere(user);
   }
 
-  async exportCsv(user: AuthenticatedUser, query: ListEquipmentQueryDto): Promise<string> {
+  async *exportCsv(user: AuthenticatedUser, query: ListEquipmentQueryDto): AsyncGenerator<string> {
     await this.settingsService.assertFeatureEnabled('features.equipment');
     const where = await this.buildListWhere(user, query);
-    const rows = await this.prisma.equipment.findMany({
-      where,
-      include: {
-        currentHolder: { select: { firstName: true, lastName: true } },
-        category: { select: { name: true } },
-        stockLot: { select: { productName: true } },
-      },
-      orderBy: { inventoryNumber: 'asc' },
-    });
     const headers = [
       'Inv. broj',
       'Kategorija',
@@ -598,27 +590,42 @@ export class EquipmentService {
       'Datum unosa',
       'Bilješke',
     ];
-    const lines: string[] = [headers.map(escapeCsvCell).join(',')];
-    for (const row of rows) {
+    yield `\uFEFF${headers.map(escapeCsvCell).join(',')}`;
+
+    const rows = iterateCursorPages(
+      (cursorId, take) =>
+        this.prisma.equipment.findMany({
+          where,
+          include: {
+            currentHolder: { select: { firstName: true, lastName: true } },
+            category: { select: { name: true } },
+            stockLot: { select: { productName: true } },
+          },
+          orderBy: [{ inventoryNumber: 'asc' }, { id: 'asc' }],
+          take,
+          ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+        }),
+      500,
+    );
+
+    for await (const row of rows) {
       const holder = row.currentHolder
         ? `${row.currentHolder.firstName} ${row.currentHolder.lastName}`.trim()
         : '';
-      lines.push(
-        [
-          row.inventoryNumber,
-          row.category?.name ?? '',
-          row.stockLot?.productName ?? '',
-          row.status,
-          holder,
-          row.contractNumber ?? '',
-          row.entryDate ? row.entryDate.toISOString().slice(0, 10) : '',
-          row.notes ?? '',
-        ]
-          .map(escapeCsvCell)
-          .join(','),
-      );
+      const line = [
+        row.inventoryNumber,
+        row.category?.name ?? '',
+        row.stockLot?.productName ?? '',
+        row.status,
+        holder,
+        row.contractNumber ?? '',
+        row.entryDate ? row.entryDate.toISOString().slice(0, 10) : '',
+        row.notes ?? '',
+      ]
+        .map(escapeCsvCell)
+        .join(',');
+      yield `\r\n${line}`;
     }
-    return lines.join('\r\n');
   }
 
   private async getEmployeeOrThrow(id: string) {
