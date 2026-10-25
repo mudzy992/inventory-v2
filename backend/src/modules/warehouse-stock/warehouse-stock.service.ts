@@ -71,6 +71,7 @@ import {
 import { applyStockLotReceiveInTx } from './utils/apply-stock-lot-receive.util';
 import { findCanonicalStockLotInTx } from './utils/find-canonical-stock-lot.util';
 import { consumeStockLotReceiptFifoInTx } from './utils/consume-stock-lot-receipt-fifo.util';
+import { decrementStockLotOnHandInTx } from './utils/decrement-stock-lot-on-hand.util';
 import {
   applyHistoricalTotalsToProductGroups,
   buildStockLotHistoricalTotalsByGroup,
@@ -639,14 +640,7 @@ export class WarehouseStockService {
               ...transferIssueInput,
             })
           : await executeStockLotIssueDirectInTx(tx, { ...issueBase, receipt });
-        const nextOnHand = lot.quantityOnHand - 1;
-        await tx.warehouseStockLot.update({
-          where: { id: lotId },
-          data: {
-            quantityOnHand: nextOnHand,
-            status: nextOnHand === 0 ? 'zatvoreno' : 'spremno_za_izdavanje',
-          },
-        });
+        await decrementStockLotOnHandInTx(tx, lotId);
         if (isCrossWarehouse && destWarehouseId && lot.catalogItemId) {
           await applyCrossWarehouseIssueLotUpdatesInTx(tx, {
             equipmentId: issued.equipmentId,
@@ -732,14 +726,7 @@ export class WarehouseStockService {
           affiliation: dto.affiliation,
           mergedSpecifications,
         });
-        const nextOnHand = lot.quantityOnHand - 1;
-        await tx.warehouseStockLot.update({
-          where: { id: lotId },
-          data: {
-            quantityOnHand: nextOnHand,
-            status: nextOnHand === 0 ? 'zatvoreno' : 'spremno_za_izdavanje',
-          },
-        });
+        await decrementStockLotOnHandInTx(tx, lotId);
       });
       return this.findOne(user, lotId);
     } catch (err) {

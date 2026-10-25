@@ -12,8 +12,9 @@ type ReceiptRow = {
   createdAt: Date;
 };
 
-const createTx = (input: { receipts: ReceiptRow[]; lotExists: boolean }) => {
+const createTx = (input: { receipts: ReceiptRow[]; lotExists: boolean; raceReceiptOnce?: string }) => {
   const updates: Array<{ id: string }> = [];
+  let simulatedRace = false;
   return {
     updates,
     tx: {
@@ -35,11 +36,23 @@ const createTx = (input: { receipts: ReceiptRow[]; lotExists: boolean }) => {
           });
           return (rows[0] as unknown) ?? null;
         },
-        update: async ({ where }: { where: { id: string } }) => {
-          updates.push(where);
+        updateMany: async ({
+          where,
+        }: {
+          where: { id: string; quantityRemaining: { gt: number } };
+        }) => {
+          updates.push({ id: where.id });
           const row = input.receipts.find((r) => r.id === where.id);
-          if (row) row.quantityRemaining -= 1;
-          return row ?? null;
+          if (row && input.raceReceiptOnce === row.id && !simulatedRace) {
+            row.quantityRemaining -= 1;
+            simulatedRace = true;
+            return { count: 0 };
+          }
+          if (!row || row.quantityRemaining <= where.quantityRemaining.gt) {
+            return { count: 0 };
+          }
+          row.quantityRemaining -= 1;
+          return { count: 1 };
         },
       },
       warehouseStockLot: {
@@ -75,6 +88,33 @@ describe('consumeStockLotReceiptFifoInTx', () => {
     assert.equal(result.contractNumber, null);
     assert.deepEqual(updates, [{ id: 'a' }]);
     assert.equal(receipts.find((r) => r.id === 'a')?.quantityRemaining, 0);
+  });
+
+  it('retries with the next FIFO receipt when a concurrent issue exhausts the first batch', async () => {
+    const receipts: ReceiptRow[] = [
+      {
+        id: 'oldest',
+        stockLotId: 'lot-1',
+        quantityRemaining: 1,
+        entryDate: new Date('2026-01-01'),
+        contractNumber: 'OLD',
+        createdAt: new Date('2026-01-01T10:00:00Z'),
+      },
+      {
+        id: 'next',
+        stockLotId: 'lot-1',
+        quantityRemaining: 2,
+        entryDate: new Date('2026-01-02'),
+        contractNumber: 'NEXT',
+        createdAt: new Date('2026-01-02T10:00:00Z'),
+      },
+    ];
+    const { tx, updates } = createTx({ receipts, lotExists: true, raceReceiptOnce: 'oldest' });
+    const result = await consumeStockLotReceiptFifoInTx(tx as never, 'lot-1');
+    assert.equal(result.contractNumber, 'NEXT');
+    assert.deepEqual(updates, [{ id: 'oldest' }, { id: 'next' }]);
+    assert.equal(receipts[0].quantityRemaining, 0);
+    assert.equal(receipts[1].quantityRemaining, 1);
   });
 
   it('throws NotFound when lot does not exist', async () => {
