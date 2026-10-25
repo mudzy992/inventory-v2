@@ -197,6 +197,7 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 
 - Zamijeniti pre-check + decrement sa atomic conditional decrement gdje je moguće (`quantityOnHand >= requested`) i provjeriti pogođeni red.
 - U istoj transakciji zapisati movement/event i povezanu opremu/maintenance promjenu.
+- Maintenance part statusi (faulty/remove/replace) koriste conditional update u istoj transakciji kao event i, kod zamjene, stock decrement.
 - Ograničiti maksimalnu veličinu bulk prijema na DTO sloju i provjeriti da transakcija nije neprimjereno duga.
 - Batch-ovati registrar scope provjere umjesto serijskog N+1 poziva.
 - Testirati posljednju jedinicu koju paralelno pokušavaju izdati/ugraditi/zamijeniti; jedan zahtjev uspije, drugi dobije razumljiv insufficient-stock odgovor.

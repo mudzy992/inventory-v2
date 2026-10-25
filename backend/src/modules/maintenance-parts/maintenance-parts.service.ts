@@ -28,6 +28,7 @@ import {
 } from './utils/aggregate-consumption.util';
 import { isMaintenanceLeafAllowedForHost } from './utils/expand-maintenance-catalog.util';
 import { decrementStockLotOnHandInTx } from '../warehouse-stock/utils/decrement-stock-lot-on-hand.util';
+import { transitionInstalledPartInTx } from './utils/conditional-installed-part-transition.util';
 
 const partInclude = {
   maintenanceCategory: true,
@@ -328,13 +329,18 @@ export class MaintenancePartsService {
       throw new BadRequestException('Only active parts can be marked faulty');
     }
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.equipmentInstalledPart.update({
+      await transitionInstalledPartInTx(
+        tx,
+        partId,
+        ['active'],
+        { status: 'faulty', notes: note?.trim() || part.notes },
+        'Only active parts can be marked faulty',
+      );
+      await this.recordPartEvent(tx, partId, user.id, 'marked_faulty', { note: note ?? null });
+      return tx.equipmentInstalledPart.findUniqueOrThrow({
         where: { id: partId },
-        data: { status: 'faulty', notes: note?.trim() || part.notes },
         include: partInclude,
       });
-      await this.recordPartEvent(tx, partId, user.id, 'marked_faulty', { note: note ?? null });
-      return updated;
     });
   }
 
@@ -346,17 +352,22 @@ export class MaintenancePartsService {
       throw new BadRequestException('Part already removed');
     }
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.equipmentInstalledPart.update({
-        where: { id: partId },
-        data: {
+      await transitionInstalledPartInTx(
+        tx,
+        partId,
+        ['active', 'faulty'],
+        {
           status: 'removed',
           removedAt: new Date(),
           notes: note?.trim() || part.notes,
         },
+        'Part already removed',
+      );
+      await this.recordPartEvent(tx, partId, user.id, 'removed', { note: note ?? null });
+      return tx.equipmentInstalledPart.findUniqueOrThrow({
+        where: { id: partId },
         include: partInclude,
       });
-      await this.recordPartEvent(tx, partId, user.id, 'removed', { note: note ?? null });
-      return updated;
     });
   }
 
@@ -395,13 +406,13 @@ export class MaintenancePartsService {
         dto.quantity,
         'Insufficient quantity on stock lot',
       );
-      await tx.equipmentInstalledPart.update({
-        where: { id: partId },
-        data: {
-          status: 'removed',
-          removedAt: new Date(),
-        },
-      });
+      await transitionInstalledPartInTx(
+        tx,
+        partId,
+        ['active', 'faulty'],
+        { status: 'removed', removedAt: new Date() },
+        'Cannot replace a removed part',
+      );
       const newPart = await tx.equipmentInstalledPart.create({
         data: {
           hostEquipmentId: oldPart.hostEquipmentId,
