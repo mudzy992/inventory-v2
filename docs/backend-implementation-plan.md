@@ -209,8 +209,9 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 
 - `recordLine` i `recordWarehouseLine` sada zaključavaju aktivnu parent sesiju (`SELECT ... FOR UPDATE`) u istoj transakciji prije upisa; oba committee-close toka koriste isti session lock, a committee status se provjerava ponovo nakon zaključavanja.
 - Dodati Postgres integration/race test za disposal approval, pending action retry i close-vs-record redoslijed; unit test pokriva active-session guard rezultat.
-- Za scheduler uskladiti business timezone i cron trigger; napisati fake-clock testove za DST i granicu dana.
-- Distributed lock: koristiti obnavljivu lease ili sigurni job key; zaključati ponašanje kad posao traje duže od TTL-a.
+- Inventory cron je sada eksplicitno vezan za 00:05 UTC; `inventory.scheduler_timezone` se koristi za poslovni kalendarski datum, a invalidna IANA zona se loguje i preskače bez rušenja scheduler procesa.
+- Redis lease se obnavlja svakih 5 minuta preko token-checked Lua `PEXPIRE`; 15-minutni TTL i dalje čisti lease nakon pada procesa, a token-checked release sprečava brisanje tuđeg locka.
+- Unit testovi pokrivaju vlasnički token i TTL argumente; live Redis CI test potvrđuje renewal/TTL/release, deterministički timestamp testovi pokrivaju DST promjene i granicu godine.
 
 **Prihvatanje:** zatvorena komisija/sesija ne prima kasniji write; isti periodični job se ne izvršava duplo; timezone prelazi imaju jedno očekivano ponašanje.
 

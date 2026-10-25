@@ -35,3 +35,27 @@ test('incrementRateLimitCounter validates window and Redis response', async () =
   await assert.rejects(service.incrementRateLimitCounter('rate', 10), /invalid rate-limit counter/u);
   assert.equal(calls, 1, 'invalid windows must be rejected before calling Redis');
 });
+
+test('renewLock atomically extends a lease only for the current owner token', async () => {
+  const calls: unknown[][] = [];
+  let scriptResult: unknown = 1;
+  const service = new RedisService({
+    eval: async (...args: unknown[]) => {
+      calls.push(args);
+      return scriptResult;
+    },
+  } as unknown as Redis);
+
+  assert.equal(await service.renewLock('scheduler-lock', 'owner-token', 20_000), true);
+  assert.equal(calls[0]?.[1], 1);
+  assert.equal(calls[0]?.[2], 'scheduler-lock');
+  assert.equal(calls[0]?.[3], 'owner-token');
+  assert.equal(calls[0]?.[4], 20_000);
+  assert.match(String(calls[0]?.[0]), /PEXPIRE/u);
+  assert.match(String(calls[0]?.[0]), /GET/u);
+
+  scriptResult = 0;
+  assert.equal(await service.renewLock('scheduler-lock', 'stale-token', 20_000), false);
+  await assert.rejects(service.renewLock('scheduler-lock', 'owner-token', 0), RangeError);
+  assert.equal(calls.length, 2, 'invalid lease durations must not call Redis');
+});

@@ -167,6 +167,22 @@ export class RedisService {
     return count;
   }
 
+  /** Obnavlja lease samo ako je token vlasnika i dalje važeći. */
+  async renewLock(key: string, token: string, ttlMs: number): Promise<boolean> {
+    if (!Number.isSafeInteger(ttlMs) || ttlMs < 1) {
+      throw new RangeError('ttlMs must be a positive safe integer');
+    }
+
+    const script = `
+      if redis.call('GET', KEYS[1]) == ARGV[1] then
+        return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+      end
+      return 0
+    `;
+    const result: unknown = await this.client.eval(script, 1, key, token, ttlMs);
+    return Number(result) === 1;
+  }
+
   async ping(): Promise<boolean> {
     try {
       const reply = await this.client.ping();

@@ -361,7 +361,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     valueType: 'string',
     defaultValue: 'Europe/Sarajevo',
     label: 'Vremenska zona schedulera',
-    description: 'IANA timezone za cron jobove popisa (npr. Europe/Sarajevo).',
+    description: 'IANA timezone za poslovni kalendarski datum popisa; dnevni cron se pokreće u 00:05 UTC (npr. Europe/Sarajevo).',
     group: 'inventory',
   }),
   def({

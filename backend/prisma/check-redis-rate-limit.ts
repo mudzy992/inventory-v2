@@ -46,10 +46,19 @@ const main = async (): Promise<void> => {
     const legacyTtl = await client.ttl('legacy-without-ttl');
     assert.ok(legacyTtl > 0 && legacyTtl <= 60, 'a legacy counter without TTL must be repaired');
 
-    console.log('Verified atomic Redis rate-limit increments, expiry, and legacy TTL repair.');
+    const lockToken = await redisService.acquireLock('scheduler-lock', 2_000);
+    assert.ok(lockToken, 'scheduler lease must be acquired');
+    assert.equal(await redisService.renewLock('scheduler-lock', 'stale-token', 20_000), false);
+    assert.equal(await redisService.renewLock('scheduler-lock', lockToken, 20_000), true);
+    const leaseTtl = await client.pttl('scheduler-lock');
+    assert.ok(leaseTtl > 10_000 && leaseTtl <= 20_000, 'only the owner must be able to extend the lease');
+    await redisService.releaseLock('scheduler-lock', lockToken);
+    assert.equal(await client.exists('scheduler-lock'), 0, 'the owner must release the lease');
+
+    console.log('Verified atomic rate limiting, TTL repair, and owner-checked Redis lease renewal.');
   } finally {
     try {
-      await client.del('concurrent', 'legacy-without-ttl');
+      await client.del('concurrent', 'legacy-without-ttl', 'scheduler-lock');
     } finally {
       client.disconnect();
     }

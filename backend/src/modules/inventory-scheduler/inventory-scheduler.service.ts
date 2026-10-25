@@ -11,11 +11,10 @@ import { RedisService } from '../../redis/redis.service';
 import { InventoryCountService } from '../inventory-count/inventory-count.service';
 
 const DAILY_JOB_LOCK_KEY = 'lock:inventory-scheduler:daily-jobs';
-// Dovoljno dugo da pokrije realno trajanje handleDailyInventoryJobs (upiti
-// + iteracija po distribucijama), a kratko dovoljno da se lock ne zaglavi
-// do sljedećeg dana ako proces padne usred izvršavanja bez da oslobodi lock
-// (Redis TTL ga svejedno automatski čisti).
+// Lease se periodično obnavlja dok dnevni posao traje; TTL ostaje ograničen
+// kako bi Redis očistio lock ako proces padne prije finally/release toka.
 const DAILY_JOB_LOCK_TTL_MS = 15 * 60 * 1000;
+const DAILY_JOB_LOCK_RENEW_INTERVAL_MS = Math.floor(DAILY_JOB_LOCK_TTL_MS / 3);
 
 @Injectable()
 export class InventorySchedulerService {
@@ -29,7 +28,9 @@ export class InventorySchedulerService {
     private readonly redisService: RedisService,
   ) {}
 
-  @Cron('5 0 * * *')
+  // Trigger is pinned to UTC so host/container TZ cannot move the daily tick.
+  // The business calendar date is still derived from inventory.scheduler_timezone.
+  @Cron('5 0 * * *', { timeZone: 'UTC' })
   async handleDailyInventoryJobs(): Promise<void> {
     if (!this.isSchedulerEnabled()) {
       return;
@@ -49,9 +50,34 @@ export class InventorySchedulerService {
       this.logger.debug('Daily inventory job skipped — lock held by another instance.');
       return;
     }
+    let renewalInFlight: Promise<void> | undefined;
+    const renewalTimer = setInterval(() => {
+      if (renewalInFlight) return;
+      renewalInFlight = this.redisService
+        .renewLock(DAILY_JOB_LOCK_KEY, lockToken, DAILY_JOB_LOCK_TTL_MS)
+        .then((renewed) => {
+          if (!renewed) {
+            this.logger.error('Inventory scheduler lock lease was lost while the job was running.');
+          }
+        })
+        .catch((error: unknown) => {
+          this.logger.error(`Inventory scheduler lock renewal failed: ${String(error)}`);
+        })
+        .finally(() => {
+          renewalInFlight = undefined;
+        });
+    }, DAILY_JOB_LOCK_RENEW_INTERVAL_MS);
+    renewalTimer.unref();
+
     try {
       const timeZone = await this.productionModeService.getSchedulerTimezone();
-      const today = getZonedCalendarParts(new Date(), timeZone);
+      let today: ReturnType<typeof getZonedCalendarParts>;
+      try {
+        today = getZonedCalendarParts(new Date(), timeZone);
+      } catch (error) {
+        this.logger.error(`Invalid inventory scheduler timezone "${timeZone}": ${String(error)}`);
+        return;
+      }
       const lockDate = await this.productionModeService.getLockMonthDay();
       const endDate = await this.productionModeService.getSessionEndMonthDay();
       if (isOnMonthDay(today, lockDate)) {
@@ -67,6 +93,8 @@ export class InventorySchedulerService {
         await this.runJan1DraftJobs(today.year);
       }
     } finally {
+      clearInterval(renewalTimer);
+      if (renewalInFlight) await renewalInFlight;
       await this.redisService.releaseLock(DAILY_JOB_LOCK_KEY, lockToken);
     }
   }

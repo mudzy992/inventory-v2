@@ -24,4 +24,29 @@ describe('inventory-date.util', () => {
     assert.equal(parts.month, 11);
     assert.equal(parts.day, 30);
   });
+
+  it('keeps the business date correct through DST transitions and the year boundary', () => {
+    const zone = 'Europe/Sarajevo';
+    const springBefore = getZonedCalendarParts(new Date('2026-03-29T00:59:00.000Z'), zone);
+    const springAfter = getZonedCalendarParts(new Date('2026-03-29T01:00:00.000Z'), zone);
+    assert.deepEqual(springBefore, { year: 2026, month: 3, day: 29 });
+    assert.deepEqual(springAfter, springBefore);
+
+    const fallBefore = getZonedCalendarParts(new Date('2026-10-25T00:59:00.000Z'), zone);
+    const fallAfter = getZonedCalendarParts(new Date('2026-10-25T01:00:00.000Z'), zone);
+    assert.deepEqual(fallBefore, { year: 2026, month: 10, day: 25 });
+    assert.deepEqual(fallAfter, fallBefore);
+
+    assert.deepEqual(
+      getZonedCalendarParts(new Date('2026-12-31T23:00:00.000Z'), zone),
+      { year: 2027, month: 1, day: 1 },
+    );
+  });
+
+  it('rejects an invalid IANA timezone', () => {
+    assert.throws(
+      () => getZonedCalendarParts(new Date('2026-01-01T00:00:00.000Z'), 'Invalid/Timezone'),
+      RangeError,
+    );
+  });
 });
