@@ -12,8 +12,10 @@ test('decrements only a ready lot with positive stock and closes it at zero', as
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         conditions.push(where);
         if ('quantityOnHand' in data) {
-          if (status !== where.status || quantityOnHand <= 0) return { count: 0 };
-          quantityOnHand -= 1;
+          const minimum = (where.quantityOnHand as { gte: number }).gte;
+          const decrement = (data.quantityOnHand as { decrement: number }).decrement;
+          if (status !== where.status || quantityOnHand < minimum) return { count: 0 };
+          quantityOnHand -= decrement;
           return { count: 1 };
         }
         if (status === where.status && quantityOnHand === where.quantityOnHand) {
@@ -22,6 +24,7 @@ test('decrements only a ready lot with positive stock and closes it at zero', as
         }
         return { count: 0 };
       },
+      findUnique: async () => ({ id: 'lot-1', quantityOnHand, status }),
     },
   };
 
@@ -29,9 +32,33 @@ test('decrements only a ready lot with positive stock and closes it at zero', as
   assert.equal(quantityOnHand, 0);
   assert.equal(status, 'zatvoreno');
   assert.deepEqual(conditions, [
-    { id: 'lot-1', status: 'spremno_za_izdavanje', quantityOnHand: { gt: 0 } },
+    { id: 'lot-1', status: 'spremno_za_izdavanje', quantityOnHand: { gte: 1 } },
     { id: 'lot-1', status: 'spremno_za_izdavanje', quantityOnHand: 0 },
   ]);
+});
+
+test('supports atomic multi-unit decrements for maintenance stock', async () => {
+  let quantityOnHand = 5;
+  const status = 'spremno_za_izdavanje';
+  const tx = {
+    warehouseStockLot: {
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        if ('quantityOnHand' in data) {
+          const minimum = (where.quantityOnHand as { gte: number }).gte;
+          const decrement = (data.quantityOnHand as { decrement: number }).decrement;
+          if (quantityOnHand < minimum) return { count: 0 };
+          quantityOnHand -= decrement;
+          return { count: 1 };
+        }
+        return { count: 0 };
+      },
+      findUnique: async () => ({ id: 'lot-1', quantityOnHand, status }),
+    },
+  };
+
+  await decrementStockLotOnHandInTx(tx as never, 'lot-1', 3, 'Insufficient quantity on stock lot');
+  assert.equal(quantityOnHand, 2);
+  assert.equal(status, 'spremno_za_izdavanje');
 });
 
 test('rejects when another transaction has already consumed the final unit', async () => {

@@ -27,6 +27,7 @@ import {
   type MaintenanceConsumptionRow,
 } from './utils/aggregate-consumption.util';
 import { isMaintenanceLeafAllowedForHost } from './utils/expand-maintenance-catalog.util';
+import { decrementStockLotOnHandInTx } from '../warehouse-stock/utils/decrement-stock-lot-on-hand.util';
 
 const partInclude = {
   maintenanceCategory: true,
@@ -292,13 +293,12 @@ export class MaintenancePartsService {
     }
     const legacySpecs = dto.legacySpecs ?? lot.specifications;
     return this.prisma.$transaction(async (tx) => {
-      const updatedLot = await tx.warehouseStockLot.update({
-        where: { id: lot.id },
-        data: {
-          quantityOnHand: { decrement: dto.quantity },
-          status: lot.quantityOnHand - dto.quantity <= 0 ? 'zatvoreno' : lot.status,
-        },
-      });
+      const updatedLot = await decrementStockLotOnHandInTx(
+        tx,
+        lot.id,
+        dto.quantity,
+        'Insufficient quantity on stock lot',
+      );
       const part = await tx.equipmentInstalledPart.create({
         data: {
           hostEquipmentId: equipmentId,
@@ -389,13 +389,12 @@ export class MaintenancePartsService {
     }
     const legacySpecs = dto.legacySpecs ?? lot.specifications;
     return this.prisma.$transaction(async (tx) => {
-      await tx.warehouseStockLot.update({
-        where: { id: lot.id },
-        data: {
-          quantityOnHand: { decrement: dto.quantity },
-          status: lot.quantityOnHand - dto.quantity <= 0 ? 'zatvoreno' : lot.status,
-        },
-      });
+      await decrementStockLotOnHandInTx(
+        tx,
+        lot.id,
+        dto.quantity,
+        'Insufficient quantity on stock lot',
+      );
       await tx.equipmentInstalledPart.update({
         where: { id: partId },
         data: {
