@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import { claimDisposalApprovalReviewInTx } from '../src/modules/inventory-count/utils/claim-disposal-approval-review.util';
+import { ensureDisposalPendingApproval } from '../src/modules/inventory-count/utils/ensure-disposal-pending-approval.util';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 const main = async (): Promise<void> => {
@@ -23,6 +24,7 @@ const main = async (): Promise<void> => {
   const commissionId = randomUUID();
   const equipmentId = randomUUID();
   const sessionId = randomUUID();
+  const nextSessionId = randomUUID();
   const approvalId = randomUUID();
   let connected = false;
 
@@ -108,11 +110,45 @@ const main = async (): Promise<void> => {
       'the single winning review must persist a terminal status',
     );
 
-    console.log('Verified only one concurrent reviewer can claim a pending disposal approval.');
+    const retriedApproval = await ensureDisposalPendingApproval(prisma, {
+      equipmentId,
+      disposalCommissionId: commissionId,
+      sessionId,
+      inventoryLineId: null,
+    });
+    assert.equal(
+      retriedApproval.status,
+      finalApproval.status,
+      'retrying the same session action must not reset a reviewed disposal approval',
+    );
+    assert.equal(retriedApproval.reviewedAt?.getTime(), finalApproval.reviewedAt?.getTime());
+
+    await prisma.inventorySession.create({
+      data: {
+        id: nextSessionId,
+        name: `CI next session ${nextSessionId}`,
+        orgUnitId,
+        year: 2101,
+        status: 'active',
+      },
+    });
+    const nextSessionApproval = await ensureDisposalPendingApproval(prisma, {
+      equipmentId,
+      disposalCommissionId: commissionId,
+      sessionId: nextSessionId,
+      inventoryLineId: null,
+    });
+    assert.equal(nextSessionApproval.sessionId, nextSessionId);
+    assert.equal(nextSessionApproval.status, 'pending', 'a new session must still reopen its approval');
+
+    console.log(
+      'Verified concurrent disposal review and retry idempotency: same-session retry preserves review, new session reopens approval.',
+    );
   } finally {
     try {
       if (connected) {
         await prisma.disposalInventoryApproval.deleteMany({ where: { id: approvalId } });
+        await prisma.inventorySession.deleteMany({ where: { id: nextSessionId } });
         await prisma.inventorySession.deleteMany({ where: { id: sessionId } });
         await prisma.disposalCommission.deleteMany({ where: { id: commissionId } });
         await prisma.equipment.deleteMany({ where: { id: equipmentId } });

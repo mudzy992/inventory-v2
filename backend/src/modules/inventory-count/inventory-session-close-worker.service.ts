@@ -9,8 +9,13 @@ import {
   type InventorySessionCloseJobPayload,
 } from './inventory-session-close.queue';
 import { isFinalInventoryCloseAttempt } from './utils/inventory-close-retry.util';
+import {
+  getPendingActionRetryDelayMs,
+  isRetryablePendingActionError,
+} from './utils/classify-pending-action-error.util';
 
 const ACTION_THROTTLE_MS = 250;
+const MAX_PENDING_ACTION_ATTEMPTS = 3;
 
 /**
  * BullMQ worker za zatvaranje inventurne sesije — zamjenjuje raniju
@@ -125,22 +130,54 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
       if (claimed.count !== 1) {
         continue;
       }
-      try {
-        await this.inventoryCountService.applyPendingAction(action.id);
+      let applied = false;
+      let actionError: unknown;
+      let retryCount = 0;
+
+      while (true) {
+        try {
+          await this.inventoryCountService.applyPendingAction(action.id);
+          applied = true;
+          break;
+        } catch (err) {
+          actionError = err;
+          if (
+            !isRetryablePendingActionError(err) ||
+            retryCount + 1 >= MAX_PENDING_ACTION_ATTEMPTS
+          ) {
+            break;
+          }
+
+          retryCount += 1;
+          const delayMs = getPendingActionRetryDelayMs(retryCount);
+          this.logger.warn(
+            `Transient error applying pending action ${action.id}; retry ${retryCount + 1}/${MAX_PENDING_ACTION_ATTEMPTS} in ${delayMs}ms.`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
+
+      const retryAttemptCount = retryCount > 0 ? { attempts: { increment: retryCount } } : {};
+      if (applied) {
         await this.prisma.inventoryPendingAction.update({
           where: { id: action.id },
-          data: { status: 'applied', appliedAt: new Date() },
+          data: {
+            status: 'applied',
+            appliedAt: new Date(),
+            lastError: null,
+            ...retryAttemptCount,
+          },
         });
         const progressJob = await this.prisma.inventorySessionCloseJob.update({
           where: { sessionId },
           data: { appliedCount: { increment: 1 } },
         });
         await this.emitCloseJobUpdate(sessionId, progressJob);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+      } else {
+        const message = actionError instanceof Error ? actionError.message : String(actionError);
         await this.prisma.inventoryPendingAction.update({
           where: { id: action.id },
-          data: { status: 'failed', lastError: message },
+          data: { status: 'failed', lastError: message, ...retryAttemptCount },
         });
         const failedProgressJob = await this.prisma.inventorySessionCloseJob.update({
           where: { sessionId },

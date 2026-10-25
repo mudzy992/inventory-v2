@@ -64,6 +64,8 @@ import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 import { provisionSessionCommitteeSlots } from './utils/provision-session-committee-slots.util';
 import { claimDisposalApprovalReviewInTx } from './utils/claim-disposal-approval-review.util';
+import { ensureDisposalPendingApproval } from './utils/ensure-disposal-pending-approval.util';
+import { isRelocationAlreadyApplied } from './utils/is-relocation-already-applied.util';
 import { lockActiveInventorySessionInTx } from './utils/lock-active-inventory-session-in-tx.util';
 import { deleteInventorySessionCascadeInTx } from './utils/delete-inventory-session-cascade.util';
 import { getEquipmentInventoryLabel } from '../../common/utils/equipment-accounting-tracked.util';
@@ -2077,11 +2079,24 @@ export class InventoryCountService {
       let transferId = line?.generatedTransfer?.id ?? null;
       if (!transferId) {
         if (action.kind === 'relocate_to_warehouse') {
+          const targetWarehouseId = await this.resolveRelocationWarehouseId({
+            sessionOrgUnitId: committee.session.orgUnitId,
+            committeeWarehouseId: committee.warehouseId,
+          });
+          if (
+            isRelocationAlreadyApplied({
+              kind: action.kind,
+              equipment,
+              targetWarehouseId,
+            })
+          ) {
+            return;
+          }
           const created = await this.createRelocationTransfer(
             committee.session,
             equipment,
             'skladiste',
-            undefined,
+            targetWarehouseId,
             undefined,
             action.inventoryLineId,
             committee.warehouseId,
@@ -2092,6 +2107,15 @@ export class InventoryCountService {
           const toPersonId = payload.relocationToPersonId ?? null;
           if (!toPersonId) {
             throw new BadRequestException('Target person is required');
+          }
+          if (
+            isRelocationAlreadyApplied({
+              kind: action.kind,
+              equipment,
+              targetPersonId: toPersonId,
+            })
+          ) {
+            return;
           }
           const created = await this.createRelocationTransfer(
             committee.session,
@@ -2283,35 +2307,20 @@ export class InventoryCountService {
     if (!committee.disposalCommissionId) {
       throw new BadRequestException('Disposal commission is not configured for committee');
     }
-    const approval = await this.prisma.disposalInventoryApproval.upsert({
-      where: {
-        equipmentId_disposalCommissionId: {
-          equipmentId: action.equipmentId,
-          disposalCommissionId: committee.disposalCommissionId,
-        },
-      },
-      create: {
-        equipmentId: action.equipmentId,
-        disposalCommissionId: committee.disposalCommissionId,
-        sessionId: committee.session.id,
-        inventoryLineId: action.inventoryLineId,
-        status: 'pending',
-      },
-      update: {
-        status: 'pending',
-        inventoryLineId: action.inventoryLineId,
-        reviewedByUserId: null,
-        reviewNote: null,
-        reviewedAt: null,
-      },
-      include: { equipment: { select: { inventoryNumber: true } } },
+    const approval = await ensureDisposalPendingApproval(this.prisma, {
+      equipmentId: action.equipmentId,
+      disposalCommissionId: committee.disposalCommissionId,
+      sessionId: committee.session.id,
+      inventoryLineId: action.inventoryLineId,
     });
-    void this.notificationsService.notifyDisposalApprovalPending(
-      approval.id,
-      committee.disposalCommissionId,
-      getEquipmentInventoryLabel(approval.equipment),
-    );
-    void this.notificationsService.emitInventoryDisposalInboxRefresh(committee.session.id);
+    if (approval.status === 'pending') {
+      void this.notificationsService.notifyDisposalApprovalPending(
+        approval.id,
+        committee.disposalCommissionId,
+        getEquipmentInventoryLabel(approval.equipment),
+      );
+      void this.notificationsService.emitInventoryDisposalInboxRefresh(committee.session.id);
+    }
   }
 
   private async assertRelocateLinesHaveUpload(
