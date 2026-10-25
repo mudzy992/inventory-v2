@@ -208,7 +208,7 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 - Zamijeniti pre-check + decrement sa atomic conditional decrement gdje je moguće (`quantityOnHand >= requested`) i provjeriti pogođeni red.
 - U istoj transakciji zapisati movement/event i povezanu opremu/maintenance promjenu.
 - Maintenance part statusi (faulty/remove/replace) i disposal approval review koriste conditional update; promjene opreme, zaliha i eventi ostaju u istoj transakciji.
-- Ograničiti maksimalnu veličinu bulk prijema na DTO sloju i provjeriti da transakcija nije neprimjereno duga.
+- Implementirano nakon odluke vlasnika: `BulkCreateStockLotDto.items` ima gornju granicu od 100 unosa; dozvoljava prijeme do 100 stavki po zahtjevu. Obrada unutar transakcije i dalje je serijska, pa batching treba razmatrati tek uz mjerenje trajanja.
 - Batch-ovati registrar scope provjere umjesto serijskog N+1 poziva.
 - Testirati posljednju jedinicu koju paralelno pokušavaju izdati/ugraditi/zamijeniti; jedan zahtjev uspije, drugi dobije razumljiv insufficient-stock odgovor.
 
@@ -243,7 +243,7 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 
 - CSV: zaštititi ćelije koje spreadsheet može tretirati kao formulu (`=`, `+`, `-`, `@` i relevantni leading control/whitespace slučajevi), uz test Excel/LibreOffice kompatibilnosti; escaping delimitera sam po sebi nije dovoljan.
 - Ograničiti broj export redova ili koristiti streaming; definisati timeout/memorijski budžet. Testirati response prekid i velika, ali dozvoljena izvlačenja.
-- Javni QR: vlasnik procesa treba odobriti tačan DTO — puno ime, titula, org putanja i historija transfera; predložiti minimizaciju i maksimum posljednjih kretanja.
+- Javni QR: vlasnik procesa je odabrao zadržati postojeći DTO, uključujući ime/titulu/organizacijski put i historiju kretanja; ova odluka ne uklanja privacy rizik ni potrebu za redovnim preispitivanjem.
 - Anti-enumeration bez nepotrebnog odavanja da li ID postoji; load test na cache miss-u.
 
 #### Javni QR rate limit (P2 — implementation added)
@@ -251,7 +251,7 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 - `GET /public/equipment/:id` sada koristi poseban Redis fixed-window bucket po klijentskoj IP adresi, nezavisan od login bucket-a; podrazumijevano 60 zahtjeva u 60 sekundi, višak dobija 429.
 - `RATE_LIMIT_PUBLIC_EQUIPMENT_MAX`, `RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC` i `RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED` dokumentovani su u `.env.example` i proslijeđeni kroz oba Compose deploymenta; konfiguracija se strogo validira. Outage ponašanje je fail-open po defaultu, uz opciju 503 fail-closed.
 - Guardovi su registrovani u odgovarajućim Nest modulima i Redis zavisnost se injektuje eksplicitnim tokenom; HTTP integration test pokreće stvarnu Nest rutu, potvrđuje 429 na trećem pozivu i da odbijeni zahtjev ne dođe do service sloja. Unit testovi pokrivaju route guard metadata, odvojene Redis ključeve, prag/prozor, neispravnu konfiguraciju i Redis outage policy.
-- Privacy odluka o poljima i neograničenoj historiji transfera, kao i anti-enumeration/load test, ostaju otvoreni; rate limit ne mijenja postojeći response DTO.
+- Vlasnik procesa je odabrao zadržati postojeći javni response DTO, uključujući historiju transfera; ovaj paket nije mijenjao javna polja. Anti-enumeration/load test ostaju otvoreni; rate limit ne mijenja response DTO.
 
 **Prihvatanje:** export ne izvršava formule i ima predvidivu gornju granicu; javni QR response je dokumentovan i privacy-odobren.
 

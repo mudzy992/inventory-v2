@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { BulkCreateStockLotDto } from '../../modules/warehouse-stock/dto/bulk-create-stock-lot.dto';
 import { CreateInventorySessionDto } from '../../modules/inventory-count/dto/create-inventory-session.dto';
 import { ManageInventoryCommitteeDto } from '../../modules/inventory-count/dto/manage-inventory-committee.dto';
 import { RecordInventoryLineDto } from '../../modules/inventory-count/dto/record-inventory-line.dto';
@@ -76,6 +77,18 @@ test('optional maintenance notes must be bounded strings', async () => {
     (await validatePayload(UpdateMaintenancePartNoteDto, { note: 'x'.repeat(1001) })).length,
     0,
   );
+});
+
+test('bulk stock receipt accepts up to 100 valid items and rejects larger batches', async () => {
+  const item = {
+    categoryId: '00000000-0000-4000-8000-000000000001',
+    catalogItemId: '00000000-0000-4000-8000-000000000002',
+    quantity: 1,
+    entryDate: '2026-10-25T00:00:00.000Z',
+  };
+  assert.equal((await validatePayload(BulkCreateStockLotDto, { items: Array(100).fill(item) })).length, 0);
+  assert.notEqual((await validatePayload(BulkCreateStockLotDto, { items: Array(101).fill(item) })).length, 0);
+  assert.notEqual((await validatePayload(BulkCreateStockLotDto, { items: [] })).length, 0);
 });
 
 test('transfer template label is an optional bounded string and rejects unknown keys', async () => {

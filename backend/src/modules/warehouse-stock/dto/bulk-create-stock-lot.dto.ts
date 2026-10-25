@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsDateString,
@@ -35,6 +36,7 @@ export class BulkStockLotItemDto {
 export class BulkCreateStockLotDto {
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => BulkStockLotItemDto)
   items!: BulkStockLotItemDto[];
