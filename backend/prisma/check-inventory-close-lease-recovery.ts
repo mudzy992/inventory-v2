@@ -28,7 +28,8 @@ const createInventoryCountService = (prisma: PrismaService): InventoryCountServi
     {} as never,
     {} as never,
     {
-      notifyDisposalApprovalPending: async () => undefined,
+      notificationsEnabled: async () => true,
+      enqueueDisposalApprovalPendingOutboxInTx: async () => undefined,
       emitInventoryDisposalInboxRefresh: async () => undefined,
     } as never,
     {} as never,
@@ -181,7 +182,10 @@ const main = async (): Promise<void> => {
     const worker = new InventorySessionCloseWorkerService(
       prisma,
       createInventoryCountService(prisma),
-      { emitInventoryCloseJobProgress: async () => undefined } as never,
+      {
+        emitInventoryCloseJobProgress: async () => undefined,
+        buildInventorySessionClosedOutboxRows: async () => [],
+      } as never,
     );
     await worker.process({
       id: 'ci-expired-close-lease',
