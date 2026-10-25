@@ -63,6 +63,7 @@ import { ListInventoryLinesQueryDto } from './dto/list-inventory-lines-query.dto
 import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 import { provisionSessionCommitteeSlots } from './utils/provision-session-committee-slots.util';
+import { claimDisposalApprovalReviewInTx } from './utils/claim-disposal-approval-review.util';
 import { deleteInventorySessionCascadeInTx } from './utils/delete-inventory-session-cascade.util';
 import { getEquipmentInventoryLabel } from '../../common/utils/equipment-accounting-tracked.util';
 
@@ -2195,14 +2196,14 @@ export class InventoryCountService {
       throw new BadRequestException('Rejection reason is required');
     }
     const updated = await this.prisma.$transaction(async (tx) => {
-      const row = await tx.disposalInventoryApproval.update({
+      await claimDisposalApprovalReviewInTx(tx, approvalId, {
+        status: approved ? 'approved' : 'rejected',
+        reviewedByUserId: user.id,
+        reviewNote: note?.trim() ?? null,
+        reviewedAt: new Date(),
+      });
+      const row = await tx.disposalInventoryApproval.findUniqueOrThrow({
         where: { id: approvalId },
-        data: {
-          status: approved ? 'approved' : 'rejected',
-          reviewedByUserId: user.id,
-          reviewNote: note?.trim() ?? null,
-          reviewedAt: new Date(),
-        },
         include: { equipment: true },
       });
       if (approved) {
