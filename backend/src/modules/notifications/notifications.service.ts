@@ -1,5 +1,10 @@
 import { Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
-import type { Notification, NotificationType } from '../../../generated/prisma/client';
+import type {
+  Notification,
+  NotificationOutbox,
+  NotificationType,
+  Prisma,
+} from '../../../generated/prisma/client';
 import { LocationResolutionService } from '../../common/services/location-resolution.service';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 import type { PaginatedResponse } from '../../common/types/paginated-response.type';
@@ -17,7 +22,6 @@ import {
 } from './notification-recipients.util';
 import {
   collectCommitteeMemberUserIds,
-  collectDisposalCommissionMemberUserIds,
   collectInventorySessionStakeholderUserIds,
 } from './notification-inventory-recipients.util';
 import { SettingsService } from '../settings/settings.service';
@@ -69,6 +73,109 @@ export class NotificationsService {
     @Inject(forwardRef(() => SettingsService))
     private readonly settingsService: SettingsService,
   ) {}
+
+  async notificationsEnabled(): Promise<boolean> {
+    return this.areNotificationsEnabled();
+  }
+
+  async enqueueDisposalApprovalPendingOutboxInTx(
+    tx: Prisma.TransactionClient,
+    input: {
+      approvalId: string;
+      sessionId: string;
+      commissionId: string;
+      inventoryLabel: string;
+    },
+  ): Promise<void> {
+    const members = await tx.disposalCommissionMember.findMany({
+      where: { commissionId: input.commissionId },
+      select: { employeeId: true },
+    });
+    if (members.length === 0) {
+      return;
+    }
+    const users = await tx.user.findMany({
+      where: {
+        employeeId: { in: members.map((row) => row.employeeId) },
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    if (users.length === 0) {
+      return;
+    }
+    const message = `Rashodna komisija je otvorila predmet za ${input.inventoryLabel}. Pregledajte stavku i glasajte.`;
+    await tx.notificationOutbox.createMany({
+      data: users.map(({ id: userId }) => ({
+        idempotencyKey: `inventory-disposal-approval:${input.sessionId}:${input.approvalId}:${userId}`,
+        userId,
+        type: 'disposal_approval_pending',
+        title: 'Nova odluka o rashodu',
+        message,
+        relatedId: input.approvalId,
+        sessionId: input.sessionId,
+        refreshDisposalInbox: true,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  async buildInventorySessionClosedOutboxRows(
+    sessionId: string,
+  ): Promise<Prisma.NotificationOutboxCreateManyInput[]> {
+    if (!(await this.areNotificationsEnabled())) {
+      return [];
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const session = await tx.inventorySession.findUnique({
+        where: { id: sessionId },
+        select: { name: true, orgUnitId: true },
+      });
+      if (!session) {
+        return [];
+      }
+      const effectiveCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
+        session.orgUnitId,
+      );
+      const recipients = await collectInventorySessionStakeholderUserIds(
+        tx,
+        this.registrarScope,
+        sessionId,
+        effectiveCityId,
+      );
+      const message = `Sesija „${session.name}" je zatvorena. Prenosnice i rashod su primijenjeni u pozadini.`;
+      return [...new Set(recipients)].map((userId) => ({
+        idempotencyKey: `inventory-session-closed:${sessionId}:${userId}`,
+        userId,
+        type: 'inventory_session_closed',
+        title: 'Sesija popisa zatvorena',
+        message,
+        relatedId: sessionId,
+        sessionId,
+      }));
+    });
+  }
+
+  async deliverOutboxNotification(outbox: NotificationOutbox): Promise<void> {
+    const notification = await this.prisma.notification.upsert({
+      where: { outboxId: outbox.id },
+      create: {
+        outboxId: outbox.id,
+        userId: outbox.userId,
+        type: outbox.type,
+        title: outbox.title,
+        message: outbox.message,
+        relatedId: outbox.relatedId,
+      },
+      update: {},
+    });
+    this.gateway.emitNotificationCreated(outbox.userId, this.toResponse(notification));
+    if (outbox.refreshDisposalInbox && outbox.sessionId) {
+      this.gateway.emitInventoryDisposalInboxUpdated([outbox.userId], {
+        sessionId: outbox.sessionId,
+      });
+    }
+  }
 
   disconnectUserSockets(userId: string): void {
     this.gateway.disconnectUser(userId);
@@ -248,34 +355,6 @@ export class NotificationsService {
       title: 'Prenosnica čeka upload',
       message: `Upload potpisane prenosnice ${transfer.documentNumber} (${equipmentLabel}) prije zatvaranja sesije.`,
       relatedId: transfer.id,
-    });
-  }
-
-  async notifyInventorySessionClosed(sessionId: string, sessionName: string): Promise<void> {
-    if (!(await this.areNotificationsEnabled())) {
-      return;
-    }
-    const session = await this.prisma.inventorySession.findUnique({
-      where: { id: sessionId },
-      select: { orgUnitId: true },
-    });
-    if (!session) {
-      return;
-    }
-    const effectiveCityId = await this.locationResolutionService.getEffectiveLocationForOrgUnit(
-      session.orgUnitId,
-    );
-    const recipients = await collectInventorySessionStakeholderUserIds(
-      this.prisma,
-      this.registrarScope,
-      sessionId,
-      effectiveCityId,
-    );
-    await this.createForUsers(recipients, {
-      type: 'inventory_session_closed',
-      title: 'Sesija popisa zatvorena',
-      message: `Sesija „${sessionName}" je zatvorena. Prenosnice i rashod su primijenjeni u pozadini.`,
-      relatedId: sessionId,
     });
   }
 
@@ -460,29 +539,6 @@ export class NotificationsService {
     });
   }
 
-  async notifyDisposalApprovalPending(
-    approvalId: string,
-    disposalCommissionId: string,
-    equipmentInventoryNumber: string,
-  ): Promise<void> {
-    if (!(await this.areNotificationsEnabled())) {
-      return;
-    }
-    const recipients = await collectDisposalCommissionMemberUserIds(
-      this.prisma,
-      disposalCommissionId,
-    );
-    if (recipients.length === 0) {
-      return;
-    }
-    await this.createForUsers(recipients, {
-      type: 'disposal_approval_pending',
-      title: 'Rashod čeka odobrenje',
-      message: `Oprema ${equipmentInventoryNumber} čeka odobrenje komisije za rashod (popis).`,
-      relatedId: approvalId,
-    });
-  }
-
   async emitInventoryCloseJobProgress(
     sessionId: string,
     job: {
@@ -494,7 +550,7 @@ export class NotificationsService {
   ): Promise<void> {
     const session = await this.prisma.inventorySession.findUnique({
       where: { id: sessionId },
-      select: { orgUnitId: true, name: true },
+      select: { orgUnitId: true },
     });
     if (!session) {
       return;
@@ -516,7 +572,6 @@ export class NotificationsService {
       totalCount: job.totalCount,
     });
     if (job.status === 'done') {
-      await this.notifyInventorySessionClosed(sessionId, session.name);
       this.gateway.emitInventoryDisposalInboxUpdated(recipients, { sessionId });
     }
   }

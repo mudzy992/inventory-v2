@@ -10,6 +10,7 @@ import { CreateInventorySessionDto } from './dto/create-inventory-session.dto';
 import { ManageInventoryCommitteeDto } from './dto/manage-inventory-committee.dto';
 import { RecordInventoryLineDto } from './dto/record-inventory-line.dto';
 import { ReviewDisposalApprovalDto } from './dto/review-disposal-approval.dto';
+import { RetryCloseJobDto } from './dto/retry-close-job.dto';
 import { InventoryCountService } from './inventory-count.service';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 import { MarkDisposalListDto, WithdrawDisposalListDto } from './dto/mark-disposal-list.dto';
@@ -200,6 +201,16 @@ export class InventoryCountController {
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator, UserRole.user)
   getCloseJob(@Param('id') id: string) {
     return this.inventoryCountService.getCloseJob(id);
+  }
+
+  @Post(':id/close-job/retry')
+  @Roles(UserRole.admin)
+  retryFailedCloseJob(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: RetryCloseJobDto,
+  ) {
+    return this.inventoryCountService.retryFailedCloseSession(user, id, body.reason);
   }
 
   @Get(':id/report')

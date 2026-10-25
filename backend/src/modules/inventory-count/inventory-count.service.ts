@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -2047,6 +2048,66 @@ export class InventoryCountService {
     return toPublicInventoryCloseJob(job);
   }
 
+  async retryFailedCloseSession(user: AuthenticatedUser, sessionId: string, reason: string) {
+    await this.assertInventoryCountEnabled();
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('Only administrators can retry a failed inventory close job');
+    }
+    const normalizedReason = reason.trim();
+    if (normalizedReason.length < 5 || normalizedReason.length > 500) {
+      throw new BadRequestException('Retry reason must be between 5 and 500 characters');
+    }
+
+    const job = await this.prisma.$transaction(async (tx) => {
+      const session = await tx.inventorySession.findUnique({
+        where: { id: sessionId },
+        select: { status: true },
+      });
+      if (!session || session.status !== 'closing') {
+        throw new BadRequestException('Only a session still closing can have its failed close job retried');
+      }
+      const existingJob = await tx.inventorySessionCloseJob.findUnique({ where: { sessionId } });
+      if (!existingJob || existingJob.status !== 'failed') {
+        throw new BadRequestException('Only a failed inventory close job can be retried');
+      }
+      const claimed = await tx.inventorySessionCloseJob.updateMany({
+        where: { id: existingJob.id, status: 'failed' },
+        data: {
+          status: 'queued',
+          startedAt: null,
+          endedAt: null,
+          leaseToken: null,
+          leaseUntil: null,
+          lastError: null,
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException('Inventory close job changed before it could be retried');
+      }
+      await tx.inventorySessionCloseRetryAudit.create({
+        data: {
+          closeJobId: existingJob.id,
+          actorUserId: user.id,
+          reason: normalizedReason,
+        },
+      });
+      return tx.inventorySessionCloseJob.findUniqueOrThrow({ where: { id: existingJob.id } });
+    });
+
+    try {
+      await this.closeSessionQueue.add(
+        INVENTORY_SESSION_CLOSE_JOB_NAME,
+        { sessionId },
+        { jobId: randomUUID() },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Admin retry persisted but enqueue failed for session ${sessionId}: ${String(error)}`,
+      );
+    }
+    return toPublicInventoryCloseJob(job);
+  }
+
   async getCloseJob(sessionId: string) {
     await this.assertInventoryCountEnabled();
     const job = await this.prisma.inventorySessionCloseJob.findUnique({ where: { sessionId } });
@@ -2357,18 +2418,25 @@ export class InventoryCountService {
     if (!committee.disposalCommissionId) {
       throw new BadRequestException('Disposal commission is not configured for committee');
     }
-    const approval = await ensureDisposalPendingApproval(this.prisma, {
-      equipmentId: action.equipmentId,
-      disposalCommissionId: committee.disposalCommissionId,
-      sessionId: committee.session.id,
-      inventoryLineId: action.inventoryLineId,
+    const notificationsEnabled = await this.notificationsService.notificationsEnabled();
+    const approval = await this.prisma.$transaction(async (tx) => {
+      const row = await ensureDisposalPendingApproval(tx, {
+        equipmentId: action.equipmentId,
+        disposalCommissionId: committee.disposalCommissionId!,
+        sessionId: committee.session.id,
+        inventoryLineId: action.inventoryLineId,
+      });
+      if (row.status === 'pending' && notificationsEnabled) {
+        await this.notificationsService.enqueueDisposalApprovalPendingOutboxInTx(tx, {
+          approvalId: row.id,
+          sessionId: committee.session.id,
+          commissionId: committee.disposalCommissionId!,
+          inventoryLabel: getEquipmentInventoryLabel(row.equipment),
+        });
+      }
+      return row;
     });
     if (approval.status === 'pending') {
-      void this.notificationsService.notifyDisposalApprovalPending(
-        approval.id,
-        committee.disposalCommissionId,
-        getEquipmentInventoryLabel(approval.equipment),
-      );
       void this.notificationsService.emitInventoryDisposalInboxRefresh(committee.session.id);
     }
   }

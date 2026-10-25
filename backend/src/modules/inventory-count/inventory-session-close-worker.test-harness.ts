@@ -5,7 +5,10 @@ export interface WorkerTestWrite {
   args: Record<string, unknown>;
 }
 
-export const createInventoryCloseWorkerTestHarness = (applyPendingAction: () => Promise<void>) => {
+export const createInventoryCloseWorkerTestHarness = (
+  applyPendingAction: () => Promise<void>,
+  closeNotificationRows: unknown[] = [],
+) => {
   const writes: WorkerTestWrite[] = [];
   let pendingActionLookupCount = 0;
   const prisma: Record<string, unknown> = {
@@ -43,12 +46,21 @@ export const createInventoryCloseWorkerTestHarness = (applyPendingAction: () => 
         return {};
       },
     },
+    notificationOutbox: {
+      createMany: async (args: Record<string, unknown>) => {
+        writes.push({ model: 'notificationOutbox', args });
+        return { count: closeNotificationRows.length };
+      },
+    },
   };
 
   const worker = new InventorySessionCloseWorkerService(
     prisma as never,
     { applyPendingAction } as never,
-    { emitInventoryCloseJobProgress: async () => undefined } as never,
+    {
+      emitInventoryCloseJobProgress: async () => undefined,
+      buildInventorySessionClosedOutboxRows: async () => closeNotificationRows,
+    } as never,
   );
 
   return { worker, writes, getPendingActionLookupCount: () => pendingActionLookupCount };

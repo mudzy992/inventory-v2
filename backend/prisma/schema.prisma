@@ -84,6 +84,12 @@ enum TransferStatus {
   cancelled
 }
 
+enum NotificationOutboxStatus {
+  pending
+  running
+  delivered
+}
+
 enum NotificationType {
   transfer_pending
   transfer_signed_upload_pending
@@ -317,6 +323,8 @@ model User {
   registrarAssignments              RegistrarAssignment[]
   inventoryCoordinatorAssignments InventoryCoordinatorAssignment[]
   notifications                   Notification[]
+  notificationOutbox              NotificationOutbox[]
+  closeJobRetryAudits              InventorySessionCloseRetryAudit[]
   savedFilters         SavedFilter[]
   refreshTokens        RefreshToken[]
   warehouseAssignments WarehouseKeeper[]
@@ -1072,11 +1080,26 @@ model InventorySessionCloseJob {
   createdAt    DateTime                       @default(now())
   updatedAt    DateTime                       @updatedAt
 
-  session InventorySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session      InventorySession                     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  retryAudits InventorySessionCloseRetryAudit[]
 
   @@index([status])
   @@index([status, leaseUntil], map: "inventory_session_close_jobs_status_lease_idx")
   @@map("inventory_session_close_jobs")
+}
+
+model InventorySessionCloseRetryAudit {
+  id          String   @id @default(uuid())
+  closeJobId  String
+  actorUserId String
+  reason      String   @db.Text
+  createdAt   DateTime @default(now())
+
+  closeJob InventorySessionCloseJob @relation(fields: [closeJobId], references: [id], onDelete: Cascade)
+  actor    User                     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([closeJobId, createdAt])
+  @@map("inventory_session_close_retry_audits")
 }
 
 // Document Engine — perzistentni zapis jednog posla konverzije dokumenta
@@ -1275,6 +1298,7 @@ model EmployeeRelocationEvent {
 model Notification {
   id        String           @id @default(uuid())
   userId    String
+  outboxId  String?          @unique
   type      NotificationType
   title     String           @db.VarChar(255)
   message   String           @db.Text
@@ -1282,10 +1306,40 @@ model Notification {
   relatedId String?          @db.VarChar(36)
   createdAt DateTime         @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outbox NotificationOutbox? @relation(fields: [outboxId], references: [id], onDelete: SetNull)
 
   @@index([userId, read])
   @@map("notifications")
+}
+
+model NotificationOutbox {
+  id                    String                  @id @default(uuid())
+  idempotencyKey        String                  @unique
+  userId                String
+  type                  NotificationType
+  title                 String                  @db.VarChar(255)
+  message               String                  @db.Text
+  relatedId             String?                 @db.VarChar(36)
+  sessionId             String?
+  refreshDisposalInbox  Boolean                 @default(false)
+  status                NotificationOutboxStatus @default(pending)
+  attempts              Int                     @default(0)
+  nextAttemptAt        DateTime?
+  leaseToken            String?
+  leaseUntil            DateTime?
+  deliveredAt           DateTime?
+  lastError             String?                 @db.Text
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification Notification?
+
+  @@index([status, leaseUntil], map: "notification_outbox_status_lease_idx")
+  @@index([status, nextAttemptAt], map: "notification_outbox_status_next_attempt_idx")
+  @@index([createdAt])
+  @@map("notification_outbox")
 }
 
 model SavedFilter {

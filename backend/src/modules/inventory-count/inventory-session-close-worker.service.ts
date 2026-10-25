@@ -139,6 +139,8 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
     try {
       await this.applyPendingActions(sessionId, leaseToken, assertLease);
       await assertLease();
+      const closeNotificationOutboxRows =
+        await this.notificationsService.buildInventorySessionClosedOutboxRows(sessionId);
       const doneJob = await this.prisma.$transaction(async (tx) => {
         const finalized = await tx.inventorySessionCloseJob.updateMany({
           where: { id: dbJob.id, status: 'running', leaseToken },
@@ -156,6 +158,12 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
           where: { id: sessionId },
           data: { status: 'closed', closedAt: new Date() },
         });
+        if (closeNotificationOutboxRows.length > 0) {
+          await tx.notificationOutbox.createMany({
+            data: closeNotificationOutboxRows,
+            skipDuplicates: true,
+          });
+        }
         return tx.inventorySessionCloseJob.findUniqueOrThrow({ where: { id: dbJob.id } });
       });
       await this.emitCloseJobUpdate(sessionId, doneJob);

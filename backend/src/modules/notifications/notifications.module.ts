@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsService } from './notifications.service';
+import { NotificationOutboxRelayService } from './notification-outbox-relay.service';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { NotificationsService } from './notifications.service';
     }),
   ],
   controllers: [NotificationsController],
-  providers: [NotificationsGateway, NotificationsService],
+  providers: [NotificationsGateway, NotificationsService, NotificationOutboxRelayService],
   // NotificationsGateway je eksportovan pored NotificationsService da bi
   // moduli van notifications/ (npr. DocumentsModule) mogli emitovati
   // ciljane per-user evente (npr. document.job.updated) bez prolaska kroz

@@ -1,8 +1,8 @@
-import type { PrismaService } from '../../prisma/prisma.service';
+import type { Prisma } from '../../../generated/prisma/client';
 import type { RegistrarScopeService } from '../../common/services/registrar-scope.service';
 
 export const collectCommitteeMemberUserIds = async (
-  prisma: PrismaService,
+  prisma: Prisma.TransactionClient,
   committeeId: string,
 ): Promise<string[]> => {
   const members = await prisma.inventoryCommitteeMember.findMany({
@@ -23,7 +23,7 @@ export const collectCommitteeMemberUserIds = async (
 };
 
 export const collectDisposalCommissionMemberUserIds = async (
-  prisma: PrismaService,
+  prisma: Prisma.TransactionClient,
   disposalCommissionId: string,
 ): Promise<string[]> => {
   const members = await prisma.disposalCommissionMember.findMany({
@@ -44,7 +44,7 @@ export const collectDisposalCommissionMemberUserIds = async (
 };
 
 export const collectInventorySessionStakeholderUserIds = async (
-  prisma: PrismaService,
+  prisma: Prisma.TransactionClient,
   registrarScope: RegistrarScopeService,
   sessionId: string,
   effectiveCityId: string | null,
@@ -92,7 +92,7 @@ export const collectInventorySessionStakeholderUserIds = async (
 };
 
 const findEvidenticarUserIds = async (
-  prisma: PrismaService,
+  prisma: Prisma.TransactionClient,
   registrarScope: RegistrarScopeService,
   cityId: string,
   categoryId: string,

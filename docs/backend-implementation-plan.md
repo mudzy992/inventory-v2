@@ -150,23 +150,23 @@ Obuhvatiti `uploads` i DOCX template upload kroz zajednički, konfigurabilni pol
 
 Prije implementacije dogovoriti tačno značenje i prelaze za inventory close, npr.:
 
-`queued → running → completed | failed_retryable | failed_terminal`
+`queued → running → done | failed` (sa lease-token/expiry recovery za napušteni `running` posao)
 
 - **Odluka vlasnika procesa:** inventurna sesija ostaje zatvorena i pending action greške se evidentiraju; retry iscrpljen ili trajna/business greška ostaje `failed` uz `failedCount`.
 - **Odluka o retry-u:** samo poznate prolazne DB/connection greške dobijaju najviše 3 pokušaja ukupno, sa eksponencijalnim čekanjem 250 ms pa 500 ms (cap 2 s); business/validation i neklasifikovane greške se ne ponavljaju. Retry izvršava close worker u okviru obrade akcije; BullMQ i dalje upravlja retry-em samog close posla.
-- Durable lease/heartbeat i ručni retry terminalnih grešaka nisu dio ove izmjene; traže zaseban recovery/audit dizajn.
+- Lease/heartbeat recovery je implementiran: lease traje 2 minute, heartbeat se obnavlja svakih 30 sekundi, a reconciler ponovo enqueue-a queued i istekle running poslove. Ručni retry je zaseban, admin-only tok samo za `failed` posao dok je sesija još `closing`; zahtijeva razlog (5–500 znakova) i u istoj DB transakciji bilježi audit zapis. Završena sesija/job se ne mogu ponovo otvoriti.
 
 ### 3.2 Atomarni claim, idempotency i recovery
 
 **Pending-action retry implementacija:** `applyPendingAction()` sada ponavlja samo eksplicitno allowlistane prolazne Prisma/PostgreSQL/network greške, najviše 3 pokušaja ukupno, uz 250/500 ms backoff. Trajne, business i nepoznate greške ne dobijaju retry: akcija se bilježi kao `failed`, a close worker nastavlja i zatvara sesiju uz `failedCount > 0`, po odobrenoj poslovnoj odluci. Pokušaji uključuju početni claim i dodatne retry pokušaje. Relocation finalize već je idempotentan preko terminalnog transfer statusa; direktni relocation retry prepoznaje ciljano warehouse/person stanje nakon mogućeg ambiguous commit-a. Disposal retry u istoj sesiji sada ne resetuje terminalni review status i za pending zapis mijenja samo line link pod uslovom da status i dalje `pending`; nova sesija i dalje otvara novi pending review.
 
-Dodani su unit testovi za retry, lease claim i reconciler te PostgreSQL integracija koja u child procesu uradi disposal approval commit pa ga prisilno prekine sa `SIGKILL` prije statusa akcije; worker oporavi lease i replay potvrđuje da postoji samo jedan approval. Osnovni lease recovery prošao je CI run `40231642660` (426 backend unit testova), a stvarni process-kill/replay scenario prošao je CI run `40232428101`. Ručni retry endpoint i notification exactly-once/outbox garancija ostaju otvoreni.
+Dodani su unit testovi za retry, lease claim i reconciler te PostgreSQL integracija koja u child procesu uradi disposal approval commit pa ga prisilno prekine sa `SIGKILL` prije statusa akcije; worker oporavi lease i replay potvrđuje da postoji samo jedan approval. Osnovni lease recovery prošao je CI run `40231642660` (426 backend unit testova), a stvarni process-kill/replay scenario prošao je CI run `40232428101`. CI za novi admin retry i notification outbox dodat će se nakon implementacijskog push-a.
 
 - Implementirano: conditional DB claim uz unikatni lease token, expiry od 2 minute i heartbeat svakih 30 sekundi. Pri takeover-u se pending actions ostavljene `running` atomarno vraćaju u `pending`; terminalne akcije se ne diraju.
 - Progress brojači i terminalni action status se commituju u jednoj transakciji pod istim lease tokenom; close-job finalizacija i session zatvaranje su također transakcijski. API response mapperi izostavljaju interne lease kolone, pa response shape ostaje nepromijenjen.
-- Relocation/disposal DB promjene su zaštićene replayom; notification side effecti i dalje su best-effort i nisu exactly-once/outbox garantovani — poslovna odluka iz sekcije 12 ostaje otvorena.
+- Relocation/disposal DB promjene su zaštićene replayom. Notification outbox je uveden za disposal approval pending i zatvaranje sesije: idempotentni outbox zapisi se kreiraju u istoj DB transakciji kao approval/session close, a relay upsert-a jednu Notification po outbox ID-u. Socket.IO je at-least-once signal: pad nakon emit-a, a prije mark-as-delivered može proizvesti dupli event; REST Notification zapis ostaje jedinstven i trajno čitljiv.
 - Ako se DB queued zapis kreira, a `queue.add()` padne, status ostaje retryable; startup/periodični reconciler sada traži queued poslove i running poslove sa isteklim ili starim null lease-om, uz deterministički recovery job ID.
-- Administrativni retry mora imati audit trail i ne smije vratiti već kompletiranu sesiju u `queued`.
+- Admin-only `POST /inventory-sessions/:id/close-job/retry` prihvata obavezan razlog, upisuje audit zapis i vraća samo failed posao sesije koja je i dalje `closing` u `queued`. Kompletirana sesija i job nisu retryable. Ako Redis enqueue ne uspije, DB zapis ostaje queued za postojeći reconciler.
 
 ### 3.3 Fault-injection i prihvatanje
 
@@ -175,7 +175,7 @@ Testirati najmanje:
 - Redis nedostupan prije i poslije DB enqueue zapisa.
 - Worker proces se ugasi tokom obrade i nakon side effect-a, ali prije DB completion statusa.
 - Isti job isporučen dva puta ili paralelno na dvije worker instance.
-- Retry na `failed_retryable` i blokada na `failed_terminal`.
+- Retry admin-only na failed close job dok je sesija još `closing`, odbijanje za već zatvoren session/job i audit trail razloga.
 - Djelimično neuspjela pending action i odluka o finalnom session statusu.
 - Reconciler pokrenut istovremeno na dvije backend instance.
 
@@ -183,14 +183,14 @@ Testirati najmanje:
 
 ### 3.4 Outbox za kritične side-effecte
 
-Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (npr. kritična notification/document enqueue), ne za svaku telemetry poruku.
+Transactional notification outbox je uveden za događaje koji nastaju pri inventory close obradi: disposal approval pending i inventory session closed. Ostale, nepovezane notification tokove nisu obuhvaćeni ovim paketom.
 
-- Business row i outbox event nastaju u istoj DB transakciji.
-- Dispatcher obrađuje događaje idempotentno, bilježi attempt i može se restartovati.
-- Za Socket.IO tretirati websocket emit kao best-effort signal; persisted notification/outbox je izvor istine.
-- Testirati dispatcher prekid nakon publish-a prije mark-as-sent i idempotentnu ponovnu isporuku.
+- Business row i per-user outbox zapisi nastaju u istoj PostgreSQL transakciji; jedinstveni idempotency key sprečava dupliciranje pri replay-u.
+- Relay claim-a event uz lease, kreira Notification preko unique `outboxId` upsert-a i tek onda emituje Socket.IO signal. Greške se retry-uju bez gubitka outbox reda, uz eksponencijalni backoff od 5 sekundi do najviše 1 sata; istekli `running` lease se preuzima nakon restarta.
+- Socket.IO je at-least-once; ponovljeni signal nosi isti Notification ID. Persisted Notification/outbox su izvor istine, a klijent može deduplikovati po ID-u.
+- Unit testovi pokrivaju stabilan idempotency key, `skipDuplicates` i notification upsert prije emit-a; stvarni crash-after-publish scenario ostaje dodatna integracijska mogućnost.
 
-**Prihvatanje:** business commit ne može izgubiti odabrani kritični event; dupli delivery ne stvara dupli poslovni zapis.
+**Prihvatanje:** commit approval-a/session close ne može izgubiti odabrani outbox event; ponovljeni relay ne kreira dupli Notification DB zapis.
 
 ## 7. Talas 4 — konkurentnost i domenske invarijante
 
@@ -369,7 +369,7 @@ Prije implementacije ovih tačaka tražiti izričitu potvrdu:
 1. **Riješeno:** inventurna sesija se zatvara i uz pending-action greške; svaka trajna/neispravljiva greška ostaje evidentirana kao failed.
 2. Koji podaci i koliko historije treba javni QR prikazati neautentifikovanom korisniku?
 3. Koje su maksimalne legitimne PDF/DOCX veličine i šta korisnik treba vidjeti pri odbijanju?
-4. Koje transfer/document/notification side effecte poslovanje smatra obaveznim, a koje best-effort?
-5. **Djelimično riješeno:** automatski retry je ograničen na allowlistu prolaznih grešaka (maksimum 3 pokušaja, 250/500 ms backoff); ko smije ručno ponoviti terminalno neuspješan job i da li takav UI/API potreban ostaje otvoreno.
+4. **Djelimično riješeno:** notification događaji disposal-approval-pending i inventory-session-closed imaju durable outbox; Socket.IO emit ostaje at-least-once signal. Ostali transfer/document/notification side effecti trebaju zasebnu obaveznost/best-effort odluku.
+5. **Riješeno:** automatski retry je ograničen na allowlistu prolaznih grešaka (maksimum 3 pokušaja, 250/500 ms backoff); ručni retry close joba dozvoljen je samo administratoru, traži razlog i audit zapis, i ne može ponovo otvoriti zatvorenu sesiju.
 6. Koje vrijeme (timezone) je autoritativno za automatsko otvaranje/zatvaranje inventurnih perioda?
 7. Koji je dozvoljeni recovery prozor za deaktiviran korisnički pristup preko postojećih WS konekcija i tokena?
