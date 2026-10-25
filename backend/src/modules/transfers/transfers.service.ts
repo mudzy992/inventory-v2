@@ -53,7 +53,10 @@ import {
 } from './transfer-validation.util';
 import { resolveTransferSignerId } from './utils/resolve-transfer-signer.util';
 import { allocateTransferDocumentNumberInTx } from './utils/allocate-transfer-document-number.util';
-import { claimTransferForFinalizeInTx } from './utils/claim-transfer-finalize.util';
+import {
+  claimTransferForFinalizeInTx,
+  transitionOpenTransferInTx,
+} from './utils/claim-transfer-finalize.util';
 import { isLegacyDocumentNumber } from '../../common/utils/document-number.util';
 import { executeDirectEquipmentTransferInTx } from './utils/execute-direct-equipment-transfer.util';
 import { isTransferDocumentEnabled } from './utils/transfer-generation-policy.util';
@@ -425,11 +428,14 @@ export class TransfersService {
     if (transfer.status !== 'raw') {
       throw new BadRequestException(TRANSFER_MESSAGES.markPrintedNotAllowed);
     }
-    return this.prisma.transfer.update({
-      where: { id },
-      data: { status: 'printed', printedAt: new Date() },
-      include: transferInclude,
-    });
+    await transitionOpenTransferInTx(
+      this.prisma,
+      id,
+      ['raw'],
+      { status: 'printed', printedAt: new Date() },
+      TRANSFER_MESSAGES.markPrintedNotAllowed,
+    );
+    return this.getTransferOrThrow(id);
   }
 
   async cancel(user: AuthenticatedUser, id: string) {
@@ -440,11 +446,14 @@ export class TransfersService {
     if (!['raw', 'printed', 'uploaded'].includes(transfer.status)) {
       throw new BadRequestException(TRANSFER_MESSAGES.cancelNotAllowed);
     }
-    return this.prisma.transfer.update({
-      where: { id },
-      data: { status: 'cancelled' },
-      include: transferInclude,
-    });
+    await transitionOpenTransferInTx(
+      this.prisma,
+      id,
+      ['raw', 'printed', 'uploaded'],
+      { status: 'cancelled' },
+      TRANSFER_MESSAGES.cancelNotAllowed,
+    );
+    return this.getTransferOrThrow(id);
   }
 
   async getRawDocumentHtml(user: AuthenticatedUser, id: string): Promise<string> {

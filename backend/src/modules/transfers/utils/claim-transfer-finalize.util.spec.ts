@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { BadRequestException } from '@nestjs/common';
-import { claimTransferForFinalizeInTx } from './claim-transfer-finalize.util';
+import {
+  claimTransferForFinalizeInTx,
+  transitionOpenTransferInTx,
+} from './claim-transfer-finalize.util';
 
 test('conditionally claims only an open transfer before applying finalization data', async () => {
   let args: unknown;
@@ -18,6 +21,23 @@ test('conditionally claims only an open transfer before applying finalization da
   assert.deepEqual(args, {
     where: { id: 'transfer-1', status: { in: ['raw', 'printed', 'uploaded'] } },
     data,
+  });
+});
+
+test('supports narrower conditional transitions for print and cancel operations', async () => {
+  let args: unknown;
+  const tx = {
+    transfer: {
+      updateMany: async (input: unknown) => {
+        args = input;
+        return { count: 1 };
+      },
+    },
+  };
+  await transitionOpenTransferInTx(tx as never, 'transfer-2', ['raw'], { status: 'printed' } as never, 'not allowed');
+  assert.deepEqual(args, {
+    where: { id: 'transfer-2', status: { in: ['raw'] } },
+    data: { status: 'printed' },
   });
 });
 
