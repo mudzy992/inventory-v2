@@ -85,8 +85,10 @@ certifikata i hostname-a ostaje uključena; nemojte je isključivati globalno.
 - **Bez javne mreže**: nema `EXPOSE` u Dockerfile-u, nema `ports`/`expose`
   u docker-compose servisima, nema Traefik labela.
 - **Health check**: mali HTTP server vezan ISKLJUČIVO za `127.0.0.1`
-  (nedostupan van kontejnera) — provjerava da je `soffice` pokretljiv i da
-  je Redis konekcija `ready`. `HOME=/tmp` je postavljen na nivou kontejnera
+  (nedostupan van kontejnera) — pri svakoj provjeri ponovo čita trenutni
+  status BullMQ Redis clienta, a nakon prvog uspješnog poziva kešira provjeru
+  da je `soffice` pokretljiv. Interni detalji greške se ne vraćaju kroz health
+  response. `HOME=/tmp` je postavljen na nivou kontejnera
   (Dockerfile) upravo zato da ovaj poziv (koji ne prosljeđuje eksplicitan
   `-env:UserInstallation`) ima gdje upisati default profil pod `read_only:
   true` root fs-om.

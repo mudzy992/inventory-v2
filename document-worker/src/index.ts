@@ -16,26 +16,24 @@ const main = (): void => {
   );
 
   const healthState: HealthState = { redisReady: false, shuttingDown: false };
-  const healthServer = startHealthServer(config.healthPort, config.sofficeBinary, healthState);
+  const worker = createDocumentWorker(config);
+  const healthServer = startHealthServer(
+    config.healthPort,
+    config.sofficeBinary,
+    healthState,
+    async () => {
+      const client = await worker.client;
+      if (client.status !== 'ready') {
+        throw new Error('BullMQ Redis connection is not ready');
+      }
+    },
+  );
   log(`health endpoint listening on 127.0.0.1:${config.healthPort}/health (internal only)`);
 
-  const worker = createDocumentWorker(config);
   worker.on('ready', () => {
     healthState.redisReady = true;
     log('BullMQ worker connected to Redis, ready to process jobs');
   });
-  worker.on('error', () => {
-    // Ne rušimo redisReady na svaku prolaznu grešku — ioredis se sam
-    // rekonektuje; ako konekcija stvarno propadne trajno, healthcheck
-    // failovi na 'redis_not_ready' bi ionako pratili status 'close'.
-  });
-
-    // worker close se ne koristi više, jer se healthState.redisReady ne bi smio resetovati na false dok
-    // se ne završe svi aktivni poslovi (worker.close() čeka da se završe) — inače bi healthcheck failovi
-    // mogli izazvati restart dok se još radi na aktivnim poslovima.
-    //   worker.on('close', () => {
-    //     healthState.redisReady = false;
-    //   });
 
   let shuttingDown = false;
   const shutdown = (signal: string): void => {

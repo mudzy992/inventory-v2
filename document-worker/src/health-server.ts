@@ -10,23 +10,16 @@ export interface HealthState {
 }
 
 /**
- * Health server je NAMJERNO vezan SAMO za 127.0.0.1 (loopback) — servis
- * nema javnu domenu niti je izložen u docker-compose (nema `ports:`/
- * `expose:`), a Docker `HEALTHCHECK` izvršava komande UNUTAR mrežnog
- * namespace-a kontejnera, pa loopback bind i dalje radi za healthcheck
- * svrhu bez ikakve mrežne izloženosti ka drugim kontejnerima ili internetu.
- *
- * Provjerava dvije stvari:
- *  - da je `soffice` binarni fajl uopšte pokretljiv (brz `--version` poziv,
- *    keširan nakon prvog uspjeha da health provjere ne pokreću soffice
- *    stalno),
- *  - da je BullMQ Worker-ova Redis konekcija u 'ready' stanju (postavlja se
- *    iz index.ts preko `worker.on('ready'/'error')`).
+ * Health server is bound to loopback because Docker executes its HEALTHCHECK
+ * inside the container network namespace. The Redis probe is live (not just a
+ * one-time connection event), while the soffice binary check is cached after
+ * the first successful invocation to avoid starting LibreOffice every 30s.
  */
 export const startHealthServer = (
   port: number,
   sofficeBinary: string,
   state: HealthState,
+  checkRedis: () => Promise<void>,
 ): Server => {
   let sofficeVerifiedOnce = false;
 
@@ -48,13 +41,21 @@ export const startHealthServer = (
         );
         return;
       }
+      try {
+        await checkRedis();
+      } catch {
+        res.writeHead(503, { 'Content-Type': 'application/json' }).end(
+          JSON.stringify({ status: 'redis_not_ready' }),
+        );
+        return;
+      }
       if (!sofficeVerifiedOnce) {
         try {
           await execFileAsync(sofficeBinary, ['--version'], { timeout: 5000 });
           sofficeVerifiedOnce = true;
-        } catch (err) {
+        } catch {
           res.writeHead(503, { 'Content-Type': 'application/json' }).end(
-            JSON.stringify({ status: 'soffice_unavailable', error: String(err) }),
+            JSON.stringify({ status: 'soffice_unavailable' }),
           );
           return;
         }
