@@ -363,7 +363,7 @@ export const EmployeeRelocationPage = () => {
   const [sourceMeta, setSourceMeta] = useState<{ page: number; pageSize: number; total: number; totalPages: number } | null>(null);
   const [destMeta, setDestMeta] = useState<{ page: number; pageSize: number; total: number; totalPages: number } | null>(null);
   const [sourcePage, setSourcePage] = useState(1);
-  const [destPage, setDestPage] = useState(1);
+  const [, setDestPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {

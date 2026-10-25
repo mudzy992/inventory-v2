@@ -339,7 +339,9 @@ export const InventoryCommitteeWizard = ({
                 setCategoryId(nextCategoryId);
                 const slot = availableCategories.find((row) => row.id === nextCategoryId);
                 setSelectedCommitteeId(
-                  'committeeId' in (slot ?? {}) ? String((slot as { committeeId: string }).committeeId) : '',
+                  slot && 'committeeId' in slot && typeof slot.committeeId === 'string'
+                    ? slot.committeeId
+                    : '',
                 );
               }}
               className={selectClass}

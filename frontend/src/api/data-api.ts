@@ -9,6 +9,9 @@ import type {
   AppState,
   UserRole,
   Notification,
+  OrgUnit,
+  Category,
+  TransferRecord,
 } from '../types';
 
 /** Lightweight bootstrap: reference data + notifications; large lists load per-page. */
@@ -46,10 +49,10 @@ export const fetchBootstrap = async (role: UserRole): Promise<AppState> => {
 export const fetchAppState = fetchBootstrap;
 
 export const createOrgUnitApi = (body: Record<string, unknown>) =>
-  apiRequest('/org-units', { method: 'POST', body: JSON.stringify(body) });
+  apiRequest<OrgUnit>('/org-units', { method: 'POST', body: JSON.stringify(body) });
 
 export const updateOrgUnitApi = (id: string, body: Record<string, unknown>) =>
-  apiRequest(`/org-units/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  apiRequest<OrgUnit>(`/org-units/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 export const deleteOrgUnitApi = (id: string) =>
   apiRequest<void>(`/org-units/${id}`, { method: 'DELETE' });
@@ -64,10 +67,10 @@ export const deleteEmployeeApi = (id: string) =>
   apiRequest<void>(`/employees/${id}`, { method: 'DELETE' });
 
 export const createCategoryApi = (body: Record<string, unknown>) =>
-  apiRequest('/categories', { method: 'POST', body: JSON.stringify(body) });
+  apiRequest<Category>('/categories', { method: 'POST', body: JSON.stringify(body) });
 
 export const updateCategoryApi = (id: string, body: Record<string, unknown>) =>
-  apiRequest(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  apiRequest<Category>(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 export const deleteCategoryApi = (id: string) =>
   apiRequest<void>(`/categories/${id}`, { method: 'DELETE' });
@@ -84,7 +87,7 @@ export const deleteEquipmentApi = (id: string) =>
 export const createTransferApi = (body: Record<string, unknown>) =>
   apiRequest('/transfers', { method: 'POST', body: JSON.stringify(body) });
 
-export const fetchTransferApi = (id: string) => apiRequest(`/transfers/${id}`);
+export const fetchTransferApi = (id: string) => apiRequest<TransferRecord>(`/transfers/${id}`);
 
 export const signTransferApi = (id: string, body: Record<string, unknown> = {}) =>
   apiRequest(`/transfers/${id}/sign`, {

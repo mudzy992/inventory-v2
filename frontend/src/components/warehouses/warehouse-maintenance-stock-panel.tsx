@@ -229,8 +229,8 @@ export const WarehouseMaintenanceStockPanel = ({
       {!loading ? (
         <>
           <CategoryBrowseBreadcrumb
-            parent={browseParent}
-            subCategory={browseSubCategory}
+            parent={browseParent ?? null}
+            subCategory={browseSubCategory ?? null}
             onNavigateRoot={handleNavigateRoot}
             onNavigateParent={handleNavigateParent}
           />

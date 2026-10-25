@@ -48,8 +48,8 @@ export function Layout({ onLogout, children }: LayoutProps) {
     onLogout();
   };
 
-  const roleLabel = getRoleLabel(role);
-  const roleColor = getRoleBadgeClass(role);
+  const roleLabel = getRoleLabel(role ?? 'user');
+  const roleColor = getRoleBadgeClass(role ?? 'user');
 
   return (
     <div className="flex h-[100dvh] bg-gray-50">

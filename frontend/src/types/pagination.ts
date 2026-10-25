@@ -16,7 +16,7 @@ export interface PaginatedListParams {
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
   search?: string;
-  [key: string]: string | number | undefined;
+  [key: string]: string | number | boolean | undefined;
 }
 
 export const buildListQueryString = (params: PaginatedListParams): string => {

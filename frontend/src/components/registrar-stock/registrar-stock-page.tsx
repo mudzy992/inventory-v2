@@ -12,7 +12,7 @@ import {
 } from '../../api/warehouse-stock-api';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../contexts/toast-context';
-import { formatDate, getEmployeeFullName, getEquipmentAffiliationLabel, getOrgUnitPath, getStatusLabel } from '../../helpers';
+import { formatDate, getEmployeeFullName, getEquipmentAffiliationLabel, getStatusLabel } from '../../helpers';
 import { getEquipmentPrimaryLabel } from '../../helpers/equipment-accounting-tracked.util';
 import {
   useInventoryNumberAvailability,
@@ -731,8 +731,8 @@ export const RegistrarStockPage = () => {
         </div>
       </div>
       <CategoryBrowseBreadcrumb
-        parent={browseParent}
-        subCategory={browseSubCategory}
+        parent={browseParent ?? null}
+        subCategory={browseSubCategory ?? null}
         onNavigateRoot={handleNavigateBrowseRoot}
         onNavigateParent={handleNavigateBrowseParent}
       />
@@ -790,10 +790,10 @@ export const RegistrarStockPage = () => {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {group.awaitingSpecCount > 0 ? (
-                    <Badge tone="warning">Čeka spec. ({group.awaitingSpecCount})</Badge>
+                    <Badge tone="warning">Čeka spec. ({String(group.awaitingSpecCount)})</Badge>
                   ) : null}
                   {group.readyToIssueCount > 0 ? (
-                    <Badge tone="success">Spremno ({group.readyToIssueCount})</Badge>
+                    <Badge tone="success">Spremno ({String(group.readyToIssueCount)})</Badge>
                   ) : null}
                   {isExpanded ? (
                     <ChevronDown size={16} className="text-gray-400" />

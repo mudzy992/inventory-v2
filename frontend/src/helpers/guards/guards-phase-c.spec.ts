@@ -91,8 +91,8 @@ describe('Phase C guard smoke — FE helpers', () => {
 
   it('org tree: scoped list uses forest roots', () => {
     const roots = getOrgTreeRootUnits([
-      { id: 'podrucje-1', parentId: 'direkcija-1', type: 'podrucje', name: 'Područje' } as never,
-      { id: 'ed-zenica', parentId: 'podrucje-1', type: 'podruznica', name: 'ED Zenica' } as never,
+      { id: 'podrucje-1', parentId: 'direkcija-1', type: 'podrucje', name: 'Područje' },
+      { id: 'ed-zenica', parentId: 'podrucje-1', type: 'podruznica', name: 'ED Zenica' },
     ]);
     assert.equal(roots.length, 1);
     assert.equal(roots[0]?.id, 'podrucje-1');

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Switch } from '../ui/switch';
 import { inputClass } from '../ui/form-styles';
 import type { SettingDto } from '../../api/settings-api';

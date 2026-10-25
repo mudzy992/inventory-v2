@@ -2,9 +2,11 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../../utils/cn';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+type ButtonSize = 'sm' | 'md';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
+  size?: ButtonSize;
   children: ReactNode;
 }
 
@@ -18,6 +20,7 @@ const variantClass: Record<ButtonVariant, string> = {
 
 export const Button = ({
   variant = 'primary',
+  size = 'md',
   className,
   children,
   type = 'button',
@@ -26,8 +29,9 @@ export const Button = ({
   <button
     type={type}
     className={cn(
-      'inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none',
+      'inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none',
       variantClass[variant],
+      size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm',
       className,
     )}
     {...props}

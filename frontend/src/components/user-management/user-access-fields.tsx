@@ -46,7 +46,7 @@ interface UserAccessFieldsProps {
   orgUnits: OrgUnit[];
   equipment: Pick<Equipment, 'warehouseId' | 'categoryId'>[];
   effectiveWarehouseIdByOrgUnit?: Record<string, string | null>;
-  cities: { id: string; name: string; canton?: { name: string } }[];
+  cities: { id: string; cantonId: string; name: string; canton?: { name: string } }[];
   isActive: boolean;
   onIsActiveChange: (active: boolean) => void;
   scopeValidationErrors?: string[];

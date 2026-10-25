@@ -118,8 +118,8 @@ export const AppSidebarNav = ({
     }
   }, [currentPage]);
 
-  const roleLabel = getRoleLabel(role);
-  const roleColor = getRoleBadgeClass(role);
+  const roleLabel = getRoleLabel(role ?? 'user');
+  const roleColor = getRoleBadgeClass(role ?? 'user');
 
   const handleLogout = () => {
     onLogout?.();

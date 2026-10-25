@@ -1,4 +1,5 @@
 import { apiRequest } from './client';
+import type { Equipment } from '../types';
 import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
 import { buildListQueryString } from '../types/pagination';
 
@@ -21,7 +22,7 @@ export interface OrgUnitDto {
 
 export interface InventoryCommitteeMemberDto {
   employeeId: string;
-  role: string;
+  role: 'predsjednik' | 'clan';
   employee?: { id: string; firstName: string; lastName: string; title?: string };
 }
 
@@ -48,6 +49,7 @@ export interface InventoryCommitteeDto {
     orgUnit?: OrgUnitDto;
   };
   members: InventoryCommitteeMemberDto[];
+  lines?: InventoryLineDto[];
   disposalCommission?: {
     id: string;
     name: string;
@@ -119,6 +121,8 @@ export interface PrintScopeEquipmentDto {
   inventoryNumber: string;
   categoryId: string;
   status: string;
+  affiliation: Equipment['affiliation'];
+  isAccountingTracked: boolean;
   specifications: Record<string, string>;
   category?: { name: string };
   currentHolder?: { id: string; firstName: string; lastName: string; title: string; orgUnitId: string };

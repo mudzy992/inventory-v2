@@ -65,6 +65,8 @@ const mapScopeItemsToEquipment = (items: PrintScopeEquipmentDto[]): Equipment[] 
     inventoryNumber: item.inventoryNumber,
     specifications: item.specifications ?? {},
     status: item.status as Equipment['status'],
+    affiliation: item.affiliation,
+    isAccountingTracked: item.isAccountingTracked,
     entryDate: '',
     currentHolderId: item.currentHolder?.id,
     currentHolder: item.currentHolder
@@ -452,7 +454,7 @@ export const InventoryCountPage = () => {
   const handleDeleteCommittee = async (id: string) => {
     const committee = committees.find((row) => row.id === id);
     if (committee && selectedSession) {
-      const guard = canDeleteInventoryCommittee(selectedSession.status, committee.membersConfigured);
+      const guard = canDeleteInventoryCommittee(selectedSession.status, Boolean(committee.membersConfigured));
       if (!guard.allowed) {
         toastError(guard.reason ?? 'Brisanje nije dozvoljeno.');
         return;

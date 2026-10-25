@@ -3,7 +3,7 @@ import type { PaginatedListParams, PaginatedResponse } from '../types/pagination
 
 const DEFAULT_DEBOUNCE_MS = 300;
 
-export interface UsePaginatedListOptions<T, F extends Record<string, string | undefined>> {
+export interface UsePaginatedListOptions<T, F extends Record<string, string | number | boolean | undefined>> {
   fetchPage: (params: PaginatedListParams & F) => Promise<PaginatedResponse<T>>;
   initialFilters?: F;
   initialPageSize?: number;
@@ -13,7 +13,7 @@ export interface UsePaginatedListOptions<T, F extends Record<string, string | un
   enabled?: boolean;
 }
 
-export interface UsePaginatedListResult<T, F extends Record<string, string | undefined>> {
+export interface UsePaginatedListResult<T, F extends Record<string, string | number | boolean | undefined>> {
   items: T[];
   meta: PaginatedResponse<T>['meta'] | null;
   page: number;
@@ -32,7 +32,7 @@ export interface UsePaginatedListResult<T, F extends Record<string, string | und
   refresh: () => Promise<void>;
 }
 
-export function usePaginatedList<T, F extends Record<string, string | undefined> = Record<string, never>>(
+export function usePaginatedList<T, F extends Record<string, string | number | boolean | undefined> = Record<string, never>>(
   options: UsePaginatedListOptions<T, F>,
 ): UsePaginatedListResult<T, F> {
   const {

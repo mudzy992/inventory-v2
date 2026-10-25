@@ -1,6 +1,4 @@
 import { apiRequest } from './client';
-import type { PaginatedListParams, PaginatedResponse } from '../types/pagination';
-import { buildListQueryString } from '../types/pagination';
 import type { Canton, City } from '../types';
 
 export const fetchCantonsApi = () => apiRequest<Canton[]>('/locations/cantons');

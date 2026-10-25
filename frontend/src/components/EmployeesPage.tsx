@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore, useRefreshData } from '../useStore';
 import { createEmployeeApi, deleteEmployeeApi, updateEmployeeApi } from '../api/data-api';
@@ -10,7 +10,7 @@ import { getApiErrorMessage, refreshAfterMutation } from '../helpers/run-mutatio
 import { canDeleteEmployee } from '../helpers/guards';
 import { useToast } from '../contexts/toast-context';
 import { usePublicSettings } from '../contexts/public-settings-context';
-import { isAdmin, isEvidenticar, isModerator, getCurrentUser } from '../store';
+import { isAdmin, isEvidenticar, isModerator } from '../store';
 import { Plus, Edit2, Trash2, Search, Package, Eye } from 'lucide-react';
 import { getOrgUnitPath, getOrgUnitTypeLabel } from '../helpers';
 import { EmployeeTitleAutocomplete } from './employee-title-autocomplete';
@@ -36,7 +36,6 @@ export function EmployeesPage() {
     evidenticar && getPublicSettingBoolean('features.evidenticar_employee_ops', true);
   const canManageEmployees = admin || moderator || canRegistrarOps;
   const canDeleteEmployees = admin || moderator;
-  const user = getCurrentUser();
   const { toastError, toastSuccess } = useToast();
   const [filterOrgUnit, setFilterOrgUnit] = useState('');
   const [showForm, setShowForm] = useState(false);

@@ -1,6 +1,6 @@
 import type { PageId } from '../components/page-id';
 
-export const PAGE_LOADERS: Record<PageId, () => Promise<unknown>> = {
+export const PAGE_LOADERS: Record<PageId, () => Promise<object>> = {
   dashboard: () => import('../components/Dashboard'),
   organization: () => import('../components/OrganizationPage'),
   locations: () => import('../components/LocationsPage'),

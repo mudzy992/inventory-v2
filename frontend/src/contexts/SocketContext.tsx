@@ -10,7 +10,6 @@ import {
 } from 'react';
 import type { Socket } from 'socket.io-client';
 import {
-  fetchNotificationsApi,
   fetchNotificationsPageApi,
   fetchUnreadNotificationsCountApi,
   markAllNotificationsReadApi,

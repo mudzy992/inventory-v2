@@ -31,6 +31,7 @@ import { TransferHistoryTab } from './transfers/transfer-history-tab';
 import { ModalRoot } from './ui/modal-root';
 import type { Employee, Equipment, TransferType } from '../types';
 import { buildTransferCreatePayload } from '../helpers/create-transfer-payload.util';
+import { hasRegistrarModeAAssignment, hasRegistrarModeBAssignment } from '../helpers/registrar-scope';
 import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
@@ -160,7 +161,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
     setShowForm(true);
   };
 
-  const refreshHistory = useCallback(() => {
+  const refreshHistory = useCallback(async () => {
     setHistoryRefreshKey((key) => key + 1);
   }, []);
 
@@ -297,7 +298,6 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
                     setSelectedEquipment(null);
                     setFToPersonId('');
                     setSelectedToEmployee(null);
-                    setSignerEmployee(null);
                     setFManualPreuzeoLabel('');
                     if (e.target.value === 'zaduzenje') {
                       setZaduzenjePickMode(hasRegistrarModeAAssignment(user) ? 'list' : 'custody');

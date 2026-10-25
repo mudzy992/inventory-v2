@@ -240,9 +240,6 @@ export const canRegistrarCreateTransfer = (
   if (!hasModeA) {
     return transferType === 'razduzenje' || transferType === 'prenos';
   }
-  if (transferType === 'zaduzenje') {
-    return matches.some((row) => isModeA(row));
-  }
   return true;
 };
 

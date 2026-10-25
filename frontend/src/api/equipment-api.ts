@@ -65,7 +65,7 @@ export const CUSTODY_POOL_LOOKUP_NOT_FOUND_MESSAGE =
   'Nije u vašem poolu vraćene opreme, pogrešan inventurni broj ili nije na skladištu.';
 
 export type CustodyPoolEquipment = Equipment & {
-  lastRazduzenjeFromPerson?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'> | null;
+  lastRazduzenjeFromPerson?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId' | 'title'> | null;
 };
 
 export const resolveCustodyPoolEquipmentApi = async (inventoryNumber: string) => {

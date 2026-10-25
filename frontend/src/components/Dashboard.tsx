@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   fetchAdminRelocationAlertsApi,
   type AdminRelocationAlerts,
@@ -31,7 +31,6 @@ import { useNavigate } from 'react-router-dom';
 import { pageIdToPath } from '../routes/app-routes';
 import { useIsPageEnabled } from '../hooks/use-is-page-enabled';
 import { Package, Users, ArrowLeftRight, AlertTriangle, MapPin, Layers, Clock } from 'lucide-react';
-import { getEmployeeFullName } from '../helpers';
 import type { EquipmentSummary } from '../api/equipment-api';
 import type { TransferRecord } from '../types';
 

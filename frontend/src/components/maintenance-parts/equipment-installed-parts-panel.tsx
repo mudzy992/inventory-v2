@@ -1,3 +1,4 @@
+import { ApiError } from '../../api/client';
 import { useCallback, useEffect, useState } from 'react';
 import { Wrench, X } from 'lucide-react';
 import {

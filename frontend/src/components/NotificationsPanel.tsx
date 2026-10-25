@@ -127,8 +127,8 @@ export const NotificationsPanel = () => {
                             </span>
                           </div>
                           <p className="text-sm text-gray-800 mt-1">{notification.title}</p>
-                          {notification.body ? (
-                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notification.body}</p>
+                          {notification.message ? (
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notification.message}</p>
                           ) : null}
                         </button>
                       </li>

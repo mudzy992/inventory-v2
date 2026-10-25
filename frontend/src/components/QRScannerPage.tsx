@@ -81,7 +81,7 @@ export function QRScannerPage() {
       const found =
         response.items.find(
           (item) =>
-            item.inventoryNumber.toLowerCase() === searchTerm.toLowerCase() || item.id === searchTerm,
+            item.inventoryNumber?.toLowerCase() === searchTerm.toLowerCase() || item.id === searchTerm,
         ) ?? response.items[0];
 
       if (found) {

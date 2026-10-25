@@ -19,7 +19,7 @@ import {
   useInventoryNumberAvailability,
   isAvailabilityBlocking,
 } from '../hooks/use-equipment-availability';
-import type { CategoryField, Equipment, EquipmentAffiliation } from '../types';
+import type { CategoryField, Equipment, EquipmentAffiliation, EquipmentStatus } from '../types';
 import { EquipmentCard } from './EquipmentCard';
 import { WarehouseDetailView } from './warehouses/warehouse-detail-view';
 import { getUserWarehouseIds } from '../helpers/org-warehouse.util';
@@ -49,7 +49,7 @@ export function EquipmentPage() {
   const [state] = useStore();
   const refresh = useRefreshData();
   const [filterCategory, setFilterCategory] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterStatus, setFilterStatus] = useState<EquipmentStatus | ''>('');
   const [filterAffiliation, setFilterAffiliation] = useState('');
   const [filterAccountingTracked, setFilterAccountingTracked] = useState('');
   const [equipmentSummary, setEquipmentSummary] = useState<EquipmentSummary | null>(null);
@@ -74,7 +74,7 @@ export function EquipmentPage() {
       await exportEquipmentCsvApi({
         search: list.search || undefined,
         categoryId: filterCategory || undefined,
-        status: (filterStatus as EquipmentAffiliation) || undefined,
+        status: filterStatus || undefined,
         affiliation: (filterAffiliation as EquipmentAffiliation) || undefined,
         isAccountingTracked:
           filterAccountingTracked === ''
@@ -136,7 +136,7 @@ export function EquipmentPage() {
 
   const list = usePaginatedList<
     Equipment,
-    { categoryId?: string; status?: string; affiliation?: EquipmentAffiliation; isAccountingTracked?: boolean }
+    { categoryId?: string; status?: EquipmentStatus; affiliation?: EquipmentAffiliation; isAccountingTracked?: boolean }
   >({
     fetchPage,
     initialFilters: { categoryId: undefined, status: undefined, affiliation: undefined, isAccountingTracked: undefined },
@@ -361,7 +361,7 @@ export function EquipmentPage() {
             <option value="">Sve kategorije</option>
             {filterCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as EquipmentStatus | '')}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
             <option value="">Svi statusi</option>
             <option value="skladiste">Na skladištu</option>

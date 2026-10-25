@@ -102,7 +102,7 @@ export const buildTransferCreatePayload = (
       type,
       fromType: equipment.status === 'zaduzeno' ? 'osoba' : 'skladiste',
       fromPersonId: equipment.currentHolderId || undefined,
-      toType: type === 'razduzenje' ? 'skladiste' : type === 'rashodovanje' ? 'rashod' : 'osoba',
+      toType: type === 'razduzenje' ? 'skladiste' : 'osoba',
       toPersonId: type === 'zaduzenje' || type === 'prenos' ? toPersonId : undefined,
       signerId: resolveSignerId(state.orgUnits, type, equipment, toPersonOrgUnitId),
       date: date ?? new Date().toISOString().slice(0, 10),

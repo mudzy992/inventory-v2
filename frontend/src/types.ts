@@ -29,6 +29,7 @@ export interface City {
 
 export interface Warehouse {
   id: string;
+  createdAt?: string;
   name: string;
   cityId: string;
   orgUnitId?: string | null;
@@ -186,7 +187,7 @@ export interface Equipment {
   contractNumber?: string;
   entryDate: string;
   currentHolderId?: string;
-  currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'>;
+  currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId' | 'title'>;
   category?: Pick<Category, 'id' | 'name' | 'parentId'>;
   warehouseId?: string | null;
   warehouseCondition?: WarehouseCondition | null;
@@ -223,7 +224,7 @@ export interface TransferRecord {
   documentWarehouseId?: string | null;
   hasGeneratedDocument?: boolean;
   equipment?: Pick<Equipment, 'id' | 'inventoryNumber' | 'status' | 'warehouseId' | 'categoryId'> & {
-    currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId'>;
+    currentHolder?: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'orgUnitId' | 'title'>;
     warehouse?: Pick<Warehouse, 'id' | 'name' | 'cityId'>;
   };
   signer?: Pick<Employee, 'id' | 'firstName' | 'lastName'>;
@@ -237,6 +238,7 @@ export interface Notification {
   type: string;
   title: string;
   message: string;
+  body?: string;
   read: boolean;
   createdAt: string;
   relatedId?: string;

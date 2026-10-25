@@ -15,5 +15,7 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: LucideIcon; label: string }
   employee_deactivation_equipment_required: { icon: AlertTriangle, label: 'Deaktivacija radnika' },
 };
 
-export const getNotificationTypeMeta = (type: string) =>
-  NOTIFICATION_TYPE_META[type] ?? { icon: Bell, label: 'Obavijest' };
+export const getNotificationTypeMeta = (type: string) => ({
+  ...(NOTIFICATION_TYPE_META[type] ?? { icon: Bell, label: 'Obavijest' }),
+  badgeClass: 'bg-gray-100 text-gray-700',
+});
