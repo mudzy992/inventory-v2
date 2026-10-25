@@ -125,6 +125,7 @@ Obuhvatiti `uploads` i DOCX template upload kroz zajednički, konfigurabilni pol
 - Uvesti compare-and-set revoke (`where revokedAt IS NULL`) i provjeriti da je pogođen tačno jedan red; novi token se kreira u istoj transakciji.
 - Paralelni refresh test: od dva istovremena zahtjeva najviše jedan izdaje novi validan refresh token; drugi dobija kontrolisani unauthorized odgovor.
 - Provjeriti logout, expiry, revoke, password/account deactivation i cleanup starih refresh redova.
+- P2 retention: `RefreshTokenCleanupService` jednom dnevno (03:00 UTC) briše istekle redove u batch-ovima do 20.000 po pokretanju; složeni `(expiresAt, id)` indeks podržava determinističko skeniranje, a preostali redovi se nastavljaju narednim danom. Testovi pokrivaju aktivne tokene, batch limit i cleanup rezultat.
 - Dodati metrike za refresh failure/reuse bez logovanja tokena ili token hash-a.
 
 **Prihvatanje:** dupli refresh ne može proizvesti dvije aktivne rotacije; logout/deactivation ponašanje je pokriveno integration testom.

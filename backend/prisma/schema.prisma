@@ -1335,5 +1335,6 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt, id])
   @@map("refresh_tokens")
 }
