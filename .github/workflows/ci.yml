@@ -72,6 +72,10 @@ jobs:
           npx prisma migrate deploy
           npx prisma migrate status
 
+      - name: Verify SQL-only migration invariant
+        working-directory: backend
+        run: npm run test:integration:migrations
+
       - name: Verify temporary Redis service
         working-directory: backend
         run: |
