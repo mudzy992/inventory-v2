@@ -77,31 +77,30 @@ export class SettingsService {
   }
 
   async ensureDefaults(): Promise<void> {
-    for (const definition of SETTINGS_REGISTRY) {
-      const existing = await this.prisma.setting.findUnique({ where: { key: definition.key } });
-      if (existing) {
-        if (existing.scope !== definition.scope || existing.valueType !== definition.valueType) {
-          await this.prisma.setting.update({
-            where: { key: definition.key },
-            data: {
-              scope: definition.scope,
-              valueType: definition.valueType,
-              description: definition.description,
-            },
-          });
-        }
-        continue;
-      }
-      await this.prisma.setting.create({
-        data: {
+    const defaultWrites = SETTINGS_REGISTRY.map((definition) =>
+      this.prisma.setting.upsert({
+        where: { key: definition.key },
+        create: {
           key: definition.key,
           scope: definition.scope,
           valueType: definition.valueType,
           value: this.serializeValue(definition.defaultValue, definition),
           description: definition.description,
         },
-      });
-    }
+        // Preserve administrator-configured values; reconcile only registry metadata.
+        update: {
+          scope: definition.scope,
+          valueType: definition.valueType,
+          description: definition.description,
+        },
+      }),
+    );
+
+    // A single transaction makes the defaults visible as one consistent set;
+    // upsert also makes simultaneous multi-instance startup idempotent.
+    await this.prisma.$transaction(defaultWrites);
+    // Other startup hooks may have cached misses before defaults were inserted.
+    await this.redisService.del(...SETTINGS_REGISTRY.map(({ key }) => SettingsService.cacheKey(key)));
   }
 
   async getBooleanValue(key: string, defaultValue = false): Promise<boolean> {

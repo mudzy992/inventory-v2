@@ -222,6 +222,12 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 
 **Prihvatanje:** kategorijsko stablo je aciklično; nevažeći setting se odbija sa field-level 400 prije upisa/cache invalidacije.
 
+#### Settings default initialization (P2 — implementation added)
+
+- `SettingsService.ensureDefaults()` sada koristi registry-driven upsert-e u jednoj Prisma transakciji; višestruke replike mogu sigurno inicijalizovati iste ključeve bez check-then-create race-a.
+- Postojeće admin vrijednosti ostaju netaknute, a registry metadata se usklađuje; cache ključevi se invalidiraju tek nakon uspješnog commit-a.
+- Unit test pokriva transakcijsku granicu i cache invalidaciju; hosted CI ima PostgreSQL test koji istovremeno pokreće dvije inicijalizacije i provjerava da nema duplih/izgubljenih vrijednosti.
+
 ### 4.5 CSV i javni QR
 
 - CSV: zaštititi ćelije koje spreadsheet može tretirati kao formulu (`=`, `+`, `-`, `@` i relevantni leading control/whitespace slučajevi), uz test Excel/LibreOffice kompatibilnosti; escaping delimitera sam po sebi nije dovoljan.
