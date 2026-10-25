@@ -196,9 +196,10 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 
 ### 4.1 Transferi i promjene statusa
 
-- Dodati conditional status transition za finalize/cancel/markPrinted i provjeriti affected row count.
+- Conditional status transition za finalize/cancel/markPrinted već koristi affected-row count; unit testovi `claim-transfer-finalize.util.spec.ts` pokrivaju otvoreni claim, uže tranzicije i odbijanje nakon konkurentne terminalne promjene.
 - Gdje stanje više redova mora mijenjati zajedno, koristiti transakciju i dosljedan lock/update redoslijed.
-- Za create + notification/document generation koristiti outbox/retry gdje je događaj poslovno obavezan.
+- **Potvrđeni post-commit rizik:** u `TransfersService.create()` transfer commit-uje prije `notifyTransferPending()`, `notifyTransferSignedUploadPending()` i DOCX generisanja; u `finalize()` status/oprema commit-uju prije DOCX regenerisanja i `notifyTransferSigned()`. Greška u kasnijem koraku može vratiti HTTP grešku iako je transfer već kreiran/finaliziran, a sequential notification loop može ostaviti djelimične obavijesti. `TransferDocumentGenerationService` hvata PDF queue enqueue greške, ali DOCX render/write/database greške propagira; eksplicitni `generated-document/retry` route retry-a PDF, dok se DOCX pokušava regenerisati samo kroz download putanju. Postojeći testovi ne fault-injectuju ove post-commit granice.
+- Za create/finalize notification/document side effecte koristiti outbox/retry gdje su poslovno obavezni, ali prije mijenjanja HTTP ugovora odrediti smije li transfer ostati uspješno kreiran/finaliziran kad je samo dokument/notifikacija neuspješna.
 - Testirati dvije istovremene finalizacije, finalize naspram cancel, retry istog requesta i document failure poslije uspješnog transfer commita.
 
 **Prihvatanje:** samo jedan zahtjev može izvršiti state transition; prateći dokument/notifikacija je eventualno pouzdana ili jasno označena kao neuspjela.
@@ -208,7 +209,7 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 - Zamijeniti pre-check + decrement sa atomic conditional decrement gdje je moguće (`quantityOnHand >= requested`) i provjeriti pogođeni red.
 - U istoj transakciji zapisati movement/event i povezanu opremu/maintenance promjenu.
 - Maintenance part statusi (faulty/remove/replace) i disposal approval review koriste conditional update; promjene opreme, zaliha i eventi ostaju u istoj transakciji.
-- Implementirano nakon odluke vlasnika: `BulkCreateStockLotDto.items` ima gornju granicu od 100 unosa; dozvoljava prijeme do 100 stavki po zahtjevu. Obrada unutar transakcije i dalje je serijska, pa batching treba razmatrati tek uz mjerenje trajanja.
+- Implementirano nakon odluke vlasnika: `BulkCreateStockLotDto.items` ima gornju granicu od 100 unosa; DTO test potvrđuje da 100 prolazi, a 101 se odbija. Backend/PostgreSQL/Redis CI run `40235730013` prošao je lint, typecheck, unit testove, migracije i build. Obrada unutar transakcije i dalje je serijska, pa batching treba razmatrati tek uz mjerenje trajanja.
 - Batch-ovati registrar scope provjere umjesto serijskog N+1 poziva.
 - Testirati posljednju jedinicu koju paralelno pokušavaju izdati/ugraditi/zamijeniti; jedan zahtjev uspije, drugi dobije razumljiv insufficient-stock odgovor.
 
