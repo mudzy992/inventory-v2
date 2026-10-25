@@ -80,6 +80,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:settings-defaults
 
+      - name: Verify inventory close-vs-record locking
+        working-directory: backend
+        run: npm run test:integration:inventory-session-lock
+
       - name: Verify temporary Redis service
         working-directory: backend
         run: |
