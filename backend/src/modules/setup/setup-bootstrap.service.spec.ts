@@ -126,7 +126,10 @@ describe('SetupBootstrapService', () => {
     const { service } = createService();
     const dto = buildDto();
     dto.roles.user.username = 'admin';
-    await assert.rejects(() => service.bootstrap(dto), BadRequestException);
+    await assert.rejects(
+      () => service.bootstrap(dto, service.buildCompanySettingsEntries(dto)),
+      BadRequestException,
+    );
   });
 
   it('creates bootstrap entities in transaction', async () => {
