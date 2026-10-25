@@ -18,8 +18,8 @@ export const SettingsLimitedFileInterceptor = (fieldName: string) => {
   @Injectable()
   class SettingsLimitedFileInterceptorMixin implements NestInterceptor {
     constructor(
-      private readonly settingsService: SettingsService,
-      private readonly configService: ConfigService,
+      readonly settingsService: SettingsService,
+      readonly configService: ConfigService,
     ) {}
 
     async intercept(context: ExecutionContext, next: CallHandler) {
