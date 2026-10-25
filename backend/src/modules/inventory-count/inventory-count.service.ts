@@ -64,6 +64,7 @@ import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
 import { provisionSessionCommitteeSlots } from './utils/provision-session-committee-slots.util';
 import { claimDisposalApprovalReviewInTx } from './utils/claim-disposal-approval-review.util';
+import { lockActiveInventorySessionInTx } from './utils/lock-active-inventory-session-in-tx.util';
 import { deleteInventorySessionCascadeInTx } from './utils/delete-inventory-session-cascade.util';
 import { getEquipmentInventoryLabel } from '../../common/utils/equipment-accounting-tracked.util';
 
@@ -1556,21 +1557,34 @@ export class InventoryCountService {
     if (quantityCounted < 0) {
       throw new BadRequestException('quantityCounted cannot be negative');
     }
-    return this.prisma.inventoryWarehouseLine.upsert({
-      where: { committeeId_stockLotId: { committeeId, stockLotId } },
-      create: {
-        committeeId,
-        stockLotId,
-        status,
-        quantityCounted,
-        note: note?.trim() || null,
-      },
-      update: {
-        status,
-        quantityCounted,
-        note: note?.trim() || null,
-      },
-      include: { stockLot: { include: { category: true } } },
+    return this.prisma.$transaction(async (tx) => {
+      await lockActiveInventorySessionInTx(tx, committee.sessionId);
+      const currentCommittee = await tx.inventoryWarehouseCommittee.findUnique({
+        where: { id: committeeId },
+        select: { isClosed: true },
+      });
+      if (!currentCommittee) {
+        throw new NotFoundException('Warehouse inventory committee not found');
+      }
+      if (currentCommittee.isClosed) {
+        throw new BadRequestException('Warehouse committee list is closed');
+      }
+      return tx.inventoryWarehouseLine.upsert({
+        where: { committeeId_stockLotId: { committeeId, stockLotId } },
+        create: {
+          committeeId,
+          stockLotId,
+          status,
+          quantityCounted,
+          note: note?.trim() || null,
+        },
+        update: {
+          status,
+          quantityCounted,
+          note: note?.trim() || null,
+        },
+        include: { stockLot: { include: { category: true } } },
+      });
     });
   }
 
@@ -1590,17 +1604,26 @@ export class InventoryCountService {
     if (!president) {
       throw new ForbiddenException('Only committee president can close the list');
     }
-    return this.prisma.inventoryWarehouseCommittee.update({
-      where: { id: committeeId },
-      data: {
-        isClosed: true,
-        closedAt: new Date(),
-        closedByUserId: user.id,
-      },
-      include: {
-        warehouse: true,
-        members: { include: { employee: true } },
-      },
+    const include = {
+      warehouse: true,
+      members: { include: { employee: true } },
+    } as const;
+    if (committee.isClosed) {
+      return this.prisma.inventoryWarehouseCommittee.findUniqueOrThrow({
+        where: { id: committeeId },
+        include,
+      });
+    }
+    return this.prisma.$transaction(async (tx) => {
+      await lockActiveInventorySessionInTx(tx, committee.sessionId);
+      await tx.inventoryWarehouseCommittee.updateMany({
+        where: { id: committeeId, isClosed: false },
+        data: { isClosed: true, closedAt: new Date(), closedByUserId: user.id },
+      });
+      return tx.inventoryWarehouseCommittee.findUniqueOrThrow({
+        where: { id: committeeId },
+        include,
+      });
     });
   }
 
@@ -1741,6 +1764,17 @@ export class InventoryCountService {
       }
     }
     const line = await this.prisma.$transaction(async (tx) => {
+      await lockActiveInventorySessionInTx(tx, committee.sessionId);
+      const currentCommittee = await tx.inventoryCommittee.findUnique({
+        where: { id: committeeId },
+        select: { isClosed: true },
+      });
+      if (!currentCommittee) {
+        throw new NotFoundException('Inventory committee not found');
+      }
+      if (currentCommittee.isClosed) {
+        throw new BadRequestException('Inventory committee list is closed');
+      }
       const existing = await tx.inventoryLine.findUnique({
         where: { committeeId_equipmentId: { committeeId, equipmentId } },
         include: { pendingAction: true },
@@ -1878,10 +1912,16 @@ export class InventoryCountService {
     if (!member || member.role !== 'predsjednik') {
       throw new ForbiddenException('Only committee president can close inventory committee list');
     }
-    return this.prisma.inventoryCommittee.update({
-      where: { id: committeeId },
-      data: { isClosed: true, closedAt: new Date(), closedByUserId: user.id },
-      include: { session: true, members: true, category: true },
+    return this.prisma.$transaction(async (tx) => {
+      await lockActiveInventorySessionInTx(tx, committee.sessionId);
+      await tx.inventoryCommittee.updateMany({
+        where: { id: committeeId, isClosed: false },
+        data: { isClosed: true, closedAt: new Date(), closedByUserId: user.id },
+      });
+      return tx.inventoryCommittee.findUniqueOrThrow({
+        where: { id: committeeId },
+        include: { session: true, members: true, category: true },
+      });
     });
   }
 

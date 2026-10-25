@@ -206,8 +206,8 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 
 ### 4.3 Inventura, komisije i scheduler
 
-- Atomizovati `recordLine` naspram close/committee close: DB mora odlučiti da li line write dolazi prije ili poslije zatvaranja.
-- Testirati disposal approval duplikate, pending action retry i close-vs-record races.
+- `recordLine` i `recordWarehouseLine` sada zaključavaju aktivnu parent sesiju (`SELECT ... FOR UPDATE`) u istoj transakciji prije upisa; oba committee-close toka koriste isti session lock, a committee status se provjerava ponovo nakon zaključavanja.
+- Dodati Postgres integration/race test za disposal approval, pending action retry i close-vs-record redoslijed; unit test pokriva active-session guard rezultat.
 - Za scheduler uskladiti business timezone i cron trigger; napisati fake-clock testove za DST i granicu dana.
 - Distributed lock: koristiti obnavljivu lease ili sigurni job key; zaključati ponašanje kad posao traje duže od TTL-a.
 
@@ -218,7 +218,6 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 - Parent promjena u kategoriji mora odbiti izbor vlastitog descendant-a. Provjera mora biti zaštićena od paralelnih promjena; dodati testove self, descendant, validan reparent i dva paralelna reparent-a.
 - `upload.max_mb`, `lists.default_page_size` i `lists.max_page_size` sada odbijaju non-finite vrijednosti, pogrešan tip, decimale i vrijednosti izvan key-specific raspona; dodatno se provjerava `default_page_size <= max_page_size`. Boolean settings odbijaju neprepoznate stringove umjesto da ih tiho pretvore u `false`.
 - Svaki novi numeric setting mora deklarisati odgovarajući min/max/integer policy u registry-ju.
-- Boolean parser treba odbiti nepoznatu vrijednost umjesto da je tiho pretvori u `false`.
 
 **Prihvatanje:** kategorijsko stablo je aciklično; nevažeći setting se odbija sa field-level 400 prije upisa/cache invalidacije.
 
