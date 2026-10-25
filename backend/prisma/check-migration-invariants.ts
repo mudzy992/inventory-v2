@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 
 const main = async (): Promise<void> => {
@@ -12,6 +13,7 @@ const main = async (): Promise<void> => {
   const client = new Client({ connectionString: parsedConnectionString.toString() });
 
   let connected = false;
+  let transactionOpen = false;
   try {
     await client.connect();
     connected = true;
@@ -42,9 +44,76 @@ const main = async (): Promise<void> => {
     assert.match(definition, /sourceid/);
     assert.match(definition, /queued/);
     assert.match(definition, /running/);
-    console.log('Verified SQL-only migration invariant: one active DocumentJob per source.');
+
+    const sourceType = 'ci-migration-invariant';
+    const sourceId = `ci-${randomUUID()}`;
+    const firstJobId = randomUUID();
+    const secondJobId = randomUUID();
+    const insertJob = (id: string) =>
+      client.query(
+        `INSERT INTO document_jobs (
+           id, "sourceType", "sourceId", "sourceFormat", "sourceRelativePath",
+           "resultRelativePath", "updatedAt"
+         ) VALUES ($1, $2, $3, 'docx', $4, $5, NOW())`,
+        [
+          id,
+          sourceType,
+          sourceId,
+          `ci/${id}.docx`,
+          `ci/${id}.pdf`,
+        ],
+      );
+
+    await client.query('BEGIN');
+    transactionOpen = true;
+    await insertJob(firstJobId);
+    await client.query('SAVEPOINT before_duplicate_active_job');
+
+    let duplicateRejectedByUniqueIndex = false;
+    try {
+      await insertJob(secondJobId);
+    } catch (error: unknown) {
+      duplicateRejectedByUniqueIndex =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === '23505';
+    }
+    assert.equal(
+      duplicateRejectedByUniqueIndex,
+      true,
+      'PostgreSQL must reject a second queued job for the same source',
+    );
+
+    await client.query('ROLLBACK TO SAVEPOINT before_duplicate_active_job');
+    await client.query('RELEASE SAVEPOINT before_duplicate_active_job');
+    await client.query(`UPDATE document_jobs SET status = 'done' WHERE id = $1`, [firstJobId]);
+    await insertJob(secondJobId);
+
+    const activeJobs = await client.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM document_jobs
+       WHERE "sourceType" = $1
+         AND "sourceId" = $2
+         AND status IN ('queued', 'running')`,
+      [sourceType, sourceId],
+    );
+    assert.equal(
+      activeJobs.rows[0]?.count,
+      '1',
+      'a completed job must not prevent a new active job for the same source',
+    );
+
+    await client.query('ROLLBACK');
+    transactionOpen = false;
+    console.log(
+      'Verified PostgreSQL migration invariant: one active DocumentJob per source, with completed jobs reusable.',
+    );
   } finally {
     if (connected) {
+      if (transactionOpen) {
+        await client.query('ROLLBACK');
+      }
       await client.end();
     }
   }
