@@ -27,40 +27,66 @@ export interface RedisAppConfig {
   caCertPath?: string;
 }
 
+const readInteger = (
+  name: string,
+  fallback: number,
+  minimum: number,
+  maximum = Number.MAX_SAFE_INTEGER,
+): number => {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+
+  const normalized = raw.trim();
+  if (!/^\d+$/u.test(normalized)) {
+    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`);
+  }
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`);
+  }
+  return parsed;
+};
+
+const readBoolean = (name: string, fallback: boolean): boolean => {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+
+  const normalized = raw.trim();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  throw new Error(`${name} must be either "true" or "false"`);
+};
+
 export const readRedisConfig = (): RedisAppConfig => {
   const keyPrefix = (process.env.REDIS_KEY_PREFIX ?? 'inventory-v2').replace(/:+$/, '');
   return {
     host: process.env.REDIS_HOST ?? 'redis-core',
-    port: Number(process.env.REDIS_PORT ?? 6379),
+    port: readInteger('REDIS_PORT', 6379, 1, 65535),
     username: process.env.REDIS_USERNAME || undefined,
     password: process.env.REDIS_PASSWORD || undefined,
-    db: Number(process.env.REDIS_DB ?? 0),
+    db: readInteger('REDIS_DB', 0, 0),
     keyPrefix: `${keyPrefix}:`,
-    tls: process.env.REDIS_TLS === 'true',
+    tls: readBoolean('REDIS_TLS', false),
     caCertPath: process.env.REDIS_CA_CERT_PATH?.trim() || undefined,
   };
 };
 
-/** Baznе (bez keyPrefix-a) ioredis opcije — koristi ih svako ko pravi
- * vlastitu konekciju (BullMQ, Socket.IO adapter) i sam odlučuje o namespace
- * strategiji. */
+/**
+ * Bazne (bez keyPrefix-a) ioredis opcije — koriste ih BullMQ i Socket.IO.
+ * TLS koristi sistemski trust store ili montirani CA, uz standardnu provjeru
+ * certifikata i hostname-a. Retry strategija ostaje brza i ograničena.
+ */
 export const buildBaseRedisOptions = (config: RedisAppConfig): RedisOptions => ({
   host: config.host,
   port: config.port,
   username: config.username,
   password: config.password,
   db: config.db,
-  // Do not disable certificate/hostname verification. When a private CA is
-  // configured, pass it as a trust anchor; otherwise Node's system trust store
-  // is used. This is shared by plain ioredis, BullMQ and Socket.IO clients.
   tls: config.tls
     ? config.caCertPath
       ? { ca: readFileSync(config.caCertPath) }
       : {}
     : undefined,
-  // Robusna retry strategija — bitno jer ova aplikacija ima kritične puteve
-  // (login rate-limit, BullMQ, Socket.IO) koji zavise od Redis-a; brz
-  // ali ograničen retry umjesto default ponašanja koje odustaje.
   retryStrategy: (attempts: number) => Math.min(attempts * 200, 5000),
   maxRetriesPerRequest: 3,
   enableReadyCheck: true,

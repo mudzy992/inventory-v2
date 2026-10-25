@@ -28,13 +28,34 @@ export interface WorkerConfig {
   sofficeBinary: string;
 }
 
-const readInt = (name: string, fallback: number): number => {
+const readInt = (
+  name: string,
+  fallback: number,
+  minimum = 1,
+  maximum = Number.MAX_SAFE_INTEGER,
+): number => {
   const raw = process.env[name];
-  if (!raw) return fallback;
+  if (raw === undefined || raw.trim() === '') return fallback;
+
   const normalized = raw.trim();
-  if (!/^\d+$/u.test(normalized)) return fallback;
+  if (!/^\d+$/u.test(normalized)) {
+    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`);
+  }
   const parsed = Number(normalized);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`);
+  }
+  return parsed;
+};
+
+const readBoolean = (name: string, fallback: boolean): boolean => {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+
+  const normalized = raw.trim();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  throw new Error(`${name} must be either "true" or "false"`);
 };
 
 export const loadConfig = (): WorkerConfig => {
@@ -42,12 +63,12 @@ export const loadConfig = (): WorkerConfig => {
   return {
     redis: {
       host: process.env.REDIS_HOST ?? 'redis-core',
-      port: readInt('REDIS_PORT', 6379),
+      port: readInt('REDIS_PORT', 6379, 1, 65535),
       username: process.env.REDIS_USERNAME || undefined,
       password: process.env.REDIS_PASSWORD || undefined,
-      db: readInt('REDIS_DB', 0),
+      db: readInt('REDIS_DB', 0, 0),
       keyPrefix: `${keyPrefix}:`,
-      tls: process.env.REDIS_TLS === 'true',
+      tls: readBoolean('REDIS_TLS', false),
       caCertPath: process.env.REDIS_CA_CERT_PATH?.trim() || undefined,
     },
     // Mora biti identično DOCUMENT_GENERATION_QUEUE u

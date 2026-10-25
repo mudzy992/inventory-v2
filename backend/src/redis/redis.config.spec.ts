@@ -1,0 +1,122 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import { buildBaseRedisOptions, readRedisConfig } from './redis.config';
+
+const REDIS_ENV_NAMES = [
+  'REDIS_HOST',
+  'REDIS_PORT',
+  'REDIS_USERNAME',
+  'REDIS_PASSWORD',
+  'REDIS_DB',
+  'REDIS_KEY_PREFIX',
+  'REDIS_TLS',
+  'REDIS_CA_CERT_PATH',
+] as const;
+
+type RedisEnvironment = Partial<Record<(typeof REDIS_ENV_NAMES)[number], string>>;
+
+const withRedisEnvironment = (values: RedisEnvironment, run: () => void): void => {
+  const previous = new Map(REDIS_ENV_NAMES.map((name) => [name, process.env[name]]));
+  for (const name of REDIS_ENV_NAMES) delete process.env[name];
+  Object.assign(process.env, values);
+
+  try {
+    run();
+  } finally {
+    for (const name of REDIS_ENV_NAMES) {
+      const value = previous.get(name);
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+};
+
+test('readRedisConfig supplies compatible defaults', () => {
+  withRedisEnvironment({}, () => {
+    assert.deepEqual(readRedisConfig(), {
+      host: 'redis-core',
+      port: 6379,
+      username: undefined,
+      password: undefined,
+      db: 0,
+      keyPrefix: 'inventory-v2:',
+      tls: false,
+      caCertPath: undefined,
+    });
+  });
+});
+
+test('readRedisConfig parses explicit TLS and trims the CA path', () => {
+  withRedisEnvironment(
+    {
+      REDIS_HOST: 'redis.internal',
+      REDIS_PORT: '6380',
+      REDIS_USERNAME: 'inventory',
+      REDIS_PASSWORD: 'test-secret',
+      REDIS_DB: '2',
+      REDIS_KEY_PREFIX: 'test::',
+      REDIS_TLS: 'true',
+      REDIS_CA_CERT_PATH: ' /run/secrets/redis-ca.pem ',
+    },
+    () => {
+      assert.deepEqual(readRedisConfig(), {
+        host: 'redis.internal',
+        port: 6380,
+        username: 'inventory',
+        password: 'test-secret',
+        db: 2,
+        keyPrefix: 'test:',
+        tls: true,
+        caCertPath: '/run/secrets/redis-ca.pem',
+      });
+    },
+  );
+});
+
+test('readRedisConfig rejects malformed, unsafe, or out-of-range numeric values', () => {
+  const invalidValues: Array<[keyof RedisEnvironment, string]> = [
+    ['REDIS_PORT', '6379junk'],
+    ['REDIS_PORT', '0'],
+    ['REDIS_PORT', '65536'],
+    ['REDIS_DB', '-1'],
+    ['REDIS_DB', '1.5'],
+    ['REDIS_DB', '9007199254740992'],
+  ];
+
+  for (const [name, value] of invalidValues) {
+    withRedisEnvironment({ [name]: value }, () => {
+      assert.throws(() => readRedisConfig(), new RegExp(name, 'u'));
+    });
+  }
+});
+
+test('readRedisConfig accepts only explicit true/false TLS values', () => {
+  for (const value of ['TRUE', 'yes', '1', 'enabled']) {
+    withRedisEnvironment({ REDIS_TLS: value }, () => {
+      assert.throws(() => readRedisConfig(), /REDIS_TLS/u);
+    });
+  }
+});
+
+test('buildBaseRedisOptions keeps TLS peer verification and loads a configured CA', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'inventory-redis-config-'));
+  const caPath = join(directory, 'redis-ca.pem');
+  const ca = 'synthetic test CA';
+  writeFileSync(caPath, ca);
+
+  try {
+    const options = buildBaseRedisOptions({
+      ...readRedisConfig(),
+      tls: true,
+      caCertPath: caPath,
+    });
+    assert.ok(options.tls);
+    assert.deepEqual(options.tls.ca, readFileSync(caPath));
+    assert.notEqual(options.tls.rejectUnauthorized, false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

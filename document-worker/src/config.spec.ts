@@ -107,22 +107,28 @@ test('loadConfig reads Redis TLS, credentials, queue, paths, and worker limits',
   );
 });
 
-test('loadConfig falls back rather than partially parsing malformed integer values', () => {
-  withConfigEnvironment(
-    {
-      REDIS_PORT: '6379junk',
-      REDIS_DB: '-1',
-      DOCUMENT_WORKER_CONCURRENCY: '2.5',
-      DOCUMENT_WORKER_CONVERT_TIMEOUT_MS: '999999999999999999999',
-      DOCUMENT_WORKER_HEALTH_PORT: '0',
-    },
-    () => {
-      const config = loadConfig();
-      assert.equal(config.redis.port, 6379);
-      assert.equal(config.redis.db, 0);
-      assert.equal(config.concurrency, 2);
-      assert.equal(config.convertTimeoutMs, 120_000);
-      assert.equal(config.healthPort, 8080);
-    },
-  );
+test('loadConfig rejects malformed or out-of-range integer values', () => {
+  const invalidValues: Array<[keyof ConfigEnvironment, string]> = [
+    ['REDIS_PORT', '6379junk'],
+    ['REDIS_PORT', '0'],
+    ['REDIS_PORT', '65536'],
+    ['REDIS_DB', '-1'],
+    ['DOCUMENT_WORKER_CONCURRENCY', '2.5'],
+    ['DOCUMENT_WORKER_CONVERT_TIMEOUT_MS', '999999999999999999999'],
+    ['DOCUMENT_WORKER_HEALTH_PORT', '0'],
+  ];
+
+  for (const [name, value] of invalidValues) {
+    withConfigEnvironment({ [name]: value }, () => {
+      assert.throws(() => loadConfig(), new RegExp(name, 'u'));
+    });
+  }
+});
+
+test('loadConfig refuses to interpret invalid Redis TLS values as TLS-off', () => {
+  for (const value of ['TRUE', 'yes', '1', 'enabled']) {
+    withConfigEnvironment({ REDIS_TLS: value }, () => {
+      assert.throws(() => loadConfig(), /REDIS_TLS/u);
+    });
+  }
 });
