@@ -248,7 +248,7 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 
 - `GET /public/equipment/:id` sada koristi poseban Redis fixed-window bucket po klijentskoj IP adresi, nezavisan od login bucket-a; podrazumijevano 60 zahtjeva u 60 sekundi, višak dobija 429.
 - `RATE_LIMIT_PUBLIC_EQUIPMENT_MAX`, `RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC` i `RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED` dokumentovani su u `.env.example` i proslijeđeni kroz oba Compose deploymenta; konfiguracija se strogo validira. Outage ponašanje je fail-open po defaultu, uz opciju 503 fail-closed.
-- Guardovi su registrovani u odgovarajućim Nest modulima za dependency injection; testovi pokrivaju route guard metadata, odvojene Redis ključeve, prag/prozor, neispravnu konfiguraciju i Redis outage policy.
+- Guardovi su registrovani u odgovarajućim Nest modulima i Redis zavisnost se injektuje eksplicitnim tokenom; HTTP integration test pokreće stvarnu Nest rutu, potvrđuje 429 na trećem pozivu i da odbijeni zahtjev ne dođe do service sloja. Unit testovi pokrivaju route guard metadata, odvojene Redis ključeve, prag/prozor, neispravnu konfiguraciju i Redis outage policy.
 - Privacy odluka o poljima i neograničenoj historiji transfera, kao i anti-enumeration/load test, ostaju otvoreni; rate limit ne mijenja postojeći response DTO.
 
 **Prihvatanje:** export ne izvršava formule i ima predvidivu gornju granicu; javni QR response je dokumentovan i privacy-odobren.

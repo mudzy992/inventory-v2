@@ -2,6 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   HttpException,
+  Inject,
   HttpStatus,
   Optional,
   Injectable,
@@ -71,7 +72,7 @@ export class RedisRateLimitGuard implements CanActivate {
   private readonly failClosed: boolean;
 
   constructor(
-    private readonly redisService: RedisService,
+    @Inject(RedisService) private readonly redisService: RedisService,
     @Optional() policy: RedisRateLimitPolicy = LOGIN_RATE_LIMIT_POLICY,
   ) {
     this.logger = new Logger(policy.loggerContext);

@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { RedisService } from '../../redis/redis.service';
 import { RedisRateLimitGuard } from '../../redis/redis-rate-limit.guard';
 
 @Injectable()
 export class PublicEquipmentRateLimitGuard extends RedisRateLimitGuard {
-  constructor(redisService: RedisService) {
+  constructor(@Inject(RedisService) redisService: RedisService) {
     super(redisService, {
       loggerContext: PublicEquipmentRateLimitGuard.name,
       maxEnvName: 'RATE_LIMIT_PUBLIC_EQUIPMENT_MAX',
