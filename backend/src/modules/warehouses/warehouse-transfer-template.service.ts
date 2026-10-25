@@ -13,6 +13,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { assertTransferTemplateValid } from './utils/validate-transfer-template.util';
+import { resolveTransferTemplatePath } from './utils/resolve-transfer-template-path.util';
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -188,7 +189,7 @@ export class WarehouseTransferTemplateService {
   }
 
   resolveTemplateAbsolutePath(templatePath: string): string {
-    return join(this.getUploadRoot(), templatePath);
+    return resolveTransferTemplatePath(this.getUploadRoot(), templatePath);
   }
 
   async assertWarehouseHasActiveTemplate(warehouseId: string): Promise<void> {

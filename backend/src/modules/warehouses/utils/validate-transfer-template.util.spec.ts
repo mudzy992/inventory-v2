@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import PizZip from 'pizzip';
 import { validateTransferTemplateBuffer } from './validate-transfer-template.util';
+import { resolve } from 'node:path';
 import { createMinimalTransferTemplateDocx } from './create-minimal-transfer-template-docx.util';
+import { resolveTransferTemplatePath } from './resolve-transfer-template-path.util';
 
 describe('validate-transfer-template.util', () => {
   it('accepts a docx with all required placeholders', () => {
@@ -34,5 +36,22 @@ describe('validate-transfer-template.util', () => {
     const result = validateTransferTemplateBuffer(buffer);
     assert.equal(result.valid, false);
     assert.match(result.renderError ?? '', /omjer kompresije/);
+  });
+
+  it('resolves stored template paths only beneath the upload root', () => {
+    const uploadRoot = '/tmp/inventory-template-path-test';
+    assert.equal(
+      resolveTransferTemplatePath(uploadRoot, 'templates/warehouses/wh-1/template.docx'),
+      resolve(uploadRoot, 'templates/warehouses/wh-1/template.docx'),
+    );
+    assert.throws(
+      () => resolveTransferTemplatePath(uploadRoot, '../../outside.docx'),
+      /outside the upload directory/u,
+    );
+    assert.throws(
+      () => resolveTransferTemplatePath(uploadRoot, '/etc/passwd'),
+      /path is invalid/u,
+    );
+    assert.throws(() => resolveTransferTemplatePath(uploadRoot, '.'), /outside the upload directory/u);
   });
 });

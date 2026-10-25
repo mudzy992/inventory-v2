@@ -89,6 +89,11 @@ Obuhvatiti `uploads` i DOCX template upload kroz zajednički, konfigurabilni pol
 
 **Prihvatanje:** hard limit se primjenjuje prije parsiranja/bufferovanja; validacija stvarnog sadržaja prolazi; DB failure ne ostavlja neotkriven orphan; dozvoljeni dokumenti i download ACL rade kao prije.
 
+#### Stored transfer-template path containment (P2 — implementation added)
+
+- Putanja template-a iz baze se sada normalizuje i provjerava da ostane unutar `UPLOAD_DIR`; apsolutne putanje, traversal izvan root-a i root direktorij kao fajl odbijaju se kao neispravan interni zapis.
+- Isti resolver koriste download, activation i generisanje prenosnice; testovi pokrivaju validnu relativnu putanju, traversal, apsolutnu putanju i root.
+
 ### 1.3 Ukloniti stored HTML injection iz prenosnica
 
 - Potvrditi endpoint response i origin u stvarnom deployment-u.
