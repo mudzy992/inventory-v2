@@ -53,6 +53,7 @@ import {
 } from './transfer-validation.util';
 import { resolveTransferSignerId } from './utils/resolve-transfer-signer.util';
 import { allocateTransferDocumentNumberInTx } from './utils/allocate-transfer-document-number.util';
+import { claimTransferForFinalizeInTx } from './utils/claim-transfer-finalize.util';
 import { isLegacyDocumentNumber } from '../../common/utils/document-number.util';
 import { executeDirectEquipmentTransferInTx } from './utils/execute-direct-equipment-transfer.util';
 import { isTransferDocumentEnabled } from './utils/transfer-generation-policy.util';
@@ -505,16 +506,16 @@ export class TransfersService {
             isRashod,
           )
         : transfer.documentNumber;
-      const updated = await tx.transfer.update({
+      await claimTransferForFinalizeInTx(tx, id, {
+        status: 'potpisan',
+        signerId,
+        date: signDate,
+        documentNumber,
+        documentWarehouseId,
+        finalizedByUserId: user.id,
+      });
+      const updated = await tx.transfer.findUniqueOrThrow({
         where: { id },
-        data: {
-          status: 'potpisan',
-          signerId,
-          date: signDate,
-          documentNumber,
-          documentWarehouseId,
-          finalizedByUserId: user.id,
-        },
         include: transferInclude,
       });
       await tx.equipment.update({
