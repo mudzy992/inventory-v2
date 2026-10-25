@@ -209,7 +209,7 @@ Uvesti transactional outbox samo za događaje čiji gubitak nije prihvatljiv (np
 
 - `recordLine` i `recordWarehouseLine` sada zaključavaju aktivnu parent sesiju (`SELECT ... FOR UPDATE`) u istoj transakciji prije upisa; oba committee-close toka koriste isti session lock, a committee status se provjerava ponovo nakon zaključavanja.
 - PostgreSQL CI integration test sada koristi dvije stvarne transakcije: record-side čeka dok close-side zaključa i zatvori aktivnu sesiju; nakon otključavanja helper ponovo provjerava status i odbija kasniji write. Test je prošao u CI run-u `40221562648`; unit test pokriva active-session guard rezultat.
-- Disposal approval race i pending-action retry još traže zasebne Postgres integration scenarije.
+- PostgreSQL CI integration test pokreće dvije istovremene review transakcije nad istim pending disposal approval zapisom; tačno jedna mora commit-ovati terminalni status, a druga dobiti `Approval already reviewed`. CI je time pokrio close-vs-record i disposal-review race; pending-action retry još traži zaseban Postgres integration scenario.
 - Inventory cron je sada eksplicitno vezan za 00:05 UTC; `inventory.scheduler_timezone` se koristi za poslovni kalendarski datum, a invalidna IANA zona se loguje i preskače bez rušenja scheduler procesa.
 - Redis lease se obnavlja svakih 5 minuta preko token-checked Lua `PEXPIRE`; 15-minutni TTL i dalje čisti lease nakon pada procesa, a token-checked release sprečava brisanje tuđeg locka.
 - Unit testovi pokrivaju vlasnički token i TTL argumente; live Redis CI test potvrđuje renewal/TTL/release, deterministički timestamp testovi pokrivaju DST promjene i granicu godine.

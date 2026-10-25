@@ -26,7 +26,8 @@
     "test:integration:migrations": "node --import tsx prisma/check-migration-invariants.ts",
     "test:integration:redis-rate-limit": "node --import tsx prisma/check-redis-rate-limit.ts",
     "test:integration:settings-defaults": "node --import tsx prisma/check-settings-defaults.ts",
-    "test:integration:inventory-session-lock": "node --import tsx prisma/check-inventory-session-lock.ts"
+    "test:integration:inventory-session-lock": "node --import tsx prisma/check-inventory-session-lock.ts",
+    "test:integration:disposal-approval-race": "node --import tsx prisma/check-disposal-approval-race.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",
