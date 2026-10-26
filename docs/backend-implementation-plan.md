@@ -305,9 +305,15 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 - Unit testovi pokrivaju Lua poziv, input/response validaciju i oba outage režima; branch CI izvršava i live Redis test sa paralelnim inkrementima, expiry provjerom i legacy TTL repair.
 - Failure se trenutno bilježi preko warn/error loga; zasebna rate-limit Redis failure metrika ostaje otvorena uz širu observability implementaciju.
 
+#### Notification outbox backlog signal (P2 — implementation added)
+
+- `NotificationOutboxMetricsService` svakih 30 sekundi čita broj `pending` i `running` outbox redova te starost najstarijeg nedostavljenog reda. Log linija `notification_outbox_backlog` je stabilan JSON događaj bez user ID-jeva, naslova ili sadržaja notifikacija; `log` je rutinski nivo, a `warn` se aktivira kada se pređe prag broja redova ili starosti. Log collector može direktno alertovati na `warn` ili neprazan `reasons` niz.
+- Dodane su privatne, admin-editabilne postavke `notifications.outbox.warn_backlog_count` (default 50) i `notifications.outbox.warn_age_seconds` (default 300), s validiranim rasponima. Ako settings store padne ili vrati nevažeću vrijednost, koriste se sigurni defaulti; DB greška se bilježi ali ne ruši scheduler.
+- Sedam unit testova pokriva prikupljanje metrika, konfiguraciju, fallback, healthy/warn logove i izolaciju DB greške. Lokalno su prošli lint i svih 466 unit testova; hosted CI provjera slijedi.
+
 - Razdvojiti liveness (proces/event loop) i readiness (zavisnosti potrebne za prijem saobraćaja).
 - Odrediti šta se smatra obaveznim za readiness: DB svakako; Redis/queue prema degradacijskom ugovoru pojedinih funkcija. Ne označavati cijeli servis unhealthy zbog opcionalnog feature-a ako aplikacija može sigurno degradirati.
-- Dodati metrike: DB pool/latency, Redis ready/reconnect, queue depth/lag/retry/failed jobs, upload reject counts, inventory close age/status, request latency/error rate.
+- Dodati metrike: DB pool/latency, Redis ready/reconnect, queue depth/lag/retry/failed jobs, upload reject counts, inventory close age/status, request latency/error rate. Notification outbox backlog/age je već pokriven log-based signalom iznad.
 - Dodati request/correlation ID kroz HTTP, logove i job metadata; redigovati authorization header, lozinke, refresh token, PII i upload sadržaj/putanje.
 - Strukturirani logovi i javne error poruke trebaju biti različiti: korisniku stabilan code/message, logu correlation ID i sanitizovan interni razlog.
 

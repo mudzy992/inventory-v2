@@ -75,6 +75,14 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
     dependsOn: { key: 'notifications.enabled', equals: true },
     detail: 'Socket.IO push za notifikacije i postavke. Isključeno = samo polling.',
   },
+  'notifications.outbox.warn_backlog_count': {
+    dependsOn: { key: 'notifications.enabled', equals: true },
+    detail: 'Operativni alarm u logovima kada broj nedostavljenih notifikacija dosegne prag.',
+  },
+  'notifications.outbox.warn_age_seconds': {
+    dependsOn: { key: 'notifications.enabled', equals: true },
+    detail: 'Operativni alarm u logovima kada najstarija nedostavljena notifikacija postane previše stara.',
+  },
   'transfer.template_placeholders_help': {
     display: 'info',
     detail: 'Referentna lista placeholdera za Word šablon prenosnice po skladištu.',

@@ -6,6 +6,7 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsService } from './notifications.service';
 import { NotificationOutboxRelayService } from './notification-outbox-relay.service';
+import { NotificationOutboxMetricsService } from './notification-outbox-metrics.service';
 
 @Module({
   imports: [
@@ -19,7 +20,12 @@ import { NotificationOutboxRelayService } from './notification-outbox-relay.serv
     }),
   ],
   controllers: [NotificationsController],
-  providers: [NotificationsGateway, NotificationsService, NotificationOutboxRelayService],
+  providers: [
+    NotificationsGateway,
+    NotificationsService,
+    NotificationOutboxRelayService,
+    NotificationOutboxMetricsService,
+  ],
   // NotificationsGateway je eksportovan pored NotificationsService da bi
   // moduli van notifications/ (npr. DocumentsModule) mogli emitovati
   // ciljane per-user evente (npr. document.job.updated) bez prolaska kroz
