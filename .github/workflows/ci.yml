@@ -104,6 +104,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:inventory-pending-action-outcomes
 
+      - name: Verify concurrent inventory close reconcilers
+        working-directory: backend
+        run: npm run test:integration:inventory-close-reconciler-concurrency
+
       - name: Verify temporary Redis service
         working-directory: backend
         run: |
