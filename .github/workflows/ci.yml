@@ -124,6 +124,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:document-event-reconcile-race
 
+      - name: Verify durable DocumentJob terminal notifications
+        working-directory: backend
+        run: npm run test:integration:document-job-terminal-outbox
+
       - name: Verify transfer DOCX crash recovery
         working-directory: backend
         run: npm run test:integration:transfer-docx-crash-recovery

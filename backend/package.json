@@ -37,6 +37,7 @@
     "test:integration:notification-outbox-crash-replay": "node --import tsx prisma/check-notification-outbox-crash-replay.ts",
     "test:integration:document-job-enqueue-crash-recovery": "node --import tsx prisma/check-document-job-enqueue-crash-recovery.ts",
     "test:integration:document-event-reconcile-race": "node --import tsx prisma/check-document-event-reconcile-race.ts",
+    "test:integration:document-job-terminal-outbox": "node --import tsx prisma/check-document-job-terminal-outbox.ts",
     "test:integration:transfer-docx-crash-recovery": "node --import tsx prisma/check-transfer-docx-crash-recovery.ts"
   },
   "dependencies": {
