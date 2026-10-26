@@ -8,6 +8,7 @@ import {
   type DocumentConversionJobPayload,
 } from './document-generation.queue';
 import { DocumentJobsService } from './document-jobs.service';
+import { ensureCorrelationId, runWithCorrelationId } from '../../common/utils/correlation-id.util';
 
 export interface EnqueueConversionInput {
   sourceType: string;
@@ -96,7 +97,9 @@ export class DocumentConversionQueueService {
     // queue.getJob() poziva (manje Redis round-trip-ova, i nema race-a
     // ako bi posao već bio uklonjen/istekao prije nego stignemo da ga
     // pročitamo). Kolizija je nemoguća — documentJob.id je svježi UUID.
+    const correlationId = ensureCorrelationId();
     const payload: DocumentConversionJobPayload = {
+      correlationId,
       documentJobId: documentJob.id,
       sourceFormat: input.sourceFormat,
       targetFormat: 'pdf',
@@ -105,16 +108,18 @@ export class DocumentConversionQueueService {
     };
 
     try {
-      const bullJob = await this.queue.add(DOCUMENT_CONVERT_JOB_NAME, payload, {
-        jobId: documentJob.id,
-        // LibreOffice greške su rijetko prolazne mrežne "hiccups" — 2
-        // pokušaja (umjesto globalnog default-a od 3, vidi QueuesModule)
-        // drži worst-case vrijeme do konačnog 'failed' statusa razumnim,
-        // uz kratki fiksni razmak (posao koji je pao zbog zaglavljenog
-        // soffice procesa neće se popraviti čekanjem duže od par sekundi).
-        attempts: 2,
-        backoff: { type: 'fixed', delay: 10_000 },
-      });
+      const bullJob = await runWithCorrelationId(correlationId, () =>
+        this.queue.add(DOCUMENT_CONVERT_JOB_NAME, payload, {
+          jobId: documentJob.id,
+          // LibreOffice greške su rijetko prolazne mrežne "hiccups" — 2
+          // pokušaja (umjesto globalnog default-a od 3, vidi QueuesModule)
+          // drži worst-case vrijeme do konačnog 'failed' statusa razumnim,
+          // uz kratki fiksni razmak (posao koji je pao zbog zaglavljenog
+          // soffice procesa neće se popraviti čekanjem duže od par sekundi).
+          attempts: 2,
+          backoff: { type: 'fixed', delay: 10_000 },
+        }),
+      );
       documentJob = await this.documentJobs.attachBullJobId(documentJob.id, bullJob.id ?? documentJob.id);
     } catch (err) {
       // Ako Redis/BullMQ zakaže TAČNO ovdje (nakon što je DB red već

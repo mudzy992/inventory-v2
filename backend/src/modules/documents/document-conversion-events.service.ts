@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { DOCUMENT_GENERATION_QUEUE, type DocumentConversionJobPayload } from './document-generation.queue';
 import { DocumentJobsService } from './document-jobs.service';
+import { runWithCorrelationId } from '../../common/utils/correlation-id.util';
 
 /** Uklanja apsolutne putanje (unutar kontejnera) iz poruka grešaka prije
  * nego što se upišu u `DocumentJob.lastError` (čita ga API/frontend preko
@@ -78,13 +79,13 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
     this.queueEvents = queueEvents;
 
     queueEvents.on('active', ({ jobId }) => {
-      void this.handleActive(jobId);
+      void runWithCorrelationId(`document-job:${jobId}`, () => this.handleActive(jobId));
     });
     queueEvents.on('completed', ({ jobId }) => {
-      void this.handleCompleted(jobId);
+      void runWithCorrelationId(`document-job:${jobId}`, () => this.handleCompleted(jobId));
     });
     queueEvents.on('failed', ({ jobId, failedReason }) => {
-      void this.handleFailed(jobId, failedReason);
+      void runWithCorrelationId(`document-job:${jobId}`, () => this.handleFailed(jobId, failedReason));
     });
     queueEvents.on('error', (err) => {
       // QueueEvents (i njegova interna Redis konekcija) se sama re-konektuje

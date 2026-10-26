@@ -8,6 +8,8 @@
 export type DocumentSourceFormat = 'docx' | 'xlsx' | 'odt';
 
 export interface DocumentConversionJobPayload {
+  /** Correlation ID propagated from the originating backend request. */
+  correlationId?: string;
   documentJobId: string;
   sourceFormat: DocumentSourceFormat;
   targetFormat: 'pdf';

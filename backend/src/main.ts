@@ -7,14 +7,20 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
 import { resolveCorsOriginPolicy } from './common/utils/cors-origins.util';
+import { CorrelationLogger } from './common/logging/correlation.logger';
+import { correlationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { CORRELATION_ID_RESPONSE_HEADER } from './common/utils/correlation-id.util';
 
 loadEnv({ path: resolve(process.cwd(), '../.env') });
 loadEnv({ path: resolve(process.cwd(), '.env') });
 
 const bootstrap = async (): Promise<void> => {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: new CorrelationLogger(),
+  });
   const configService = app.get(ConfigService);
+  app.use(correlationIdMiddleware);
 
   // Backend je uvijek iza Traefik/Coolify reverse proxyja u produkciji —
   // bez ovoga, `request.ip` (koristi ga npr. RedisRateLimitGuard) bi
@@ -43,7 +49,11 @@ const bootstrap = async (): Promise<void> => {
 
   // U produkciji resolveCorsOriginPolicy odbija praznu/wildcard allow-listu;
   // samo dev režim smije reflektovati Origin radi lokalnog razvoja.
-  app.enableCors({ origin: corsOrigin, credentials: true });
+  app.enableCors({
+    origin: corsOrigin,
+    credentials: true,
+    exposedHeaders: [CORRELATION_ID_RESPONSE_HEADER],
+  });
 
   // Namjerno logovano pri svakom pokretanju — najbrži način da se u Coolify
   // logovima potvrdi da su API_PREFIX i CORS_ORIGIN stvarno stigli iz env-a

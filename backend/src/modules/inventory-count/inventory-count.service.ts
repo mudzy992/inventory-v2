@@ -35,6 +35,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import {
+  buildInventoryCloseJobPayload,
   INVENTORY_SESSION_CLOSE_JOB_NAME,
   INVENTORY_SESSION_CLOSE_QUEUE,
   type InventorySessionCloseJobPayload,
@@ -2037,7 +2038,7 @@ export class InventoryCountService {
     try {
       await this.closeSessionQueue.add(
         INVENTORY_SESSION_CLOSE_JOB_NAME,
-        { sessionId: session.id },
+        buildInventoryCloseJobPayload(session.id),
         { jobId: randomUUID() },
       );
     } catch (error) {
@@ -2097,7 +2098,7 @@ export class InventoryCountService {
     try {
       await this.closeSessionQueue.add(
         INVENTORY_SESSION_CLOSE_JOB_NAME,
-        { sessionId },
+        buildInventoryCloseJobPayload(sessionId),
         { jobId: randomUUID() },
       );
     } catch (error) {

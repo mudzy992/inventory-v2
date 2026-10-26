@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { InventorySessionCloseReconcilerService } from './inventory-session-close-reconciler.service';
 import { buildInventoryCloseRecoveryJobId } from './utils/inventory-close-recovery.util';
+import { runWithCorrelationId } from '../../common/utils/correlation-id.util';
 
 test('reconciles queued jobs and running jobs with expired or missing leases', async () => {
   const updatedAt = new Date('2026-10-25T20:00:00.000Z');
@@ -22,7 +23,7 @@ test('reconciles queued jobs and running jobs with expired or missing leases', a
   };
   const reconciler = new InventorySessionCloseReconcilerService(prisma as never, queue as never);
 
-  await reconciler.reconcileQueuedJobs();
+  await runWithCorrelationId('cid-reconciler', () => reconciler.reconcileQueuedJobs());
 
   const where = query?.where as {
     OR: Array<Record<string, unknown>>;
@@ -37,7 +38,7 @@ test('reconciles queued jobs and running jobs with expired or missing leases', a
   assert.deepEqual(runningWhere.OR[1], { leaseUntil: null });
   assert.deepEqual(enqueue, {
     name: 'close-session',
-    data: { sessionId: 'session-1' },
+    data: { sessionId: 'session-1', correlationId: 'cid-reconciler' },
     options: { jobId: buildInventoryCloseRecoveryJobId('close-job-1', updatedAt) },
   });
 });

@@ -3,6 +3,7 @@ import type { WorkerConfig } from './config';
 import { convertToPdf } from './convert';
 import { buildRedisOptions, bullmqPrefix } from './redis-connection';
 import type { DocumentConversionJobPayload, DocumentConversionJobResult } from './types';
+import { formatJobCorrelation } from './worker-log.util';
 
 const log = (msg: string): void => {
   // eslint-disable-next-line no-console
@@ -34,17 +35,18 @@ export const createDocumentWorker = (config: WorkerConfig): Worker<
   const worker = new Worker<DocumentConversionJobPayload, DocumentConversionJobResult>(
     config.queueName,
     async (job: Job<DocumentConversionJobPayload>): Promise<DocumentConversionJobResult> => {
+      const correlation = formatJobCorrelation(job.data);
       log(
-        `job ${job.id} start documentJobId=${job.data.documentJobId} ` +
+        `job ${job.id} ${correlation} start documentJobId=${job.data.documentJobId} ` +
           `${job.data.sourceFormat}->${job.data.targetFormat} attempt=${job.attemptsMade + 1}`,
       );
-      const resultAbsolute = await convertToPdf(config, {
+      await convertToPdf(config, {
         documentJobId: job.data.documentJobId,
         sourceFormat: job.data.sourceFormat,
         sourceRelativePath: job.data.sourceRelativePath,
         resultRelativePath: job.data.resultRelativePath,
       });
-      log(`job ${job.id} done -> ${resultAbsolute}`);
+      log(`job ${job.id} ${correlation} done`);
       return {
         documentJobId: job.data.documentJobId,
         resultRelativePath: job.data.resultRelativePath,
@@ -67,10 +69,13 @@ export const createDocumentWorker = (config: WorkerConfig): Worker<
     logError(`worker error (auto-retrying connection): ${String(err)}`);
   });
   worker.on('failed', (job, err) => {
-    logError(`job ${job?.id} failed (attempt ${job?.attemptsMade}): ${err.message}`);
+    logError(
+      `job ${job?.id} ${formatJobCorrelation(job?.data)} failed ` +
+        `(attempt ${job?.attemptsMade}): ${err.message}`,
+    );
   });
   worker.on('stalled', (jobId) => {
-    logError(`job ${jobId} stalled — will be retried by BullMQ`);
+    logError(`job ${jobId} correlationId=unknown stalled — will be retried by BullMQ`);
   });
 
   return worker;

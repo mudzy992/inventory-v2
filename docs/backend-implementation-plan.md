@@ -317,11 +317,17 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 - Dodane su privatne postavke `queues.metrics.warn_backlog_count` (50), `queues.metrics.warn_waiting_seconds` (300) i `queues.metrics.warn_active_seconds` (1800). Nevažeće ili nedostupne postavke padaju na default; Redis greška se bilježi po queue-u bez rušenja scheduler-a.
 - Osam unit testova pokriva izračun starosti, evaluaciju pragova, konfiguraciju i izolaciju greške. Nova Redis integracija koristi stvarni BullMQ `Queue`/`Worker` sa aktivnim, waiting i delayed poslovima te potvrđuje stvarne count/age metrike. Lokalno su prošli lint i svih 474 unit testova. Prvi hosted CI run `40383318996` je otkrio duplicirani `imports` ključ u `HealthModule` (TS1117); ispravka `e85b7bf` je prošla u run-u `40384114725` sa svim backend/frontend/document-worker provjerama.
 
+#### Request/correlation ID i redakcija logova (P2 — implementation added)
+
+- Express middleware čita `X-Request-Id` (ili `X-Correlation-Id` alias), odbija nesigurne vrijednosti s kontrolnim znakovima/`..`, generiše UUID ako header nedostaje, vraća ID u response headeru i izlaže ga kroz CORS `exposedHeaders`. `AsyncLocalStorage` drži ID kroz cijeli HTTP poziv.
+- `CorrelationLogger` dodaje `[cid=...]` svim Nest logovima. `http_request` log sadrži samo metodu, put **bez query stringa**, status i trajanje — ne tijelo ni headere. `redactSensitiveText` uklanja authorization/cookie, lozinke, refresh/access tokene, JWT-ove, e-mail adrese, secret query parametre i apsolutne container putanje iz poruka i error objekata.
+- `correlationId` se propagira u payload `inventory-session-close` i `document-generation` poslova. HTTP pozivi zadržavaju svoj ID; scheduleri dobijaju novi. Inventory close worker izvršava cijeli posao unutar tog konteksta, a QueueEvents handleri koriste stabilan `document-job:<jobId>` kontekst. Document Worker loguje `correlationId` bez apsolutnih putanja i bez job payload-a.
+- Dodano je 16 backend unit testova za normalizaciju, ALS, redakciju, middleware i job payload-e, te 2 document-worker testa za format korelacije. Ažuriran je postojeći reconciler test. Lokalno su prošli backend lint i 490 unit testova, ciljani `tsc` nad novim common fajlovima, te 14 document-worker unit testova i build. Hosted CI provjera slijedi.
+
 - Razdvojiti liveness (proces/event loop) i readiness (zavisnosti potrebne za prijem saobraćaja).
 - Odrediti šta se smatra obaveznim za readiness: DB svakako; Redis/queue prema degradacijskom ugovoru pojedinih funkcija. Ne označavati cijeli servis unhealthy zbog opcionalnog feature-a ako aplikacija može sigurno degradirati.
-- Dodati metrike: DB pool/latency, Redis ready/reconnect, upload reject counts, inventory close age/status, request latency/error rate. Notification outbox backlog/age i BullMQ queue depth/lag već su pokriveni log-based signalima iznad.
-- Dodati request/correlation ID kroz HTTP, logove i job metadata; redigovati authorization header, lozinke, refresh token, PII i upload sadržaj/putanje.
-- Strukturirani logovi i javne error poruke trebaju biti različiti: korisniku stabilan code/message, logu correlation ID i sanitizovan interni razlog.
+- Dodati metrike: DB pool/latency, Redis ready/reconnect, upload reject counts, inventory close age/status, request latency/error rate. Notification outbox backlog/age, BullMQ queue depth/lag i osnovni HTTP request log već su pokriveni.
+- Javne error poruke ostaju stabilan code/message; interni logovi sada imaju correlation ID i redigovan razlog. Preostaje postepeno prebaciti preostale legacy free-form logove u potpuno strukturirani format.
 
 ### 5.3 CI/release gate
 

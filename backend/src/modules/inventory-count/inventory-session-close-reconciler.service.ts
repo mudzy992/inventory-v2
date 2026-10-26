@@ -4,6 +4,7 @@ import { Interval } from '@nestjs/schedule';
 import type { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  buildInventoryCloseJobPayload,
   INVENTORY_SESSION_CLOSE_JOB_NAME,
   INVENTORY_SESSION_CLOSE_QUEUE,
 } from './inventory-session-close.queue';
@@ -53,7 +54,7 @@ export class InventorySessionCloseReconcilerService implements OnModuleInit {
         try {
           await this.closeSessionQueue.add(
             INVENTORY_SESSION_CLOSE_JOB_NAME,
-            { sessionId: job.sessionId },
+            buildInventoryCloseJobPayload(job.sessionId),
             { jobId: buildInventoryCloseRecoveryJobId(job.id, job.updatedAt) },
           );
         } catch (error) {

@@ -1,6 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { runWithCorrelationId } from '../../common/utils/correlation-id.util';
 import type { Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -62,6 +63,11 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
   }
 
   async process(job: Job<InventorySessionCloseJobPayload>): Promise<void> {
+    const correlationId = job.data.correlationId ?? randomUUID();
+    await runWithCorrelationId(correlationId, () => this.processWithCorrelation(job));
+  }
+
+  private async processWithCorrelation(job: Job<InventorySessionCloseJobPayload>): Promise<void> {
     const { sessionId } = job.data;
     const dbJob = await this.prisma.inventorySessionCloseJob.findUnique({ where: { sessionId } });
     if (!dbJob) {

@@ -19,6 +19,8 @@ export const DOCUMENT_CONVERT_JOB_NAME = 'convert-to-pdf';
 export type DocumentSourceFormat = 'docx' | 'xlsx' | 'odt';
 
 export interface DocumentConversionJobPayload {
+  /** HTTP/job correlation ID propagated from the backend request context. */
+  correlationId?: string;
   /** DocumentJob.id — worker ne dira Postgres, ali prosljeđuje ovo polje
    * nazad u job return value radi jednostavnijeg logovanja/korelacije. */
   documentJobId: string;
