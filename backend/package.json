@@ -30,7 +30,8 @@
     "test:integration:category-reparent-race": "node --import tsx prisma/check-category-reparent-race.ts",
     "test:integration:inventory-session-lock": "node --import tsx prisma/check-inventory-session-lock.ts",
     "test:integration:disposal-approval-race": "node --import tsx prisma/check-disposal-approval-race.ts",
-    "test:integration:inventory-close-lease-recovery": "node --import tsx prisma/check-inventory-close-lease-recovery.ts"
+    "test:integration:inventory-close-lease-recovery": "node --import tsx prisma/check-inventory-close-lease-recovery.ts",
+    "test:integration:inventory-pending-action-outcomes": "node --import tsx prisma/check-inventory-pending-action-outcomes.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",

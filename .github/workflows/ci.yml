@@ -100,6 +100,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:inventory-close-lease-recovery
 
+      - name: Verify pending-action retry and failure close semantics
+        working-directory: backend
+        run: npm run test:integration:inventory-pending-action-outcomes
+
       - name: Verify temporary Redis service
         working-directory: backend
         run: |
