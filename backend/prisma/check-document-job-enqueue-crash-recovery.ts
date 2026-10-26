@@ -139,7 +139,10 @@ const main = async (): Promise<void> => {
     assert.equal(queueAddCount, 1, 'failed orphan must permit a new BullMQ enqueue');
     assert.notEqual(retry.id, orphanedId, 'retry must preserve history in a fresh DocumentJob row');
     assert.equal(retry.status, 'queued');
-    assert.equal(retry.bullJobId, retry.id);
+    assert.equal(retry.bullJobId, retry.id, 'enqueue result must include the attached BullMQ job ID');
+    const persistedRetry = await documentJobs.findById(retry.id);
+    assert.ok(persistedRetry);
+    assert.equal(persistedRetry.bullJobId, retry.id, 'BullMQ job ID must be persisted on the retry row');
     assert.equal(await prisma.documentJob.count({ where: { sourceType: 'transfer', sourceId } }), 2);
 
     console.log(

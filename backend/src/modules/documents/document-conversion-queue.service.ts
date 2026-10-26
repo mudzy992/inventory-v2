@@ -115,7 +115,7 @@ export class DocumentConversionQueueService {
         attempts: 2,
         backoff: { type: 'fixed', delay: 10_000 },
       });
-      await this.documentJobs.attachBullJobId(documentJob.id, bullJob.id ?? documentJob.id);
+      documentJob = await this.documentJobs.attachBullJobId(documentJob.id, bullJob.id ?? documentJob.id);
     } catch (err) {
       // Ako Redis/BullMQ zakaže TAČNO ovdje (nakon što je DB red već
       // kreiran kao 'queued'), red NE SMIJE ostati zauvijek "queued" bez

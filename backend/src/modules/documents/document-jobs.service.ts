@@ -38,8 +38,8 @@ export class DocumentJobsService {
     });
   }
 
-  async attachBullJobId(id: string, bullJobId: string): Promise<void> {
-    await this.prisma.documentJob.update({ where: { id }, data: { bullJobId } });
+  async attachBullJobId(id: string, bullJobId: string): Promise<DocumentJob> {
+    return this.prisma.documentJob.update({ where: { id }, data: { bullJobId } });
   }
 
   async findById(id: string): Promise<DocumentJob | null> {
