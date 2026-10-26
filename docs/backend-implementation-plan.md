@@ -229,7 +229,7 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 
 ### 4.4 Kategorije i numeric settings
 
-- Parent promjena u kategoriji se validira u transakciji pod PostgreSQL advisory transaction lock-om; nakon lock-a se ponovo čita cijelo stablo, pa dva paralelna reparent-a ne mogu zajedno uvesti ciklus. Unit testovi pokrivaju self/descendant i validno reparentovanje; `check-category-reparent-race.ts` dodaje stvarni PostgreSQL test za dva paralelna update-a (hosted CI run nakon ove izmjene čeka).
+- Parent promjena u kategoriji se validira u transakciji pod PostgreSQL advisory transaction lock-om; nakon lock-a se ponovo čita cijelo stablo, pa dva paralelna reparent-a ne mogu zajedno uvesti ciklus. Prisma raw lock query vraća serializabilan integer umjesto PostgreSQL `void` rezultata. Unit testovi pokrivaju self/descendant i validno reparentovanje; stvarni PostgreSQL test za dva paralelna update-a prošao je u CI run-u `40283745919`.
 - `upload.max_mb`, `lists.default_page_size` i `lists.max_page_size` sada odbijaju non-finite vrijednosti, pogrešan tip, decimale i vrijednosti izvan key-specific raspona; dodatno se provjerava `default_page_size <= max_page_size`. Boolean settings odbijaju neprepoznate stringove umjesto da ih tiho pretvore u `false`.
 - Svaki novi numeric setting mora deklarisati odgovarajući min/max/integer policy u registry-ju.
 
