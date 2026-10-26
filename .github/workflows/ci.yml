@@ -116,6 +116,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:notification-outbox-crash-replay
 
+      - name: Verify DocumentJob enqueue crash recovery
+        working-directory: backend
+        run: npm run test:integration:document-job-enqueue-crash-recovery
+
       - name: Verify transfer DOCX crash recovery
         working-directory: backend
         run: npm run test:integration:transfer-docx-crash-recovery

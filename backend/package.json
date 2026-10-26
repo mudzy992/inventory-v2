@@ -35,6 +35,7 @@
     "test:integration:inventory-close-reconciler-concurrency": "node --import tsx prisma/check-inventory-close-reconciler-concurrency.ts",
     "test:integration:inventory-manual-close-retry-race": "node --import tsx prisma/check-inventory-manual-close-retry-race.ts",
     "test:integration:notification-outbox-crash-replay": "node --import tsx prisma/check-notification-outbox-crash-replay.ts",
+    "test:integration:document-job-enqueue-crash-recovery": "node --import tsx prisma/check-document-job-enqueue-crash-recovery.ts",
     "test:integration:transfer-docx-crash-recovery": "node --import tsx prisma/check-transfer-docx-crash-recovery.ts"
   },
   "dependencies": {
