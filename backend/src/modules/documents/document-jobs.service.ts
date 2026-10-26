@@ -56,41 +56,44 @@ export class DocumentJobsService {
     });
   }
 
-  /** Svi redovi zaglavljeni u 'queued'/'running' — koristi
-   * DocumentConversionEventsService.reconcileStaleJobs() jednom pri
-   * startu backend-a da uskladi DB status sa stvarnim BullMQ stanjem za
-   * poslove čiji je event (completed/failed) možda propušten dok je
-   * backend proces bio ugašen (restart/deploy). */
+  /** Svi redovi `queued`/`running` — koristi ih početna i periodična
+   * rekonsilijacija da uskladi DB sa stvarnim BullMQ stanjem kada je event
+   * propušten tokom restarta ili race-a pri pokretanju QueueEvents-a. */
   async findActiveJobs(): Promise<DocumentJob[]> {
     return this.prisma.documentJob.findMany({
       where: { status: { in: ['queued', 'running'] } },
     });
   }
 
-  async markRunning(id: string): Promise<void> {
-    await this.prisma.documentJob.update({
-      where: { id },
+  /** Compare-and-set status updates prevent late QueueEvents handlers from
+   * reopening a terminal row after a faster `completed`/`failed` handler. */
+  async markRunning(id: string): Promise<boolean> {
+    const result = await this.prisma.documentJob.updateMany({
+      where: { id, status: { in: ['queued', 'running'] } },
       data: { status: 'running', startedAt: new Date(), lastError: null },
     });
+    return result.count === 1;
   }
 
-  async markDone(id: string): Promise<DocumentJob> {
-    return this.prisma.documentJob.update({
-      where: { id },
+  async markDone(id: string): Promise<DocumentJob | null> {
+    const result = await this.prisma.documentJob.updateMany({
+      where: { id, status: { in: ['queued', 'running'] } },
       data: { status: 'done', endedAt: new Date(), lastError: null },
     });
+    return result.count === 1 ? this.findById(id) : null;
   }
 
-  async markFailed(id: string, error: string, attempts: number): Promise<DocumentJob> {
-    return this.prisma.documentJob.update({
-      where: { id },
+  async markFailed(id: string, error: string, attempts: number): Promise<DocumentJob | null> {
+    const result = await this.prisma.documentJob.updateMany({
+      where: { id, status: { in: ['queued', 'running'] } },
       data: { status: 'failed', endedAt: new Date(), lastError: error, attempts },
     });
+    return result.count === 1 ? this.findById(id) : null;
   }
 
   async incrementAttempts(id: string): Promise<void> {
-    await this.prisma.documentJob.update({
-      where: { id },
+    await this.prisma.documentJob.updateMany({
+      where: { id, status: { in: ['queued', 'running'] } },
       data: { attempts: { increment: 1 } },
     });
   }

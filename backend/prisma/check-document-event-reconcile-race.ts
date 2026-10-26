@@ -39,6 +39,8 @@ const main = async (): Promise<void> => {
   const prisma = new PrismaService();
   const documentJobId = randomUUID();
   const sourceId = randomUUID();
+  const failedDocumentJobId = randomUUID();
+  const failedSourceId = randomUUID();
   let connected = false;
   let releaseProcessor: (() => void) | undefined;
   let workerStarted = false;
@@ -143,7 +145,40 @@ const main = async (): Promise<void> => {
     assert.ok(recovered?.endedAt);
     assert.equal(recovered?.lastError, null);
 
-    console.log('Verified a lost QueueEvents completion is recovered by the periodic DocumentJob reconciler.');
+    assert.equal(await documentJobs.markRunning(documentJobId), false, 'late active handler must not reopen done job');
+    assert.equal(await documentJobs.markDone(documentJobId), null, 'duplicate completion must not repeat terminal effects');
+    assert.equal(
+      await documentJobs.markFailed(documentJobId, 'late failed event', 1),
+      null,
+      'late failed handler must not replace completed status',
+    );
+    const stillDone = await documentJobs.findById(documentJobId);
+    assert.equal(stillDone?.status, 'done');
+    assert.equal(stillDone?.lastError, null);
+
+    await prisma.documentJob.create({
+      data: {
+        id: failedDocumentJobId,
+        sourceType: 'ci-startup-reconcile-race',
+        sourceId: failedSourceId,
+        sourceFormat: 'docx',
+        targetFormat: 'pdf',
+        sourceRelativePath: 'ci/startup-reconcile/failed-source.docx',
+        resultRelativePath: 'ci/startup-reconcile/failed-result.pdf',
+        status: 'running',
+      },
+    });
+    const terminalFailure = await documentJobs.markFailed(failedDocumentJobId, 'terminal failure', 1);
+    assert.equal(terminalFailure?.status, 'failed');
+    assert.equal(await documentJobs.markRunning(failedDocumentJobId), false, 'late active handler must not reopen failed job');
+    assert.equal(await documentJobs.markDone(failedDocumentJobId), null, 'late completion must not replace failed status');
+    await documentJobs.incrementAttempts(failedDocumentJobId);
+    const stillFailed = await documentJobs.findById(failedDocumentJobId);
+    assert.equal(stillFailed?.status, 'failed');
+    assert.equal(stillFailed?.attempts, 1, 'late non-terminal events must not mutate terminal retry counters');
+    assert.equal(stillFailed?.lastError, 'terminal failure');
+
+    console.log('Verified missed QueueEvents recovery and monotonic terminal DocumentJob transitions.');
   } finally {
     releaseProcessor?.();
     try {
@@ -154,7 +189,10 @@ const main = async (): Promise<void> => {
     } finally {
       if (connected) {
         await prisma.documentJob.deleteMany({
-          where: { sourceType: 'ci-startup-reconcile-race', sourceId },
+          where: {
+            sourceType: 'ci-startup-reconcile-race',
+            sourceId: { in: [sourceId, failedSourceId] },
+          },
         });
       }
       await prisma.$disconnect();
