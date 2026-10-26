@@ -27,6 +27,7 @@
     "test:integration:redis-rate-limit": "node --import tsx prisma/check-redis-rate-limit.ts",
     "test:integration:settings-defaults": "node --import tsx prisma/check-settings-defaults.ts",
     "test:integration:stock-lot-decrement": "node --import tsx prisma/check-stock-lot-decrement-race.ts",
+    "test:integration:category-reparent-race": "node --import tsx prisma/check-category-reparent-race.ts",
     "test:integration:inventory-session-lock": "node --import tsx prisma/check-inventory-session-lock.ts",
     "test:integration:disposal-approval-race": "node --import tsx prisma/check-disposal-approval-race.ts",
     "test:integration:inventory-close-lease-recovery": "node --import tsx prisma/check-inventory-close-lease-recovery.ts"

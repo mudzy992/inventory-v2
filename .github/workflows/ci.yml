@@ -88,6 +88,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:stock-lot-decrement
 
+      - name: Verify concurrent category reparenting
+        working-directory: backend
+        run: npm run test:integration:category-reparent-race
+
       - name: Verify concurrent disposal approval reviews
         working-directory: backend
         run: npm run test:integration:disposal-approval-race

@@ -229,7 +229,7 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 
 ### 4.4 Kategorije i numeric settings
 
-- Parent promjena u kategoriji mora odbiti izbor vlastitog descendant-a. Provjera mora biti zaštićena od paralelnih promjena; dodati testove self, descendant, validan reparent i dva paralelna reparent-a.
+- Parent promjena u kategoriji se validira u transakciji pod PostgreSQL advisory transaction lock-om; nakon lock-a se ponovo čita cijelo stablo, pa dva paralelna reparent-a ne mogu zajedno uvesti ciklus. Unit testovi pokrivaju self/descendant i validno reparentovanje; `check-category-reparent-race.ts` dodaje stvarni PostgreSQL test za dva paralelna update-a (hosted CI run nakon ove izmjene čeka).
 - `upload.max_mb`, `lists.default_page_size` i `lists.max_page_size` sada odbijaju non-finite vrijednosti, pogrešan tip, decimale i vrijednosti izvan key-specific raspona; dodatno se provjerava `default_page_size <= max_page_size`. Boolean settings odbijaju neprepoznate stringove umjesto da ih tiho pretvore u `false`.
 - Svaki novi numeric setting mora deklarisati odgovarajući min/max/integer policy u registry-ju.
 
