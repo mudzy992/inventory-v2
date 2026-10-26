@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { Queue } from 'bullmq';
+import type { DocumentJob } from '../generated/prisma/client';
 import { DocumentConversionEventsService } from '../src/modules/documents/document-conversion-events.service';
 import { DocumentConversionQueueService } from '../src/modules/documents/document-conversion-queue.service';
 import {
@@ -23,6 +24,19 @@ const assertTestDatabase = (): void => {
   ) {
     throw new Error('Document job enqueue crash check is restricted to the local inventory_ci test database');
   }
+};
+
+const waitForFailedDocumentJob = async (
+  prisma: PrismaService,
+  id: string,
+): Promise<DocumentJob> => {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const job = await prisma.documentJob.findUnique({ where: { id } });
+    if (job?.status === 'failed') return job;
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+  }
+  throw new Error(`DocumentJob ${id} was not reconciled to failed within 10 seconds`);
 };
 
 const enqueueThenCrashBeforeBullAdd = async (sourceId: string): Promise<never> => {
@@ -94,6 +108,10 @@ const main = async (): Promise<void> => {
     assert.equal(orphaned.attempts, 0);
     assert.equal(orphaned.sourceType, 'transfer');
     assert.equal(orphaned.sourceId, sourceId);
+    await prisma.documentJob.update({
+      where: { id: orphanedId },
+      data: { createdAt: new Date(Date.now() - 120_000) },
+    });
 
     const redisConfig = readRedisConfig();
     queue = new Queue<DocumentConversionJobPayload>(DOCUMENT_GENERATION_QUEUE, {
@@ -106,11 +124,10 @@ const main = async (): Promise<void> => {
       { emitDocumentJobUpdated: () => undefined } as never,
       prisma,
     );
-    await events.onModuleInit();
+    events.onModuleInit();
     eventsInitialized = true;
 
-    const reconciled = await documentJobs.findById(orphanedId);
-    assert.ok(reconciled);
+    const reconciled = await waitForFailedDocumentJob(prisma, orphanedId);
     assert.equal(reconciled.status, 'failed', 'startup reconciliation must fail a queued DB row with no BullMQ job');
     assert.equal(reconciled.attempts, 0);
     assert.equal(reconciled.lastError, 'Posao izgubljen tokom restarta servisa. Pokušajte ponovo.');
