@@ -32,7 +32,8 @@
     "test:integration:disposal-approval-race": "node --import tsx prisma/check-disposal-approval-race.ts",
     "test:integration:inventory-close-lease-recovery": "node --import tsx prisma/check-inventory-close-lease-recovery.ts",
     "test:integration:inventory-pending-action-outcomes": "node --import tsx prisma/check-inventory-pending-action-outcomes.ts",
-    "test:integration:inventory-close-reconciler-concurrency": "node --import tsx prisma/check-inventory-close-reconciler-concurrency.ts"
+    "test:integration:inventory-close-reconciler-concurrency": "node --import tsx prisma/check-inventory-close-reconciler-concurrency.ts",
+    "test:integration:inventory-manual-close-retry-race": "node --import tsx prisma/check-inventory-manual-close-retry-race.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",

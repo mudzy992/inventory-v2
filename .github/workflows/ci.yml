@@ -108,6 +108,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:inventory-close-reconciler-concurrency
 
+      - name: Verify concurrent admin retries for failed inventory close
+        working-directory: backend
+        run: npm run test:integration:inventory-manual-close-retry-race
+
       - name: Verify temporary Redis service
         working-directory: backend
         run: |
