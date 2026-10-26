@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { SettingsModule } from '../settings/settings.module';
 import { DOCUMENT_GENERATION_QUEUE } from './document-generation.queue';
 import { DocumentConversionQueueService } from './document-conversion-queue.service';
 import { DocumentConversionEventsService } from './document-conversion-events.service';
@@ -14,12 +15,15 @@ import { DocumentJobsService } from './document-jobs.service';
  * SVOJE tanke HTTP rute koje delegiraju ovim servisima, zadržavajući
  * postojeći access-control obrazac tog modula (npr.
  * TransfersService.canAccessTransfer) umjesto generičkog cross-cutting
- * autorizacijskog sloja ovdje.
+ * autorizacijskog sloja ovdje. `SettingsModule` je potreban jer se trajne
+ * terminal notifikacije kreiraju samo kada je globalni notifications feature
+ * uključen.
  */
 @Module({
   imports: [
     BullModule.registerQueue({ name: DOCUMENT_GENERATION_QUEUE }),
     NotificationsModule,
+    SettingsModule,
   ],
   providers: [DocumentJobsService, DocumentConversionQueueService, DocumentConversionEventsService],
   exports: [DocumentJobsService, DocumentConversionQueueService],

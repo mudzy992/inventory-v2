@@ -41,6 +41,7 @@ const main = async (): Promise<void> => {
   const sourceId = randomUUID();
   const failedDocumentJobId = randomUUID();
   const failedSourceId = randomUUID();
+  const userId = randomUUID();
   let connected = false;
   let releaseProcessor: (() => void) | undefined;
   let workerStarted = false;
@@ -51,6 +52,16 @@ const main = async (): Promise<void> => {
     await prisma.$connect();
     connected = true;
 
+    await prisma.user.create({
+      data: {
+        id: userId,
+        username: `ci-document-outbox-${userId}`,
+        passwordHash: 'ci-not-a-login-hash',
+        role: 'admin',
+        isActive: true,
+      },
+    });
+
     await prisma.documentJob.create({
       data: {
         id: documentJobId,
@@ -60,6 +71,7 @@ const main = async (): Promise<void> => {
         targetFormat: 'pdf',
         sourceRelativePath: 'ci/startup-reconcile/source.docx',
         resultRelativePath: 'ci/startup-reconcile/result.pdf',
+        requestedByUserId: userId,
         status: 'queued',
       },
     });
@@ -145,6 +157,23 @@ const main = async (): Promise<void> => {
     assert.ok(recovered?.endedAt);
     assert.equal(recovered?.lastError, null);
 
+    const doneOutbox = await prisma.notificationOutbox.findUnique({
+      where: { idempotencyKey: `document-job-terminal:${documentJobId}:done` },
+    });
+    assert.ok(doneOutbox, 'reconciled completion must persist a durable notification outbox row');
+    assert.equal(doneOutbox.userId, userId);
+    assert.equal(doneOutbox.type, 'info');
+    assert.equal(doneOutbox.relatedId, documentJobId);
+    assert.equal(doneOutbox.status, 'pending');
+    assert.equal(doneOutbox.message, 'Generisani dokument je spreman za preuzimanje.');
+    assert.equal(
+      await prisma.notificationOutbox.count({
+        where: { idempotencyKey: `document-job-terminal:${documentJobId}:done` },
+      }),
+      1,
+      'duplicate completion events must not duplicate the outbox row',
+    );
+
     assert.equal(await documentJobs.markRunning(documentJobId), false, 'late active handler must not reopen done job');
     assert.equal(await documentJobs.markDone(documentJobId), null, 'duplicate completion must not repeat terminal effects');
     assert.equal(
@@ -165,11 +194,31 @@ const main = async (): Promise<void> => {
         targetFormat: 'pdf',
         sourceRelativePath: 'ci/startup-reconcile/failed-source.docx',
         resultRelativePath: 'ci/startup-reconcile/failed-result.pdf',
+        requestedByUserId: userId,
         status: 'running',
       },
     });
     const terminalFailure = await documentJobs.markFailed(failedDocumentJobId, 'terminal failure', 1);
     assert.equal(terminalFailure?.status, 'failed');
+    const failedOutbox = await prisma.notificationOutbox.findUnique({
+      where: { idempotencyKey: `document-job-terminal:${failedDocumentJobId}:failed` },
+    });
+    assert.ok(failedOutbox, 'terminal failure must persist a durable notification outbox row');
+    assert.equal(failedOutbox.userId, userId);
+    assert.equal(failedOutbox.type, 'info');
+    assert.equal(failedOutbox.relatedId, failedDocumentJobId);
+    assert.equal(failedOutbox.status, 'pending');
+    assert.equal(
+      failedOutbox.message,
+      'Generisanje dokumenta nije uspjelo. terminal failure',
+    );
+    assert.equal(
+      await prisma.notificationOutbox.count({
+        where: { idempotencyKey: `document-job-terminal:${failedDocumentJobId}:failed` },
+      }),
+      1,
+      'duplicate failure events must not duplicate the outbox row',
+    );
     assert.equal(await documentJobs.markRunning(failedDocumentJobId), false, 'late active handler must not reopen failed job');
     assert.equal(await documentJobs.markDone(failedDocumentJobId), null, 'late completion must not replace failed status');
     await documentJobs.incrementAttempts(failedDocumentJobId);
@@ -178,7 +227,9 @@ const main = async (): Promise<void> => {
     assert.equal(stillFailed?.attempts, 1, 'late non-terminal events must not mutate terminal retry counters');
     assert.equal(stillFailed?.lastError, 'terminal failure');
 
-    console.log('Verified missed QueueEvents recovery and monotonic terminal DocumentJob transitions.');
+    console.log(
+      'Verified missed QueueEvents recovery, monotonic terminal DocumentJob transitions and durable notification outbox rows.',
+    );
   } finally {
     releaseProcessor?.();
     try {
@@ -188,12 +239,15 @@ const main = async (): Promise<void> => {
       await queue?.close();
     } finally {
       if (connected) {
+        await prisma.notification.deleteMany({ where: { userId } });
+        await prisma.notificationOutbox.deleteMany({ where: { userId } });
         await prisma.documentJob.deleteMany({
           where: {
             sourceType: 'ci-startup-reconcile-race',
             sourceId: { in: [sourceId, failedSourceId] },
           },
         });
+        await prisma.user.deleteMany({ where: { id: userId } });
       }
       await prisma.$disconnect();
     }

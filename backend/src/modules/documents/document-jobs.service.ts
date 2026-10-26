@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type { DocumentJob, DocumentSourceFormat } from '../../../generated/prisma/client';
+import type { DocumentJob, DocumentSourceFormat, Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
+import {
+  buildDocumentJobTerminalOutboxRow,
+  type DocumentJobTerminalStatus,
+} from './document-job-terminal-outbox.util';
 
 export interface CreateDocumentJobInput {
   sourceType: string;
@@ -17,11 +22,76 @@ export interface CreateDocumentJobInput {
  * posla konverzije dokumenta (isti obrazac kao `InventorySessionCloseJob` u
  * modules/inventory-count/). BullMQ posao je samo trigger za izvršavanje;
  * frontend i ostatak backend-a čitaju status ISKLJUČIVO preko ove tabele,
- * nikad direktno iz BullMQ-a.
+ * nikad direktno iz BullMQ-a. Terminalne `done`/`failed` tranzicije u istoj
+ * DB transakciji upisuju idempotentni notification outbox red, pa korisnik
+ * dobija trajnu obavijest čak i ako Socket.IO `document.job.updated` signal
+ * ne stigne.
  */
 @Injectable()
 export class DocumentJobsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService?: SettingsService,
+  ) {}
+
+  /** Durable terminal notifications are best-effort with respect to settings
+   * reads: if the settings store is temporarily unavailable we preserve the
+   * notification rather than silently dropping it. */
+  private async shouldCreateTerminalOutbox(createOutbox: boolean): Promise<boolean> {
+    if (!createOutbox || !this.settingsService) return createOutbox;
+    try {
+      return await this.settingsService.getBooleanValue('notifications.enabled', true);
+    } catch {
+      return true;
+    }
+  }
+
+  private async finalizeTerminalStatus(
+    id: string,
+    status: DocumentJobTerminalStatus,
+    error: string | null,
+    attempts: number | null,
+    createOutbox: boolean,
+  ): Promise<DocumentJob | null> {
+    const persistOutbox = await this.shouldCreateTerminalOutbox(createOutbox);
+    return this.prisma.$transaction(async (tx) => {
+      const activeWhere: Prisma.DocumentJobWhereInput = {
+        id,
+        status: { in: ['queued', 'running'] },
+      };
+      const result =
+        status === 'done'
+          ? await tx.documentJob.updateMany({
+              where: activeWhere,
+              data: { status: 'done', endedAt: new Date(), lastError: null },
+            })
+          : await tx.documentJob.updateMany({
+              where: activeWhere,
+              data: {
+                status: 'failed',
+                endedAt: new Date(),
+                lastError: error,
+                attempts: attempts ?? 0,
+              },
+            });
+      if (result.count !== 1) return null;
+
+      const job = await tx.documentJob.findUnique({ where: { id } });
+      if (persistOutbox && job?.requestedByUserId) {
+        const recipient = await tx.user.findUnique({
+          where: { id: job.requestedByUserId },
+          select: { id: true, isActive: true },
+        });
+        if (recipient?.isActive) {
+          await tx.notificationOutbox.createMany({
+            data: [buildDocumentJobTerminalOutboxRow(id, recipient.id, status, error)],
+            skipDuplicates: true,
+          });
+        }
+      }
+      return job;
+    });
+  }
 
   async create(input: CreateDocumentJobInput): Promise<DocumentJob> {
     return this.prisma.documentJob.create({
@@ -75,20 +145,17 @@ export class DocumentJobsService {
     return result.count === 1;
   }
 
-  async markDone(id: string): Promise<DocumentJob | null> {
-    const result = await this.prisma.documentJob.updateMany({
-      where: { id, status: { in: ['queued', 'running'] } },
-      data: { status: 'done', endedAt: new Date(), lastError: null },
-    });
-    return result.count === 1 ? this.findById(id) : null;
+  async markDone(id: string, createOutbox = true): Promise<DocumentJob | null> {
+    return this.finalizeTerminalStatus(id, 'done', null, null, createOutbox);
   }
 
-  async markFailed(id: string, error: string, attempts: number): Promise<DocumentJob | null> {
-    const result = await this.prisma.documentJob.updateMany({
-      where: { id, status: { in: ['queued', 'running'] } },
-      data: { status: 'failed', endedAt: new Date(), lastError: error, attempts },
-    });
-    return result.count === 1 ? this.findById(id) : null;
+  async markFailed(
+    id: string,
+    error: string,
+    attempts: number,
+    createOutbox = true,
+  ): Promise<DocumentJob | null> {
+    return this.finalizeTerminalStatus(id, 'failed', error, attempts, createOutbox);
   }
 
   async incrementAttempts(id: string): Promise<void> {
