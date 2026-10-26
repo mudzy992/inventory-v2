@@ -52,7 +52,8 @@ export class SetupBootstrapService {
     const result = await this.prisma.$transaction(async (tx) => {
       // Serialize the first bootstrap across backend replicas. The inner count
       // then runs after the previous transaction commits or rolls back.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(1800043170, 13579)`;
+      // Return an integer row instead of Prisma having to deserialize PostgreSQL's `void` lock result.
+      await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(1800043170, 13579)) AS setup_bootstrap_lock`;
       const existing = await tx.user.count();
       if (existing > 0) {
         throw new ConflictException('Application is already initialized');

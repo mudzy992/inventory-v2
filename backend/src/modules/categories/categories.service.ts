@@ -109,7 +109,8 @@ export class CategoriesService {
     return this.prisma.$transaction(async (tx) => {
       // Serialize tree reparent operations so concurrent updates cannot each
       // validate against a stale hierarchy and jointly introduce a cycle.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(1800043170, 24681)`;
+      // Return an integer row instead of Prisma having to deserialize PostgreSQL's `void` lock result.
+      await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(1800043170, 24681)) AS category_tree_lock`;
       const categories = await tx.category.findMany({ select: { id: true, parentId: true } });
       if (parentId && !categories.some((category) => category.id === parentId)) {
         throw new NotFoundException('Category not found');

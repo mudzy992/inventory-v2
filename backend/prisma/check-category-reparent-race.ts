@@ -23,23 +23,23 @@ const main = async (): Promise<void> => {
   try {
     await prisma.$connect();
     connected = true;
-    await prisma.category.createMany({
-      data: [
-        {
-          id: categoryAId,
-          name: `CI category A ${categoryAId}`,
-          description: 'CI concurrent category reparent test',
-          fields: [],
-          parentId: null,
-        },
-        {
-          id: categoryBId,
-          name: `CI category B ${categoryBId}`,
-          description: 'CI concurrent category reparent test',
-          fields: [],
-          parentId: null,
-        },
-      ],
+    await prisma.category.create({
+      data: {
+        id: categoryAId,
+        name: `CI category A ${categoryAId}`,
+        description: 'CI concurrent category reparent test',
+        fields: [],
+        parentId: null,
+      },
+    });
+    await prisma.category.create({
+      data: {
+        id: categoryBId,
+        name: `CI category B ${categoryBId}`,
+        description: 'CI concurrent category reparent test',
+        fields: [],
+        parentId: null,
+      },
     });
 
     const service = new CategoriesService(
@@ -88,6 +88,10 @@ const main = async (): Promise<void> => {
   } finally {
     try {
       if (connected) {
+        await prisma.category.updateMany({
+          where: { id: { in: [categoryAId, categoryBId] } },
+          data: { parentId: null },
+        });
         await prisma.category.deleteMany({ where: { id: { in: [categoryAId, categoryBId] } } });
       }
     } finally {
