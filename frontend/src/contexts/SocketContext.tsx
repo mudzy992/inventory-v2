@@ -30,6 +30,16 @@ import type { Notification } from '../types';
 import { useAuth } from './AuthContext';
 import { usePublicSettings } from './public-settings-context';
 
+export interface DocumentJobUpdatedEvent {
+  jobId: string;
+  sourceType: string;
+  sourceId: string;
+  status: string;
+  error?: string | null;
+}
+
+type DocumentJobUpdateListener = (payload: DocumentJobUpdatedEvent) => void;
+
 interface SocketContextValue {
   notifications: Notification[];
   unreadCount: number;
@@ -40,6 +50,7 @@ interface SocketContextValue {
   markAllRead: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
   loadMoreNotifications: () => Promise<void>;
+  subscribeToDocumentJobUpdates: (listener: DocumentJobUpdateListener) => () => void;
 }
 
 const SocketContext = createContext<SocketContextValue | null>(null);
@@ -59,6 +70,14 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const pageRef = useRef(1);
   const socketRef = useRef<Socket | null>(null);
   const pollRef = useRef<number | null>(null);
+  const documentJobListenersRef = useRef(new Set<DocumentJobUpdateListener>());
+
+  const subscribeToDocumentJobUpdates = useCallback((listener: DocumentJobUpdateListener) => {
+    documentJobListenersRef.current.add(listener);
+    return () => {
+      documentJobListenersRef.current.delete(listener);
+    };
+  }, []);
 
   useEffect(() => subscribeTokenChange(() => setTokenRevision((n) => n + 1)), []);
 
@@ -209,17 +228,28 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     const handleSettingsUpdated = (payload: { key: string; value: string | number | boolean }) => {
       patchLocal(payload.key, payload.value);
     };
+    const handleDocumentJobUpdated = (payload: DocumentJobUpdatedEvent) => {
+      for (const listener of [...documentJobListenersRef.current]) {
+        try {
+          listener(payload);
+        } catch {
+          // One consumer must not break delivery to the other document panels.
+        }
+      }
+    };
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('notification.created', handleCreated);
     socket.on('notification.read', handleRead);
     socket.on('settings.updated', handleSettingsUpdated);
+    socket.on('document.job.updated', handleDocumentJobUpdated);
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('notification.created', handleCreated);
       socket.off('notification.read', handleRead);
       socket.off('settings.updated', handleSettingsUpdated);
+      socket.off('document.job.updated', handleDocumentJobUpdated);
       socketRef.current = null;
       setIsConnected(socket.connected);
     };
@@ -258,6 +288,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       markAllRead,
       refreshNotifications,
       loadMoreNotifications,
+      subscribeToDocumentJobUpdates,
     }),
     [
       notifications,
@@ -269,6 +300,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       markAllRead,
       refreshNotifications,
       loadMoreNotifications,
+      subscribeToDocumentJobUpdates,
     ],
   );
 
@@ -281,6 +313,25 @@ export const useNotifications = (): SocketContextValue => {
     throw new Error('useNotifications must be used within SocketProvider');
   }
   return context;
+};
+
+/** Subscribes to document conversion events for one source. The socket event
+ * is a low-latency hint; consumers should still refresh durable status and
+ * keep polling as a fallback when realtime delivery is unavailable. */
+export const useDocumentJobUpdates = (
+  sourceType: string,
+  sourceId: string | null | undefined,
+  listener: DocumentJobUpdateListener,
+): void => {
+  const { subscribeToDocumentJobUpdates } = useNotifications();
+  useEffect(() => {
+    if (!sourceId) return;
+    return subscribeToDocumentJobUpdates((payload) => {
+      if (payload.sourceType === sourceType && payload.sourceId === sourceId) {
+        listener(payload);
+      }
+    });
+  }, [sourceType, sourceId, subscribeToDocumentJobUpdates, listener]);
 };
 
 export const useSocket = useNotifications;

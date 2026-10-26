@@ -31,6 +31,15 @@ export const shouldPollGeneratedDocumentStatus = (
   docxStatus === 'queued' ||
   docxStatus === 'running';
 
+/** Realtime events are emitted only to the user who requested the conversion.
+ * Other viewers keep polling until they receive their own event, and everyone
+ * falls back to polling while the socket is disconnected. */
+export const shouldUseGeneratedDocumentPolling = (
+  hasActiveJob: boolean,
+  isConnected: boolean,
+  hasRealtimeUpdate: boolean,
+): boolean => hasActiveJob && (!isConnected || !hasRealtimeUpdate);
+
 export const describeGeneratedPdfStatus = (
   status: GeneratedDocumentJobStatus,
   hasGeneratedPdf: boolean,

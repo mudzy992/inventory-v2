@@ -15,6 +15,7 @@ import {
   describeGeneratedPdfStatus,
   GENERATED_PDF_MESSAGES,
   shouldPollGeneratedDocumentStatus,
+  shouldUseGeneratedDocumentPolling,
 } from '../../components/transfers/generated-document-status.util';
 import type { Category, UserAccount } from '../../types';
 
@@ -109,6 +110,15 @@ describe('Phase C guard smoke — FE helpers', () => {
     assert.equal(shouldPollGeneratedDocumentStatus('none', 'queued'), true);
     assert.equal(shouldPollGeneratedDocumentStatus('done', 'done'), false);
     assert.equal(shouldPollGeneratedDocumentStatus('failed', 'done'), false);
+  });
+
+  it('generated document polling falls back until realtime delivery is confirmed', () => {
+    assert.equal(shouldUseGeneratedDocumentPolling(true, false, false), true);
+    assert.equal(shouldUseGeneratedDocumentPolling(true, false, true), true);
+    assert.equal(shouldUseGeneratedDocumentPolling(true, true, false), true);
+    assert.equal(shouldUseGeneratedDocumentPolling(true, true, true), false);
+    assert.equal(shouldUseGeneratedDocumentPolling(false, true, true), false);
+    assert.equal(shouldUseGeneratedDocumentPolling(false, false, false), false);
   });
 
   it('generated PDF status explains active jobs and missing files', () => {

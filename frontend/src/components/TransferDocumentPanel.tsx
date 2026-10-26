@@ -11,6 +11,7 @@ import { buildTransferSteps, getTransferStepBadge } from './transfers/transfer-s
 import {
   describeGeneratedPdfStatus,
   shouldPollGeneratedDocumentStatus,
+  shouldUseGeneratedDocumentPolling,
   type GeneratedDocumentJobStatus,
   type GeneratedDocumentStatusResponse,
 } from './transfers/generated-document-status.util';
@@ -29,7 +30,8 @@ import {
   canShowTransferGeneratedPdf,
 } from '../helpers/guards';
 import { ApiError } from '../api/client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDocumentJobUpdates, useNotifications } from '../contexts/SocketContext';
 
 interface TransferDocumentPanelProps {
   transfer: TransferRecord;
@@ -54,6 +56,7 @@ export const TransferDocumentPanel = ({
 }: TransferDocumentPanelProps) => {
   const { getBoolean, getNumber, settings: adminSettings } = useAdminSettings();
   const { toastError } = useToast();
+  const { isConnected } = useNotifications();
   const isPdfGenerationEnabled = adminSettings['transfer.generate_print_pdf'] !== false;
   const maxUploadMb = getNumber('upload.max_mb', 10);
   const allowFinalizeWithoutUpload =
@@ -67,6 +70,8 @@ export const TransferDocumentPanel = ({
   const [pdfStatus, setPdfStatus] = useState<GeneratedDocumentJobStatus>('none');
   const [hasGeneratedPdf, setHasGeneratedPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [hasRealtimeDocumentUpdate, setHasRealtimeDocumentUpdate] = useState(false);
+  const refreshStatusRef = useRef<() => void>(() => undefined);
   const isDrawer = layout === 'drawer';
 
   useEffect(() => {
@@ -78,9 +83,27 @@ export const TransferDocumentPanel = ({
     setPdfStatus('none');
     setHasGeneratedPdf(false);
     setPdfError(null);
+    setHasRealtimeDocumentUpdate(false);
   }, [transfer.id]);
 
+  useEffect(() => {
+    // Realtime streams are not replayed on reconnect; require a fresh event
+    // before trusting the socket again for this transfer.
+    setHasRealtimeDocumentUpdate(false);
+  }, [isConnected, transfer.id]);
+
+  const handleDocumentJobUpdated = useCallback(() => {
+    setHasRealtimeDocumentUpdate(true);
+    refreshStatusRef.current();
+  }, []);
+  useDocumentJobUpdates('transfer', transfer.id, handleDocumentJobUpdated);
+
   const shouldPollStatus = shouldPollGeneratedDocumentStatus(pdfStatus, docxStatus);
+  const shouldUsePolling = shouldUseGeneratedDocumentPolling(
+    shouldPollStatus,
+    isConnected,
+    hasRealtimeDocumentUpdate,
+  );
   useEffect(() => {
     if (!isPdfGenerationEnabled) {
       setPdfStatus('none');
@@ -106,8 +129,11 @@ export const TransferDocumentPanel = ({
         // Keep the last known state; status polling is best-effort.
       }
     };
+    refreshStatusRef.current = () => {
+      void refreshStatus();
+    };
     void refreshStatus();
-    if (!shouldPollStatus) {
+    if (!shouldUsePolling) {
       return () => {
         disposed = true;
       };
@@ -117,7 +143,7 @@ export const TransferDocumentPanel = ({
       disposed = true;
       window.clearInterval(interval);
     };
-  }, [transfer.id, isPdfGenerationEnabled, shouldPollStatus]);
+  }, [transfer.id, isPdfGenerationEnabled, shouldUsePolling, isConnected]);
   const effectiveAutoPreview = isDrawer ? autoPreview : false;
 
   const {
