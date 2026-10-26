@@ -112,6 +112,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:inventory-manual-close-retry-race
 
+      - name: Verify notification outbox crash replay
+        working-directory: backend
+        run: npm run test:integration:notification-outbox-crash-replay
+
       - name: Verify temporary Redis service
         working-directory: backend
         run: |
