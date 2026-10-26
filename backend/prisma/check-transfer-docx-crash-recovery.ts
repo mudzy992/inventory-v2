@@ -4,9 +4,15 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { HttpException } from '@nestjs/common';
 import PizZip from 'pizzip';
+import { DocumentConversionQueueService } from '../src/modules/documents/document-conversion-queue.service';
+import { DocumentJobsService } from '../src/modules/documents/document-jobs.service';
 import { TransferDocumentGenerationService } from '../src/modules/transfers/transfer-document-generation.service';
-import { buildGeneratedDocxRelativePath } from '../src/modules/transfers/utils/transfer-document-path.util';
+import {
+  buildGeneratedDocxRelativePath,
+  buildGeneratedPdfRelativePath,
+} from '../src/modules/transfers/utils/transfer-document-path.util';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 const assertTestDatabase = (): void => {
@@ -78,6 +84,42 @@ const crashAfterDocxFileWrite = async (
   } finally {
     await prisma.$disconnect();
   }
+};
+
+const crashAfterDocxFinalizeBeforePdfEnqueue = async (
+  transferId: string,
+  uploadRoot: string,
+  templateAbsolutePath: string,
+): Promise<never> => {
+  assertTestDatabase();
+  const prisma = new PrismaService();
+  await prisma.$connect();
+  const documentConversionQueue = {
+    enqueuePdfConversion: async () => {
+      const transfer = await prisma.transfer.findUniqueOrThrow({
+        where: { id: transferId },
+        select: { generatedDocxStatus: true, generatedDocxPath: true },
+      });
+      assert.equal(transfer.generatedDocxStatus, 'done', 'DOCX DB finalize must precede PDF enqueue');
+      assert.ok(transfer.generatedDocxPath);
+      assert.ok(existsSync(join(uploadRoot, transfer.generatedDocxPath)));
+      process.kill(process.pid, 'SIGKILL');
+    },
+  };
+  const templateService = {
+    getActiveTemplate: async () => ({ templatePath: 'ci/template.docx' }),
+    resolveTemplateAbsolutePath: () => templateAbsolutePath,
+    getUploadRoot: () => uploadRoot,
+  };
+  const service = new TransferDocumentGenerationService(
+    prisma,
+    { getBooleanValue: async () => true } as never,
+    templateService as never,
+    documentConversionQueue as never,
+    {} as never,
+  );
+  await service.reconcileQueuedDocxGenerations();
+  throw new Error('Expected SIGKILL after DOCX finalize but before PDF enqueue');
 };
 
 const main = async (): Promise<void> => {
@@ -176,6 +218,7 @@ const main = async (): Promise<void> => {
       {
         env: {
           ...process.env,
+          TRANSFER_DOCX_CRASH_PHASE: 'after-file-write-before-finalize',
           TRANSFER_DOCX_CRASH_ID: transferId,
           TRANSFER_DOCX_UPLOAD_ROOT: tempDirectory,
           TRANSFER_DOCX_TEMPLATE_PATH: templateAbsolutePath,
@@ -207,19 +250,26 @@ const main = async (): Promise<void> => {
       where: { id: transferId },
       data: { generatedDocxLeaseUntil: new Date(Date.now() - 1_000) },
     });
-    const templateService = {
-      getActiveTemplate: async () => ({ templatePath: 'ci/template.docx' }),
-      resolveTemplateAbsolutePath: () => templateAbsolutePath,
-      getUploadRoot: () => tempDirectory,
-    };
-    const service = new TransferDocumentGenerationService(
-      prisma,
-      { getBooleanValue: async () => false } as never,
-      templateService as never,
-      {} as never,
-      {} as never,
+    const recoveredWorker = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', resolve(process.cwd(), 'prisma/check-transfer-docx-crash-recovery.ts')],
+      {
+        env: {
+          ...process.env,
+          TRANSFER_DOCX_CRASH_PHASE: 'after-finalize-before-pdf-enqueue',
+          TRANSFER_DOCX_CRASH_ID: transferId,
+          TRANSFER_DOCX_UPLOAD_ROOT: tempDirectory,
+          TRANSFER_DOCX_TEMPLATE_PATH: templateAbsolutePath,
+        },
+        encoding: 'utf8',
+        timeout: 30_000,
+      },
     );
-    await service.reconcileQueuedDocxGenerations();
+    assert.equal(
+      recoveredWorker.signal,
+      'SIGKILL',
+      'reconciler must be killed after DOCX finalize and before PDF enqueue',
+    );
 
     const recovered = await prisma.transfer.findUniqueOrThrow({
       where: { id: transferId },
@@ -244,10 +294,61 @@ const main = async (): Promise<void> => {
     const documentXml = generatedZip.file('word/document.xml')?.asText() ?? '';
     assert.ok(documentXml.includes(documentNumber), 'recovered DOCX must contain the transfer document number');
 
-    console.log('Verified transfer DOCX recovery after process death between file write and DB finalize.');
+    const documentJobs = new DocumentJobsService(prisma);
+    assert.equal(
+      await prisma.documentJob.count({ where: { sourceType: 'transfer', sourceId: transferId } }),
+      0,
+      'crash after DOCX finalize must leave no PDF DocumentJob to reconcile',
+    );
+    const expectedPdfRelativePath = buildGeneratedPdfRelativePath(
+      warehouseId,
+      new Date('2026-01-01T00:00:00.000Z').getFullYear(),
+      documentNumber,
+    );
+    let queueAddCount = 0;
+    const capturedQueueAdd: { payload?: Record<string, unknown> } = {};
+    const fakeBullQueue = {
+      add: async (
+        _jobName: string,
+        payload: Record<string, unknown>,
+        options: { jobId?: string },
+      ) => {
+        queueAddCount += 1;
+        capturedQueueAdd.payload = payload;
+        return { id: options.jobId };
+      },
+    };
+    const conversionQueue = new DocumentConversionQueueService(fakeBullQueue as never, documentJobs);
+    const pdfRetryService = new TransferDocumentGenerationService(
+      prisma,
+      {} as never,
+      { getUploadRoot: () => tempDirectory } as never,
+      conversionQueue,
+      documentJobs as never,
+    );
+    await assert.rejects(
+      pdfRetryService.getGeneratedFileStream(transferId, 'pdf'),
+      (error: unknown) => error instanceof HttpException && error.getStatus() === 409,
+      'PDF request should report processing while it recreates the missing conversion job',
+    );
+
+    const enqueuedDocumentJob = await documentJobs.findLatestForSource('transfer', transferId);
+    assert.equal(queueAddCount, 1, 'PDF retry must add a BullMQ job when DB has no PDF job');
+    assert.ok(enqueuedDocumentJob);
+    assert.equal(enqueuedDocumentJob.status, 'queued');
+    assert.equal(enqueuedDocumentJob.sourceRelativePath, generatedRelativePath);
+    assert.equal(enqueuedDocumentJob.resultRelativePath, expectedPdfRelativePath);
+    assert.equal(enqueuedDocumentJob.bullJobId, enqueuedDocumentJob.id);
+    assert.equal(capturedQueueAdd.payload?.sourceRelativePath, generatedRelativePath);
+    assert.equal(capturedQueueAdd.payload?.resultRelativePath, expectedPdfRelativePath);
+
+    console.log(
+      'Verified DOCX recovery and PDF retry after process death both after DOCX file write and after DB finalize.',
+    );
   } finally {
     try {
       if (connected) {
+        await prisma.documentJob.deleteMany({ where: { sourceType: 'transfer', sourceId: transferId } });
         await prisma.transfer.deleteMany({ where: { id: transferId } });
         await prisma.equipment.deleteMany({ where: { id: equipmentId } });
         await prisma.employee.deleteMany({ where: { id: signerId } });
@@ -264,11 +365,18 @@ const main = async (): Promise<void> => {
   }
 };
 
+const crashPhase = process.env.TRANSFER_DOCX_CRASH_PHASE;
 const crashTransferId = process.env.TRANSFER_DOCX_CRASH_ID;
 const crashUploadRoot = process.env.TRANSFER_DOCX_UPLOAD_ROOT;
 const crashTemplatePath = process.env.TRANSFER_DOCX_TEMPLATE_PATH;
-if (crashTransferId && crashUploadRoot && crashTemplatePath) {
-  void crashAfterDocxFileWrite(crashTransferId, crashUploadRoot, crashTemplatePath).catch((error: unknown) => {
+if (crashPhase && crashTransferId && crashUploadRoot && crashTemplatePath) {
+  const crashWorker =
+    crashPhase === 'after-file-write-before-finalize'
+      ? crashAfterDocxFileWrite(crashTransferId, crashUploadRoot, crashTemplatePath)
+      : crashPhase === 'after-finalize-before-pdf-enqueue'
+        ? crashAfterDocxFinalizeBeforePdfEnqueue(crashTransferId, crashUploadRoot, crashTemplatePath)
+        : Promise.reject(new Error(`Unknown transfer DOCX crash phase: ${crashPhase}`));
+  void crashWorker.catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;
   });
