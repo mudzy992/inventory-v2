@@ -69,7 +69,6 @@ export class PostgresMetricsService {
 
   async collectMetrics(): Promise<PostgresMetricsSnapshot> {
     const thresholds = await this.readThresholds();
-    const poolStats = postgresPoolRegistry.getStats();
     const startedAt = Date.now();
     let latencyMs: number | null = null;
     let dbState: 'connected' | 'error' = 'connected';
@@ -79,6 +78,9 @@ export class PostgresMetricsService {
     } catch {
       dbState = 'error';
     }
+    // Read pool counters after the probe: pg.Pool lazily opens its first
+    // connection on the first query, so a pre-probe snapshot would report 0.
+    const poolStats = postgresPoolRegistry.getStats();
     return buildPostgresMetricsSnapshot(poolStats, latencyMs, dbState, thresholds);
   }
 

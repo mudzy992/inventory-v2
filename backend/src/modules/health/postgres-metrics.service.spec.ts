@@ -106,6 +106,34 @@ describe('PostgresMetricsService', () => {
     assert.equal(logs[0].line.includes('ci-secret'), false);
   });
 
+  it('reads pool counters after the database probe opens a connection', async (t) => {
+    const originalGetStats = postgresPoolRegistry.getStats;
+    let probed = false;
+    postgresPoolRegistry.getStats = () => ({
+      max: 10,
+      total: probed ? 1 : 0,
+      idle: probed ? 1 : 0,
+      waiting: 0,
+    });
+    t.after(() => {
+      postgresPoolRegistry.getStats = originalGetStats;
+    });
+    const prisma = {
+      $queryRaw: async () => {
+        probed = true;
+        return [{ '?column?': 1 }];
+      },
+    } as unknown as PrismaService;
+    const settings = {
+      getNumberValue: async (_key: string, fallback: number): Promise<number> => fallback,
+    } as unknown as SettingsService;
+    const service = new PostgresMetricsService(prisma, settings);
+    const snapshot = await service.collectMetrics();
+    assert.equal(snapshot.poolTotal, 1);
+    assert.equal(snapshot.poolIdle, 1);
+    assert.equal(snapshot.poolUtilizationPercent, 10);
+  });
+
   it('warns separately when the pool registry is unavailable', async (t) => {
     const { service, logs, restore } = createHarness({ stats: null });
     t.after(restore);
