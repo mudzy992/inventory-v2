@@ -134,7 +134,12 @@ const main = async (): Promise<void> => {
     const enqueued = await queue.getJob(currentRecoveryJobId);
     assert.ok(enqueued, 'deterministic recovery job must be present in BullMQ');
     assert.equal(enqueued.name, 'close-session');
-    assert.deepEqual(enqueued.data, { sessionId });
+    assert.equal(enqueued.data.sessionId, sessionId);
+    assert.match(
+      String(enqueued.data.correlationId ?? ''),
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+      'recovered close job must carry a generated correlation ID',
+    );
     const jobsWithRecoveryId = (await queue.getJobs([
       'waiting',
       'active',
