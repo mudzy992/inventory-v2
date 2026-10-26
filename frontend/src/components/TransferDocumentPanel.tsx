@@ -9,6 +9,12 @@ import {
 } from './inventory-count/inventory-transfer-step.util';
 import { buildTransferSteps, getTransferStepBadge } from './transfers/transfer-step.util';
 import {
+  describeGeneratedPdfStatus,
+  shouldPollGeneratedDocumentStatus,
+  type GeneratedDocumentJobStatus,
+  type GeneratedDocumentStatusResponse,
+} from './transfers/generated-document-status.util';
+import {
   useTransferDocumentPreview,
   type TransferDocumentPreviewMode,
 } from './transfers/use-transfer-document-preview';
@@ -48,6 +54,7 @@ export const TransferDocumentPanel = ({
 }: TransferDocumentPanelProps) => {
   const { getBoolean, getNumber, settings: adminSettings } = useAdminSettings();
   const { toastError } = useToast();
+  const isPdfGenerationEnabled = adminSettings['transfer.generate_print_pdf'] !== false;
   const maxUploadMb = getNumber('upload.max_mb', 10);
   const allowFinalizeWithoutUpload =
     isAdmin() && getBoolean('transfer.allow_finalize_without_upload', false);
@@ -57,6 +64,9 @@ export const TransferDocumentPanel = ({
     'not_requested' | 'queued' | 'running' | 'done' | 'failed'
   >(transfer.documentGenerationStatus ?? 'not_requested');
   const [hasGeneratedDocx, setHasGeneratedDocx] = useState(transfer.hasGeneratedDocument === true);
+  const [pdfStatus, setPdfStatus] = useState<GeneratedDocumentJobStatus>('none');
+  const [hasGeneratedPdf, setHasGeneratedPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const isDrawer = layout === 'drawer';
 
   useEffect(() => {
@@ -65,31 +75,49 @@ export const TransferDocumentPanel = ({
   }, [transfer.id, transfer.documentGenerationStatus, transfer.hasGeneratedDocument]);
 
   useEffect(() => {
-    if (docxStatus !== 'queued' && docxStatus !== 'running') {
-      return;
+    setPdfStatus('none');
+    setHasGeneratedPdf(false);
+    setPdfError(null);
+  }, [transfer.id]);
+
+  const shouldPollStatus = shouldPollGeneratedDocumentStatus(pdfStatus, docxStatus);
+  useEffect(() => {
+    if (!isPdfGenerationEnabled) {
+      setPdfStatus('none');
+      setHasGeneratedPdf(false);
+      setPdfError(null);
     }
     let disposed = false;
     const refreshStatus = async () => {
       try {
-        const status = await apiRequest<{
-          docxStatus: typeof docxStatus;
-          hasGeneratedDocument: boolean;
-        }>(`/transfers/${transfer.id}/generated-document/status`);
+        const status = await apiRequest<GeneratedDocumentStatusResponse>(
+          `/transfers/${transfer.id}/generated-document/status`,
+        );
         if (!disposed) {
-          setDocxStatus(status.docxStatus);
-          setHasGeneratedDocx(status.hasGeneratedDocument);
+          setDocxStatus(status.docxStatus ?? 'not_requested');
+          setHasGeneratedDocx(status.hasGeneratedDocument === true);
+          if (isPdfGenerationEnabled) {
+            setPdfStatus(status.status ?? 'none');
+            setHasGeneratedPdf(status.hasGeneratedPdf === true);
+            setPdfError(status.error ?? null);
+          }
         }
       } catch {
         // Keep the last known state; status polling is best-effort.
       }
     };
     void refreshStatus();
+    if (!shouldPollStatus) {
+      return () => {
+        disposed = true;
+      };
+    }
     const interval = window.setInterval(() => void refreshStatus(), 3_000);
     return () => {
       disposed = true;
       window.clearInterval(interval);
     };
-  }, [docxStatus, transfer.id]);
+  }, [transfer.id, isPdfGenerationEnabled, shouldPollStatus]);
   const effectiveAutoPreview = isDrawer ? autoPreview : false;
 
   const {
@@ -155,12 +183,17 @@ export const TransferDocumentPanel = ({
   const handleRetryGeneratedDocument = async () => {
     setIsLoading(true);
     try {
-      const status = await apiRequest<{
-        docxStatus: typeof docxStatus;
-        hasGeneratedDocument: boolean;
-      }>(`/transfers/${transfer.id}/generated-document/retry`, { method: 'POST' });
-      setDocxStatus(status.docxStatus);
-      setHasGeneratedDocx(status.hasGeneratedDocument);
+      const status = await apiRequest<GeneratedDocumentStatusResponse>(
+        `/transfers/${transfer.id}/generated-document/retry`,
+        { method: 'POST' },
+      );
+      setDocxStatus(status.docxStatus ?? 'not_requested');
+      setHasGeneratedDocx(status.hasGeneratedDocument === true);
+      if (isPdfGenerationEnabled) {
+        setPdfStatus(status.status ?? 'none');
+        setHasGeneratedPdf(status.hasGeneratedPdf === true);
+        setPdfError(status.error ?? null);
+      }
     } catch (err) {
       toastError(err instanceof ApiError ? err.message : 'Ponovni pokušaj generisanja nije uspio.');
     } finally {
@@ -238,6 +271,16 @@ export const TransferDocumentPanel = ({
     canShowTransferGeneratedDocx(generatedDocumentState) && (inventoryMode || isRaw);
   const canShowPdf =
     canShowTransferGeneratedPdf(generatedDocumentState, adminSettings) && (inventoryMode || isRaw);
+  const pdfNotice = isPdfGenerationEnabled
+    ? describeGeneratedPdfStatus(pdfStatus, hasGeneratedPdf, pdfError)
+    : null;
+  const showPdfNotice = Boolean(pdfNotice && (canShowPdf || shouldPollStatus));
+  const pdfNoticeClass = cn(
+    'text-xs rounded px-2 py-1.5 border',
+    pdfNotice?.tone === 'info'
+      ? 'text-blue-700 bg-blue-50 border-blue-200'
+      : 'text-amber-700 bg-amber-50 border-amber-200',
+  );
   const showAutoPreview = Boolean(effectiveAutoPreview);
   const showSignedDownload = isDrawer && effectiveAutoPreview === 'signed' && uploadMeta;
   const badgeClass =
@@ -443,6 +486,11 @@ export const TransferDocumentPanel = ({
               Finalizacija nije dostupna dok traje godišnji popis.
             </p>
           ) : null}
+          {showPdfNotice && pdfNotice ? (
+            <p className={cn('mt-2', pdfNoticeClass)} role="status">
+              {pdfNotice.message}
+            </p>
+          ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-hidden bg-gray-50 p-3 md:p-4">{drawerPreview}</div>
       </div>
@@ -557,6 +605,11 @@ export const TransferDocumentPanel = ({
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
           Generisani obrazac još nije dostupan — provjerite aktivni .docx template skladišta povezanog
           s prenosom.
+        </p>
+      ) : null}
+      {showPdfNotice && pdfNotice ? (
+        <p className={pdfNoticeClass} role="status">
+          {pdfNotice.message}
         </p>
       ) : null}
       {canUpload ? (

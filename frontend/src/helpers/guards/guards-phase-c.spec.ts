@@ -11,6 +11,11 @@ import { canTransferRelocationLine } from './employee-relocation-guards';
 import { canMarkDisposalList, DISPOSAL_GUARD_MESSAGES } from './disposal-guards';
 import { getScopedCategoryIds } from '../registrar-scope';
 import { getOrgTreeRootUnits } from '../org-hierarchy.util';
+import {
+  describeGeneratedPdfStatus,
+  GENERATED_PDF_MESSAGES,
+  shouldPollGeneratedDocumentStatus,
+} from '../../components/transfers/generated-document-status.util';
 import type { Category, UserAccount } from '../../types';
 
 describe('Phase C guard smoke — FE helpers', () => {
@@ -96,5 +101,37 @@ describe('Phase C guard smoke — FE helpers', () => {
     ]);
     assert.equal(roots.length, 1);
     assert.equal(roots[0]?.id, 'podrucje-1');
+  });
+
+  it('generated PDF status polls only while DOCX or PDF generation is active', () => {
+    assert.equal(shouldPollGeneratedDocumentStatus('queued', 'done'), true);
+    assert.equal(shouldPollGeneratedDocumentStatus('running', 'done'), true);
+    assert.equal(shouldPollGeneratedDocumentStatus('none', 'queued'), true);
+    assert.equal(shouldPollGeneratedDocumentStatus('done', 'done'), false);
+    assert.equal(shouldPollGeneratedDocumentStatus('failed', 'done'), false);
+  });
+
+  it('generated PDF status explains active jobs and missing files', () => {
+    assert.deepEqual(describeGeneratedPdfStatus('queued', false), {
+      tone: 'info',
+      message: GENERATED_PDF_MESSAGES.generating,
+    });
+    assert.deepEqual(describeGeneratedPdfStatus('running', false), {
+      tone: 'info',
+      message: GENERATED_PDF_MESSAGES.generating,
+    });
+    assert.deepEqual(describeGeneratedPdfStatus('failed', false, 'LibreOffice nije dostupan'), {
+      tone: 'warning',
+      message: 'LibreOffice nije dostupan',
+    });
+    assert.deepEqual(describeGeneratedPdfStatus('done', false), {
+      tone: 'warning',
+      message: GENERATED_PDF_MESSAGES.missing,
+    });
+  });
+
+  it('generated PDF status stays quiet when the PDF is readable', () => {
+    assert.equal(describeGeneratedPdfStatus('done', true), null);
+    assert.equal(describeGeneratedPdfStatus('none', false), null);
   });
 });
