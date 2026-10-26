@@ -12,8 +12,8 @@ import { INVENTORY_SESSION_CLOSE_QUEUE } from '../inventory-count/inventory-sess
       { name: INVENTORY_SESSION_CLOSE_QUEUE },
       { name: DOCUMENT_GENERATION_QUEUE },
     ),
+    SettingsModule,
   ],
-  imports: [SettingsModule],
   controllers: [HealthController],
   providers: [QueueMetricsService],
 })
