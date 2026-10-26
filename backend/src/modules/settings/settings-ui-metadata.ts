@@ -83,6 +83,15 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
     dependsOn: { key: 'notifications.enabled', equals: true },
     detail: 'Operativni alarm u logovima kada najstarija nedostavljena notifikacija postane previše stara.',
   },
+  'queues.metrics.warn_backlog_count': {
+    detail: 'Operativni alarm u logovima za depth inventory-close i document-generation redova.',
+  },
+  'queues.metrics.warn_waiting_seconds': {
+    detail: 'Operativni alarm u logovima kada najstariji posao predugo čeka na obradu.',
+  },
+  'queues.metrics.warn_active_seconds': {
+    detail: 'Operativni alarm u logovima kada aktivni posao predugo traje.',
+  },
   'transfer.template_placeholders_help': {
     display: 'info',
     detail: 'Referentna lista placeholdera za Word šablon prenosnice po skladištu.',

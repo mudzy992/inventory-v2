@@ -156,6 +156,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:redis-rate-limit
 
+      - name: Verify BullMQ queue metrics
+        working-directory: backend
+        run: npm run test:integration:queue-metrics
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

@@ -311,9 +311,15 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 - Dodane su privatne, admin-editabilne postavke `notifications.outbox.warn_backlog_count` (default 50) i `notifications.outbox.warn_age_seconds` (default 300), s validiranim rasponima. Ako settings store padne ili vrati nevažeću vrijednost, koriste se sigurni defaulti; DB greška se bilježi ali ne ruši scheduler.
 - Sedam unit testova pokriva prikupljanje metrika, konfiguraciju, fallback, healthy/warn logove i izolaciju DB greške. Lokalno su prošli lint i svih 466 unit testova; hosted CI run `40378439779` potvrdio je backend typecheck/unit/build, sve PostgreSQL/Redis integracije, FE i document-worker provjere.
 
+#### BullMQ queue depth/lag signal (P2 — implementation added)
+
+- `QueueMetricsService` svakih 30 sekundi čita `waiting`, `active`, `delayed` i `failed` brojeve za `inventory-session-close` i `document-generation`, plus starost najstarijeg waiting i aktivnog posla. Log događaj `bullmq_queue_metrics` ne čita job payload-e i ne sadrži PII; `warn` se aktivira na prag backlog-a, waiting lag-a ili predugog aktivnog posla, sa odgovarajućim `reasons` nizom.
+- Dodane su privatne postavke `queues.metrics.warn_backlog_count` (50), `queues.metrics.warn_waiting_seconds` (300) i `queues.metrics.warn_active_seconds` (1800). Nevažeće ili nedostupne postavke padaju na default; Redis greška se bilježi po queue-u bez rušenja scheduler-a.
+- Osam unit testova pokriva izračun starosti, evaluaciju pragova, konfiguraciju i izolaciju greške. Nova Redis integracija koristi stvarni BullMQ `Queue`/`Worker` sa aktivnim, waiting i delayed poslovima te potvrđuje stvarne count/age metrike. Lokalno su prošli lint i svih 474 unit testova; hosted CI provjera slijedi.
+
 - Razdvojiti liveness (proces/event loop) i readiness (zavisnosti potrebne za prijem saobraćaja).
 - Odrediti šta se smatra obaveznim za readiness: DB svakako; Redis/queue prema degradacijskom ugovoru pojedinih funkcija. Ne označavati cijeli servis unhealthy zbog opcionalnog feature-a ako aplikacija može sigurno degradirati.
-- Dodati metrike: DB pool/latency, Redis ready/reconnect, queue depth/lag/retry/failed jobs, upload reject counts, inventory close age/status, request latency/error rate. Notification outbox backlog/age je već pokriven log-based signalom iznad.
+- Dodati metrike: DB pool/latency, Redis ready/reconnect, upload reject counts, inventory close age/status, request latency/error rate. Notification outbox backlog/age i BullMQ queue depth/lag već su pokriveni log-based signalima iznad.
 - Dodati request/correlation ID kroz HTTP, logove i job metadata; redigovati authorization header, lozinke, refresh token, PII i upload sadržaj/putanje.
 - Strukturirani logovi i javne error poruke trebaju biti različiti: korisniku stabilan code/message, logu correlation ID i sanitizovan interni razlog.
 
