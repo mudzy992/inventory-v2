@@ -84,7 +84,11 @@ const main = async (): Promise<void> => {
         timeout: 30_000,
       },
     );
-    assert.equal(crashedEnqueue.signal, 'SIGKILL', 'process must die after DB create and before BullMQ add');
+    assert.equal(
+      crashedEnqueue.signal,
+      'SIGKILL',
+      `process must die after DB create and before BullMQ add; child result: ${JSON.stringify({ status: crashedEnqueue.status, stdout: crashedEnqueue.stdout, stderr: crashedEnqueue.stderr })}`,
+    );
 
     const documentJobs = new DocumentJobsService(prisma);
     const orphaned = await documentJobs.findById(documentJobId);
@@ -160,6 +164,14 @@ const main = async (): Promise<void> => {
   }
 };
 
+const reportMainFailure = (error: unknown): void => {
+  const message = error instanceof Error ? error.stack ?? error.message : String(error);
+  console.error(error);
+  const workflowMessage = message.replaceAll('%', '%25').replaceAll(/[\r\n]/gu, ' ');
+  console.log(`::error title=DocumentJob enqueue crash recovery::${workflowMessage}`);
+  process.exitCode = 1;
+};
+
 const crashId = process.env.DOCUMENT_JOB_CRASH_ID;
 const crashSourceId = process.env.DOCUMENT_JOB_CRASH_SOURCE_ID;
 if (crashId && crashSourceId) {
@@ -168,8 +180,5 @@ if (crashId && crashSourceId) {
     process.exitCode = 1;
   });
 } else {
-  void main().catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+  void main().catch(reportMainFailure);
 }
