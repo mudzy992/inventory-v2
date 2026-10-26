@@ -25,18 +25,15 @@ const assertTestDatabase = (): void => {
   }
 };
 
-const enqueueThenCrashBeforeBullAdd = async (
-  documentJobId: string,
-  sourceId: string,
-): Promise<never> => {
+const enqueueThenCrashBeforeBullAdd = async (sourceId: string): Promise<never> => {
   assertTestDatabase();
   const prisma = new PrismaService();
   try {
     await prisma.$connect();
     const documentJobs = new DocumentJobsService(prisma);
     const queue = {
-      add: async () => {
-        const row = await prisma.documentJob.findUniqueOrThrow({ where: { id: documentJobId } });
+      add: async (_jobName: string, payload: DocumentConversionJobPayload) => {
+        const row = await prisma.documentJob.findUniqueOrThrow({ where: { id: payload.documentJobId } });
         assert.equal(row.status, 'queued', 'DocumentJob must be committed before BullMQ enqueue');
         assert.equal(row.bullJobId, null, 'BullMQ job ID must not be attached before enqueue');
         assert.equal(row.sourceId, sourceId);
@@ -61,7 +58,6 @@ const main = async (): Promise<void> => {
   assertTestDatabase();
   const prisma = new PrismaService();
   const sourceId = randomUUID();
-  const documentJobId = randomUUID();
   let connected = false;
   let queue: Queue<DocumentConversionJobPayload> | undefined;
   let events: DocumentConversionEventsService | undefined;
@@ -77,7 +73,6 @@ const main = async (): Promise<void> => {
       {
         env: {
           ...process.env,
-          DOCUMENT_JOB_CRASH_ID: documentJobId,
           DOCUMENT_JOB_CRASH_SOURCE_ID: sourceId,
         },
         encoding: 'utf8',
@@ -91,8 +86,9 @@ const main = async (): Promise<void> => {
     );
 
     const documentJobs = new DocumentJobsService(prisma);
-    const orphaned = await documentJobs.findById(documentJobId);
+    const orphaned = await documentJobs.findLatestForSource('transfer', sourceId);
     assert.ok(orphaned, 'DocumentJob create must commit before the process crash');
+    const orphanedId = orphaned.id;
     assert.equal(orphaned.status, 'queued');
     assert.equal(orphaned.bullJobId, null);
     assert.equal(orphaned.attempts, 0);
@@ -113,7 +109,7 @@ const main = async (): Promise<void> => {
     await events.onModuleInit();
     eventsInitialized = true;
 
-    const reconciled = await documentJobs.findById(documentJobId);
+    const reconciled = await documentJobs.findById(orphanedId);
     assert.ok(reconciled);
     assert.equal(reconciled.status, 'failed', 'startup reconciliation must fail a queued DB row with no BullMQ job');
     assert.equal(reconciled.attempts, 0);
@@ -141,7 +137,7 @@ const main = async (): Promise<void> => {
     });
 
     assert.equal(queueAddCount, 1, 'failed orphan must permit a new BullMQ enqueue');
-    assert.notEqual(retry.id, documentJobId, 'retry must preserve history in a fresh DocumentJob row');
+    assert.notEqual(retry.id, orphanedId, 'retry must preserve history in a fresh DocumentJob row');
     assert.equal(retry.status, 'queued');
     assert.equal(retry.bullJobId, retry.id);
     assert.equal(await prisma.documentJob.count({ where: { sourceType: 'transfer', sourceId } }), 2);
@@ -172,10 +168,9 @@ const reportMainFailure = (error: unknown): void => {
   process.exitCode = 1;
 };
 
-const crashId = process.env.DOCUMENT_JOB_CRASH_ID;
 const crashSourceId = process.env.DOCUMENT_JOB_CRASH_SOURCE_ID;
-if (crashId && crashSourceId) {
-  void enqueueThenCrashBeforeBullAdd(crashId, crashSourceId).catch((error: unknown) => {
+if (crashSourceId) {
+  void enqueueThenCrashBeforeBullAdd(crashSourceId).catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;
   });
