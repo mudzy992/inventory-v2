@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { HttpException } from '@nestjs/common';
 import PizZip from 'pizzip';
@@ -342,8 +342,41 @@ const main = async (): Promise<void> => {
     assert.equal(capturedQueueAdd.payload?.sourceRelativePath, generatedRelativePath);
     assert.equal(capturedQueueAdd.payload?.resultRelativePath, expectedPdfRelativePath);
 
+    // A completed conversion whose transfer pointer is stale must repair the
+    // pointer from the durable job result without triggering another enqueue.
+    const completedPdfPath = join(tempDirectory, expectedPdfRelativePath);
+    mkdirSync(dirname(completedPdfPath), { recursive: true });
+    writeFileSync(completedPdfPath, '%PDF-1.4 integration');
+    await documentJobs.markDone(enqueuedDocumentJob.id);
+    await prisma.transfer.update({
+      where: { id: transferId },
+      data: { generatedPdfPath: 'generated/stale.pdf' },
+    });
+    const repairedPdf = await pdfRetryService.getGeneratedFileStream(transferId, 'pdf');
+    assert.equal(repairedPdf.absolutePath, completedPdfPath);
+    const repairedTransfer = await prisma.transfer.findUniqueOrThrow({
+      where: { id: transferId },
+      select: { generatedPdfPath: true },
+    });
+    assert.equal(repairedTransfer.generatedPdfPath, expectedPdfRelativePath);
+    assert.equal(queueAddCount, 1, 'repairing a stale PDF pointer must not enqueue another conversion');
+
+    // If that completed file is later deleted, download must enqueue a new
+    // conversion instead of remaining stuck on a 409 with status 'done'.
+    rmSync(completedPdfPath);
+    await assert.rejects(
+      pdfRetryService.getGeneratedFileStream(transferId, 'pdf'),
+      (error: unknown) => error instanceof HttpException && error.getStatus() === 409,
+      'deleted PDF should report processing while a new conversion is queued',
+    );
+    assert.equal(queueAddCount, 2, 'deleted completed PDF must be regenerated');
+    const regeneratedDocumentJob = await documentJobs.findLatestForSource('transfer', transferId);
+    assert.ok(regeneratedDocumentJob);
+    assert.notEqual(regeneratedDocumentJob.id, enqueuedDocumentJob.id);
+    assert.equal(regeneratedDocumentJob.status, 'queued');
+
     console.log(
-      'Verified DOCX recovery and PDF retry after process death both after DOCX file write and after DB finalize.',
+      'Verified DOCX crash recovery, PDF retry, stale-pointer repair and deleted-PDF regeneration.',
     );
   } finally {
     try {

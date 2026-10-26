@@ -404,42 +404,47 @@ export class TransferDocumentGenerationService implements OnModuleInit {
     // format === 'pdf': konverzija se dešava asinhrono na Document Worker
     // servisu — ovdje samo čitamo trenutno stanje, NIKAD ne čekamo/blokiramo
     // HTTP zahtjev na LibreOffice.
+    const job = await this.documentJobs.findLatestForSource(DOCUMENT_SOURCE_TYPE_TRANSFER, transferId);
+
+    // Završeni posao može imati ispravan fajl iako je transfer pointer null
+    // ili zastario (npr. completion sync nije prošao). Uvijek prvo pokušamo
+    // vratiti rezultat najnovijeg posla i popraviti pointer. Bez ovoga bi
+    // obrisan PDF ostavljao korisnika zauvijek na 409 sa statusom 'done'.
+    if (job?.status === 'done') {
+      const resultAbsolutePath = join(
+        this.templateService.getUploadRoot(),
+        job.resultRelativePath,
+      );
+      if (existsSync(resultAbsolutePath)) {
+        if (transfer.generatedPdfPath !== job.resultRelativePath) {
+          await this.prisma.transfer.update({
+            where: { id: transferId },
+            data: { generatedPdfPath: job.resultRelativePath },
+          });
+        }
+        return {
+          absolutePath: resultAbsolutePath,
+          mime: 'application/pdf',
+          filename: `${transfer.documentNumber}.pdf`,
+        };
+      }
+    }
+
+    // Ako najnoviji posao nema čitljiv rezultat, stari ali ispravan PDF je
+    // i dalje bolji od prisiljavanja korisnika na novu konverziju.
     if (transfer.generatedPdfPath) {
       const absolutePath = join(this.templateService.getUploadRoot(), transfer.generatedPdfPath);
       if (existsSync(absolutePath)) {
         return { absolutePath, mime: 'application/pdf', filename: `${transfer.documentNumber}.pdf` };
       }
-      // DB kaže da postoji ali fajl nedostaje (npr. obrisan sa diska) —
-      // tretiramo kao da PDF nikad nije generisan i ponovo pokrećemo ispod.
     }
-    const job = await this.documentJobs.findLatestForSource(DOCUMENT_SOURCE_TYPE_TRANSFER, transferId);
-    if (!job || job.status === 'failed') {
+
+    if (!job || job.status === 'failed' || job.status === 'done') {
       await this.retryPdfGeneration(transferId, requestedByUserId);
       throw new HttpException(
         { status: 'processing', message: 'PDF se generiše, pokušajte ponovo za par sekundi.' },
         HttpStatus.CONFLICT,
       );
-    }
-    if (job.status === 'done' && !transfer.generatedPdfPath) {
-        await this.prisma.transfer.update({
-            where: { id: transferId },
-            data: {
-            generatedPdfPath: job.resultRelativePath,
-            },
-        });
-
-        const absolutePath = join(
-            this.templateService.getUploadRoot(),
-            job.resultRelativePath,
-        );
-
-        if (existsSync(absolutePath)) {
-            return {
-            absolutePath,
-            mime: 'application/pdf',
-            filename: `${transfer.documentNumber}.pdf`,
-            };
-        }
     }
     throw new HttpException(
       { status: job.status, jobId: job.id, message: 'PDF se još generiše, pokušajte ponovo za par sekundi.' },
