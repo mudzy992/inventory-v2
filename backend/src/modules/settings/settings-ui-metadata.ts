@@ -101,6 +101,15 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
   'database.metrics.warn_utilization_percent': {
     detail: 'Operativni alarm kada je connection pool blizu svog konfigurisanog maksimuma.',
   },
+  'redis.metrics.warn_ping_ms': {
+    detail: 'Operativni alarm u logovima kada Redis PING proba predugo traje.',
+  },
+  'redis.metrics.warn_disconnect_seconds': {
+    detail: 'Operativni alarm kada shared Redis konekcija predugo nije u ready stanju.',
+  },
+  'redis.metrics.warn_reconnect_count': {
+    detail: 'Operativni alarm kada se od pokretanja procesa nakupi previše reconnect događaja.',
+  },
   'transfer.template_placeholders_help': {
     display: 'info',
     detail: 'Referentna lista placeholdera za Word šablon prenosnice po skladištu.',

@@ -160,6 +160,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:redis-rate-limit
 
+      - name: Verify Redis connection health metrics
+        working-directory: backend
+        run: npm run test:integration:redis-metrics
+
       - name: Verify BullMQ queue metrics
         working-directory: backend
         run: npm run test:integration:queue-metrics

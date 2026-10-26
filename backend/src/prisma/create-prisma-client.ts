@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+import { writeStructuredLog } from '../common/logging/structured-log.util';
 import { redactSensitiveText } from '../common/utils/redact-log.util';
 import { PrismaClient } from '../../generated/prisma/client';
 import { resolveDatabaseConfig, resolveDatabasePoolMax } from './database-config.util';
@@ -8,17 +9,14 @@ import { setActivePostgresPool } from './postgres-pool.registry';
 export { resolveDatabaseConfig } from './database-config.util';
 export { resolveDatabasePoolMax } from './database-config.util';
 
-/** Pool errors can happen before Nest installs its global JSON logger. Write a
- * raw JSON line instead of a prefixed ConsoleLogger record so collectors can
- * parse it with the same schema as the other operational events. */
+/** Pool errors can happen before Nest installs its global JSON logger. Emit a
+ * single structured line so collectors parse them like the other events. */
 const logPoolError = (event: 'postgres_pool_error' | 'postgres_connection_error') =>
   (error: Error): void => {
-    process.stderr.write(
-      `${JSON.stringify({
-        event,
-        message: redactSensitiveText(error.message),
-      })}\n`,
-    );
+    writeStructuredLog('error', {
+      event,
+      message: redactSensitiveText(error.message),
+    });
   };
 
 export const createPrismaClientOptions = (): ConstructorParameters<typeof PrismaClient>[0] => {

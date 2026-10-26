@@ -1,15 +1,17 @@
-import { Global, Injectable, Inject, Logger, Module, type OnModuleDestroy } from '@nestjs/common';
+import { Global, Injectable, Inject, Module, type OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
+import { writeStructuredLog } from '../common/logging/structured-log.util';
+import { attachRedisConnectionObservers } from './redis-connection.registry';
 import { buildBaseRedisOptions, readRedisConfig } from './redis.config';
 import { REDIS_CLIENT } from './redis.constants';
 import { RedisService } from './redis.service';
 
 @Injectable()
 class RedisClientCloser implements OnModuleDestroy {
-  private readonly logger = new Logger('Redis');
   constructor(@Inject(REDIS_CLIENT) private readonly client: Redis) {}
+
   onModuleDestroy(): void {
-    this.logger.log('Closing Redis connection (app shutdown)...');
+    writeStructuredLog('log', { event: 'redis_client_shutdown' });
     this.client.disconnect();
   }
 }
@@ -28,17 +30,13 @@ class RedisClientCloser implements OnModuleDestroy {
     {
       provide: REDIS_CLIENT,
       useFactory: (): Redis => {
-        const logger = new Logger('Redis');
         const config = readRedisConfig();
         const client = new Redis({
           ...buildBaseRedisOptions(config),
           keyPrefix: config.keyPrefix,
           lazyConnect: false,
         });
-        client.on('connect', () => logger.log(`Connecting to Redis ${config.host}:${config.port}...`));
-        client.on('ready', () => logger.log(`Redis ready (keyPrefix="${config.keyPrefix}")`));
-        client.on('error', (err) => logger.error(`Redis connection error: ${err.message}`));
-        client.on('close', () => logger.warn('Redis connection closed'));
+        attachRedisConnectionObservers(client);
         return client;
       },
     },

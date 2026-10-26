@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { randomUUID } from 'node:crypto';
+import { redactSensitiveText } from '../common/utils/redact-log.util';
 import { REDIS_CLIENT } from './redis.constants';
 
 /**
@@ -24,6 +25,24 @@ export class RedisService {
 
   constructor(@Inject(REDIS_CLIENT) private readonly client: Redis) {}
 
+  /** Structured warning without Redis key names: keys can contain user IDs,
+   * IPs or e-mail addresses, so only the operation and a redacted reason are
+   * safe to send to the log collector. */
+  private logOperationWarning(
+    operation: string,
+    error: unknown,
+    extra: Record<string, unknown> = {},
+  ): void {
+    this.logger.warn(
+      JSON.stringify({
+        ...extra,
+        event: 'redis_operation_failed',
+        operation,
+        error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
+      }),
+    );
+  }
+
   /** Direktan pristup klijentu za slučajeve koje ovaj wrapper ne pokriva. */
   getClient(): Redis {
     return this.client;
@@ -41,7 +60,7 @@ export class RedisService {
       }
       return JSON.parse(raw) as T;
     } catch (err) {
-      this.logger.warn(`getJson(${key}) failed, treating as cache miss: ${String(err)}`);
+      this.logOperationWarning('getJson', err, { impact: 'cache_miss' });
       return undefined;
     }
   }
@@ -50,7 +69,7 @@ export class RedisService {
     try {
       await this.client.set(key, JSON.stringify(value), 'EX', ttlSeconds);
     } catch (err) {
-      this.logger.warn(`setJson(${key}) failed (non-fatal): ${String(err)}`);
+      this.logOperationWarning('setJson', err);
     }
   }
 
@@ -61,7 +80,7 @@ export class RedisService {
     try {
       await this.client.del(...keys);
     } catch (err) {
-      this.logger.warn(`del(${keys.join(',')}) failed (non-fatal): ${String(err)}`);
+      this.logOperationWarning('del', err, { keyCount: keys.length });
     }
   }
 
@@ -82,7 +101,7 @@ export class RedisService {
         await this.client.del(...keysToDelete);
       }
     } catch (err) {
-      this.logger.warn(`delByPrefix(${prefix}) failed (non-fatal): ${String(err)}`);
+      this.logOperationWarning('delByPrefix', err);
     }
   }
 
@@ -131,7 +150,7 @@ export class RedisService {
     try {
       await this.client.eval(script, 1, key, token);
     } catch (err) {
-      this.logger.warn(`releaseLock(${key}) failed (lock will expire via TTL): ${String(err)}`);
+      this.logOperationWarning('releaseLock', err, { impact: 'lock_expires_via_ttl' });
     }
   }
 

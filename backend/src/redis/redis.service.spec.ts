@@ -36,6 +36,41 @@ test('incrementRateLimitCounter validates window and Redis response', async () =
   assert.equal(calls, 1, 'invalid windows must be rejected before calling Redis');
 });
 
+test('cache/lock warnings are structured JSON without Redis key names or secrets', async () => {
+  const failure = new Error('password=ci-secret connection refused');
+  const service = new RedisService({
+    get: async () => {
+      throw failure;
+    },
+    set: async () => {
+      throw failure;
+    },
+    del: async () => {
+      throw failure;
+    },
+  } as unknown as Redis);
+  const warnings: string[] = [];
+  (service as unknown as { logger: { warn: (line: string) => void } }).logger = {
+    warn: (line: string) => warnings.push(line),
+  };
+
+  assert.equal(await service.getJson('settings:user:john@example.com'), undefined);
+  await service.setJson('settings:user:john@example.com', { role: 'admin' }, 60);
+  await service.del('settings:user:john@example.com', 'settings:row:app.name');
+
+  assert.equal(warnings.length, 3);
+  const events = warnings.map((line) => JSON.parse(line) as Record<string, unknown>);
+  assert.deepEqual(
+    events.map(({ operation }) => operation),
+    ['getJson', 'setJson', 'del'],
+  );
+  assert.ok(events.every(({ event }) => event === 'redis_operation_failed'));
+  assert.equal(events[2]?.keyCount, 2);
+  assert.ok(warnings.every((line) => !line.includes('ci-secret')));
+  assert.ok(warnings.every((line) => !line.includes('john@example.com')));
+  assert.ok(warnings.every((line) => !line.includes('settings:user')));
+});
+
 test('renewLock atomically extends a lease only for the current owner token', async () => {
   const calls: unknown[][] = [];
   let scriptResult: unknown = 1;
