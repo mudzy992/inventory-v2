@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { Queue } from 'bullmq';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { InventoryCountService } from '../src/modules/inventory-count/inventory-count.service';
 import { InventorySessionCloseReconcilerService } from '../src/modules/inventory-count/inventory-session-close-reconciler.service';
-import {
-  INVENTORY_SESSION_CLOSE_QUEUE,
-} from '../src/modules/inventory-count/inventory-session-close.queue';
+import { INVENTORY_SESSION_CLOSE_QUEUE } from '../src/modules/inventory-count/inventory-session-close.queue';
 import { buildInventoryCloseRecoveryJobId } from '../src/modules/inventory-count/utils/inventory-close-recovery.util';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 const main = async (): Promise<void> => {
   const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
@@ -30,8 +29,8 @@ const main = async (): Promise<void> => {
     connection: { host: redisHost, port: redisPort, maxRetriesPerRequest: null },
   });
   const orgUnitId = randomUUID();
+  const userId = randomUUID();
   const sessionId = randomUUID();
-  const closeJobId = randomUUID();
   let prismaConnected = false;
   let queueReady = false;
   let recoveryJobId: string | undefined;
@@ -45,19 +44,62 @@ const main = async (): Promise<void> => {
     await prisma.orgUnit.create({
       data: { id: orgUnitId, name: `CI close reconcile ${orgUnitId}`, type: 'direkcija' },
     });
+    await prisma.user.create({
+      data: {
+        id: userId,
+        username: `ci-close-reconcile-${userId}`,
+        passwordHash: 'test-only',
+        role: 'admin',
+      },
+    });
     await prisma.inventorySession.create({
       data: {
         id: sessionId,
         name: `CI close reconcile ${sessionId}`,
         orgUnitId,
         year: 2100,
-        status: 'closing',
+        status: 'active',
       },
     });
-    const closeJob = await prisma.inventorySessionCloseJob.create({
-      data: { id: closeJobId, sessionId, status: 'queued' },
-      select: { id: true, updatedAt: true },
-    });
+
+    let initialEnqueueAttempts = 0;
+    const unavailableQueue = {
+      add: async () => {
+        initialEnqueueAttempts += 1;
+        throw new Error('Injected Redis unavailable at initial close enqueue');
+      },
+    };
+    const closeService = new InventoryCountService(
+      prisma,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { assertFeatureEnabled: async () => undefined } as never,
+      {} as never,
+      unavailableQueue as never,
+    );
+    const closeResult = await closeService.closeSession(
+      { id: userId, role: 'admin' } as never,
+      sessionId,
+    );
+    assert.equal(initialEnqueueAttempts, 1);
+    assert.equal(closeResult.status, 'queued');
+
+    const [session, closeJob] = await Promise.all([
+      prisma.inventorySession.findUniqueOrThrow({ where: { id: sessionId } }),
+      prisma.inventorySessionCloseJob.findUniqueOrThrow({
+        where: { sessionId },
+        select: { id: true, updatedAt: true, status: true },
+      }),
+    ]);
+    assert.equal(session.status, 'closing', 'business close commit must survive an enqueue outage');
+    assert.equal(closeJob.status, 'queued', 'DB job must remain available to recovery');
     const currentRecoveryJobId = buildInventoryCloseRecoveryJobId(closeJob.id, closeJob.updatedAt);
     recoveryJobId = currentRecoveryJobId;
 
@@ -86,7 +128,6 @@ const main = async (): Promise<void> => {
       sharedPrismaFacade as never,
       queue as never,
     );
-
     await Promise.all([first.reconcileQueuedJobs(), second.reconcileQueuedJobs()]);
 
     assert.equal(queryCount, 2, 'both reconciler instances must observe the same queued DB row');
@@ -103,7 +144,9 @@ const main = async (): Promise<void> => {
     ])).filter((job) => job.id === currentRecoveryJobId);
     assert.equal(jobsWithRecoveryId.length, 1, 'concurrent reconciler enqueue must be deduplicated');
 
-    console.log('Verified concurrent PostgreSQL reconcilers enqueue one deterministic BullMQ recovery job.');
+    console.log(
+      'Verified injected initial enqueue failure remains durable and two PostgreSQL reconcilers recover it into one BullMQ job.',
+    );
   } finally {
     try {
       if (queueReady && recoveryJobId) {
@@ -111,6 +154,7 @@ const main = async (): Promise<void> => {
       }
       if (prismaConnected) {
         await prisma.inventorySession.deleteMany({ where: { id: sessionId } });
+        await prisma.user.deleteMany({ where: { id: userId } });
         await prisma.orgUnit.deleteMany({ where: { id: orgUnitId } });
       }
     } finally {

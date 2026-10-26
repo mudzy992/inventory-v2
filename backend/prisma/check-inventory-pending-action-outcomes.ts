@@ -119,20 +119,55 @@ const main = async (): Promise<void> => {
         throw new Error('permanent validation failure');
       },
     };
-    const worker = new InventorySessionCloseWorkerService(
-      prisma,
+    let initialReadCount = 0;
+    let releaseInitialReads!: () => void;
+    const initialReadsReady = new Promise<void>((resolve) => {
+      releaseInitialReads = resolve;
+    });
+    const workerPrismaFacade = {
+      $transaction: prisma.$transaction.bind(prisma),
+      inventorySessionCloseJob: {
+        findUnique: async (args: Parameters<typeof prisma.inventorySessionCloseJob.findUnique>[0]) => {
+          const job = await prisma.inventorySessionCloseJob.findUnique(args);
+          initialReadCount += 1;
+          if (initialReadCount === 2) {
+            releaseInitialReads();
+          }
+          await initialReadsReady;
+          return job;
+        },
+        updateMany: prisma.inventorySessionCloseJob.updateMany.bind(
+          prisma.inventorySessionCloseJob,
+        ),
+      },
+      inventoryPendingAction: {
+        findFirst: prisma.inventoryPendingAction.findFirst.bind(prisma.inventoryPendingAction),
+      },
+    };
+    const notificationsStub = {
+      emitInventoryCloseJobProgress: async () => undefined,
+      buildInventorySessionClosedOutboxRows: async () => [],
+    };
+    const firstWorker = new InventorySessionCloseWorkerService(
+      workerPrismaFacade as never,
       inventoryCountService as never,
-      {
-        emitInventoryCloseJobProgress: async () => undefined,
-        buildInventorySessionClosedOutboxRows: async () => [],
-      } as never,
+      notificationsStub as never,
     );
-    await worker.process({
+    const secondWorker = new InventorySessionCloseWorkerService(
+      workerPrismaFacade as never,
+      inventoryCountService as never,
+      notificationsStub as never,
+    );
+    const duplicateDelivery = {
       id: 'ci-pending-action-outcomes',
       data: { sessionId },
       attemptsMade: 0,
       opts: { attempts: 3 },
-    } as never);
+    } as never;
+    await Promise.all([
+      firstWorker.process(duplicateDelivery),
+      secondWorker.process(duplicateDelivery),
+    ]);
 
     const [closeJob, session, actions] = await Promise.all([
       prisma.inventorySessionCloseJob.findUniqueOrThrow({ where: { id: closeJobId } }),
@@ -142,7 +177,8 @@ const main = async (): Promise<void> => {
         orderBy: { createdAt: 'asc' },
       }),
     ]);
-    assert.equal(transientAttempts, 3, 'known transient failure gets exactly three total attempts');
+    assert.equal(initialReadCount, 2, 'both duplicate worker deliveries must read the queued job before claiming');
+    assert.equal(transientAttempts, 3, 'only the winning worker applies the action, with exactly three total attempts');
     assert.equal(actions[0]?.status, 'applied');
     assert.equal(actions[0]?.attempts, 3);
     assert.equal(actions[0]?.lastError, null);
@@ -155,7 +191,7 @@ const main = async (): Promise<void> => {
     assert.equal(session.status, 'closed');
 
     console.log(
-      'Verified PostgreSQL close semantics: transient action retries stop after success; permanent action is recorded as failed and session closes with failedCount.',
+      'Verified duplicate PostgreSQL worker delivery is single-claimed; transient action retries stop after success, permanent failure is recorded, and the session closes with failedCount.',
     );
   } finally {
     try {
