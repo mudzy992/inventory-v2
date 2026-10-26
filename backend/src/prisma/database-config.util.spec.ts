@@ -3,7 +3,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { resolveDatabaseConfig } from './database-config.util';
+import {
+  DEFAULT_DATABASE_POOL_MAX,
+  MAX_DATABASE_POOL_MAX,
+  resolveDatabaseConfig,
+  resolveDatabasePoolMax,
+} from './database-config.util';
 
 describe('resolveDatabaseConfig', () => {
   it('preserves PostgreSQL URL fields and defaults to TLS off for local compatibility', () => {
@@ -94,5 +99,29 @@ describe('resolveDatabaseConfig', () => {
         }),
       /requires PostgreSQL TLS to be enabled/,
     );
+  });
+});
+
+describe('resolveDatabasePoolMax', () => {
+  it('uses the documented default when the deployment does not set a pool size', () => {
+    assert.equal(resolveDatabasePoolMax({}), DEFAULT_DATABASE_POOL_MAX);
+    assert.equal(resolveDatabasePoolMax({ DATABASE_POOL_MAX: '   ' }), DEFAULT_DATABASE_POOL_MAX);
+  });
+
+  it('accepts a validated deployment-specific pool size', () => {
+    assert.equal(resolveDatabasePoolMax({ DATABASE_POOL_MAX: '3' }), 3);
+    assert.equal(
+      resolveDatabasePoolMax({ DATABASE_POOL_MAX: String(MAX_DATABASE_POOL_MAX) }),
+      MAX_DATABASE_POOL_MAX,
+    );
+  });
+
+  it('rejects values that could silently or catastrophically exhaust PostgreSQL connections', () => {
+    for (const value of ['0', '-1', '101', '3.5', 'ten', '1e2', '9007199254740992']) {
+      assert.throws(
+        () => resolveDatabasePoolMax({ DATABASE_POOL_MAX: value }),
+        /DATABASE_POOL_MAX must be an integer between 1 and 100/,
+      );
+    }
   });
 });

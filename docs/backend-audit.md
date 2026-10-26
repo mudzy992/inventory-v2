@@ -26,7 +26,7 @@ Glavni dug nije nedostatak poslovne funkcionalnosti, nego **pouzdanost rubnih sl
 | Asinhroni poslovi i oporavak | 6.5/10 | Document Engine ima dobar DB/queue reconciliation obrazac; zatvaranje inventure nema isti nivo oporavka i ima nepodudaranje DB statusa sa BullMQ retry-jem. |
 | Testovi | 6.5/10 | `npm run test:unit`: 261 test prošao u 53 suite-a kroz 36 fajlova. Repo sadrži 54 `*.spec.ts`, ali je većina testova util/scope funkcija, a malo je controller/DB/integration testova. |
 | Sigurnost zavisnosti | 5.5/10 | `npm audit` na backend lockfile-u je prijavio 24 nalaza (1 critical, 17 high, 5 moderate, 1 low) u trenutno instaliranom stablu; postoje ispravke za prijavljene pakete. |
-| Operativna vidljivost | 6.0/10 | Postoje health endpoint, logovi i servisni healthcheck-i, ali backend `/health` provjerava samo DB, ne i Redis/queue kritične putanje. |
+| Operativna vidljivost | 7.5/10 | `/health/ready` sada pokriva DB, Redis, BullMQ i Socket.IO; logovi imaju request/job correlation ID, redakciju i strukturirane JSON signale za notification outbox, BullMQ redove i PostgreSQL pool/latenciju. Preostaje postepeni prelazak preostalih legacy free-form logova i eksplicitan Redis ready state u metrikama. |
 | **Kompletan backend** | **6.6/10** | Dobar i aktivno korišten poslovni temelj; drugi prolaz je otkrio i stored-XSS put kroz HTML prenosnice, uz već navedene integritetske i upload rizike. |
 
 Ocjene su heurističke, kodne ocjene za planiranje rada — nisu procjena dostupnosti produkcije niti potvrda eksploatabilnosti svakog nalaza.
@@ -109,7 +109,7 @@ Root modul je `backend/src/app.module.ts`; globalni prefix je konfigurabilan pre
 21. **Nedostaje API-level/integration test sloj.** Većina od 261 testa pokriva čiste util-e i mock scope servise. Potrebni su testovi sa stvarnim PostgreSQL-om za migrations, unique constraint-e, transakcije i konkurentne zahtjeve; testovi Nest HTTP guards/DTO-a; Redis/BullMQ recovery testovi.
 22. **Velike domenske klase su teško održive.** Posebno `InventoryCountService` (~2.875 LOC), `EmployeeRelocationService` (~989), `WarehouseStockService` (~865), `TransfersService` (~829), `NotificationsService` (~627), `EquipmentService` (~641), `MaintenancePartsService` (~564), `EmployeesService` (~539). Izdvajati use-case servise po odvojenim state transition-ima, ali tek uz karakterizacione testove.
 23. **Dokumentacija migracija je zastarjela.** `backend/prisma/migrations/README.md` opisuje folder kao prazan, a postoje PostgreSQL migracije. Uskladiti README sa stvarnim istorijatom i dodati automatizovan schema/migration drift check.
-24. **Opservabilnost je log-centric.** Dodati request/correlation ID, strukturirane logove bez osjetljivih vrijednosti, metrike za queue lag/retry/failed jobs, DB pool, Redis ready stanje, upload odbijanja i poslovne state transition-e.
+24. **Opservabilnost je i dalje log-centric, ali je značajno ojačana.** Uvedeni su request/job correlation ID, redakcija tajni/PII, JSON log događaji za HTTP zahtjeve, notification outbox backlog, BullMQ queue depth/lag i PostgreSQL pool/latenciju; `DATABASE_POOL_MAX` je validirana deployment konfiguracija. Preostaje eksplicitan Redis ready state u metrikama, strukturirani signali za upload odbijanja i poslovne state transition-e, te postepeni prelazak preostalih legacy free-form logova u potpuno strukturirani JSON.
 
 ### Tragovi u kodu za glavne nalaze
 

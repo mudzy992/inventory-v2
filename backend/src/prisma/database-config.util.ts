@@ -23,6 +23,38 @@ const SUPPORTED_SSL_MODES = new Set<DatabaseSslMode>([
   'verify-full',
 ]);
 
+export const DEFAULT_DATABASE_POOL_MAX = 10;
+export const MAX_DATABASE_POOL_MAX = 100;
+
+/** Pool size is deployment configuration: replicas × DATABASE_POOL_MAX, plus
+ * document-worker, migration and maintenance connections, must stay below the
+ * PostgreSQL max_connections reserve. Keep the validated range deliberately
+ * narrow so a typo cannot exhaust the database for every replica. */
+export const resolveDatabasePoolMax = (
+  env: NodeJS.ProcessEnv = process.env,
+): number => {
+  const raw = env.DATABASE_POOL_MAX;
+  if (raw === undefined || raw.trim() === '') {
+    return DEFAULT_DATABASE_POOL_MAX;
+  }
+  if (!/^\d+$/u.test(raw.trim())) {
+    throw new Error(
+      `DATABASE_POOL_MAX must be an integer between 1 and ${MAX_DATABASE_POOL_MAX}`,
+    );
+  }
+  const parsed = Number(raw.trim());
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < 1 ||
+    parsed > MAX_DATABASE_POOL_MAX
+  ) {
+    throw new Error(
+      `DATABASE_POOL_MAX must be an integer between 1 and ${MAX_DATABASE_POOL_MAX}`,
+    );
+  }
+  return parsed;
+};
+
 const resolveSslConfig = (
   parsedUrl: URL | null,
   env: NodeJS.ProcessEnv,

@@ -41,6 +41,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - DATABASE_SSL_MODE=${DATABASE_SSL_MODE:-verify-full}
       - DATABASE_SSL_CA=${DATABASE_SSL_CA:-/etc/ssl/certs/coolify-ca.crt}
+      # Replike × ovaj broj + worker/migracije/maintenance < max_connections.
+      - DATABASE_POOL_MAX=${DATABASE_POOL_MAX:-10}
       - SETUP_TOKEN=${SETUP_TOKEN}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ACCESS_TTL=${JWT_ACCESS_TTL:-15m}

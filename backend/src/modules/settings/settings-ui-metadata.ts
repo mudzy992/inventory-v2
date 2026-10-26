@@ -92,6 +92,15 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
   'queues.metrics.warn_active_seconds': {
     detail: 'Operativni alarm u logovima kada aktivni posao predugo traje.',
   },
+  'database.metrics.warn_latency_ms': {
+    detail: 'Operativni alarm u logovima kada SELECT 1 proba predugo traje.',
+  },
+  'database.metrics.warn_waiting_count': {
+    detail: 'Operativni alarm kada zahtjevi čekaju slobodnu PostgreSQL konekciju.',
+  },
+  'database.metrics.warn_utilization_percent': {
+    detail: 'Operativni alarm kada je connection pool blizu svog konfigurisanog maksimuma.',
+  },
   'transfer.template_placeholders_help': {
     display: 'info',
     detail: 'Referentna lista placeholdera za Word šablon prenosnice po skladištu.',

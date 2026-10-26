@@ -52,6 +52,8 @@ services:
       RATE_LIMIT_PUBLIC_EQUIPMENT_MAX: ${RATE_LIMIT_PUBLIC_EQUIPMENT_MAX:-60}
       RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC: ${RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC:-60}
       RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED: ${RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED:-false}
+      # Replike × ovaj broj + worker/migracije/maintenance < max_connections.
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
     # Upload root na hostu; unutra aplikacija gradi prenosnice/, templates/, ...
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads

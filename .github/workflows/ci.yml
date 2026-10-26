@@ -80,6 +80,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:settings-defaults
 
+      - name: Verify PostgreSQL pool and latency metrics
+        working-directory: backend
+        run: npm run test:integration:postgres-metrics
+
       - name: Verify inventory close-vs-record locking
         working-directory: backend
         run: npm run test:integration:inventory-session-lock
