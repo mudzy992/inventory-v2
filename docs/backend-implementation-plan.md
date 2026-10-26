@@ -212,7 +212,7 @@ Transactional notification outbox je uveden za događaje koji nastaju pri invent
 - Maintenance part statusi (faulty/remove/replace) i disposal approval review koriste conditional update; promjene opreme, zaliha i eventi ostaju u istoj transakciji.
 - Implementirano nakon odluke vlasnika: `BulkCreateStockLotDto.items` ima gornju granicu od 100 unosa; DTO test potvrđuje da 100 prolazi, a 101 se odbija. Backend/PostgreSQL/Redis CI run `40235730013` prošao je lint, typecheck, unit testove, migracije i build. Obrada unutar transakcije i dalje je serijska, pa batching treba razmatrati tek uz mjerenje trajanja.
 - Batch-ovati registrar scope provjere umjesto serijskog N+1 poziva.
-- Testirati posljednju jedinicu koju paralelno pokušavaju izdati/ugraditi/zamijeniti; jedan zahtjev uspije, drugi dobije razumljiv insufficient-stock odgovor.
+- PostgreSQL test `check-stock-lot-decrement-race.ts` sada pokreće dvije transakcije koje istovremeno pokušavaju potrošiti posljednju jedinicu kroz isti helper; potvrđuje tačno jedan uspjeh, jedan kontrolisani insufficient-stock odgovor, quantity 0 i zatvaranje lota. Test je dodat u obavezni branch CI; hosted run nakon ove izmjene čeka.
 
 **Prihvatanje:** quantity nikad nije negativan niti se potrošnja evidentira bez odgovarajućeg lot movement-a.
 

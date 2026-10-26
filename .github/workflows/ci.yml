@@ -84,6 +84,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:inventory-session-lock
 
+      - name: Verify concurrent stock-lot decrements
+        working-directory: backend
+        run: npm run test:integration:stock-lot-decrement
+
       - name: Verify concurrent disposal approval reviews
         working-directory: backend
         run: npm run test:integration:disposal-approval-race
