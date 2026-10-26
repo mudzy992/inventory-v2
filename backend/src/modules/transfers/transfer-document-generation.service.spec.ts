@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -9,6 +9,7 @@ import { TransferDocumentGenerationService } from './transfer-document-generatio
 interface PdfDownloadHarness {
   service: TransferDocumentGenerationService;
   root: string;
+  parentRoot: string;
   updates: unknown[];
   retries: string[];
   cleanup: () => void;
@@ -18,14 +19,22 @@ interface PdfDownloadOptions {
   generatedPdfPath: string | null;
   job: { id: string; status: string; resultRelativePath: string } | null;
   existingFiles?: string[];
+  outsideFiles?: string[];
 }
 
 const createHarness = (options: PdfDownloadOptions): PdfDownloadHarness => {
-  const root = mkdtempSync(join(tmpdir(), 'inventory-pdf-download-'));
+  const parentRoot = mkdtempSync(join(tmpdir(), 'inventory-pdf-download-'));
+  const root = join(parentRoot, 'uploads');
+  mkdirSync(root, { recursive: true });
   for (const relativePath of options.existingFiles ?? []) {
     const absolutePath = join(root, relativePath);
     mkdirSync(dirname(absolutePath), { recursive: true });
     writeFileSync(absolutePath, '%PDF-1.4 test');
+  }
+  for (const relativePath of options.outsideFiles ?? []) {
+    const absolutePath = join(parentRoot, relativePath);
+    mkdirSync(dirname(absolutePath), { recursive: true });
+    writeFileSync(absolutePath, '%PDF-1.4 outside');
   }
 
   const updates: unknown[] = [];
@@ -62,9 +71,10 @@ const createHarness = (options: PdfDownloadOptions): PdfDownloadHarness => {
   return {
     service,
     root,
+    parentRoot,
     updates,
     retries,
-    cleanup: () => rmSync(root, { recursive: true, force: true }),
+    cleanup: () => rmSync(parentRoot, { recursive: true, force: true }),
   };
 };
 
@@ -172,4 +182,78 @@ test('does not enqueue a second conversion while a PDF retry is active', async (
 
   assert.deepEqual(harness.retries, []);
   assert.deepEqual(harness.updates, []);
+});
+
+test('reports PDF availability from the newest completed job result', async (t) => {
+  const harness = createHarness({
+    generatedPdfPath: null,
+    job: { id: 'job-1', status: 'done', resultRelativePath: 'generated/actual.pdf' },
+    existingFiles: ['generated/actual.pdf'],
+  });
+  t.after(harness.cleanup);
+
+  const status = await harness.service.getPdfJobStatus('transfer-1');
+
+  assert.equal(status.status, 'done');
+  assert.equal(status.hasGeneratedPdf, true);
+  assert.equal(status.hasGeneratedDocument, true);
+});
+
+test('falls back to a readable stored PDF when the completed job result is missing', async (t) => {
+  const harness = createHarness({
+    generatedPdfPath: 'generated/stored.pdf',
+    job: { id: 'job-1', status: 'done', resultRelativePath: 'generated/missing.pdf' },
+    existingFiles: ['generated/stored.pdf'],
+  });
+  t.after(harness.cleanup);
+
+  const status = await harness.service.getPdfJobStatus('transfer-1');
+
+  assert.equal(status.hasGeneratedPdf, true);
+});
+
+test('reports missing PDF when a done job has no readable result', async (t) => {
+  const harness = createHarness({
+    generatedPdfPath: 'generated/missing.pdf',
+    job: { id: 'job-1', status: 'done', resultRelativePath: 'generated/missing.pdf' },
+  });
+  t.after(harness.cleanup);
+
+  const status = await harness.service.getPdfJobStatus('transfer-1');
+
+  assert.equal(status.status, 'done');
+  assert.equal(status.hasGeneratedPdf, false);
+});
+
+test('does not report a running job result as an available PDF', async (t) => {
+  const harness = createHarness({
+    generatedPdfPath: null,
+    job: { id: 'job-2', status: 'running', resultRelativePath: 'generated/partial.pdf' },
+    existingFiles: ['generated/partial.pdf'],
+  });
+  t.after(harness.cleanup);
+
+  const status = await harness.service.getPdfJobStatus('transfer-1');
+
+  assert.equal(status.status, 'running');
+  assert.equal(status.hasGeneratedPdf, false);
+});
+
+test('never serves a PDF stored outside the upload root', async (t) => {
+  const harness = createHarness({
+    generatedPdfPath: '../outside.pdf',
+    job: { id: 'job-1', status: 'done', resultRelativePath: 'generated/missing.pdf' },
+    outsideFiles: ['outside.pdf'],
+  });
+  t.after(harness.cleanup);
+  assert.ok(existsSync(join(harness.parentRoot, 'outside.pdf')));
+
+  const status = await harness.service.getPdfJobStatus('transfer-1');
+  assert.equal(status.hasGeneratedPdf, false);
+
+  await assert.rejects(
+    harness.service.getGeneratedFileStream('transfer-1', 'pdf'),
+    (error: unknown) => assertConflictStatus(error, 'processing'),
+  );
+  assert.deepEqual(harness.retries, ['transfer-1']);
 });

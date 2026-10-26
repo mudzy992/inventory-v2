@@ -11,7 +11,7 @@ import { Interval } from '@nestjs/schedule';
 import { randomUUID } from 'node:crypto';
 import Docxtemplater from 'docxtemplater';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname } from 'node:path';
 import PizZip from 'pizzip';
 import type { Prisma } from '../../../generated/prisma/client';
 import { DocumentConversionQueueService } from '../documents/document-conversion-queue.service';
@@ -24,6 +24,7 @@ import {
   buildGeneratedDocxRelativePath,
   buildGeneratedPdfRelativePath,
 } from './utils/transfer-document-path.util';
+import { resolveGeneratedDocumentPath } from './utils/resolve-generated-document-path.util';
 
 const transferTemplateInclude = {
   signer: true,
@@ -55,6 +56,23 @@ export class TransferDocumentGenerationService implements OnModuleInit {
   ) {}
 
   private reconcilingDocxJobs = false;
+
+  /** Returns an existing file only when its stored relative path is safely
+   * contained in the upload root. Invalid paths are treated as missing so a
+   * stale DB row can still be repaired by regeneration. */
+  private resolveReadableGeneratedDocument(storedPath: string | null | undefined): string | null {
+    if (!storedPath) return null;
+    try {
+      const absolutePath = resolveGeneratedDocumentPath(
+        this.templateService.getUploadRoot(),
+        storedPath,
+      );
+      return existsSync(absolutePath) ? absolutePath : null;
+    } catch (error) {
+      this.logger.warn(`Ignoring invalid stored generated document path: ${String(error)}`);
+      return null;
+    }
+  }
 
   onModuleInit(): void {
     void this.reconcileQueuedDocxGenerations();
@@ -167,8 +185,11 @@ export class TransferDocumentGenerationService implements OnModuleInit {
         year,
         transfer.documentNumber,
       );
-      const docxAbsolute = join(this.templateService.getUploadRoot(), docxRelative);
-      mkdirSync(resolve(docxAbsolute, '..'), { recursive: true });
+      const docxAbsolute = resolveGeneratedDocumentPath(
+        this.templateService.getUploadRoot(),
+        docxRelative,
+      );
+      mkdirSync(dirname(docxAbsolute), { recursive: true });
       writeFileSync(docxAbsolute, docxBuffer);
 
       const completed = await this.prisma.transfer.updateMany({
@@ -268,7 +289,9 @@ export class TransferDocumentGenerationService implements OnModuleInit {
   /**
    * Status trenutnog/posljednjeg PDF posla za prenosnicu — koristi ga
    * frontend za polling dok čeka Socket.IO `document.job.updated` event
-   * (ili kao fallback ako WebSocket nije povezan).
+   * (ili kao fallback ako WebSocket nije povezan). `hasGeneratedPdf` provjerava
+   * stvarnu dostupnost fajla, pa `done` posao bez čitljivog rezultata ne mora
+   * značiti da je PDF dostupan za preuzimanje.
    */
   async getPdfJobStatus(transferId: string): Promise<{
     status: 'none' | 'queued' | 'running' | 'done' | 'failed';
@@ -277,14 +300,23 @@ export class TransferDocumentGenerationService implements OnModuleInit {
     docxStatus: 'not_requested' | 'queued' | 'running' | 'done' | 'failed';
     docxError: string | null;
     hasGeneratedDocument: boolean;
+    hasGeneratedPdf: boolean;
   }> {
     const [job, transfer] = await Promise.all([
       this.documentJobs.findLatestForSource(DOCUMENT_SOURCE_TYPE_TRANSFER, transferId),
       this.prisma.transfer.findUnique({
         where: { id: transferId },
-        select: { generatedDocxStatus: true, generatedDocxPath: true },
+        select: {
+          generatedDocxStatus: true,
+          generatedDocxPath: true,
+          generatedPdfPath: true,
+        },
       }),
     ]);
+    const completedJobResult =
+      job && job.status === 'done'
+        ? this.resolveReadableGeneratedDocument(job.resultRelativePath)
+        : null;
     return {
       status: job?.status ?? 'none',
       jobId: job?.id ?? null,
@@ -295,6 +327,9 @@ export class TransferDocumentGenerationService implements OnModuleInit {
           ? 'Generisanje Word obrasca nije uspjelo. Provjerite aktivni predložak i pokušajte ponovo.'
           : null,
       hasGeneratedDocument: Boolean(transfer?.generatedDocxPath),
+      hasGeneratedPdf: Boolean(
+        completedJobResult ?? this.resolveReadableGeneratedDocument(transfer?.generatedPdfPath),
+      ),
     };
   }
 
@@ -337,8 +372,8 @@ export class TransferDocumentGenerationService implements OnModuleInit {
           : 'DOCX generisanje je još u toku.',
       );
     }
-    const docxAbsolute = join(this.templateService.getUploadRoot(), transfer.generatedDocxPath);
-    if (!existsSync(docxAbsolute)) {
+    const docxAbsolute = this.resolveReadableGeneratedDocument(transfer.generatedDocxPath);
+    if (!docxAbsolute) {
       await this.retryDocxGeneration(transferId, requestedByUserId);
       return; // DOCX generation handles the corresponding PDF enqueue.
     }
@@ -390,8 +425,8 @@ export class TransferDocumentGenerationService implements OnModuleInit {
         }
         throw new NotFoundException('Generated docx not available');
       }
-      const absolutePath = join(this.templateService.getUploadRoot(), transfer.generatedDocxPath);
-      if (!existsSync(absolutePath)) {
+      const absolutePath = this.resolveReadableGeneratedDocument(transfer.generatedDocxPath);
+      if (!absolutePath) {
         throw new NotFoundException('Generated docx file not found');
       }
       return {
@@ -410,12 +445,9 @@ export class TransferDocumentGenerationService implements OnModuleInit {
     // ili zastario (npr. completion sync nije prošao). Uvijek prvo pokušamo
     // vratiti rezultat najnovijeg posla i popraviti pointer. Bez ovoga bi
     // obrisan PDF ostavljao korisnika zauvijek na 409 sa statusom 'done'.
-    if (job?.status === 'done') {
-      const resultAbsolutePath = join(
-        this.templateService.getUploadRoot(),
-        job.resultRelativePath,
-      );
-      if (existsSync(resultAbsolutePath)) {
+    if (job && job.status === 'done') {
+      const resultAbsolutePath = this.resolveReadableGeneratedDocument(job.resultRelativePath);
+      if (resultAbsolutePath) {
         if (transfer.generatedPdfPath !== job.resultRelativePath) {
           await this.prisma.transfer.update({
             where: { id: transferId },
@@ -432,11 +464,13 @@ export class TransferDocumentGenerationService implements OnModuleInit {
 
     // Ako najnoviji posao nema čitljiv rezultat, stari ali ispravan PDF je
     // i dalje bolji od prisiljavanja korisnika na novu konverziju.
-    if (transfer.generatedPdfPath) {
-      const absolutePath = join(this.templateService.getUploadRoot(), transfer.generatedPdfPath);
-      if (existsSync(absolutePath)) {
-        return { absolutePath, mime: 'application/pdf', filename: `${transfer.documentNumber}.pdf` };
-      }
+    const storedPdfAbsolutePath = this.resolveReadableGeneratedDocument(transfer.generatedPdfPath);
+    if (storedPdfAbsolutePath) {
+      return {
+        absolutePath: storedPdfAbsolutePath,
+        mime: 'application/pdf',
+        filename: `${transfer.documentNumber}.pdf`,
+      };
     }
 
     if (!job || job.status === 'failed' || job.status === 'done') {
@@ -467,10 +501,7 @@ export class TransferDocumentGenerationService implements OnModuleInit {
     if (!transfer?.documentWarehouseId) {
       return;
     }
-    const docxAbsolute = transfer.generatedDocxPath
-      ? join(this.templateService.getUploadRoot(), transfer.generatedDocxPath)
-      : null;
-    if (docxAbsolute && existsSync(docxAbsolute)) {
+    if (this.resolveReadableGeneratedDocument(transfer.generatedDocxPath)) {
       return;
     }
     try {
