@@ -140,24 +140,20 @@ export class MaintenancePartsService {
   async listMaintenanceLots(user: AuthenticatedUser, warehouseId: string) {
     await this.assertEnabled();
     await this.assertWarehouseReadAccess(user, warehouseId);
-    const lots = await this.prisma.warehouseStockLot.findMany({
-      where: { warehouseId, lotKind: 'MAINTENANCE' },
+    if (this.moderatorScope.isModerator(user)) {
+      return [];
+    }
+    const filters: Prisma.WarehouseStockLotWhereInput[] = [
+      { warehouseId, lotKind: 'MAINTENANCE' },
+    ];
+    if (user.role === 'evidenticar') {
+      filters.push(await this.registrarScope.buildStockLotWhere(user));
+    }
+    return this.prisma.warehouseStockLot.findMany({
+      where: { AND: filters },
       include: { category: true },
       orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
     });
-    if (user.role === 'admin') {
-      return lots;
-    }
-    if (user.role === 'skladistar') {
-      return lots;
-    }
-    const filtered = [];
-    for (const lot of lots) {
-      if (await this.registrarScope.canAccessStockLot(user, lot)) {
-        filtered.push(lot);
-      }
-    }
-    return filtered;
   }
 
   async receiveMaintenanceLot(
@@ -250,23 +246,22 @@ export class MaintenancePartsService {
       : null;
     await this.registrarScope.assertCanAccessEquipment(user, equipment, holder);
     await this.assertMaintenanceAllowedForHost(equipment, maintenanceCategoryId);
-    const lots = await this.prisma.warehouseStockLot.findMany({
-      where: {
+    const filters: Prisma.WarehouseStockLotWhereInput[] = [
+      {
         lotKind: 'MAINTENANCE',
         categoryId: maintenanceCategoryId,
         quantityOnHand: { gt: 0 },
         status: 'spremno_za_izdavanje',
       },
+    ];
+    if (user.role !== 'admin') {
+      filters.push(await this.registrarScope.buildStockLotWhere(user));
+    }
+    return this.prisma.warehouseStockLot.findMany({
+      where: { AND: filters },
       include: { warehouse: true, category: true },
       orderBy: [{ productName: 'asc' }, { entryDate: 'desc' }],
     });
-    const filtered = [];
-    for (const lot of lots) {
-      if (user.role === 'admin' || (await this.registrarScope.canAccessStockLot(user, lot))) {
-        filtered.push(lot);
-      }
-    }
-    return filtered;
   }
 
   async installPart(user: AuthenticatedUser, equipmentId: string, dto: InstallMaintenancePartDto) {
