@@ -399,6 +399,15 @@ flag, env/compose konfiguraciju i da vodič dokumentuje svako polje.
 QR privacy contract` (exit 1); nakon vraćanja gate prolazi. CI korak:
 `Verify public QR privacy contract`.
 
+**CI dokaz.** Commit `c422be5` prolazi u run-u `40550059321` (`completed
+success` na sva tri joba). Novi korak `Verify public QR privacy contract` (41)
+je zelen, kao i prethodni `Verify auth session revocation` (40), lint (42),
+typecheck (43), 744 backend unit testova (44), build (46) i `npm audit` (47).
+Lokalno su potvrđeni 16/16 novih unit scenarija, 14/14 FE guardova, 16/16
+worker unit testova, svi statički gateovi (container policy, Redis ACL,
+migration drift, auth revocation), TLS handshake dokazi, strukturirani logovi i
+`npm audit` = 0 nalaza za sva tri workspace-a.
+
 **Ograničenje / ostaje vlasniku:** prihvaćeni rizik objavljivanja identiteta i
 historije i dalje postoji (opcije: maskiranje, kraća historija sa indikatorom,
 zaseban javni token sa užim DTO-jem). Rate limit je i dalje fail-open po
