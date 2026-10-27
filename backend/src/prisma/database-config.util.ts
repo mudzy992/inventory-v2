@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
+import { isIP } from 'node:net';
 
 export type DatabaseSslMode = 'disable' | 'require' | 'verify-ca' | 'verify-full';
 
 export interface DatabaseSslConfig {
   rejectUnauthorized: true;
+  minVersion: 'TLSv1.2';
   ca?: string;
+  servername?: string;
 }
 
 export interface DatabaseConnectionConfig {
@@ -58,16 +61,32 @@ export const resolveDatabasePoolMax = (
 const resolveSslConfig = (
   parsedUrl: URL | null,
   env: NodeJS.ProcessEnv,
+  host: string,
 ): DatabaseSslConfig | undefined => {
   const urlMode = parsedUrl?.searchParams.get('sslmode');
-  const configuredMode = urlMode ?? env.DATABASE_SSL_MODE ?? 'disable';
+  const envMode = env.DATABASE_SSL_MODE;
+  // A `sslmode=disable` embedded in DATABASE_URL must never silently override
+  // an explicit deployment-wide verified TLS policy (nor the reverse). Two
+  // different *enabled* modes are harmless: this driver treats every enabled
+  // mode as verified TLS, so the deployment-wide env value simply wins.
+  if (urlMode && envMode && urlMode !== envMode) {
+    const urlEnabled = SUPPORTED_SSL_MODES.has(urlMode as DatabaseSslMode) && urlMode !== 'disable';
+    const envEnabled = SUPPORTED_SSL_MODES.has(envMode as DatabaseSslMode) && envMode !== 'disable';
+    if (urlEnabled !== envEnabled) {
+      throw new Error(
+        'Conflicting PostgreSQL sslmode: DATABASE_URL sslmode and DATABASE_SSL_MODE disagree about TLS',
+      );
+    }
+  }
+  const configuredMode = envMode ?? urlMode ?? 'disable';
   if (!SUPPORTED_SSL_MODES.has(configuredMode as DatabaseSslMode)) {
     throw new Error(
       `Unsupported PostgreSQL sslmode "${configuredMode}". Use disable, require, verify-ca, or verify-full.`,
     );
   }
 
-  const caPath = parsedUrl?.searchParams.get('sslrootcert') ?? env.DATABASE_SSL_CA;
+  const urlCa = parsedUrl?.searchParams.get('sslrootcert');
+  const caPath = (urlCa && urlCa.trim() !== '' ? urlCa : null) ?? env.DATABASE_SSL_CA;
   if (configuredMode === 'disable') {
     if (caPath) {
       throw new Error('DATABASE_SSL_CA/sslrootcert requires PostgreSQL TLS to be enabled');
@@ -79,9 +98,13 @@ const resolveSslConfig = (
   // Node's TLS client verifies the certificate chain and hostname. Even
   // sslmode=require is intentionally treated as verified TLS, not encryption
   // without peer authentication; supply DATABASE_SSL_CA for a private CA.
+  // `minVersion` and `servername` are explicit so a future refactor cannot
+  // fall back to an implicit (or IP-invalid) verification default.
   return {
     rejectUnauthorized: true,
+    minVersion: 'TLSv1.2',
     ...(ca ? { ca } : {}),
+    ...(isIP(host) === 0 ? { servername: host } : {}),
   };
 };
 
@@ -106,7 +129,7 @@ const parseDatabaseUrl = (
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
     database,
-    ssl: resolveSslConfig(parsed, env),
+    ssl: resolveSslConfig(parsed, env, parsed.hostname),
   };
 };
 
@@ -137,6 +160,6 @@ export const resolveDatabaseConfig = (
     user,
     password,
     database,
-    ssl: resolveSslConfig(null, env),
+    ssl: resolveSslConfig(null, env, host),
   };
 };

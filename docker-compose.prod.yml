@@ -54,12 +54,19 @@ services:
       RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED: ${RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED:-false}
       # Replike × ovaj broj + worker/migracije/maintenance < max_connections.
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      # Eksterna PostgreSQL baza: TLS mod je eksplicitan i ne smije se
+      # razlikovati od `sslmode` u DATABASE_URL. Sa privatnim CA postaviti
+      # DATABASE_SSL_CA na read-only montirani PEM fajl (vidi volume ispod).
+      DATABASE_SSL_MODE: ${DATABASE_SSL_MODE:-verify-full}
+      DATABASE_SSL_CA: ${DATABASE_SSL_CA:-}
     # Upload root na hostu; unutra aplikacija gradi prenosnice/, templates/, ...
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads
       # Za vanjski Redis sa privatnim CA: postaviti REDIS_TLS=true i
       # REDIS_CA_CERT_PATH=/run/secrets/redis-ca.crt, pa odkomentirati mount.
       # - /etc/ssl/private/redis-ca.crt:/run/secrets/redis-ca.crt:ro
+      # Za PostgreSQL sa privatnim CA (DATABASE_SSL_CA), odkomentirati i ovaj:
+      # - /etc/ssl/private/postgres-ca.crt:/run/secrets/postgres-ca.crt:ro
     networks:
       - web
       - internal

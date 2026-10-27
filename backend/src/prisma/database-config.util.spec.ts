@@ -43,8 +43,76 @@ describe('resolveDatabaseConfig', () => {
         DATABASE_SSL_CA: caPath,
       });
 
-      assert.deepEqual(config.ssl, { rejectUnauthorized: true, ca });
+      assert.deepEqual(config.ssl, {
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2',
+        ca,
+        servername: 'db.internal',
+      });
       assert.equal(readFileSync(caPath, 'utf8'), ca);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps peer verification for every enabled sslmode', () => {
+    for (const mode of ['require', 'verify-ca', 'verify-full'] as const) {
+      const config = resolveDatabaseConfig({
+        DATABASE_URL: `postgresql://user:password@db.internal/inventory?sslmode=${mode}`,
+      });
+      assert.equal(config.ssl?.rejectUnauthorized, true, mode);
+      assert.equal(config.ssl?.minVersion, 'TLSv1.2', mode);
+      assert.equal(config.ssl?.servername, 'db.internal', mode);
+      assert.equal(config.ssl?.ca, undefined, mode);
+    }
+  });
+
+  it('omits SNI for IP hosts so the certificate IP SAN is checked instead', () => {
+    const config = resolveDatabaseConfig({
+      DATABASE_URL: 'postgresql://user:password@10.20.30.40:5432/inventory?sslmode=verify-full',
+    });
+    assert.deepEqual(config.ssl, { rejectUnauthorized: true, minVersion: 'TLSv1.2' });
+    assert.equal('servername' in (config.ssl ?? {}), false);
+  });
+
+  it('rejects a URL or env sslmode that tries to turn verified TLS off', () => {
+    assert.throws(
+      () =>
+        resolveDatabaseConfig({
+          DATABASE_URL: 'postgresql://user:password@db.internal/inventory?sslmode=disable',
+          DATABASE_SSL_MODE: 'verify-full',
+        }),
+      /Conflicting PostgreSQL sslmode/,
+    );
+    assert.throws(
+      () =>
+        resolveDatabaseConfig({
+          DATABASE_URL: 'postgresql://user:password@db.internal/inventory?sslmode=verify-full',
+          DATABASE_SSL_MODE: 'disable',
+        }),
+      /Conflicting PostgreSQL sslmode/,
+    );
+  });
+
+  it('lets the deployment-wide mode win when both sides only request verified TLS', () => {
+    const config = resolveDatabaseConfig({
+      DATABASE_URL: 'postgresql://user:password@db.internal/inventory?sslmode=require',
+      DATABASE_SSL_MODE: 'verify-full',
+    });
+    assert.equal(config.ssl?.rejectUnauthorized, true);
+    assert.equal(config.ssl?.minVersion, 'TLSv1.2');
+  });
+
+  it('falls back to DATABASE_SSL_CA when the URL has an empty sslrootcert', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'inventory-postgres-empty-ca-'));
+    const caPath = join(directory, 'postgres-ca.crt');
+    writeFileSync(caPath, 'deployment CA');
+    try {
+      const config = resolveDatabaseConfig({
+        DATABASE_URL: 'postgresql://user:password@db.internal/inventory?sslmode=verify-full&sslrootcert=',
+        DATABASE_SSL_CA: caPath,
+      });
+      assert.equal(config.ssl?.ca, 'deployment CA');
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -60,7 +128,12 @@ describe('resolveDatabaseConfig', () => {
       const config = resolveDatabaseConfig({
         DATABASE_URL: `postgresql://user:password@db.internal/inventory?sslmode=verify-ca&sslrootcert=${encodeURIComponent(caPath)}`,
       });
-      assert.deepEqual(config.ssl, { rejectUnauthorized: true, ca });
+      assert.deepEqual(config.ssl, {
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2',
+        ca,
+        servername: 'db.internal',
+      });
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

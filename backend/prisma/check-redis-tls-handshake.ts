@@ -1,12 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import {
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -20,6 +13,10 @@ import Redis from 'ioredis';
 import { buildBaseRedisOptions, readRedisConfig } from '../src/redis/redis.config';
 import { loadConfig } from '../../document-worker/src/config';
 import { buildRedisOptions } from '../../document-worker/src/redis-connection';
+import {
+  createTestCertificateAuthority,
+  issueTestServerCertificate,
+} from './utils/tls-test-chain.util';
 
 /**
  * Proves — with a real CA chain and a real TLS socket — that both Redis
@@ -34,10 +31,6 @@ import { buildRedisOptions } from '../../document-worker/src/redis-connection';
 const HOSTNAME = 'localhost';
 const WRONG_HOSTNAME = 'redis.evil.example.test';
 
-const openssl = (args: string[]): void => {
-  execFileSync('openssl', args, { stdio: ['ignore', 'pipe', 'pipe'] });
-};
-
 interface CertificateChain {
   caPath: string;
   serverCertPath: string;
@@ -45,42 +38,13 @@ interface CertificateChain {
 }
 
 const createCertificateChain = (directory: string): CertificateChain => {
-  const caKey = join(directory, 'ca.key');
-  const caCert = join(directory, 'ca.crt');
-  const serverKey = join(directory, 'server.key');
-  const serverCsr = join(directory, 'server.csr');
-  const serverCert = join(directory, 'server.crt');
-  const extensions = join(directory, 'server.ext');
-
-  openssl([
-    'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256',
-    '-keyout', caKey, '-out', caCert, '-days', '2',
-    '-subj', '/CN=Inventory CI Redis Test CA',
-    '-addext', 'basicConstraints=critical,CA:TRUE',
-    '-addext', 'keyUsage=critical,keyCertSign,cRLSign',
-  ]);
-  openssl([
-    'req', '-newkey', 'rsa:2048', '-nodes', '-sha256',
-    '-keyout', serverKey, '-out', serverCsr,
-    '-subj', `/CN=${HOSTNAME}`,
-  ]);
-  writeFileSync(
-    extensions,
-    [
-      'basicConstraints=critical,CA:FALSE',
-      'keyUsage=critical,digitalSignature,keyEncipherment',
-      'extendedKeyUsage=serverAuth',
-      `subjectAltName=DNS:${HOSTNAME},IP:127.0.0.1`,
-      '',
-    ].join('\n'),
-  );
-  openssl([
-    'x509', '-req', '-sha256',
-    '-in', serverCsr, '-CA', caCert, '-CAkey', caKey, '-CAcreateserial',
-    '-out', serverCert, '-days', '2', '-extfile', extensions,
-  ]);
-
-  return { caPath: caCert, serverCertPath: serverCert, serverKeyPath: serverKey };
+  const ca = createTestCertificateAuthority(directory, 'Inventory CI Redis Test CA');
+  const server = issueTestServerCertificate(ca, directory, 'redis-server', HOSTNAME);
+  return {
+    caPath: ca.caCertPath,
+    serverCertPath: server.certPath,
+    serverKeyPath: server.keyPath,
+  };
 };
 
 const INFO_REPLY = [

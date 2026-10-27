@@ -387,9 +387,11 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Vrijednost:** jedna Prisma service instanca, PostgreSQL adapter, relation models, enum statusi, FK/unique/indexi i transakcije u critical flows. U početnoj migraciji su svi osnovni modeli osim DocumentJob; taj model i unique index imaju zasebne migracije.
 
-**Rizici:** DB URL parser odbacuje query params i adapter ne postavlja `ssl`/CA eksplicitno (P1 verify). Hard-coded pool `max: 10` treba provjeriti prema broju backend replika i Postgres connection limitu. Tri migracije naspram velikog živog schema-a nisu automatski loše (init migration pokriva većinu modela), ali schema-drift test mora potvrditi da ne postoje ručne promjene izvan migracija. Migracioni README je zastario.
+**Rizici:** Hard-coded pool `max: 10` treba provjeriti prema broju backend replika i Postgres connection limitu (sada je `DATABASE_POOL_MAX` 1–100 sa budžetnom formulom). Tri migracije naspram velikog živog schema-a nisu automatski loše (init migration pokriva većinu modela), ali schema-drift test mora potvrditi da ne postoje ručne promjene izvan migracija. Migracioni README je zastario.
 
-**Plan:** P1 dokazati TLS/CA u runtime; P2 migracije na praznoj i kopiji baze u CI; schema diff check; pool budget formula = replicas × pool max + worker/maintenance.
+**Plan:** ~~P1 dokazati TLS/CA u runtime~~ **(zatvoreno)**; P2 migracije na praznoj i kopiji baze u CI; schema diff check; pool budget formula = replicas × pool max + worker/maintenance.
+
+**Remediation update:** `resolveDatabaseConfig()` više ne odbacuje TLS query parametre — podržani su `DATABASE_SSL_MODE`/`sslmode` (`disable`, `require`, `verify-ca`, `verify-full`) i `DATABASE_SSL_CA`/`sslrootcert`, pri čemu svaki uključeni mod znači verifikovan peer + hostname (`rejectUnauthorized: true`, `minVersion: TLSv1.2`, SNI za DNS host). Nesaglasnost `sslmode` iz URL-a i deployment moda oko uključenja TLS-a sada puca fail-closed umjesto tihe downgrade promjene. `createPrismaClientOptions()` eksplicitno prosljeđuje `ssl` u `pg.Pool`. P1 runtime dokaz je `backend/prisma/check-postgres-tls-handshake.ts`: pravi `openssl` CA/server lanac, TLS-only PostgreSQL wire stub i stvarni `pg.Client` koji kroz verificirani TLS izvršava `SELECT 1`, dok pogrešan CA, tuđi hostname i plaintext bivaju odbijeni (vidi `docs/backend-implementation-plan.md` §0.5). Stvarni CA mount i podudarnost certifikata sa `DATABASE_HOST` ostaju deployment potvrda.
 
 ### Redis / BullMQ / Socket.IO — **7.0/10**
 

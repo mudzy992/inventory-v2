@@ -26,6 +26,8 @@
     "test:integration:migrations": "node --import tsx prisma/check-migration-invariants.ts",
     "test:integration:redis-tls-handshake": "node --import tsx prisma/check-redis-tls-handshake.ts",
     "test:unit:redis-tls-handshake": "node --import tsx --test src/redis/redis.config.spec.ts",
+    "test:integration:postgres-tls-handshake": "node --import tsx prisma/check-postgres-tls-handshake.ts",
+    "test:unit:postgres-tls-handshake": "node --import tsx --test src/prisma/database-config.util.spec.ts",
     "test:integration:redis-rate-limit": "node --import tsx prisma/check-redis-rate-limit.ts",
     "test:integration:redis-metrics": "node --import tsx prisma/check-redis-metrics.ts",
     "test:unit:redis-metrics": "node --import tsx --test src/common/logging/structured-log.util.spec.ts src/redis/redis-connection.registry.spec.ts src/redis/redis.service.spec.ts src/modules/health/utils/redis-metrics.util.spec.ts src/modules/health/redis-metrics.service.spec.ts",
