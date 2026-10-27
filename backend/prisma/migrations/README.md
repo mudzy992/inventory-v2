@@ -20,8 +20,31 @@ Stare MySQL migracije (36 fajlova sa `CREATE TABLE` backtick-ovima, `ENGINE=Inno
 
 - `schema.prisma` je izvor za modele i indekse koje Prisma može izraziti. Kreirati novu migraciju kada se shema mijenja; ne uređivati migracije koje su već primijenjene u nekom okruženju.
 - Pregledati generisani SQL, naročito destructive operacije, lock trajanje, indekse i podatkovne backfill-e. Ne koristiti `prisma db push` kao deployment mehanizam.
-- Deploy raditi sa `prisma migrate deploy`. CI provjerava validnost Prisma sheme, primjenjuje cijelu migracionu istoriju na privremeni PostgreSQL i provjerava `prisma migrate status`.
+- Deploy raditi sa `prisma migrate deploy`. CI provjerava validnost Prisma sheme, primjenjuje cijelu migracionu istoriju na privremeni PostgreSQL, provjerava `prisma migrate status` i pokreće `test:integration:migration-drift` (vidi dole).
 - Prije release-a provjeriti i praznu bazu i kompatibilan upgrade put sa reprezentativne prethodne verzije; zabilježiti rollback/restore plan za promjene podataka.
 - SQL-only objekte (uključujući partial indexe) dokumentovati ovdje i pokriti regresionim testom kako ih kasnija migracija ne bi slučajno izbrisala.
+
+## Schema snapshot i nepromjenjivost historije
+
+`prisma migrate deploy` na svježoj CI bazi uvijek ponavlja **trenutne** SQL fajlove — ako se već primijenjena migracija naknadno izmijeni, to se ne vidi. Zato `backend/prisma/schema-drift.manifest.json` (namjerno izvan `migrations/` da ne smeta Prisma engine-u) bilježi SHA-256 `schema.prisma` i svakog `migration.sql`, po redoslijedu primjene.
+
+CI korak `Verify migration history and schema snapshot` (`npm run test:integration:migration-drift`) bez baze provjerava:
+
+- da `schema.prisma` nije promijenjen bez nove migracije (hash se mora poklapati sa manifestom);
+- da nijedan zabilježeni `migration.sql` nije prepravljen, obrisan ili preuređen;
+- da ne postoji nova migracija koja nije upisana u manifest;
+- da su imena direktorija `YYYYMMDDHHMMSS_slug` i strogo rastuća, da svaki sadrži tačno jedan neprazan `migration.sql` i da `migration_lock.toml` i dalje kaže `postgresql`;
+- da SQL-only indeks `document_jobs_active_source_unique` i dalje postoji u tačno jednoj migraciji i da je dokumentovan u `schema.prisma` i ovom README-ju.
+
+**Workflow za novu migraciju:** dodati direktorij sa pregledanim `migration.sql`, promijeniti `schema.prisma` ako je potrebno, zatim pokrenuti `npm run prisma:manifest` i commitovati ažurirani manifest zajedno sa migracijom. Ako se manifest ne regeneriše, CI odbija promjenu — to je namjerna zaštita od „schema drift"-a, a ne greška koju treba zaobići.
+
+**Destruktivni SQL** (`DROP TABLE`, `DROP COLUMN`, `DROP INDEX`, `DROP TYPE`, `TRUNCATE`, `DELETE FROM`) u novoj migraciji mora imati eksplicitni pregled u istom fajlu:
+
+```sql
+-- migration-review: <zašto je uklanjanje sigurno i kako se radi rollback>
+DROP TABLE "legacy_table";
+```
+
+Bez tog markera drift check ne prolazi. Svaka izmjena markera ulazi u code review. Unit testovi za sva pravila su u `backend/prisma/utils/migration-drift.util.spec.ts` (`npm run test:unit:migration-drift`).
 
 Vidi `migracija-mysql-postgres.md` u root-u repoa za istorijski kontekst prelaska sa MySQL-a na PostgreSQL.

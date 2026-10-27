@@ -76,6 +76,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:migrations
 
+      - name: Verify migration history and schema snapshot
+        working-directory: backend
+        run: npm run test:integration:migration-drift
+
       - name: Verify concurrent settings default initialization
         working-directory: backend
         run: npm run test:integration:settings-defaults

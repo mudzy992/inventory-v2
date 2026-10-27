@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "provider": "postgresql",
+  "schemaSha256": "ff6beccea1343df5d9de98f1a364725ced392ad297982bbe3a9dbfec05be3572",
+  "migrations": [
+    {
+      "name": "20260822185741_init_postgres",
+      "sha256": "7477fc1db19f9719881ca651147057a83c69bdb6fe6134e2768bca33775fbf96"
+    },
+    {
+      "name": "20260830010442_add_document_jobs",
+      "sha256": "957b20edad49c48428246820ecfd2785d626b78d18412e91d6dd7f5e581ac2a2"
+    },
+    {
+      "name": "20260831062751_document_jobs_active_source_unique",
+      "sha256": "afadc2ae03143b225adfdcbe2aa3e3fa22699740e14b1898e1da269fa7018a99"
+    },
+    {
+      "name": "20261025180000_add_refresh_token_expiry_index",
+      "sha256": "5bd02622e3329091215f251eacb0b4c86d8fa8abfb4a99a0adb7a4f7ec7a23e8"
+    },
+    {
+      "name": "20261025190000_add_inventory_close_leases",
+      "sha256": "9b93c97e6d95f9ce94fad2d55a8836ceec4b0557db2810db8fa403e221d54bbf"
+    },
+    {
+      "name": "20261025200000_add_notification_outbox_and_close_retry_audit",
+      "sha256": "e16bc6f2c2cf4f3527061ff3d73df787317080172fb6dbc1fab0fdd76eb2cbc5"
+    },
+    {
+      "name": "20261025210000_add_transfer_docx_generation_state",
+      "sha256": "b6a8a00ec52892802f77450ea05501a3c40002fc6389753fb144fc32c8b2da2d"
+    }
+  ],
+  "notes": "Regenerate with `npm run prisma:manifest` AFTER adding a reviewed SQL migration. CI (`test:integration:migration-drift`) rejects rewritten migration files, unmanifested migrations and schema.prisma changes without a manifest update."
+}
