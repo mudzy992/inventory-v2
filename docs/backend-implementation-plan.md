@@ -96,6 +96,8 @@ Unit specovi `backend/src/redis/redis.config.spec.ts` i `document-worker/src/red
 
 Unit spec `backend/src/prisma/database-config.util.spec.ts` pokriva SNI za DNS/IP, sve modove, konflikt downgrade-a, `sslrootcert` fallback, neispravan CA i pool budžet.
 
+**CI dokaz.** Commit `5451ed1` prolazi u run-u `40496185060` (`completed success` na backend, frontend i document-worker jobovima). Koraci `Verify Redis TLS certificate and hostname verification` (33) i `Verify PostgreSQL TLS certificate and hostname verification` (34), lint, typecheck i svih 684 backend unit testova su zeleni; lokalno potvrđeni su i `npx nest build`, 14/14 FE guardova i 15/15 worker unit testova.
+
 **Ostaje vlasniku/deploymentu:** montirati stvarni PostgreSQL CA fajl kada baza koristi privatni CA, potvrditi da CN/SAN certifikata odgovara `DATABASE_HOST`, te potvrditi da vanjski `DATABASE_URL` ne sadrži `sslmode` koji je u suprotnosti sa `DATABASE_SSL_MODE`.
 
 ## 4. Talas 1 — sigurnosni P1 nalazi
