@@ -158,6 +158,8 @@ Mutacijski dokaz: privremeno uklanjanje `key` opcije iz `createAdapter` uzrokuje
 
 **Mutacijski dokaz.** Vraćanje `RUN npm ci 2>/dev/null || npm install` u worker Dockerfile daje tri greške (`npm install resolves unpinned versions`, `shell fallback`, `2>/dev/null hides install/integrity failures`); promjena jednog CI `npm audit --audit-level=low` u `--audit-level=high` daje `expected at least 3 … found 2`. Nakon vraćanja obje mutacije gate ponovo prolazi.
 
+**CI dokaz.** Commit `b83de16` prolazi u run-u `40507199884` (`completed success` na backend, frontend i document-worker jobovima). Novi korak `Verify container dependency and lockfile policy` (5) je zelen, kao i `Verify migration history and schema snapshot` (10), lint (38), typecheck (39), 698 backend unit testova (40), build (42) i `npm audit` (43). Lokalno su potvrđeni 12/12 policy specova, 10/10 migration-drift specova, 14/14 FE guardova, 15/15 worker unit testova, worker build, YAML parse svih workflow/compose datoteka i `npm audit --audit-level=low` = 0 nalaza za sva tri workspace-a.
+
 **Ograničenje:** gate provjerava deklarativnu politiku i integritet lockfile-a, ne gradi Docker image (u CI nema Docker build koraka). Stvarni `docker build` iz clean checkouta ostaje deployment provjera; `npm ci` u sva tri CI joba već dokazuje da se lockfile može reproducirati na registryju.
 
 ## 4. Talas 1 — sigurnosni P1 nalazi
