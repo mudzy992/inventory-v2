@@ -337,6 +337,15 @@ i traži da oba servisa pozivaju marker + transakcijsku revokaciju +
 `disconnectUserSockets`. CI korak:
 `Verify auth session revocation (deactivation + refresh tokens)`.
 
+**CI dokaz.** Commit `60ed14e` prolazi u run-u `40528220036` (`completed
+success` na sva tri joba). Novi korak `Verify auth session revocation
+(deactivation + refresh tokens)` (40) je zelen, kao i lint (41), typecheck
+(42), 728 backend unit testova (43), build (45) i `npm audit` (46). Lokalno su
+potvrđeni 16/16 novih unit scenarija, 14/14 FE guardova, 16/16 worker unit
+testova, statički gateovi (container policy, Redis ACL, migration drift),
+Redis/PostgreSQL TLS handshake dokazi, strukturirani logovi i `npm audit`
+= 0 nalaza za sva tri workspace-a.
+
 **Ograničenje / ostaje vlasniku:** `disconnectUserSockets` i dalje doseže samo
 instance do kojih stiže Socket.IO adapter — ako je zbog lošeg ACL-a adapter u
 `in_memory` režimu, udaljene replike neće dobiti disconnect. Zato višereplikanski
