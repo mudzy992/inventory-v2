@@ -131,6 +131,11 @@ namespace preko `REDIS_KEY_PREFIX`. Da bi ovo stvarno radilo u Coolify-ju:
    BullMQ koristi `EVAL`/`EVALSHA` Lua skripte (`+info` gasi ioredis warning).
    zatim `redis-cli -a $REDIS_ADMIN_PASSWORD ACL LOAD` i
    `ACL GETUSER inventory-v2` za potvrdu `channels` reda.
+   **Ako korisnik već postoji** (što je slučaj na našoj platformi), dovoljna
+   je minimalna aditivna izmjena — samo dva nova `&` unosa, bez promjene
+   komandi/ključeva: vidi „Minimalna izmjena postojećeg ACL-a" u
+   `docs/redis-acl.md` (`ACL SETUSER …` + `ACL SAVE`). Stari `&socket.io…`
+   grantovi su ostaci prethodnog adaptera i mogu ostati.
 2. U Coolify env varijablama za ovaj backend servis postaviti `REDIS_PASSWORD` na
    istu vrijednost.
 3. Backend servis ove aplikacije mora biti na `redis_net` mreži (već dodato u

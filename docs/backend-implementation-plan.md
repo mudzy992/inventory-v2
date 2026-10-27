@@ -233,6 +233,31 @@ provjerava `.env.example` i BullMQ retry politiku. CI koraci:
 `Verify Socket.IO ACL denial degrades instead of crashing` i
 `Verify Redis ACL channel grants for Socket.IO and BullMQ`.
 
+**Dijagnoza stvarnog ACL-a sa platforme (vlasnikov `ACL GETUSER inventory-v2`
+na `127.0.0.1:6380`).** Komande (`-@all +@read +@write +@keyspace +@string
++@list +@stream +@sortedset +@hash +@blocking +@pubsub … +ping +info +eval
++evalsha +client|setname`) i ključevi (`~inventory-v2:* ~bull:inventory-v2:*`)
+su **ispravni** — `+@pubsub` već sadrži `PSUBSCRIBE`. `channels` ima
+`&inventory-v2:*` (glob) i osam **starih** `&socket.io…` egzaktnih grantova,
+koji su odgovarali adapteru dok je `key` bio default `socket.io`; nijedan nije
+jednak novim `inventory-v2:#/#*` / `inventory-v2:#/notifications#*`. Zato je
+minimalna ispravka **samo dva aditivna `&` unosa**, bez diranja komandi,
+ključeva ili `+@all`:
+
+```sh
+redis-cli -p 6380 -a "$REDIS_ADMIN_PASSWORD" \
+  ACL SETUSER inventory-v2 '&inventory-v2:#/#*' '&inventory-v2:#/notifications#*'
+redis-cli -p 6380 -a "$REDIS_ADMIN_PASSWORD" ACL SAVE
+```
+
+`ACL SETUSER` je aditivan za `&` (`ACLSetSelector`, `op[0] == '&'`), `ACL SAVE`
+perzistira runtime u `aclfile`; `ACL LOAD` je ispravan samo nakon ručne izmjene
+fajla. U Redis 7 ne postoji `-&pattern`, pa stare `socket.io` unose treba
+ostaviti (ili `resetchannels` + ponovo unijeti cijelu listu). Live CI check sada
+vjerno reproducira taj ACL (`LEGACY_RULE`), dokazuje `NOPERM` prije, zatim
+izvršava upravo tu dvograntnu komandu i dokazuje `shared_redis` kroz pravi
+`RedisIoAdapter` — bez promjene ijedne komande ili ključa.
+
 **CI ispravka.** Prvi run `40513334908` je pao upravo zato što je test koristio
 samo `&inventory-v2:*`; `psubscribe inventory-v2:#/#*` je odbijen. Redis 7.4
 source (`ACLCheckChannelAgainstList`) je potvrdio literalni `strcmp`, nakon

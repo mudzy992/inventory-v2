@@ -47,7 +47,76 @@ druga, odvojena (kozmetička) greška: BullMQ interno forsira `null`, a mi smo m
 slali `3`. Ispravljeno je kroz `buildBullMqRedisOptions()` u backendu i
 document-workeru; opšti Redis klijent i Socket.IO adapter i dalje koriste `3`.
 
-## Šta uraditi na Redis platformi
+## Dijagnoza stvarnog `ACL GETUSER inventory-v2` sa platforme
+
+Izlaz koji je vlasnik poslao (Redis `127.0.0.1:6380`):
+
+```
+commands: -@all +@read +@write +@keyspace +@string +@list +@stream
+          +@sortedset +@hash +@blocking +@pubsub -@admin -@dangerous
+          -flushall -flushdb -shutdown -config -debug -keys
+          +ping +info +eval +evalsha +client|setname
+keys:     ~inventory-v2:* ~bull:inventory-v2:*
+channels: &inventory-v2:* &bull:inventory-v2:*
+          &socket.io#/#* &socket.io#/notifications#*
+          &socket.io-request#/#* &socket.io-request#/notifications#*
+          &socket.io-response#/#* &socket.io-response#/notifications#*
+```
+
+**Zaključak: komande i ključevi su u redu — kanali nisu.** `+@pubsub` već
+sadrži `PSUBSCRIBE`; `+info` i `+eval`/`+evalsha` pokrivaju ioredis i BullMQ.
+`~inventory-v2:*` pokriva ključeve. Ali `channels` sadrži `&inventory-v2:*`
+(glob, dovoljan samo za PUBLISH/SUBSCRIBE) i osam **egzaktnih `&socket.io…`**
+grantova koji su ostaci **starog** adaptera (`key` je tada bio default
+`socket.io`, pa su `socket.io#/#*` i `socket.io#/notifications#*` bili tačni
+PSUBSCRIBE patterni). Novi patterni `inventory-v2:#/#*` i
+`inventory-v2:#/notifications#*` nemaju nijedan jednak `&` unos → `NOPERM`.
+
+Dakle: **ne treba dirati komande ni ključeve; treba dodati tačno dva `&`
+unosa.** `+info` već postoji (nema potrebe za `+@all`). `+client|setinfo`
+može se dodati opciono da ioredis ne loguje tiho odbijen `CLIENT SETINFO`.
+
+### Minimalna izmjena postojećeg ACL-a (preporučeno)
+
+`ACL SETUSER` je **aditivan** za `&` — dodaje nove channel patterne bez brisanja
+postojećih, bez `resetchannels` i bez prekida drugih klijenata:
+
+```sh
+redis-cli -p 6380 -a "$REDIS_ADMIN_PASSWORD" \
+  ACL SETUSER inventory-v2 \
+  '&inventory-v2:#/#*' '&inventory-v2:#/notifications#*'
+
+# Ako platforma koristi aclfile (users.acl), SAČUVAJ runtime stanje u fajl:
+redis-cli -p 6380 -a "$REDIS_ADMIN_PASSWORD" ACL SAVE
+
+redis-cli -p 6380 -a "$REDIS_ADMIN_PASSWORD" ACL GETUSER inventory-v2
+```
+
+**Važno — `ACL SAVE` vs `ACL LOAD`:** gornja komanda mijenja samo **runtime**
+ACL. `ACL SAVE` upisuje trenutno stanje u konfigurisani `aclfile`. Ako umjesto
+toga ručno editujete `users.acl`, onda treba `ACL LOAD` (on čita fajl u
+runtime). Nikad ne raditi samo `ACL LOAD` nakon `ACL SETUSER` — time bi se
+promjena izgubila. Ako se `aclfile` ne koristi, provjeriti kako platforma
+perzistira ACL (npr. Coolify `users.acl` mount) i upisati ista dva unosa tamo.
+
+Provjera bez restarta:
+
+```sh
+redis-cli -p 6380 --user inventory-v2 --pass "$REDIS_PASSWORD" \
+  PSUBSCRIBE 'inventory-v2:#/#*' 'inventory-v2:#/notifications#*'
+# očekivano: "Reading messages... (press Ctrl-C to quit)" — Ctrl+C za izlaz
+```
+
+Stari `&socket.io…` unosi mogu ostati (ne smetaju, korisni su ako neka stara
+instanca još koristi default adapter). Ako ih želite ukloniti, ne postoji
+`-&pattern` sintaksa u Redis 7 — treba `resetchannels` i znova dodati cijelu
+`&` listu, pa je jednostavnije ostaviti ih.
+
+## Šta uraditi na Redis platformi (pravilo od nule za nove deploymente)
+
+Ovo je cijelo pravilo ako tek kreirate korisnika. **Ako korisnik već postoji,
+koristite kraću „Minimalna izmjena" iznad** — vaša allowlista komandi je uža i
+ispravna, nema razloga je zamjenjivati `+@all`.
 
 1. Provjeriti stvarno stanje korisnika (ne ono što piše u fajlu):
 
@@ -104,6 +173,10 @@ document-workeru; opšti Redis klijent i Socket.IO adapter i dalje koriste `3`.
      PSUBSCRIBE 'inventory-v2:#/#*' 'inventory-v2:#/notifications#*'
    # očekivano: "Reading messages... (press Ctrl-C to quit)" — Ctrl+C za izlaz
    ```
+
+   `ACL LOAD` je ispravan samo kada ste prethodno **ručno editovali**
+   `users.acl`. Ako ste pravilo unijeli kroz `ACL SETUSER` u runtime, koristiti
+   `ACL SAVE` (vidi „Minimalna izmjena" iznad).
 
 4. **Restartovati backend (i document-worker).** Postojeće konekcije ne
    ponavljaju `PSUBSCRIBE` nakon promjene ACL-a.

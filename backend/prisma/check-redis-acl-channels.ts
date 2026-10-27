@@ -28,7 +28,7 @@ const PREFIX = 'inventory-v2';
 const KEY_PREFIX = `${PREFIX}:`;
 const GOOD_USER = 'acl_probe_socketio_ok';
 const NARROW_USER = 'acl_probe_socketio_narrow';
-const GLOB_USER = 'acl_probe_socketio_glob';
+const LEGACY_USER = 'acl_probe_socketio_legacy';
 const ACL_TEMPLATE = join('..', 'deploy', 'redis', 'users.acl.example');
 const ADAPTER_ENV = [
   'REDIS_HOST',
@@ -40,6 +40,27 @@ const ADAPTER_ENV = [
   'REDIS_TLS',
   'REDIS_CA_CERT_PATH',
   'SOCKETIO_REQUIRE_SHARED_ADAPTER',
+] as const;
+
+/**
+ * Faithful copy of the reported production `ACL GETUSER inventory-v2` rule
+ * (before the fix): a tight command allowlist, both key namespaces, the
+ * `&inventory-v2:*` glob and the OLD `socket.io…` exact channel grants from
+ * the adapter's default `key`. It proves the incident and that adding only
+ * the two new exact `&` grants is sufficient — no `+@all` needed.
+ */
+const LEGACY_RULE = [
+  '-@all',
+  '+@read', '+@write', '+@keyspace', '+@string', '+@list', '+@stream',
+  '+@sortedset', '+@hash', '+@blocking', '+@pubsub',
+  '-@admin', '-@dangerous',
+  '-flushall', '-flushdb', '-shutdown', '-config', '-debug', '-keys',
+  '+ping', '+info', '+eval', '+evalsha', '+client|setname',
+  '~inventory-v2:*', '~bull:inventory-v2:*',
+  '&inventory-v2:*', '&bull:inventory-v2:*',
+  '&socket.io#/#*', '&socket.io#/notifications#*',
+  '&socket.io-request#/#*', '&socket.io-request#/notifications#*',
+  '&socket.io-response#/#*', '&socket.io-response#/notifications#*',
 ] as const;
 
 const host = process.env.REDIS_HOST ?? '127.0.0.1';
@@ -106,6 +127,12 @@ const staticChecks = (root: string): void => {
   // 2. The documented prefix must match the application's env examples.
   const envExample = readFileSync(resolve(root, '..', '.env.example'), 'utf8');
   assert.match(envExample, /REDIS_KEY_PREFIX=inventory-v2\b/u);
+  // The operator runbook must keep the migration path for pre-existing ACLs
+  // (additive ACL SETUSER + ACL SAVE, legacy socket.io grants explained).
+  const guide = readFileSync(resolve(root, '..', 'docs', 'redis-acl.md'), 'utf8');
+  assert.match(guide, /ACL SAVE/u);
+  assert.match(guide, /ACL SETUSER inventory-v2/u);
+  assert.match(guide, /socket\.io#\/#\*/u);
   assert.match(envExample, /&<PREFIX>:\*|&inventory-v2:\*/u);
 
   // 3. BullMQ must never receive maxRetriesPerRequest: 3 (the runtime warning).
@@ -167,7 +194,7 @@ const liveChecks = async (root: string): Promise<void> => {
   const contract = buildSocketIoChannelContract(KEY_PREFIX);
   const goodPassword = password();
   const narrowPassword = password();
-  const globPassword = password();
+  const legacyPassword = password();
   const open: Redis[] = [];
   const adapters: RedisIoAdapter[] = [];
   const previous = new Map(ADAPTER_ENV.map((name) => [name, process.env[name]]));
@@ -217,20 +244,18 @@ const liveChecks = async (root: string): Promise<void> => {
       'resetchannels',
       ...ruleTokens,
     );
-    // 2. The historically documented glob-only ACL — must still fail on a
-    //    real Redis because PSUBSCRIBE patterns are compared literally.
+    // 2. The exact ACL reported from production: it already has
+    //    &inventory-v2:* and legacy &socket.io… exact grants, but no grant
+    //    equals the NEW inventory-v2:#/… psubscribe patterns.
     await admin.call(
       'ACL',
       'SETUSER',
-      GLOB_USER,
+      LEGACY_USER,
       'on',
-      `>${globPassword}`,
+      `>${legacyPassword}`,
       'resetkeys',
       'resetchannels',
-      `~${KEY_PREFIX}*`,
-      `&${KEY_PREFIX}*`,
-      '+@all',
-      '+info',
+      ...LEGACY_RULE,
     );
     // 3. Deliberately under-scoped ACL: key access, but only BullMQ-ish channels.
     await admin.call(
@@ -291,22 +316,51 @@ const liveChecks = async (root: string): Promise<void> => {
     );
     await goodCmd.del(`${KEY_PREFIX}acl_probe`);
 
-    // 5. A glob-only ACL reproduces the exact production NOPERM error even
-    //    though PUBLISH/SUBSCRIBE are allowed by that glob.
-    const globSub = makeClient(GLOB_USER, globPassword);
+    // 5. The reported production ACL reproduces the exact NOPERM error:
+    //    PUBLISH/SUBSCRIBE work, but neither &inventory-v2:* nor the old
+    //    &socket.io#/#* grants equal the new PSUBSCRIBE patterns.
+    const legacySub = makeClient(LEGACY_USER, legacyPassword);
     await expectsNoperM(
       withTimeout(
-        globSub.psubscribe(...contract.psubscribePatterns),
+        legacySub.psubscribe(...contract.psubscribePatterns),
         6000,
-        'glob-only PSUBSCRIBE',
+        'legacy ACL PSUBSCRIBE',
       ),
-      'glob-only ACL psubscribe',
+      'production ACL psubscribe',
     );
-    const globCmd = makeClient(GLOB_USER, globPassword);
+    const legacyCmd = makeClient(LEGACY_USER, legacyPassword);
     await withTimeout(
-      globCmd.publish(`${KEY_PREFIX}#/#glob-probe`, 'x'),
+      legacyCmd.publish(`${KEY_PREFIX}#/#legacy-probe`, 'x'),
       6000,
-      'glob-only PUBLISH',
+      'legacy ACL PUBLISH',
+    );
+
+    // 5b. The recommended minimal fix: a purely ADDITIVE ACL SETUSER with the
+    //     two exact patterns. No command/key changes, no ACL LOAD restart.
+    await admin.call(
+      'ACL',
+      'SETUSER',
+      LEGACY_USER,
+      ...contract.requiredAclPatterns,
+    );
+    const fixedInfo = String(await admin.call('ACL', 'GETUSER', LEGACY_USER));
+    for (const pattern of contract.requiredAclPatterns) {
+      assert.ok(fixedInfo.includes(pattern), `runtime ACL must now contain ${pattern}`);
+    }
+    const fixedSub = makeClient(LEGACY_USER, legacyPassword);
+    await withTimeout(
+      fixedSub.psubscribe(...contract.psubscribePatterns),
+      6000,
+      'fixed legacy ACL PSUBSCRIBE',
+    );
+    setAdapterEnvironment(LEGACY_USER, legacyPassword, false);
+    const fixedAdapter = new RedisIoAdapter(undefined as unknown as INestApplicationContext);
+    adapters.push(fixedAdapter);
+    await withTimeout(fixedAdapter.connectToRedis(), 10_000, 'fixed legacy adapter startup');
+    assert.equal(
+      fixedAdapter.getMode(),
+      'shared_redis',
+      'the minimal two-grant fix must restore the shared adapter',
     );
 
     // 6. The narrow ACL is denied on both pub/sub directions.
@@ -331,6 +385,7 @@ const liveChecks = async (root: string): Promise<void> => {
 
     // 7. Runtime preflight: canonical user gets shared_redis; narrow user
     //    degrades instead of crashing the process with an unhandled ReplyError.
+    //    (The fixed legacy user was already proven in step 5b.)
     setAdapterEnvironment(GOOD_USER, goodPassword, false);
     const healthy = new RedisIoAdapter(undefined as unknown as INestApplicationContext);
     adapters.push(healthy);
@@ -353,7 +408,7 @@ const liveChecks = async (root: string): Promise<void> => {
 
     console.log(
       `Redis ACL channel check passed (${contract.requiredAclPatterns.length} canonical & grants, ` +
-        `literal PSUBSCRIBE matching proven on real Redis 7, ` +
+        `literal PSUBSCRIBE matching + minimal two-grant fix proven on real Redis 7, ` +
         `adapter preflight degrades instead of crashing, BullMQ retry policy enforced).`,
     );
   } catch (error) {
@@ -371,7 +426,7 @@ const liveChecks = async (root: string): Promise<void> => {
     if (admin?.status === 'ready') {
       await admin.call('ACL', 'DELUSER', GOOD_USER).catch(() => undefined);
       await admin.call('ACL', 'DELUSER', NARROW_USER).catch(() => undefined);
-      await admin.call('ACL', 'DELUSER', GLOB_USER).catch(() => undefined);
+      await admin.call('ACL', 'DELUSER', LEGACY_USER).catch(() => undefined);
     }
     for (const client of open) client.disconnect();
     for (const name of ADAPTER_ENV) {

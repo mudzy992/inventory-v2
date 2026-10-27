@@ -33,3 +33,22 @@
 # @blocking, @stream, @list, @sortedset, @hash, @set, @string, @keyspace,
 # @read, @write, @slow and @connection, plus +info explicitly.
 user inventory-v2 on ><PASSWORD> ~<PREFIX>:* &<PREFIX>:* &<PREFIX>:#/#* &<PREFIX>:#/notifications#* +@all -@admin -@dangerous +info
+
+# --- Varijanta sa užom allowlistom komandi (ako platforma već ima takav ACL) ---
+# Ekvivalentna je za ovu aplikaciju; `+@pubsub` već uključuje PSUBSCRIBE.
+# user inventory-v2 on ><PASSWORD> \
+#   -@all +@read +@write +@keyspace +@string +@list +@stream \
+#   +@sortedset +@hash +@blocking +@pubsub \
+#   -@admin -@dangerous -flushall -flushdb -shutdown -config -debug -keys \
+#   +ping +info +eval +evalsha +client|setname +client|setinfo \
+#   ~<PREFIX>:* ~bull:<PREFIX>:* \
+#   &<PREFIX>:* &bull:<PREFIX>:* \
+#   &<PREFIX>:#/#* &<PREFIX>:#/notifications#*
+#
+# --- Minimalna izmjena VEĆ POSTOJEĆEG korisnika (bez diranja komandi/ključeva) ---
+# ACL SETUSER je aditivan za &; nije potreban resetchannels ni ACL LOAD.
+#   redis-cli -a "$REDIS_ADMIN_PASSWORD" ACL SETUSER inventory-v2 \
+#     '&<PREFIX>:#/#*' '&<PREFIX>:#/notifications#*'
+#   redis-cli -a "$REDIS_ADMIN_PASSWORD" ACL SAVE   # ako se koristi aclfile
+# Stari &socket.io… unosi mogu ostati; u Redis 7 ne postoji `-&pattern`
+# (uklanjanje traži resetchannels + ponovni unos cijele liste).
