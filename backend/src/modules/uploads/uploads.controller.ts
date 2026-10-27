@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { SettingsLimitedFileInterceptor } from '../../common/interceptors/settings-limited-file.interceptor';
+import { ListUploadsQueryDto } from './dto/list-uploads-query.dto';
 import { UploadTransferDocumentDto } from './dto/upload-transfer-document.dto';
 import { UploadsService } from './uploads.service';
 
@@ -37,12 +38,8 @@ export class UploadsController {
 
   @Get()
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.user)
-  findByEntity(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query('entityType') entityType: string,
-    @Query('entityId') entityId: string,
-  ) {
-    return this.uploadsService.findByEntity(user, entityType, entityId);
+  findByEntity(@CurrentUser() user: AuthenticatedUser, @Query() query: ListUploadsQueryDto) {
+    return this.uploadsService.findByEntity(user, query.entityType, query.entityId);
   }
 
   @Get(':id')

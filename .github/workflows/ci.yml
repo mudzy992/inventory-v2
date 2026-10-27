@@ -225,6 +225,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:public-equipment-contract
 
+      - name: Verify upload read allow-list and path containment
+        working-directory: backend
+        run: npm run test:integration:upload-read-policy
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

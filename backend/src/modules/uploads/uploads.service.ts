@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -21,6 +22,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { buildSignedPdfRelativePath } from '../transfers/utils/transfer-document-path.util';
 import { TransfersService } from '../transfers/transfers.service';
+import {
+  requireAuthorizableStoredUpload,
+  requireReadableUploadEntityType,
+  resolveUploadAbsolutePath,
+  type UploadReadableEntityType,
+} from './upload-access-policy.util';
 
 const SIGNED_TRANSFER_MIME_TYPES = new Set(['application/pdf']);
 
@@ -88,7 +95,7 @@ export class UploadsService {
       transfer.documentNumber,
       uploadId,
     );
-    const absolutePath = join(this.getUploadRoot(), relativePath);
+    const absolutePath = resolveUploadAbsolutePath(this.getUploadRoot(), relativePath);
     const temporaryPath = `${absolutePath}.${uploadId}.tmp`;
     const normalizedPath = relativePath.replace(/\\/g, '/');
     mkdirSync(resolve(absolutePath, '..'), { recursive: true });
@@ -141,10 +148,9 @@ export class UploadsService {
     if (!upload) {
       throw new NotFoundException('Upload not found');
     }
-    if (upload.entityType === 'transfer' && upload.entityId) {
-      await this.transfersService.findOne(user, upload.entityId);
-    }
-    const absolutePath = join(this.getUploadRoot(), upload.path);
+    const { type, entityId } = requireAuthorizableStoredUpload(upload.entityType, upload.entityId);
+    await this.authorizeUploadRead(type, user, entityId);
+    const absolutePath = resolveUploadAbsolutePath(this.getUploadRoot(), upload.path);
     if (!existsSync(absolutePath)) {
       throw new NotFoundException('File not found on disk');
     }
@@ -157,14 +163,35 @@ export class UploadsService {
   }
 
   async findByEntity(user: AuthenticatedUser, entityType: string, entityId: string) {
-    if (entityType === 'transfer') {
-      await this.transfersService.findOne(user, entityId);
-    }
+    // DTO validates at the boundary; this keeps direct/internal callers safe.
+    const type = requireReadableUploadEntityType(entityType);
+    await this.authorizeUploadRead(type, user, entityId);
     return this.prisma.upload.findMany({
-      where: { entityType: entityType as 'transfer', entityId },
+      where: { entityType: type, entityId },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, mime: true, path: true, sizeBytes: true, createdAt: true },
+      // `path` is an internal storage detail and must not be published.
+      select: { id: true, mime: true, sizeBytes: true, createdAt: true },
     });
+  }
+
+  /**
+   * Exhaustive switch: adding a value to UPLOAD_READABLE_ENTITY_TYPES without
+   * adding its authorizer is a compile error (the `never` branch).
+   */
+  private async authorizeUploadRead(
+    type: UploadReadableEntityType,
+    user: AuthenticatedUser,
+    entityId: string,
+  ): Promise<void> {
+    switch (type) {
+      case 'transfer':
+        await this.transfersService.findOne(user, entityId);
+        return;
+      default: {
+        const exhaustive: never = type;
+        throw new ForbiddenException(`No upload read authorizer for ${String(exhaustive)}`);
+      }
+    }
   }
 
   private getUploadRoot(): string {

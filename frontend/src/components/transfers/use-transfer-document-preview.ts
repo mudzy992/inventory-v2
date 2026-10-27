@@ -8,7 +8,6 @@ export type TransferDocumentPreviewMode = 'generated' | 'signed';
 interface UploadMeta {
   id: string;
   mime: string;
-  path: string;
 }
 
 interface UseTransferDocumentPreviewOptions {

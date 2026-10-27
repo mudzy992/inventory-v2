@@ -327,9 +327,11 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Dobro:** transfer access se provjeri prije write-a; relative path se pravi iz internog warehouse ID, godine i sanitizovanog broja dokumenta; download provjerava transfer scope.
 
-**Rizici:** neograničeni Multer memory upload, MIME trust bez PDF magic-byte provjere, write fajl → DB metadata → transfer update → status update kao više odvojenih koraka, bez rollback/cleanup (nalazi 2 i 16). `findByEntity` prima `entityType/entityId` kao plain query strings i cast-a `entityType` umjesto stroge enum DTO validacije; trenutno route role je uska, ali treba allow-list i eksplicitna autorizacija za buduće entity type-e.
+**Rizici:** neograničeni Multer memory upload, MIME trust bez PDF magic-byte provjere, write fajl → DB metadata → transfer update → status update kao više odvojenih koraka, bez rollback/cleanup (nalazi 2 i 16). ~~`findByEntity` prima plain query strings i cast-a `entityType`~~ **(zatvoreno: `ListUploadsQueryDto` + fail-closed allow-lista + containment, vidi §0.12)**.
 
-**Plan:** P1 globalni Multer size/count/field limiti, PDF header sniff i abort cleanup; P1 temp file + atomic rename + DB rollback/orphan cleanup; P2 entity DTO/allow-list i file download testovi.
+**Plan:** P1 globalni Multer size/count/field limiti, PDF header sniff i abort cleanup; P1 temp file + atomic rename + DB rollback/orphan cleanup; ~~P2 entity DTO/allow-list i file download testovi~~ **(zatvoreno: §0.12)**.
+
+**Remediation update — upload reads (zatvoreno kodno + CI dokazom, §0.12 plana):** prije je autorizacija (`TransfersService.findOne`) bila uslovna na `entityType === 'transfer'`, pa su `equipment`/`other` i redovi bez `entityId` zaobilazili scope provjeru u oba read puta, a `path` iz baze je javno vraćan i spajan bez containment provjere. Sada `ListUploadsQueryDto` (`@IsIn` + `@IsUUID`) validira na granici, `requireReadableUploadEntityType()` / `requireAuthorizableStoredUpload()` odbijaju nepoznate tipove fail-closed, `authorizeUploadRead()` je egzhaustivni `switch` sa `never` granom, `resolveUploadAbsolutePath()` štiti write i download od `..`/apsolutnih putanja/NUL-a, a `path` je uklonjen iz list selecta i frontend tipa. 14 unit scenarija + TypeScript AST gate sa mutacijskim dokazom.
 
 ### 4.19 Inventory Count — **6.0/10**
 
