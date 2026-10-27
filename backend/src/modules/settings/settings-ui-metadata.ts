@@ -110,6 +110,9 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
   'redis.metrics.warn_reconnect_count': {
     detail: 'Operativni alarm kada se od pokretanja procesa nakupi previše reconnect događaja.',
   },
+  'upload.metrics.warn_reject_count': {
+    detail: 'Operativni alarm u logovima kada se u 30 sekundi nakupi previše odbijenih upload zahtjeva.',
+  },
   'transfer.template_placeholders_help': {
     display: 'info',
     detail: 'Referentna lista placeholdera za Word šablon prenosnice po skladištu.',

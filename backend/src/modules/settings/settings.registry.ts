@@ -562,6 +562,19 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'uploads',
   }),
   def({
+    key: 'upload.metrics.warn_reject_count',
+    scope: 'private',
+    valueType: 'number',
+    defaultValue: 10,
+    minValue: 1,
+    maxValue: 10_000,
+    integer: true,
+    label: 'Prag odbijenih upload zahtjeva',
+    description:
+      'Broj odbijenih upload zahtjeva u 30-sekundnom intervalu nakon kojeg se bilježi operativno upozorenje.',
+    group: 'uploads',
+  }),
+  def({
     key: 'notifications.enabled',
     scope: 'public',
     valueType: 'boolean',

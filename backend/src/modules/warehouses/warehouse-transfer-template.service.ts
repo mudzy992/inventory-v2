@@ -8,6 +8,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
+import {
+  recordUploadReject,
+  type UploadRejectDetails,
+  type UploadRejectReason,
+} from '../../common/upload/upload-reject.registry';
 import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -25,6 +30,23 @@ export class WarehouseTransferTemplateService {
     private readonly settingsService: SettingsService,
     private readonly moderatorScope: ModeratorScopeService,
   ) {}
+
+  private recordReject(reason: UploadRejectReason, details?: UploadRejectDetails): void {
+    recordUploadReject({
+      operation: 'transfer_template_docx',
+      reason,
+      ...(details ? { details } : {}),
+    });
+  }
+
+  private rejectUpload(
+    reason: UploadRejectReason,
+    message: string,
+    details?: UploadRejectDetails,
+  ): never {
+    this.recordReject(reason, details);
+    throw new BadRequestException(message);
+  }
 
   async listTemplates(user: AuthenticatedUser, warehouseId: string) {
     await this.assertTemplateAccess(user, warehouseId);
@@ -60,21 +82,34 @@ export class WarehouseTransferTemplateService {
     file: Express.Multer.File,
     label: string,
   ) {
-    await this.assertTemplateAccess(user, warehouseId);
-    await this.assertWarehouseForTemplate(warehouseId);
+    await this.assertTemplateAccess(user, warehouseId, true);
+    await this.assertWarehouseForTemplate(warehouseId, true);
     if (!file) {
-      throw new BadRequestException('File is required');
+      this.rejectUpload('missing_file', 'File is required');
     }
     const extension = extname(file.originalname).toLowerCase();
     if (extension !== '.docx' || file.mimetype !== DOCX_MIME) {
-      throw new BadRequestException('Template must be a .docx Word document');
+      this.rejectUpload('invalid_extension', 'Template must be a .docx Word document', {
+        declaredMime: file.mimetype.slice(0, 100),
+      });
     }
     const envMaxMb = Number(this.configService.get<string>('MAX_UPLOAD_MB', '10'));
     const maxMb = await this.settingsService.getNumberValue('upload.max_mb', envMaxMb);
-    if (file.size > maxMb * 1024 * 1024) {
-      throw new BadRequestException(`File exceeds ${maxMb} MB limit`);
+    const maxBytes = maxMb * 1024 * 1024;
+    if (file.size > maxBytes) {
+      this.rejectUpload('size_limit', `File exceeds ${maxMb} MB limit`, {
+        sizeBytes: Number.isFinite(file.size) ? file.size : null,
+        maxBytes,
+      });
     }
-    assertTransferTemplateValid(file.buffer);
+    try {
+      assertTransferTemplateValid(file.buffer);
+    } catch (error) {
+      this.recordReject('invalid_template', {
+        sizeBytes: Number.isFinite(file.size) ? file.size : null,
+      });
+      throw error;
+    }
     const templateId = crypto.randomUUID();
     const relativePath = join(
       'templates',
@@ -158,18 +193,31 @@ export class WarehouseTransferTemplateService {
     return this.getActiveTemplate(warehouseId);
   }
 
-  private async assertTemplateAccess(user: AuthenticatedUser, warehouseId: string): Promise<void> {
+  private async assertTemplateAccess(
+    user: AuthenticatedUser,
+    warehouseId: string,
+    recordReject = false,
+  ): Promise<void> {
     if (user.role === 'admin') {
       return;
     }
     if (user.role === 'moderator') {
-      await this.moderatorScope.assertWarehouseAssigned(user, warehouseId);
+      try {
+        await this.moderatorScope.assertWarehouseAssigned(user, warehouseId);
+      } catch (error) {
+        if (recordReject) this.recordReject('access_denied');
+        throw error;
+      }
       return;
     }
+    if (recordReject) this.recordReject('access_denied');
     throw new ForbiddenException('Nemate dozvolu za upravljanje obrascem prenosnice');
   }
 
-  private async assertWarehouseForTemplate(warehouseId: string): Promise<void> {
+  private async assertWarehouseForTemplate(
+    warehouseId: string,
+    recordReject = false,
+  ): Promise<void> {
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
       select: { orgUnitId: true, isActive: true },
@@ -178,6 +226,7 @@ export class WarehouseTransferTemplateService {
       throw new NotFoundException('Warehouse not found');
     }
     if (!warehouse.orgUnitId) {
+      if (recordReject) this.recordReject('missing_org_unit');
       throw new BadRequestException(
         'Skladište mora imati org. jedinicu prije uploada obrasca prenosnice',
       );

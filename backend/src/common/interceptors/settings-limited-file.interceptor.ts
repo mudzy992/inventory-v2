@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { recordUploadReject } from '../upload/upload-reject.registry';
+import { classifyMultipartReject } from '../upload/upload-reject.util';
 import { SettingsService } from '../../modules/settings/settings.service';
 import { resolveMaxUploadBytes } from '../utils/upload-limits.util';
 
@@ -28,9 +30,10 @@ export const SettingsLimitedFileInterceptor = (fieldName: string) => {
         'upload.max_mb',
         fallbackMaxMb,
       );
+      const maxBytes = resolveMaxUploadBytes(configuredMaxMb, fallbackMaxMb);
       const interceptorType = FileInterceptor(fieldName, {
         limits: {
-          fileSize: resolveMaxUploadBytes(configuredMaxMb, fallbackMaxMb),
+          fileSize: maxBytes,
           files: 1,
           fields: MAX_MULTIPART_FIELDS,
           fieldNameSize: MAX_FIELD_NAME_BYTES,
@@ -38,7 +41,20 @@ export const SettingsLimitedFileInterceptor = (fieldName: string) => {
         },
       });
 
-      return new interceptorType().intercept(context, next);
+      try {
+        // Multer parsing errors are thrown before next.handle(), so catching
+        // this await records only pre-parser rejections — not business errors
+        // from the upload services (those record their own reason codes).
+        return await new interceptorType().intercept(context, next);
+      } catch (error) {
+        const { reason, details } = classifyMultipartReject(error);
+        recordUploadReject({
+          operation: 'multipart',
+          reason,
+          details: { ...details, maxBytes },
+        });
+        throw error;
+      }
     }
   }
 

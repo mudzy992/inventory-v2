@@ -9,7 +9,13 @@ import { ConfigService } from '@nestjs/config';
 import { createReadStream, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import {
+  recordUploadReject,
+  type UploadRejectDetails,
+  type UploadRejectReason,
+} from '../../common/upload/upload-reject.registry';
 import { hasPdfSignature } from '../../common/utils/file-signature.util';
+import { redactSensitiveText } from '../../common/utils/redact-log.util';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -29,29 +35,50 @@ export class UploadsService {
     private readonly settingsService: SettingsService,
   ) {}
 
+  private rejectUpload(
+    reason: UploadRejectReason,
+    message: string,
+    details?: UploadRejectDetails,
+  ): never {
+    recordUploadReject({
+      operation: 'signed_transfer_pdf',
+      reason,
+      ...(details ? { details } : {}),
+    });
+    throw new BadRequestException(message);
+  }
+
   async uploadTransferDocument(
     user: AuthenticatedUser,
     transferId: string,
     file: Express.Multer.File,
   ) {
     if (!file) {
-      throw new BadRequestException('File is required');
+      this.rejectUpload('missing_file', 'File is required');
     }
     if (!SIGNED_TRANSFER_MIME_TYPES.has(file.mimetype)) {
-      throw new BadRequestException('Potpisana prenosnica mora biti PDF');
+      this.rejectUpload('invalid_mime', 'Potpisana prenosnica mora biti PDF', {
+        declaredMime: file.mimetype.slice(0, 100),
+      });
     }
     if (!file.buffer || !hasPdfSignature(file.buffer)) {
-      throw new BadRequestException('Sadržaj datoteke nije validan PDF');
+      this.rejectUpload('invalid_signature', 'Sadržaj datoteke nije validan PDF');
     }
     const envMaxMb = Number(this.configService.get<string>('MAX_UPLOAD_MB', '10'));
     const maxMb = await this.settingsService.getNumberValue('upload.max_mb', envMaxMb);
     const maxBytes = maxMb * 1024 * 1024;
     if (file.size > maxBytes) {
-      throw new BadRequestException(`File exceeds ${maxMb} MB limit`);
+      this.rejectUpload('size_limit', `File exceeds ${maxMb} MB limit`, {
+        sizeBytes: Number.isFinite(file.size) ? file.size : null,
+        maxBytes,
+      });
     }
     const transfer = await this.transfersService.findOne(user, transferId);
     if (!transfer.documentWarehouseId) {
-      throw new BadRequestException('Transfer has no document warehouse configured');
+      this.rejectUpload(
+        'missing_document_warehouse',
+        'Transfer has no document warehouse configured',
+      );
     }
     const year = transfer.date.getFullYear();
     const uploadId = randomUUID();
@@ -95,7 +122,13 @@ export class UploadsService {
           rmSync(path, { force: true });
         } catch (cleanupError) {
           this.logger.error(
-            `Failed to clean up an incomplete transfer upload: ${String(cleanupError)}`,
+            JSON.stringify({
+              event: 'upload_cleanup_failed',
+              operation: 'signed_transfer_pdf',
+              error: redactSensitiveText(
+                cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+              ),
+            }),
           );
         }
       }
