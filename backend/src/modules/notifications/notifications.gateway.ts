@@ -70,6 +70,12 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   disconnectUser(userId: string): void {
     this.server?.in(`user:${userId}`).disconnectSockets(true);
+    // Emitted for the audit trail: deactivation/revocation is observable even
+    // when this instance has no local sockets for the user.
+    logStructuredEvent(this.logger, 'log', {
+      event: 'notifications_user_sockets_disconnected',
+      userId,
+    });
   }
 
   emitNotificationCreated(userId: string, notification: NotificationResponse): void {

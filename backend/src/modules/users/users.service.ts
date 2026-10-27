@@ -19,7 +19,11 @@ import {
 } from '../../common/utils/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
-import { authUserCacheKey } from '../auth/strategies/jwt.strategy';
+import {
+  prepareUserSessionRevocation,
+  revokeRefreshTokensInTransaction,
+  sweepRefreshTokensAfterCommit,
+} from '../auth/auth-session-revocation.util';
 import { assertEmployeeCanDeactivateOrNotify } from '../employees/utils/employee-deactivation.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
@@ -306,6 +310,15 @@ export class UsersService {
       }
     }
     const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : undefined;
+    // Write the revocation marker BEFORE the transaction: no post-commit
+    // window where a cached identity stays valid, and a Redis failure aborts
+    // the update instead of silently leaving a live session behind.
+    await prepareUserSessionRevocation(
+      this.redisService.getClient(),
+      id,
+      isDeactivatingUser ? 'user_deactivated' : 'user_updated',
+    );
+    const deactivationAt = new Date();
     const user = await this.prisma.$transaction(async (tx) => {
       await tx.registrarAssignment.deleteMany({ where: { userId: id } });
       await tx.inventoryCoordinatorAssignment.deleteMany({ where: { userId: id } });
@@ -357,6 +370,11 @@ export class UsersService {
         },
         include: userInclude,
       });
+      if (isDeactivatingUser) {
+        // Same transaction as user.update(): a deactivated account must not
+        // keep usable refresh tokens in the database.
+        await revokeRefreshTokensInTransaction(tx, id, deactivationAt);
+      }
       if (isDeactivatingUser && employeeId) {
         await tx.employee.update({
           where: { id: employeeId },
@@ -365,15 +383,11 @@ export class UsersService {
       }
       return updated;
     });
-    // Kritično za sigurnost: uloga/isActive/pristupna prava su se možda
-    // upravo promijenili (npr. deaktivacija korisnika) — JwtStrategy kešira
-    // AuthenticatedUser do 30s (vidi jwt.strategy.ts); bez ove invalidacije
-    // deaktivirani korisnik bi zadržao pristup do isteka tog prozora.
-    const cacheInvalidation = this.redisService.del(authUserCacheKey(id));
     if (isDeactivatingUser) {
+      // Catch refresh tokens created by a refresh() that raced this commit.
+      await sweepRefreshTokensAfterCommit(this.prisma, id, new Date());
       this.notifications.disconnectUserSockets(id);
     }
-    await cacheInvalidation;
     return this.toListItem(user);
   }
 

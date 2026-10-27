@@ -83,6 +83,18 @@ export class AuthService {
     }
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
+      // Re-check inside the transaction: the outer `stored.user.isActive` was
+      // read before this transaction started, so a deactivation committed in
+      // between must not still produce a fresh access/refresh token pair.
+      const active = await tx.user.findUnique({
+        where: { id: stored.user.id },
+        select: { isActive: true },
+      });
+      if (!active?.isActive) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      // Conditional claim also fails if the deactivation already revoked all
+      // of this user's refresh tokens (revokedAt is no longer null).
       const claimed = await claimRefreshTokenForRotation(tx, stored.id, now);
       if (!claimed) {
         throw new UnauthorizedException('Invalid refresh token');

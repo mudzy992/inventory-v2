@@ -217,6 +217,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:redis-acl-channels
 
+      - name: Verify auth session revocation (deactivation + refresh tokens)
+        working-directory: backend
+        run: npm run test:integration:auth-session-revocation
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

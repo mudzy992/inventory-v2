@@ -17,7 +17,11 @@ import {
 import { buildEmployeeSearchWhere } from '../../common/utils/employee-name-search.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
-import { authUserCacheKey } from '../auth/strategies/jwt.strategy';
+import {
+  prepareUserSessionRevocation,
+  revokeRefreshTokensInTransaction,
+  sweepRefreshTokensAfterCommit,
+} from '../auth/auth-session-revocation.util';
 import { EmployeeRelocationService } from '../employee-relocation/employee-relocation.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
@@ -294,11 +298,20 @@ export class EmployeesService {
       updatePayload.orgUnit = { connect: { id: dto.orgUnitId } };
     }
     let updated: Employee;
+    if (isDeactivating && linkedUser) {
+      await prepareUserSessionRevocation(
+        this.redisService.getClient(),
+        linkedUser.id,
+        'employee_deactivated',
+      );
+    }
+    const deactivationAt = new Date();
     try {
       updated = await this.prisma.$transaction(async (tx) => {
         const employee = await tx.employee.update({ where: { id }, data: updatePayload });
         if (isDeactivating && linkedUser) {
           await tx.user.update({ where: { id: linkedUser.id }, data: { isActive: false } });
+          await revokeRefreshTokensInTransaction(tx, linkedUser.id, deactivationAt);
         }
         return employee;
       });
@@ -315,9 +328,8 @@ export class EmployeesService {
       );
     }
     if (isDeactivating && linkedUser) {
-      const cacheInvalidation = this.redisService.del(authUserCacheKey(linkedUser.id));
+      await sweepRefreshTokensAfterCommit(this.prisma, linkedUser.id, new Date());
       this.notifications.disconnectUserSockets(linkedUser.id);
-      await cacheInvalidation;
       return {
         ...updated,
         userDeactivated: true,
