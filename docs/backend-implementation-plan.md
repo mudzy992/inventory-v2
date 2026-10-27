@@ -630,6 +630,14 @@ vodičem i runtime dokaz sa hostilnim payload-om, plus **5 mutacija** (ubаче�
 `<script>`, uklonjen style blok, izmijenjen stil, `inline`, CRLF u broju
 dokumenta). CI korak: `Verify generated HTML document security`.
 
+**CI dokaz.** Commit `009df37` prolazi u run-u `40565904205` (`completed
+success` na sva tri joba). Novi korak `Verify generated HTML document security`
+(45) je zelen, kao i deployment readiness (6), strukturirani logovi (34), svi
+raniji gateovi (41–44), lint (46), typecheck (47), 779 backend unit testova
+(48), build (50) i `npm audit` (51). Lokalno su uz `pipefail` potvrđeni 10/10
+novih specova, 15/15 readiness scenarija, 12/12 container policy scenarija,
+frontend/worker build i `npm audit` = 0 za sva tri workspace-a.
+
 **Ostaje vlasniku:** eventualni globalni CSP/CORP za ostatak aplikacije,
 potvrda origin/proxy topologije i odluka treba li `inline` režim za print
 workflow (default `attachment` je sigurniji).
