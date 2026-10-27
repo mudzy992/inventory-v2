@@ -274,7 +274,13 @@ testova, buildovi i `npm audit` = 0 za sva tri workspace-a. Log koraka 39
 sadrži `Redis ACL channel check passed (3 canonical & grants, literal
 PSUBSCRIBE matching proven on real Redis 7, adapter preflight degrades instead
 of crashing, BullMQ retry policy enforced)` i pravi `socketio_redis_acl_denied`
-zapis za preuski ACL.
+zapis za preuski ACL. Naknadni commit `e0ff5b4` (dijagnoza stvarnog
+`ACL GETUSER` sa platforme i dokaz minimalne dvograntne ispravke nad
+istim, vjerno reproduciranim legacy ACL-om) prolazi u run-u `40521156610`
+(`completed success` na sva tri joba); korak 39 javlja `Redis ACL channel
+check passed (3 canonical & grants, literal PSUBSCRIBE matching + minimal
+two-grant fix proven on real Redis 7, adapter preflight degrades instead of
+crashing, BullMQ retry policy enforced)`.
 
 **Ostaje vlasniku/deploymentu:** primijeniti kanonsko pravilo na centralnoj
 Redis platformi, `ACL LOAD`, **restartovati backend i document-worker**
