@@ -196,6 +196,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:postgres-tls-handshake
 
+      - name: Verify multi-instance Socket.IO shared Redis adapter
+        working-directory: backend
+        run: npm run test:integration:socketio-shared-adapter
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

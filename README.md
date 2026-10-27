@@ -104,6 +104,11 @@ Logovi ne sadrže query stringove u agregatima, tijela, tokene ni imena datoteka
 Svi aplikacijski logovi (uključujući greške workera, schedulera i dokumenata) su
 jedan red JSON-a sa stabilnim `event` imenom, `level` i `correlationId`; CI provjera
 `test:integration:structured-logs` zabranjuje nove free-form `logger.*` poruke.
+`socketio_adapter_mode` bilježi efektivni režim Socket.IO adaptera
+(`shared_redis` ili `in_memory`), a `/health/ready` ga vraća u polju
+`socketio: { mode, sharedAdapterRequired }`. Sa više backend replika postaviti
+`SOCKETIO_REQUIRE_SHARED_ADAPTER=true`: tada se pri nedostupnom Redisu startup
+prekida, a readiness vraća 503 umjesto tihog in-memory broadcasta.
 
 ## Plan i matrice
 

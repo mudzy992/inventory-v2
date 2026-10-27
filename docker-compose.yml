@@ -61,6 +61,8 @@ services:
       - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-inventory-v2}
       - REDIS_TLS=${REDIS_TLS:-false}
       - REDIS_CA_CERT_PATH=${REDIS_CA_CERT_PATH:-/run/secrets/redis-ca.crt}
+      # true = fail closed when the shared Socket.IO Redis adapter is missing.
+      - SOCKETIO_REQUIRE_SHARED_ADAPTER=${SOCKETIO_REQUIRE_SHARED_ADAPTER:-false}
       - RATE_LIMIT_LOGIN_MAX=${RATE_LIMIT_LOGIN_MAX:-10}
       - RATE_LIMIT_LOGIN_WINDOW_SEC=${RATE_LIMIT_LOGIN_WINDOW_SEC:-60}
       - RATE_LIMIT_LOGIN_FAIL_CLOSED=${RATE_LIMIT_LOGIN_FAIL_CLOSED:-false}

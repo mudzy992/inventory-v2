@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { HttpException } from '@nestjs/common';
+import {
+  resetActiveSocketIoAdapterMode,
+  setActiveSocketIoAdapterMode,
+} from '../../redis/socketio-adapter.registry';
 import { HealthController } from './health.controller';
 
 const createController = (
@@ -36,14 +40,52 @@ test('keeps legacy health as a database-only probe', async () => {
 });
 
 test('readiness probes database, shared Redis, and both BullMQ queues', async () => {
-  const result = await createController().getReadiness();
-  assert.equal(result.status, 'ok');
-  assert.equal(result.database, 'connected');
-  assert.equal(result.redis, 'connected');
-  assert.deepEqual(result.queues, {
-    inventoryClose: 'connected',
-    documentGeneration: 'connected',
-  });
+  try {
+    setActiveSocketIoAdapterMode('shared_redis');
+    const result = await createController().getReadiness();
+    assert.equal(result.status, 'ok');
+    assert.equal(result.database, 'connected');
+    assert.equal(result.redis, 'connected');
+    assert.deepEqual(result.queues, {
+      inventoryClose: 'connected',
+      documentGeneration: 'connected',
+    });
+    assert.deepEqual(result.socketio, {
+      mode: 'shared_redis',
+      sharedAdapterRequired: false,
+    });
+  } finally {
+    resetActiveSocketIoAdapterMode();
+  }
+});
+
+test('readiness degrades when a required shared Socket.IO adapter fell back', async () => {
+  const previous = process.env.SOCKETIO_REQUIRE_SHARED_ADAPTER;
+  try {
+    process.env.SOCKETIO_REQUIRE_SHARED_ADAPTER = 'true';
+    setActiveSocketIoAdapterMode('in_memory');
+    await assert.rejects(
+      () => createController().getReadiness(),
+      (error: unknown) => {
+        assert.ok(error instanceof HttpException);
+        assert.equal(error.getStatus(), 503);
+        const response = error.getResponse() as {
+          status: string;
+          socketio: { mode: string; sharedAdapterRequired: boolean };
+        };
+        assert.equal(response.status, 'degraded');
+        assert.deepEqual(response.socketio, {
+          mode: 'in_memory',
+          sharedAdapterRequired: true,
+        });
+        return true;
+      },
+    );
+  } finally {
+    if (previous === undefined) delete process.env.SOCKETIO_REQUIRE_SHARED_ADAPTER;
+    else process.env.SOCKETIO_REQUIRE_SHARED_ADAPTER = previous;
+    resetActiveSocketIoAdapterMode();
+  }
 });
 
 test('readiness returns 503 when Redis is unavailable', async () => {

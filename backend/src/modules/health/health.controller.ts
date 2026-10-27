@@ -3,6 +3,11 @@ import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
+import {
+  getActiveSocketIoAdapterMode,
+  isSharedSocketIoAdapterRequired,
+  type SocketIoAdapterMode,
+} from '../../redis/socketio-adapter.registry';
 import { DOCUMENT_GENERATION_QUEUE } from '../documents/document-generation.queue';
 import { INVENTORY_SESSION_CLOSE_QUEUE } from '../inventory-count/inventory-session-close.queue';
 
@@ -56,6 +61,7 @@ export class HealthController {
     database: string;
     redis: string;
     queues: { inventoryClose: string; documentGeneration: string };
+    socketio: { mode: SocketIoAdapterMode; sharedAdapterRequired: boolean };
     timestamp: string;
   }> {
     const [databaseResult, redisResult, inventoryQueueResult, documentQueueResult] =
@@ -75,14 +81,29 @@ export class HealthController {
       inventoryClose: inventoryQueueResult.status === 'fulfilled' ? 'connected' : 'disconnected',
       documentGeneration: documentQueueResult.status === 'fulfilled' ? 'connected' : 'disconnected',
     };
+    // A plain Redis PING cannot prove THIS process installed the shared
+    // Socket.IO adapter. Report the effective mode; when the deployment
+    // requires horizontal scaling, an in-memory fallback degrades readiness.
+    const socketio = {
+      mode: getActiveSocketIoAdapterMode(),
+      sharedAdapterRequired: isSharedSocketIoAdapterRequired(),
+    };
     const status =
       database === 'connected' &&
       redis === 'connected' &&
       queues.inventoryClose === 'connected' &&
-      queues.documentGeneration === 'connected'
+      queues.documentGeneration === 'connected' &&
+      (!socketio.sharedAdapterRequired || socketio.mode === 'shared_redis')
         ? 'ok'
         : 'degraded';
-    const response = { status, database, redis, queues, timestamp: new Date().toISOString() };
+    const response = {
+      status,
+      database,
+      redis,
+      queues,
+      socketio,
+      timestamp: new Date().toISOString(),
+    };
     if (status !== 'ok') {
       throw new HttpException(response, HttpStatus.SERVICE_UNAVAILABLE);
     }
