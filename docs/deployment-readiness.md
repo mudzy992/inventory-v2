@@ -38,7 +38,7 @@ može izvršiti umjesto čovjeka) moraju biti potvrđene prije nego se prebace u
 
 ## Šta se provjerava (repo moda)
 
-- `.env.example` i `docker-compose.yml` sadrže svih 17 deployment varijabli.
+- `.env.example` i `docker-compose.yml` sadrže svih 19 deployment varijabli.
 - Oba compose fajla imaju sigurne default-e: `DATABASE_SSL_MODE=verify-full`,
   `GLOBAL_RATE_LIMIT_ENABLED=false`, `SECURITY_HEADERS_ENABLED=true`,
   `PUBLIC_EQUIPMENT_MAX_MOVEMENTS=200`, `SOCKETIO_REQUIRE_SHARED_ADAPTER=false`,
@@ -48,7 +48,7 @@ može izvršiti umjesto čovjeka) moraju biti potvrđene prije nego se prebace u
   `&<PREFIX>:#/#*` / `&<PREFIX>:#/notifications#*` granta i `+info`.
 - Postoje svi operator guides (`redis-acl`, `http-hardening`,
   `public-qr-privacy`, `upload-read-policy`, `transfer-document-security`,
-  ovaj fajl).
+  `queue-recovery`, ovaj fajl).
 - `REDIS_KEY_PREFIX` default se poklapa s ACL namespace-om.
 
 ## Šta se provjerava (`--env` moda)
@@ -76,6 +76,7 @@ može izvršiti umjesto čovjeka) moraju biti potvrđene prije nego se prebace u
 | `global-rate-limit-fail-open` | upozorenje kad limit koristi fail-open |
 | `public-qr-cap` | `PUBLIC_EQUIPMENT_MAX_MOVEMENTS` 1–1000 |
 | `transfer-raw-disposition` | `TRANSFER_RAW_DOCUMENT_DISPOSITION` — `attachment` (pass) / `inline` (warn) / neispravno (fail) |
+| `document-job-stale-bound` | `DOCUMENT_JOB_STALE_TIMEOUT_MS` (300000–86400000) mora biti > `DOCUMENT_WORKER_CONVERT_TIMEOUT_MS` + 30 s |
 
 ## Kako riješiti MANUAL upozorenja
 
@@ -89,5 +90,6 @@ može izvršiti umjesto čovjeka) moraju biti potvrđene prije nego se prebace u
 
 Korak `Verify deployment readiness contract` pokreće repo modu i
 `scripts/check-deployment-readiness.spec.mjs` (unit scenarija za svako
-pravilo). Time se sprječava da neko slučajno promijeni sigurni default u
+pravilo). Tu je i `Verify queue recovery contract` koji održava matricu iz
+`docs/queue-recovery.md`. Time se sprječava da neko slučajno promijeni sigurni default u
 compose fajlu ili izbaci neki operator guide, a da CI ne javi.

@@ -401,9 +401,11 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Dobro:** idempotentan `DocumentJob.id` / Bull jobId, partial unique index za aktivan source, DB stanje kao source of truth, startup reconciliation queued/running redova, sanitized greške i per-user Socket.IO event. Worker ne dodiruje Postgres.
 
-**Rizici:** integration behavior zavisi od zajedničke verzije queue/prefix/env-a i shared filesystem-a; postojeći testovi su dominantno utils, bez fault-injection testa Redis outage između DB enqueue i queue add, worker restart, disk full, event stream reconnect. `QueueEvents` greške se loguju/auto retry-uju, ali operativni readiness to ne pokazuje.
+**Rizici:** integration behavior i dalje zavisi od zajedničke verzije queue/prefix/env-a i pouzdanog shared filesystem-a; `QueueEvents` greške se loguju/auto retry-uju, ali operativni readiness to ne pokazuje. ~~Bez fault-injection testa worker restart / zaglavljen posao~~ **(zatvoreno: §0.16)**.
 
-**Plan:** P2 testirati retry/reconcile kroz Redis i worker; health metrike; zadržati postojeći obrazac kao šablon za inventory close queue.
+**Plan:** ~~P2 testirati retry/reconcile kroz Redis i worker~~ **(zatvoreno kroz matricu `docs/queue-recovery.md` i live `check-document-job-stale-recovery.ts`)**; health metrike za QueueEvents konekciju i load test ostaju otvoreni.
+
+**Remediation update — queue recovery (§0.16 plana):** otkriveno da `reconcileStaleJobs()` nema vremenski bound za BullMQ posao u `waiting`/`active` stanju — ako worker padne i ne vrati se, `DocumentJob` ostaje `running` zauvijek. Dodan `DOCUMENT_JOB_STALE_TIMEOUT_MS` (default 30 min, mora biti > worker convert timeout + 30 s), `decideStaleRecovery()` i `stuck` grana koja terminalizuje red uz jedan trajni outbox zapis i best-effort uklanjanje Bull posla. `scripts/check-queue-recovery-contract.mjs` održava 9 crash pointova sa obaveznim oporavkom, idempotencijom i CI provjerom. Vodič: `docs/queue-recovery.md`.
 
 ## 5. Zajednički slojevi
 

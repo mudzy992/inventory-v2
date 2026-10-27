@@ -40,6 +40,8 @@ const GOOD = {
   GLOBAL_RATE_LIMIT_FAIL_CLOSED: 'false',
   PUBLIC_EQUIPMENT_MAX_MOVEMENTS: '200',
   TRANSFER_RAW_DOCUMENT_DISPOSITION: 'attachment',
+  DOCUMENT_JOB_STALE_TIMEOUT_MS: '1800000',
+  DOCUMENT_WORKER_CONVERT_TIMEOUT_MS: '120000',
 };
 
 const statusOf = (result, id) => result.checks.find((check) => check.id === id)?.status;
@@ -192,6 +194,18 @@ test('pool budget, headers, HSTS, rate-limit and QR cap bounds are enforced', ()
   const enabled = evaluateDeployment(withOverrides({ GLOBAL_RATE_LIMIT_ENABLED: 'true' }));
   assert.equal(statusOf(enabled, 'global-rate-limit-fail-open'), 'warn');
   assert.equal(statusOf(evaluateDeployment(withOverrides({ PUBLIC_EQUIPMENT_MAX_MOVEMENTS: '5000' })), 'public-qr-cap'), 'fail');
+});
+
+test('stuck DocumentJob recovery bound must exceed the worker conversion timeout', () => {
+  assert.equal(statusOf(evaluateDeployment(GOOD), 'document-job-stale-bound'), 'pass');
+  assert.equal(
+    statusOf(evaluateDeployment(withOverrides({ DOCUMENT_JOB_STALE_TIMEOUT_MS: '300000', DOCUMENT_WORKER_CONVERT_TIMEOUT_MS: '300000' })), 'document-job-stale-bound'),
+    'warn',
+  );
+  assert.equal(
+    statusOf(evaluateDeployment(withOverrides({ DOCUMENT_JOB_STALE_TIMEOUT_MS: 'nope' })), 'document-job-stale-bound'),
+    'fail',
+  );
 });
 
 test('raw HTML disposition is validated and inline mode warns', () => {

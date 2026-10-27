@@ -8,6 +8,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { DOCUMENT_GENERATION_QUEUE, type DocumentConversionJobPayload } from './document-generation.queue';
 import { DocumentJobsService } from './document-jobs.service';
+import {
+  DOCUMENT_JOB_STALE_RECOVERY_ERROR,
+  DEFAULT_DOCUMENT_JOB_STALE_MS,
+  decideStaleRecovery,
+  resolveDocumentJobStaleMs,
+} from './document-job-recovery-policy.util';
 import { runWithCorrelationId } from '../../common/utils/correlation-id.util';
 
 /** Uklanja apsolutne putanje (unutar kontejnera) iz poruka grešaka prije
@@ -142,18 +148,35 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
         event: 'document_stale_job_reconcile_started',
         count: staleJobs.length,
       });
+      let staleMs = DEFAULT_DOCUMENT_JOB_STALE_MS;
+      try {
+        staleMs = resolveDocumentJobStaleMs(process.env.DOCUMENT_JOB_STALE_TIMEOUT_MS);
+      } catch (err) {
+        // A misconfiguration must not disable recovery: log and use the
+        // default bound so no job can stay ownerless forever.
+        logStructuredEvent(this.logger, 'warn', {
+          event: 'document_stale_timeout_config_invalid',
+          error: safeErrorText(err),
+          fallbackMs: DEFAULT_DOCUMENT_JOB_STALE_MS,
+        });
+      }
       for (const documentJob of staleJobs) {
         try {
           // BullMQ jobId === DocumentJob.id (vidi DocumentConversionQueueService).
           const bullJob = await this.queue.getJob(documentJob.id);
-          if (!bullJob) {
-            // Ne proglasiti svježe upisani DB red izgubljenim: drugi backend
-            // proces može biti između DocumentJob.create() i queue.add().
+          const state = bullJob ? await bullJob.getState() : 'missing';
+          const decision = decideStaleRecovery({
+            job: documentJob,
+            bullJobPresent: Boolean(bullJob),
+            bullJobState: state,
+            now: Date.now(),
+            staleMs,
+            missingGraceMs: MISSING_BULL_JOB_GRACE_MS,
+          });
+
+          if (decision === 'missing') {
             // Nakon grace perioda, red bez BullMQ posla je stale i postaje
             // failed da bi se mogao ručno ponoviti.
-            if (Date.now() - documentJob.createdAt.getTime() < MISSING_BULL_JOB_GRACE_MS) {
-              continue;
-            }
             const failedJob = await this.documentJobs.markFailed(
               documentJob.id,
               'Posao izgubljen tokom restarta servisa. Pokušajte ponovo.',
@@ -164,7 +187,34 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
             }
             continue;
           }
-          const state = await bullJob.getState();
+
+          if (decision === 'stuck') {
+            // BullMQ posao je i dalje waiting/active/delayed, ali je stariji
+            // od dozvoljenog bound-a: worker je pao i niko ga neće završiti.
+            // Terminalni DB status je monotonic, pa kasni QueueEvent ne može
+            // ponovo otvoriti posao niti duplirati notifikaciju.
+            const failedJob = await this.documentJobs.markFailed(
+              documentJob.id,
+              DOCUMENT_JOB_STALE_RECOVERY_ERROR,
+              documentJob.attempts,
+            );
+            if (failedJob) {
+              logStructuredEvent(this.logger, 'warn', {
+                event: 'document_job_stale_recovered_failed',
+                documentJobId: documentJob.id,
+                bullJobState: state,
+                ageMs: Date.now() - documentJob.createdAt.getTime(),
+                staleTimeoutMs: staleMs,
+              });
+              await this.notify(documentJob.id, 'failed', DOCUMENT_JOB_STALE_RECOVERY_ERROR);
+              // Best effort: ukloni BullMQ posao da zombi worker ne bi kasnije
+              // pisao fajl za već terminalni DB red. Zaključan 'active' posao
+              // se ne može ukloniti — to je benigno, DB status je autoritet.
+              await bullJob?.remove().catch(() => undefined);
+            }
+            continue;
+          }
+
           if (state === 'completed') {
             const completedJob = await this.documentJobs.markDone(documentJob.id);
             if (completedJob) {
@@ -172,10 +222,10 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
               await this.notify(documentJob.id, 'done');
             }
           } else if (state === 'failed') {
-            const attemptsMade = bullJob.attemptsMade ?? 0;
-            const maxAttempts = bullJob.opts.attempts ?? 1;
+            const attemptsMade = bullJob?.attemptsMade ?? 0;
+            const maxAttempts = bullJob?.opts.attempts ?? 1;
             if (attemptsMade >= maxAttempts) {
-              const reason = sanitizeErrorForClient(bullJob.failedReason ?? 'Konverzija nije uspjela.');
+              const reason = sanitizeErrorForClient(bullJob?.failedReason ?? 'Konverzija nije uspjela.');
               const failedJob = await this.documentJobs.markFailed(documentJob.id, reason, attemptsMade);
               if (failedJob) {
                 await this.notify(documentJob.id, 'failed', reason);
@@ -184,9 +234,9 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
             // else: BullMQ će sam re-pokušati — normalni 'active' event će
             // uskoro stići preko QueueEvents, ne diramo status ovdje.
           }
-          // state 'waiting'/'active'/'delayed'/'prioritized': DB status je
-          // već konzistentan (queued/running) — ništa za uraditi, normalan
-          // event tok će ga dalje ažurirati.
+          // Svjež 'waiting'/'active'/'delayed'/'prioritized' posao još ima
+          // vlasnika — rekonsilijacija ga ne dira. Ako vlasnik nestane,
+          // 'stuck' grana iznad ga preuzima nakon staleMs.
         } catch (err) {
           logStructuredEvent(this.logger, 'warn', {
             event: 'document_stale_job_reconcile_failed',

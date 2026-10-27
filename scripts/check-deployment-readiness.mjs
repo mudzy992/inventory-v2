@@ -38,6 +38,7 @@ export const REQUIRED_REPO_KNOBS = [
   'GLOBAL_RATE_LIMIT_FAIL_CLOSED',
   'PUBLIC_EQUIPMENT_MAX_MOVEMENTS',
   'TRANSFER_RAW_DOCUMENT_DISPOSITION',
+  'DOCUMENT_JOB_STALE_TIMEOUT_MS',
 ];
 
 export const REQUIRED_DOCS = [
@@ -46,6 +47,7 @@ export const REQUIRED_DOCS = [
   'docs/public-qr-privacy.md',
   'docs/upload-read-policy.md',
   'docs/transfer-document-security.md',
+  'docs/queue-recovery.md',
   'docs/deployment-readiness.md',
 ];
 
@@ -57,6 +59,7 @@ export const SAFE_COMPOSE_DEFAULTS = [
   'SOCKETIO_REQUIRE_SHARED_ADAPTER:-false',
   'DATABASE_POOL_MAX:-10',
   'TRANSFER_RAW_DOCUMENT_DISPOSITION:-attachment',
+  'DOCUMENT_JOB_STALE_TIMEOUT_MS:-1800000',
 ];
 
 export const CA_MOUNT_PREFIXES = ['/run/secrets/', '/etc/ssl/'];
@@ -376,6 +379,22 @@ export function evaluateDeployment(env, options = {}) {
         ? 'RAW HTML document renders inline (strict CSP + sandbox still enforced)'
         : 'RAW HTML document is served as a download (attachment)',
     'Prefer attachment; inline still has hash-based CSP, sandbox and escaping.',
+  );
+
+  const staleMs = intInRange(value(env, 'DOCUMENT_JOB_STALE_TIMEOUT_MS') || '1800000', 300000, 86400000);
+  const convertMs = intInRange(value(env, 'DOCUMENT_WORKER_CONVERT_TIMEOUT_MS') || '120000', 1000, 3600000);
+  const staleValid = staleMs !== null && convertMs !== null;
+  const staleAfterWorker = staleValid && staleMs > convertMs + 30000;
+  add(
+    result,
+    'document-job-stale-bound',
+    !staleValid ? 'fail' : staleAfterWorker ? 'pass' : 'warn',
+    !staleValid
+      ? 'DOCUMENT_JOB_STALE_TIMEOUT_MS must be 300000–86400000 and convert timeout 1000–3600000'
+      : staleAfterWorker
+        ? `Stuck DocumentJob recovery bound ${staleMs}ms > worker timeout ${convertMs}ms + 30s lock slack`
+        : `Stale bound ${staleMs}ms is not after worker timeout ${convertMs}ms + 30s — legitimate conversions could be killed`,
+    'Set DOCUMENT_JOB_STALE_TIMEOUT_MS well above DOCUMENT_WORKER_CONVERT_TIMEOUT_MS + 30000.',
   );
 
   const qrCap = intInRange(value(env, 'PUBLIC_EQUIPMENT_MAX_MOVEMENTS') || '200', 1, 1000);

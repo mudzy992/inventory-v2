@@ -67,6 +67,11 @@ jobs:
           node scripts/check-deployment-readiness.mjs
           node --test scripts/check-deployment-readiness.spec.mjs
 
+      - name: Verify queue recovery contract
+        run: |
+          node scripts/check-queue-recovery-contract.mjs
+          node --test scripts/check-queue-recovery-contract.spec.mjs
+
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci
@@ -153,6 +158,10 @@ jobs:
       - name: Verify transfer DOCX crash recovery
         working-directory: backend
         run: npm run test:integration:transfer-docx-crash-recovery
+
+      - name: Verify stale DocumentJob recovery
+        working-directory: backend
+        run: npm run test:integration:document-job-stale-recovery
 
       - name: Verify temporary Redis service
         working-directory: backend
