@@ -62,6 +62,11 @@ jobs:
           node scripts/check-container-dependency-policy.mjs
           node --test scripts/check-container-dependency-policy.spec.mjs
 
+      - name: Verify deployment readiness contract
+        run: |
+          node scripts/check-deployment-readiness.mjs
+          node --test scripts/check-deployment-readiness.spec.mjs
+
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci

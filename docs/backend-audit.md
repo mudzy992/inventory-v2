@@ -515,10 +515,25 @@ Faze su namjerno inkrementalne. Svaka faza završava testovima i produkcijskim r
 
 ## 8. Kvalitet i ograničenja ovog audita
 
+### Deployment readiness contract (zatvara preostali deployment rep)
+
+**Remediation update (§0.14 plana):** `scripts/check-deployment-readiness.mjs`
+objedinjuje sve preostale vlasničke/deployment stavke u jednu izvršivu
+provjeru. Repo moda (CI, bez tajni) čuva 17 deployment varijabli u
+`.env.example`/compose, sigurne default-e oba compose fajla, kanonski ACL
+obrazac (glob + oba egzaktna PSUBSCRIBE granta + `+info`), 5 operator vodiča i
+podudarnost `REDIS_KEY_PREFIX` sa ACL namespace-om. `--env` moda ocjenjuje 19
+pravila nad stvarnim vrijednostima (tajne, CORS, TLS/CA, `sslmode` konflikt,
+SNI/DNS, ACL prefiks, replike, pool budžet, headeri, HSTS, rate-limit, QR cap)
+i daje PASS/WARN/FAIL sa uputama; tri MANUAL provjere (PostgreSQL/Redis cert
+SAN, `ACL GETUSER`) ostaju eksplicitno dokumentovane. 14 unit scenarija uključuje
+tri mutacije repo politike. Vodič: `docs/deployment-readiness.md`.
+
+
 - Unit testovi su pokrenuti: **261 pass, 0 fail** (`npm run test:unit`).
 - Backend build nije verifikovan do kraja u sandboxu: Prisma generator nije mogao preuzeti `schema-engine` sa Prisma binary hosta. Ovo je ograničenje build okruženja; ciljano TypeScript provjeravanje pojedinih novih konfiguracijskih fajlova ranije je prolazilo, ali nije zamjena za production build.
 - `npm audit` pregled je zavisan od advisory baze i lockfile snapshot-a tog datuma; nakon package update-a ponoviti audit.
 - Nisu izvršeni live DB/Redis, load, chaos, backup restore ili penetration testovi.
-- Svaki nalaz koji se tiče production konekcije/TLS treba potvrditi prema stvarnom deployment-u, jer kod može primati dodatne Node/PG env konfiguracije koje nisu dio repozitorija.
+- Svaki nalaz koji se tiče production konekcije/TLS treba potvrditi prema stvarnom deployment-u, jer kod može primati dodatne Node/PG env konfiguracije koje nisu dio repozitorija. `node scripts/check-deployment-readiness.mjs --env .env` automatizira sve provjere koje se mogu uraditi iz konfiguracije; certifikati, live ACL i proxy topologija ostaju ručna potvrda.
 
 **Zaključna ocjena nakon drugog prolaza:** backend ima kvalitetnu poslovnu osnovu i značajan dio zaštitnih util-a već postoji; ukupnu ocjenu revidiram sa početnih 6.8 na **6.6/10** zbog dodatno potvrđenih HTML injection/CSV export rizika, ciklične kategorijske hijerarhije i slabih numeric-setting granica. Najveći brzi dobitak je zatvaranje dependency/upload/setup/assignment/queue/XSS rupa. Nakon Faza 1–3 i potvrde integration testovima, ponovna procjena bi trebala biti bliža **8/10**, uz pretpostavku da testovi potvrde DB/Redis TLS i state recovery.

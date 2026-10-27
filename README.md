@@ -121,6 +121,10 @@ Javni QR endpoint ima zamrznut, recenziran DTO oblik: svako novo polje mora
 proći kroz [privacy contract](docs/public-qr-privacy.md), a historija kretanja
 je ograničena sa `PUBLIC_EQUIPMENT_MAX_MOVEMENTS` (default 200).
 
+Prije deploya pokrenuti `node scripts/check-deployment-readiness.mjs --env .env`
+— jedan PASS/WARN/FAIL izvještaj za sve preostale TLS/CA, ACL, CORS, tajne,
+replike i hardening stavke (vodič: [docs/deployment-readiness.md](docs/deployment-readiness.md)).
+
 ## Plan i matrice
 
 - [Plan overview](.cursor/plans/inventory-v2/00_overview.md)
