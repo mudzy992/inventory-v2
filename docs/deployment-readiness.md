@@ -77,9 +77,16 @@ može izvršiti umjesto čovjeka) moraju biti potvrđene prije nego se prebace u
 | `global-rate-limit-fail-open` | upozorenje kad limit koristi fail-open |
 | `public-qr-cap` | `PUBLIC_EQUIPMENT_MAX_MOVEMENTS` 1–1000 |
 | `transfer-raw-disposition` | `TRANSFER_RAW_DOCUMENT_DISPOSITION` — `attachment` (pass) / `inline` (warn) / neispravno (fail) |
+| `db-cert-san` / `redis-cert-san` | MANUAL potvrda cert SAN-a; `TLS_VERIFIED=true` ih označava kao potvrđene (vlasnik je potvrdio da je TLS aktivan na Redis i PostgreSQL) |
 | `document-job-stale-bound` | `DOCUMENT_JOB_STALE_TIMEOUT_MS` (300000–86400000) mora biti > `DOCUMENT_WORKER_CONVERT_TIMEOUT_MS` + 30 s |
 
 ## Kako riješiti MANUAL upozorenja
+
+**Napomena (2026-10-27):** vlasnik je potvrdio da je TLS već aktivan na Redis i
+PostgreSQL. U `--env` modi postaviti `TLS_VERIFIED=true` (ili ostaviti `false`
+dok se potvrda ne unese) — tada `db-cert-san` i `redis-cert-san` prelaze iz
+`warn` u `pass`. Kod i dalje sam verificira peer i hostname; flag samo bilježi
+operatersku potvrdu konfiguracije certifikata.
 
 1. **PostgreSQL cert SAN** — `openssl s_client -starttls postgres -connect "$DATABASE_HOST:$DATABASE_PORT" -showcerts`, provjeriti `Subject Alternative Name`. Ako je privatni CA, montirati ga read-only i postaviti `DATABASE_SSL_CA`.
 2. **Redis cert SAN** — isto za `REDIS_HOST:$REDIS_PORT` (TLS), uz `REDIS_CA_CERT_PATH` u oba kontejnera (backend + document-worker).

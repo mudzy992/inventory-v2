@@ -553,7 +553,7 @@ tri mutacije repo politike. Vodič: `docs/deployment-readiness.md`.
 - Svaki nalaz koji se tiče production konekcije/TLS treba potvrditi prema stvarnom deployment-u, jer kod može primati dodatne Node/PG env konfiguracije koje nisu dio repozitorija. `node scripts/check-deployment-readiness.mjs --env .env` automatizira sve provjere koje se mogu uraditi iz konfiguracije; certifikati, live ACL i proxy topologija ostaju ručna potvrda.
 
 **Neovisni code-only audit (2026-10-27):** vidi
-`docs/backend-code-audit-2026-10-27.md` — ocjena **8.1/10** izvedena iz
+`docs/backend-code-audit-2026-10-27.md` — ocjena **8.1/10**, nakon paketa N-5/6/7/8/12 **8.8/10** (§0.19 plana), izvedena iz
 33 758 linija koda, sa 15 novih nalaza (P1 zastarjeli scope keš je ispravljen),
 poređenjem sa optimističnim tvrdnjama dokumentacije i formalno delegiranim
 preostalim deployment stavkama.

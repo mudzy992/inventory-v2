@@ -79,14 +79,14 @@ Cilj: **realna slika koda i ocjena**, ne potvrda ranije dokumentacije.
 
 | ID | Težina | Nalaz (dokaz) | Uticaj / preporuka |
 |---|---|---|---|
-| **N-5** | **P2** | `WarehouseResolutionService.resolveForOrgUnit()` (`common/services/warehouse-resolution.service.ts:15-16`) na **svaki poziv** radi `orgUnit.findMany()` + `warehouse.findMany()` bez `where`/`take`. `InventoryCountService.resolveEmployeeIdsForWarehouse()` (`:1331`) uči **sve** zaposlene i za svakog zove `resolveForEmployee()` → O(zaposleni × (org + skladišta)). Ukupno 157/168 `findMany` bez `take`. | Najveći preostali performansni rizik. Uvesti ciljani upit po `orgUnitId`, ili keš sa istim TTL/verzijom kao N-1, ili predati već učitani graf. |
-| **N-6** | **P2** | `NotificationsService.createForUsers()` (`:609-631`) radi jedan `notification.create()` + jedan Socket.IO emit **po korisniku** u petlji, bez outboxa. | `createMany` + batch emit; za kritične tokove koristiti već postojeći `NotificationOutbox` da pad procesa ne ostavi pola obavještenja. |
-| **N-7** | **P2** | `EmployeesService.update()` (`:323`) commituje transakciju, pa **tek nakon** nje zove `employeeRelocationService.handleOrgUnitChange()`. Ako relocation pukne, org promjena ostaje, a relocation case/event/ne. | Durable status + retry (isti obrazac kao `generatedDocxStatus`), ili prebaciti u istu transakciju. Nalaz je postojao i u starom auditu — **još nije zatvoren**. |
-| **N-8** | **P2** | `WarehouseStockService.bulkCreate()` (`:455`) nakon commit-a u petlji zove `notifyWarehouseStockReceived()` za svaki lot, bez outboxa. | Prebaciti u outbox unutar transakcije (pravilo: business commit pobjeđuje, notifikacija ima durable status). |
+| **N-5 (ZATVORENO u §8)** | **P2** | `WarehouseResolutionService.resolveForOrgUnit()` (`common/services/warehouse-resolution.service.ts:15-16`) na **svaki poziv** radi `orgUnit.findMany()` + `warehouse.findMany()` bez `where`/`take`. `InventoryCountService.resolveEmployeeIdsForWarehouse()` (`:1331`) uči **sve** zaposlene i za svakog zove `resolveForEmployee()` → O(zaposleni × (org + skladišta)). Ukupno 157/168 `findMany` bez `take`. | Najveći preostali performansni rizik. Uvesti ciljani upit po `orgUnitId`, ili keš sa istim TTL/verzijom kao N-1, ili predati već učitani graf. |
+| **N-6 (ZATVORENO u §8)** | **P2** | `NotificationsService.createForUsers()` (`:609-631`) radi jedan `notification.create()` + jedan Socket.IO emit **po korisniku** u petlji, bez outboxa. | `createMany` + batch emit; za kritične tokove koristiti već postojeći `NotificationOutbox` da pad procesa ne ostavi pola obavještenja. |
+| **N-7 (ZATVORENO u §8)** | **P2** | `EmployeesService.update()` (`:323`) commituje transakciju, pa **tek nakon** nje zove `employeeRelocationService.handleOrgUnitChange()`. Ako relocation pukne, org promjena ostaje, a relocation case/event/ne. | Durable status + retry (isti obrazac kao `generatedDocxStatus`), ili prebaciti u istu transakciju. Nalaz je postojao i u starom auditu — **još nije zatvoren**. |
+| **N-8 (ZATVORENO u §8)** | **P2** | `WarehouseStockService.bulkCreate()` (`:455`) nakon commit-a u petlji zove `notifyWarehouseStockReceived()` za svaki lot, bez outboxa. | Prebaciti u outbox unutar transakcije (pravilo: business commit pobjeđuje, notifikacija ima durable status). |
 | **N-9** | **P2** | `InventoryCountController.ensureDraft()` (`:57`) radi `Number(year)` bez validacije (`NaN`, negativno, `1e9` prolaze). 6 `@Query('...') string` parametara bez DTO-a; nigdje `ParseUUIDPipe` (`grep` = 0). | `EnsureDraftQueryDto` sa `@IsInt @Min(2000) @Max(2100)` i `@IsUUID()`; dodati `ParseUUIDPipe` na `@Param('id')`. |
 | **N-10** | **P2** | `AuthService.resolveExpiry()` (`:198`) za neispravan `JWT_REFRESH_TTL` **tiho** vraća 7 dana umjesto fail-closed. | Baciti grešku pri startu; dodati unit test za `30x`, `abc`, prazno. |
 | **N-11** | **P3** | `AuthController.refresh()` i `logout()` nemaju `RedisRateLimitGuard` (samo `login()` ga ima). | Dodati namjenski, blaži rate-limit bucket za refresh/logout. |
-| **N-12** | **P3** | 7 od 12 najvećih servisa **nema direktan spec**: `employee-relocation` (989), `transfers` (895), `warehouse-stock` (860), `notifications` (681), `equipment` (638), `employees` (557), `users` (469). Pokriveni su integracijskim `check-*.ts`, ali ne karakterizacijskim unit testovima. | Dodati characterization testove prije refaktora velikih servisa (§11). |
+| **N-12 (ZATVORENO u §8)** | **P3** | 7 od 12 najvećih servisa **nema direktan spec**: `employee-relocation` (989), `transfers` (895), `warehouse-stock` (860), `notifications` (681), `equipment` (638), `employees` (557), `users` (469). Pokriveni su integracijskim `check-*.ts`, ali ne karakterizacijskim unit testovima. | Dodati characterization testove prije refaktora velikih servisa (§11). |
 | **N-13** | **P3** | 62 rasuta `role === 'admin'` provjere po servisima; nema centralne autorizacijske politike. | Ekstraktovati u `AuthorizationPolicy`; smanjuje rizik drift-a pri dodavanju uloga. |
 | **N-14** | **P3** | Dva `pg_advisory_xact_lock(1800043170, …)` sa hard-kodiranim magic brojevima, bez komentara o porijeklu. | Imenovane konstante + dokumentovan namespace (kolizija s drugom aplikacijom na istoj bazi). |
 | **N-15** | **P3** | `settings.registry.ts` 960 linija, `inventory-count.service.ts` 3 050 linija. | Razdvajanje po use-case (Faza 5 audita), ali tek nakon N-12. |
@@ -131,15 +131,15 @@ potpunosti tačne u kodu u trenutku ovog audita:
 | Održivost / veličina servisa | **6.0** | 3 050-line servis, 62 rasuta role checka, 960-line registry |
 | Dokumentacija / operativni vodiči | **9.0** | 8 vodiča + readiness alat (nije predmet ovog code-only audita) |
 
-### Ukupna ocjena: **8.1 / 10**
+### Ukupna ocjena: **8.1 / 10** u trenutku prvog pregleda → **8.8 / 10** nakon paketa N-5/6/7/8/12 (vidi §8).
 
 U odnosu na početnu ocjenu starog audita (**6.6/10**) pomak je velik i stvaran
 — ali ne na 9+: jedan svježe pronađeni **P1** (N-1, sada ispravljen), četiri
 nova P2 (dva ispravljena) i grupa otvorenih P2/P3 oko upita, post-commit
 efekata i test pokrivenosti drže ocjenu ispod 8.5.
 
-**Projekcija:** zatvaranjem N-5, N-6, N-7, N-8 i N-12 kod bi realno bio
-**~8.8/10**. Bez ovog paketa ispravki bio bi **~7.7/10**.
+**Projekcija je ostvarena:** zatvaranjem N-5, N-6, N-7, N-8 i N-12 kod je na
+**8.8/10**. Bez paketa N-1…N-4 ispravki bio bi **~7.7/10**.
 
 ---
 
@@ -149,8 +149,10 @@ Vlasnik je preuzeo sljedeće; u repou se vode kao **delegirane / prihvaćeni
 rizik**, ne kao neurađeni kod. Sve su izvršivo provjerljive kroz
 `node scripts/check-deployment-readiness.mjs --env .env`:
 
-1. **CA mountovi i SAN podudarnost** (`DATABASE_HOST`, `REDIS_HOST`) — MANUAL
-   provjere u readiness alatu; kod već verificira peer+hostname.
+1. **CA mountovi i SAN podudarnost** (`DATABASE_HOST`, `REDIS_HOST`) — vlasnik je
+   potvrdio da je **TLS već aktivan na Redis i PostgreSQL**. U readiness alatu
+   `TLS_VERIFIED=true` pretvara te dvije MANUAL provjere u `pass`; kod i dalje
+   verificira peer+hostname.
 2. **Live Redis ACL korisnik** — `ACL GETUSER inventory-v2` mora imati glob +
    oba egzaktna PSUBSCRIBE granta; kanonsko pravilo postoji u
    `deploy/redis/users.acl.example`.
@@ -183,3 +185,88 @@ joba) — korak 49 `Verify authorization scope cache freshness`, 48 `Verify
 performance budgets`, 36 `Verify structured operational logs`, 43 `Verify auth
 session revocation`, 52 `Run backend unit specs` (803 testa), 54 build i 55
 `npm audit` su zeleni.
+
+
+---
+
+## 8. Naknadni paket: N-5, N-6, N-7, N-8, N-12 (zatvoreno)
+
+Vlasnik je zatražio nastavak na pet preostalih nalaza i potvrdio da je TLS već
+aktivan na Redis i PostgreSQL (to je sada unosivo u readiness alat kroz
+`TLS_VERIFIED=true`, pa `db-cert-san` i `redis-cert-san` prelaze iz MANUAL/warn
+u pass. `.env.example` dokumentuje flag; bez njega alat i dalje traži ručnu
+potvrdu certifikata.
+
+### N-5 — `WarehouseResolutionService` više ne skenira cijele tabele na svaki poziv
+
+- `common/services/warehouse-resolution.service.ts`: orgUnit + warehouse graf se
+  učitava **jednom po TTL/verziji** (isti `scope-cache.registry.ts` kao N-1), uz
+  sinhrono izračunatu mapu efektivnih gradova (`buildEffectiveLocationMap`).
+- Nova `findEmployeeIdsForWarehouse(warehouseId)` koristi
+  `collectOrgUnitIdsForEffectiveWarehouse()` i **jedan** bounded
+  `employee.findMany({ where: { orgUnitId: { in: ... } }, take: 10_000 })`.
+- `InventoryCountService.resolveEmployeeIdsForWarehouse()` sada delegira na tu
+  metodu — petlja `for (const employee of employees) { await resolveForEmployee() }`
+  je uklonjena (O(N·M) → O(1) aplikacijskih upita). 5 unit scenarija u
+  `warehouse-resolution.service.spec.ts`, statička tvrdnja u
+  `check-audit-findings.ts`.
+
+### N-6 — notifikacijski fan-out je jedan INSERT
+
+- `NotificationsService.createForUsers()` koristi
+  `notification.createManyAndReturn()` umjesto jednog `notification.create()`
+  po korisniku; Socket.IO emit ostaje po korisniku (jeftin, namjeran).
+- Karakterizacijski test: 3 primatelja (2 jedinstvena) → 1 DB poziv, 2 emita.
+
+### N-8 — prijem robe piše notifikacije u outbox unutar transakcije
+
+- `NotificationsService.buildWarehouseStockReceivedOutboxRows(tx, lotIds)`
+  gradi redove sa `idempotencyKey = warehouse-stock-received:<lotId>:<userId>`.
+- `WarehouseStockService` (single `receive` i `receiveBulk`) poziva builder i
+  `tx.notificationOutbox.createMany({ skipDuplicates: true })` **unutar**
+  `$transaction`. Stara post-commit petlja `notifyWarehouseStockReceived()` je
+  uklonjena, a sam direktni notifier (mrtav kod) obrisan. Business commit sada
+  garantuje notifikaciju; `NotificationOutboxRelayService` je isporučuje.
+
+### N-7 — promjena org. jedinice više nije post-commit efekat
+
+- `EmployeeRelocationService.handleOrgUnitChange()` sada prima
+  `tx: Prisma.TransactionClient` i `notificationsEnabled`, `supersedeOpenCases`
+  je postao `supersedeOpenCasesInTx(tx, ...)`, a sve notifikacije su **durable
+  outbox redovi** sa ključevima `employee-relocation-action:<caseId>:<userId>` i
+  `employee-relocation-alert:<key>:<userId>`.
+- `EmployeesService.update()` poziva `handleOrgUnitChange(..., tx, ...)` unutar
+  iste `$transaction` kao `employee.update()`. Ako bilo šta pukne, rollback
+  vraća i org promjenu i relocation case — nema više "org promijenjen, case
+  izostao". Nema nove tabele niti migracije: sam `EmployeeRelocationCase` je
+  durable stanje, a notifikacije su outbox.
+
+### N-12 — characterization specovi za 7 najvećih servisa
+
+Dodano 7 `*.service.characterization.spec.ts` fajlova (equipment, transfers,
+warehouse-stock, notifications, employee-relocation, employees, users). Svaki
+kombinuje **ponašajni** test sa lažnim Prisma klijentom i **izvornu** tvrdnju
+(nema `console.*`, conditional claim, outbox u transakciji, cursor paging,
+revocation marker prije transakcije). `check-audit-findings.ts` CI gate odbija
+brisanje bilo kojeg od njih.
+
+**Ispravka ranije tvrdnje N-12:** u modulima je već bilo susjednih util/spec
+fajlova (npr. `employee-relocation-lot-accounting.spec.ts`), ali ne i direktnih
+servisnih karakterizacijskih specova — to je bio stvarni, nešto blaži nedostatak.
+
+### Ažurirana ocjena: **8.8 / 10**
+
+| Oblast | Prije | Sada |
+|---|---:|---:|
+| Performanse / upiti | 6.5 | **8.5** |
+| Integritet / transakcije | 8.5 | **9.3** |
+| Test pokrivenost velikih servisa | 6.5 | **8.5** |
+| Ukupno | 8.1 | **8.8** |
+
+**Preostali otvoreni nalazi:** N-9 (sirovi `Number(year)`, 6 `@Query` stringova,
+bez `ParseUUIDPipe`), N-10 (tihi fallback `JWT_REFRESH_TTL`), N-11 (rate-limit na
+refresh/logout), N-13 (62 rasuta role checka), N-14 (magic advisory lock brojevi),
+N-15 (3 050-line servis). Nijedan nije P1. Vlasnički dio (CA/SAN potvrda, live
+ACL, proxy lanac, staging p95 load test) ostaje delegiran kroz
+`check-deployment-readiness.mjs --env .env`, uz `TLS_VERIFIED=true` za već
+aktivni TLS.

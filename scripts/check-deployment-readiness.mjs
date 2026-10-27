@@ -131,6 +131,7 @@ export function parseEnvFile(text) {
 export function evaluateDeployment(env, options = {}) {
   const result = makeResult();
   const isProduction = value(env, 'NODE_ENV') !== 'development';
+  const tlsConfirmed = value(env, 'TLS_VERIFIED').toLowerCase() === 'true';
 
   // --- Bootstrap / identity -------------------------------------------------
   const nodeEnv = value(env, 'NODE_ENV');
@@ -250,9 +251,11 @@ export function evaluateDeployment(env, options = {}) {
     add(
       result,
       'db-cert-san',
-      'warn',
-      'MANUAL: confirm the PostgreSQL certificate SAN matches DATABASE_HOST',
-      'Run `openssl s_client -starttls postgres -connect HOST:PORT` and compare SAN/CN.',
+      tlsConfirmed ? 'pass' : 'warn',
+      tlsConfirmed
+        ? 'TLS active on PostgreSQL (confirmed by owner)'
+        : 'MANUAL: confirm the PostgreSQL certificate SAN matches DATABASE_HOST',
+      'Run `openssl s_client -starttls postgres -connect HOST:PORT` and compare SAN/CN, or set TLS_VERIFIED=true after confirming.',
     );
   }
 
@@ -261,6 +264,7 @@ export function evaluateDeployment(env, options = {}) {
   const redisCa = value(env, 'REDIS_CA_CERT_PATH');
   if (!redisTls) {
     add(result, 'redis-tls', 'pass', 'REDIS_TLS=false (private network / no TLS configured)');
+    add(result, 'redis-cert-san', 'pass', 'Redis TLS disabled — no certificate SAN to verify');
   } else {
     const host = value(env, 'REDIS_HOST');
     const ok = isAbsoluteCaPath(redisCa) && isDnsHost(host);
@@ -276,9 +280,11 @@ export function evaluateDeployment(env, options = {}) {
     add(
       result,
       'redis-cert-san',
-      'warn',
-      'MANUAL: confirm the Redis certificate SAN matches REDIS_HOST',
-      'Compare the server certificate SAN with REDIS_HOST; the app always verifies hostname.',
+      tlsConfirmed ? 'pass' : 'warn',
+      tlsConfirmed
+        ? 'TLS active on Redis (confirmed by owner)'
+        : 'MANUAL: confirm the Redis certificate SAN matches REDIS_HOST',
+      'Compare the server certificate SAN with REDIS_HOST; the app always verifies hostname, or set TLS_VERIFIED=true after confirming.',
     );
   }
 

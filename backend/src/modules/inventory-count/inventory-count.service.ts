@@ -1331,17 +1331,9 @@ export class InventoryCountService {
   }
 
   private async resolveEmployeeIdsForWarehouse(warehouseId: string): Promise<string[]> {
-    const employees = await this.prisma.employee.findMany({ select: { id: true } });
-    const matching: string[] = [];
-    for (const employee of employees) {
-      const effectiveWarehouseId = await this.warehouseResolutionService.resolveForEmployee(
-        employee.id,
-      );
-      if (effectiveWarehouseId === warehouseId) {
-        matching.push(employee.id);
-      }
-    }
-    return matching;
+    // N-5: one bounded employee query driven by the cached org/warehouse
+    // graph instead of O(employees × (orgUnits + warehouses)) lookups.
+    return this.warehouseResolutionService.findEmployeeIdsForWarehouse(warehouseId);
   }
 
   async getFreezeBannerForUser(user: AuthenticatedUser) {

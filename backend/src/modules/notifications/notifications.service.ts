@@ -517,37 +517,47 @@ export class NotificationsService {
     });
   }
 
-  async notifyWarehouseStockReceived(lotId: string): Promise<void> {
-    if (!(await this.areNotificationsEnabled())) {
-      return;
+  /**
+   * N-8: durable counterpart of notifyWarehouseStockReceived(). Built and
+   * written INSIDE the stock-receive transaction, so a committed lot always
+   * carries its notification. Idempotency keys make replay safe.
+   */
+  async buildWarehouseStockReceivedOutboxRows(
+    tx: Prisma.TransactionClient,
+    lotIds: string[],
+  ): Promise<Prisma.NotificationOutboxCreateManyInput[]> {
+    if (lotIds.length === 0) {
+      return [];
     }
-    const lot = await this.prisma.warehouseStockLot.findUnique({
-      where: { id: lotId },
+    const lots = await tx.warehouseStockLot.findMany({
+      where: { id: { in: lotIds } },
       include: { category: true, warehouse: true },
     });
-    if (!lot) {
-      return;
+    const rows: Prisma.NotificationOutboxCreateManyInput[] = [];
+    for (const lot of lots) {
+      const categoryIds = await this.registrarScope.expandCategoryIds([lot.categoryId]);
+      const assignments = await tx.registrarAssignment.findMany({
+        where: {
+          warehouseId: lot.warehouseId,
+          categoryId: { in: [...categoryIds] },
+          user: { role: 'evidenticar', isActive: true },
+        },
+        select: { userId: true },
+      });
+      for (const userId of new Set(assignments.map((row) => row.userId))) {
+        rows.push({
+          idempotencyKey: `warehouse-stock-received:${lot.id}:${userId}`,
+          userId,
+          type: 'warehouse_stock_received',
+          title: 'Nova roba na skladi\u0161tu',
+          message: `${lot.quantityReceived}\u00d7 ${lot.productName} (${lot.category.name}) \u2014 ${lot.warehouse.name}. Defini\u0161ite specifikaciju.`,
+          relatedId: lot.id,
+        });
+      }
     }
-    const categoryIds = await this.registrarScope.expandCategoryIds([lot.categoryId]);
-    const assignments = await this.prisma.registrarAssignment.findMany({
-      where: {
-        warehouseId: lot.warehouseId,
-        categoryId: { in: [...categoryIds] },
-        user: { role: 'evidenticar', isActive: true },
-      },
-      select: { userId: true },
-    });
-    const userIds = assignments.map((row) => row.userId);
-    if (userIds.length === 0) {
-      return;
-    }
-    await this.createForUsers(userIds, {
-      type: 'warehouse_stock_received',
-      title: 'Nova roba na skladištu',
-      message: `${lot.quantityReceived}× ${lot.productName} (${lot.category.name}) — ${lot.warehouse.name}. Definišite specifikaciju.`,
-      relatedId: lotId,
-    });
+    return rows;
   }
+
 
   async emitInventoryCloseJobProgress(
     sessionId: string,
@@ -616,17 +626,33 @@ export class NotificationsService {
     },
   ): Promise<void> {
     const uniqueIds = [...new Set(userIds)];
-    for (const userId of uniqueIds) {
-      const row = await this.prisma.notification.create({
-        data: {
-          userId,
-          type: input.type,
-          title: input.title,
-          message: input.message,
-          relatedId: input.relatedId,
-        },
-      });
-      this.gateway.emitNotificationCreated(userId, this.toResponse(row));
+    if (uniqueIds.length === 0) {
+      return;
+    }
+    // N-6: one DB round-trip instead of one INSERT per recipient. The
+    // in-memory emit loop is cheap and stays per-user by design.
+    const rows = await this.prisma.notification.createManyAndReturn({
+      data: uniqueIds.map((userId) => ({
+        userId,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        relatedId: input.relatedId,
+      })),
+      select: {
+        id: true,
+        userId: true,
+        type: true,
+        title: true,
+        message: true,
+        read: true,
+        relatedId: true,
+        outboxId: true,
+        createdAt: true,
+      },
+    });
+    for (const row of rows) {
+      this.gateway.emitNotificationCreated(row.userId, this.toResponse(row));
     }
   }
 

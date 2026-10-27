@@ -181,11 +181,21 @@ export class EmployeeRelocationService {
     };
   }
 
+  /**
+   * N-7: this used to run AFTER EmployeesService.update() committed. If it
+   * failed, the org-unit change survived but the relocation case/events/
+   * notifications were lost. It now runs INSIDE the employee update
+   * transaction (tx), and every notification is a durable NotificationOutbox
+   * row written in that same transaction — business commit wins, side
+   * effects are guaranteed and replayable. Idempotency keys make a retry safe.
+   */
   async handleOrgUnitChange(
     employeeId: string,
     previousOrgUnitId: string,
     newOrgUnitId: string,
     actorUserId: string,
+    tx: Prisma.TransactionClient,
+    notificationsEnabled = true,
   ): Promise<void> {
     if (!(await this.settingsService.getBooleanValue('features.employee_relocation', true))) {
       return;
@@ -198,26 +208,48 @@ export class EmployeeRelocationService {
     if (fromWarehouseId === toWarehouseId) {
       return;
     }
-    await this.supersedeOpenCases(employeeId, actorUserId);
-    const held = await this.prisma.equipment.findMany({
+    await this.supersedeOpenCasesInTx(tx, employeeId, actorUserId);
+    const held = await tx.equipment.findMany({
       where: { currentHolderId: employeeId, status: 'zaduzeno' },
       select: { id: true, categoryId: true },
     });
     if (held.length === 0) {
       return;
     }
+    const outboxRows: Prisma.NotificationOutboxCreateManyInput[] = [];
+    const addAlert = (userIds: string[], title: string, message: string, relatedId: string, key: string): void => {
+      if (!notificationsEnabled) return;
+      for (const userId of new Set(userIds)) {
+        outboxRows.push({
+          idempotencyKey: `employee-relocation-alert:${key}:${userId}`,
+          userId,
+          type: 'employee_relocation_admin_alert',
+          title,
+          message,
+          relatedId,
+        });
+      }
+    };
+    const flushOutbox = async (): Promise<void> => {
+      if (outboxRows.length > 0) {
+        await tx.notificationOutbox.createMany({ data: outboxRows, skipDuplicates: true });
+      }
+    };
+
     if (!fromWarehouseId || !toWarehouseId) {
-      const admins = await findAdminUserIds(this.prisma);
-      await this.notifications.notifyEmployeeRelocationAdminAlert({
-        userIds: admins,
-        title: 'Promjena org. jedinice — nedostaje skladište',
-        message: 'Radnik ima zaduženu opremu, ali efektivno skladište nije definisano.',
-        relatedId: employeeId,
-      });
+      const admins = await findAdminUserIds(tx as never);
+      addAlert(
+        admins,
+        'Promjena org. jedinice — nedostaje skladište',
+        'Radnik ima zaduženu opremu, ali efektivno skladište nije definisano.',
+        employeeId,
+        'missing-warehouse',
+      );
+      await flushOutbox();
       return;
     }
-    const employee = await this.prisma.employee.findUniqueOrThrow({ where: { id: employeeId } });
-    const caseRow = await this.prisma.employeeRelocationCase.create({
+    const employee = await tx.employee.findUniqueOrThrow({ where: { id: employeeId } });
+    const caseRow = await tx.employeeRelocationCase.create({
       data: {
         employeeId,
         fromOrgUnitId: previousOrgUnitId,
@@ -225,12 +257,7 @@ export class EmployeeRelocationService {
         fromWarehouseId,
         toWarehouseId,
         createdByUserId: actorUserId,
-        lines: {
-          create: held.map((row) => ({
-            equipmentId: row.id,
-            categoryId: row.categoryId,
-          })),
-        },
+        lines: { create: held.map((row) => ({ equipmentId: row.id, categoryId: row.categoryId })) },
         events: {
           create: {
             actorUserId,
@@ -244,40 +271,46 @@ export class EmployeeRelocationService {
     const notifiedSource = new Set<string>();
     for (const line of caseRow.lines) {
       const sourceRegs = await findRegistrarUserIds(
-        this.prisma,
+        tx as never,
         this.registrarScope,
         fromWarehouseId,
         line.categoryId,
       );
       if (sourceRegs.length === 0) {
-        const admins = await findAdminUserIds(this.prisma);
-        await this.notifications.notifyEmployeeRelocationAdminAlert({
-          userIds: admins,
-          title: 'Nema evidentičara na izvoru',
-          message: `${employee.firstName} ${employee.lastName} — potrebna akcija za opremu bez evidentičara na izvornom skladištu.`,
-          relatedId: line.id,
-        });
+        const admins = await findAdminUserIds(tx as never);
+        addAlert(
+          admins,
+          'Nema evidentičara na izvoru',
+          `${employee.firstName} ${employee.lastName} — potrebna akcija za opremu bez evidentičara na izvornom skladištu.`,
+          line.id,
+          'no-source-registrar',
+        );
         continue;
       }
       for (const userId of sourceRegs) {
-        if (notifiedSource.has(userId)) {
-          continue;
-        }
+        if (notifiedSource.has(userId)) continue;
         notifiedSource.add(userId);
-        await this.notifications.notifyEmployeeRelocationActionRequired({
-          userId,
-          employeeName: `${employee.firstName} ${employee.lastName}`,
-          caseId: caseRow.id,
-        });
+        if (notificationsEnabled) {
+          outboxRows.push({
+            idempotencyKey: `employee-relocation-action:${caseRow.id}:${userId}`,
+            userId,
+            type: 'employee_relocation_action_required',
+            title: 'Promjena org. jedinice — potrebna akcija',
+            message: `Radnik ${employee.firstName} ${employee.lastName} promijenio org. jedinicu. Potrebna akcija za zaduženu opremu.`,
+            relatedId: caseRow.id,
+          });
+        }
       }
     }
-    const admins = await findAdminUserIds(this.prisma);
-    await this.notifications.notifyEmployeeRelocationAdminAlert({
-      userIds: admins,
-      title: 'Promjena org. jedinice radnika',
-      message: `${employee.firstName} ${employee.lastName} prebačen — ${held.length} zaduženih komada zahtijeva akciju.`,
-      relatedId: caseRow.id,
-    });
+    const admins = await findAdminUserIds(tx as never);
+    addAlert(
+      admins,
+      'Promjena org. jedinice radnika',
+      `${employee.firstName} ${employee.lastName} prebačen — ${held.length} zaduženih komada zahtijeva akciju.`,
+      caseRow.id,
+      'case-opened',
+    );
+    await flushOutbox();
   }
 
   async listForUser(user: AuthenticatedUser, query: ListRelocationQueryDto) {
@@ -849,18 +882,20 @@ export class EmployeeRelocationService {
     return this.getLineOrThrow(line.id);
   }
 
-  private async supersedeOpenCases(employeeId: string, actorUserId: string) {
-    const openCases = await this.prisma.employeeRelocationCase.findMany({
+  private async supersedeOpenCasesInTx(
+    tx: Prisma.TransactionClient,
+    employeeId: string,
+    actorUserId: string,
+  ): Promise<void> {
+    const openCases = await tx.employeeRelocationCase.findMany({
       where: { employeeId, status: 'open' },
     });
     for (const caseRow of openCases) {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.employeeRelocationCase.update({
-          where: { id: caseRow.id },
-          data: { status: 'cancelled', resolvedAt: new Date() },
-        });
-        await this.recordEvent(tx, caseRow.id, null, actorUserId, 'superseded', {});
+      await tx.employeeRelocationCase.update({
+        where: { id: caseRow.id },
+        data: { status: 'cancelled', resolvedAt: new Date() },
       });
+      await this.recordEvent(tx, caseRow.id, null, actorUserId, 'superseded', {});
     }
   }
 

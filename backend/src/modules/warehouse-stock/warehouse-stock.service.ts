@@ -366,6 +366,9 @@ export class WarehouseStockService {
     const contractNumber = dto.contractNumber?.trim() || null;
     const notes = dto.notes?.trim() || null;
     const entryDate = new Date(dto.entryDate);
+    const notificationsEnabled = await this.notificationsService
+      .notificationsEnabled()
+      .catch(() => true);
     const result = await this.prisma.$transaction(async (tx) => {
       const canonical =
         resolved.catalogItemId
@@ -395,9 +398,15 @@ export class WarehouseStockService {
       if (!lot) {
         throw new NotFoundException('Stock lot not found');
       }
+      if (notificationsEnabled) {
+        const outboxRows =
+          await this.notificationsService.buildWarehouseStockReceivedOutboxRows(tx, [lot.id]);
+        if (outboxRows.length > 0) {
+          await tx.notificationOutbox.createMany({ data: outboxRows, skipDuplicates: true });
+        }
+      }
       return lot;
     });
-    await this.notificationsService.notifyWarehouseStockReceived(result.id);
     return this.mapLotForUser(user, result, true);
   }
 
@@ -412,6 +421,9 @@ export class WarehouseStockService {
       throw new BadRequestException('Warehouse not found or inactive');
     }
     await this.inventoryFreeze.assertNoMutationInWarehouse(warehouseId, user, 'stock_lot_create');
+    const notificationsEnabled = await this.notificationsService
+      .notificationsEnabled()
+      .catch(() => true);
     const lotIds = await this.prisma.$transaction(async (tx) => {
       const ids: string[] = [];
       for (const item of dto.items) {
@@ -451,6 +463,13 @@ export class WarehouseStockService {
         });
         ids.push(applied.stockLotId);
       }
+      if (notificationsEnabled) {
+        const outboxRows =
+          await this.notificationsService.buildWarehouseStockReceivedOutboxRows(tx, [...new Set(ids)]);
+        if (outboxRows.length > 0) {
+          await tx.notificationOutbox.createMany({ data: outboxRows, skipDuplicates: true });
+        }
+      }
       return ids;
     });
     const distinctLotIds = [...new Set(lotIds)];
@@ -458,9 +477,6 @@ export class WarehouseStockService {
       where: { id: { in: distinctLotIds } },
       include: { category: true, warehouse: true },
     });
-    for (const lotId of distinctLotIds) {
-      await this.notificationsService.notifyWarehouseStockReceived(lotId);
-    }
     return lots.map((lot) => this.mapLotForUser(user, lot, true));
   }
 

@@ -208,6 +208,21 @@ test('stuck DocumentJob recovery bound must exceed the worker conversion timeout
   );
 });
 
+test('TLS_VERIFIED=true closes the certificate MANUAL warnings', () => {
+  const tlsEnv = withOverrides({
+    REDIS_TLS: 'true',
+    REDIS_HOST: 'redis.example.com',
+    REDIS_CA_CERT_PATH: '/run/secrets/redis-ca.crt',
+  });
+  const baseline = evaluateDeployment(tlsEnv);
+  assert.equal(statusOf(baseline, 'db-cert-san'), 'warn');
+  assert.equal(statusOf(baseline, 'redis-cert-san'), 'warn');
+  const confirmed = evaluateDeployment({ ...tlsEnv, TLS_VERIFIED: 'true' });
+  assert.equal(statusOf(confirmed, 'db-cert-san'), 'pass');
+  assert.equal(statusOf(confirmed, 'redis-cert-san'), 'pass');
+  assert.ok(confirmed.summary.warn < baseline.summary.warn);
+});
+
 test('raw HTML disposition is validated and inline mode warns', () => {
   assert.equal(statusOf(evaluateDeployment(GOOD), 'transfer-raw-disposition'), 'pass');
   assert.equal(

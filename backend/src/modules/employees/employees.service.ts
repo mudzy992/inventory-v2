@@ -306,6 +306,10 @@ export class EmployeesService {
       );
     }
     const deactivationAt = new Date();
+    const relocationNeeded = Boolean(dto.orgUnitId && dto.orgUnitId !== existing.orgUnitId);
+    const notificationsEnabled = relocationNeeded
+      ? await this.notifications.notificationsEnabled().catch(() => true)
+      : true;
     try {
       updated = await this.prisma.$transaction(async (tx) => {
         const employee = await tx.employee.update({ where: { id }, data: updatePayload });
@@ -313,19 +317,21 @@ export class EmployeesService {
           await tx.user.update({ where: { id: linkedUser.id }, data: { isActive: false } });
           await revokeRefreshTokensInTransaction(tx, linkedUser.id, deactivationAt);
         }
+        if (relocationNeeded) {
+          await this.employeeRelocationService.handleOrgUnitChange(
+            id,
+            existing.orgUnitId,
+            dto.orgUnitId!,
+            user.id,
+            tx,
+            notificationsEnabled,
+          );
+        }
         return employee;
       });
     } catch (err) {
       this.rethrowStaffNumberConflict(err);
       throw err;
-    }
-    if (dto.orgUnitId && dto.orgUnitId !== existing.orgUnitId) {
-      await this.employeeRelocationService.handleOrgUnitChange(
-        id,
-        existing.orgUnitId,
-        dto.orgUnitId,
-        user.id,
-      );
     }
     if (isDeactivating && linkedUser) {
       await sweepRefreshTokensAfterCommit(this.prisma, linkedUser.id, new Date());

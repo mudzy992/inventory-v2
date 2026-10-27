@@ -259,6 +259,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:scope-cache-freshness
 
+      - name: Verify independent audit findings (N-5..N-12)
+        working-directory: backend
+        run: npm run test:integration:audit-findings
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint
