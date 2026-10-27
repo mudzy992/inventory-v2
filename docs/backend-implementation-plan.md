@@ -788,6 +788,15 @@ N-12 characterization testovi za 7 velikih servisa; N-13/N-14/N-15 održivost.
 **Ocjena:** **8.1/10** (u odnosu na početnih 6.6/10). Detaljna tabela po
 oblastima i poređenje sa ranijim optimističnim tvrdnjama u audit dokumentu.
 
+**CI dokaz.** Commit `28fe737` prolazi u run-u `40581127648` (`completed
+success` na sva tri joba). Novi korak `Verify authorization scope cache
+freshness` (49) je zelen, kao i `Verify performance budgets` (48),
+`Verify structured operational logs` (36), `Verify auth session revocation`
+(43), lint (50), typecheck (51), 803 backend unit testova (52), build (54) i
+`npm audit` (55). Lokalno su uz `pipefail` potvrđeni 6/6 scope-cache scenarija,
+8/8 performance budžeta, 36 root scenarija, svi statički gateovi i `npm audit`
+= 0 za sva tri workspace-a.
+
 **Delegirane vlasničke stavke (formalno zatvorene u repou):** CA/SAN potvrda,
 live ACL `GETUSER`, proxy lanac i staging p95 load test — preuzima vlasnik,
 provjerljivo kroz `check-deployment-readiness.mjs --env .env`.

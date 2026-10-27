@@ -177,3 +177,9 @@ globalni CSP/CORP, maskiranje identiteta na javnom QR-u.
 
 Ovaj audit je **snapshot**, ne zamjena za CI: svaki gornji ispravljeni nalaz ima
 odgovarajući gate koji će pasti ako se regresija vrati.
+
+**CI potvrda ispravki:** run `40581127648` (`completed success` na sva tri
+joba) — korak 49 `Verify authorization scope cache freshness`, 48 `Verify
+performance budgets`, 36 `Verify structured operational logs`, 43 `Verify auth
+session revocation`, 52 `Run backend unit specs` (803 testa), 54 build i 55
+`npm audit` su zeleni.
