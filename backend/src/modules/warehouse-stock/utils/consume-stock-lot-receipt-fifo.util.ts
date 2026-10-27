@@ -1,3 +1,4 @@
+import { recordConditionalTransition } from '../../../common/metrics/business-transition-metrics.registry';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../../../generated/prisma/client';
 
@@ -26,6 +27,10 @@ export const consumeStockLotReceiptFifoInTx = async (
     const claimed = await tx.warehouseStockLotReceipt.updateMany({
       where: { id: receipt.id, quantityRemaining: { gt: 0 } },
       data: { quantityRemaining: { decrement: 1 } },
+    });
+    recordConditionalTransition('stock_lot_fifo_consume', claimed.count, {
+      fromStatus: 'quantity_remaining',
+      toStatus: 'decremented',
     });
     if (claimed.count === 1) {
       return { entryDate: receipt.entryDate, contractNumber: receipt.contractNumber };

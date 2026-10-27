@@ -1,3 +1,4 @@
+import { recordConditionalTransition } from '../../../common/metrics/business-transition-metrics.registry';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { WarehouseStockLot, Prisma } from '../../../../generated/prisma/client';
 
@@ -18,6 +19,10 @@ export const decrementStockLotOnHandInTx = async (
       quantityOnHand: { gte: quantity },
     },
     data: { quantityOnHand: { decrement: quantity } },
+  });
+  recordConditionalTransition('stock_lot_decrement', decremented.count, {
+    fromStatus: 'spremno_za_izdavanje',
+    toStatus: 'quantity_decremented',
   });
   if (decremented.count !== 1) {
     throw new BadRequestException(insufficientMessage);

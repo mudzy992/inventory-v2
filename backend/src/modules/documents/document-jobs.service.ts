@@ -1,3 +1,4 @@
+import { recordConditionalTransition } from '../../common/metrics/business-transition-metrics.registry';
 import { Injectable } from '@nestjs/common';
 import type { DocumentJob, DocumentSourceFormat, Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -74,6 +75,11 @@ export class DocumentJobsService {
                 attempts: attempts ?? 0,
               },
             });
+      recordConditionalTransition('document_job_terminal', result.count, {
+        fromStatus: 'queued|running',
+        toStatus: status,
+        terminal: status === 'done' ? 'done' : 'failed',
+      });
       if (result.count !== 1) return null;
 
       const job = await tx.documentJob.findUnique({ where: { id } });
@@ -141,6 +147,10 @@ export class DocumentJobsService {
     const result = await this.prisma.documentJob.updateMany({
       where: { id, status: { in: ['queued', 'running'] } },
       data: { status: 'running', startedAt: new Date(), lastError: null },
+    });
+    recordConditionalTransition('document_job_running', result.count, {
+      fromStatus: 'queued|running',
+      toStatus: 'running',
     });
     return result.count === 1;
   }

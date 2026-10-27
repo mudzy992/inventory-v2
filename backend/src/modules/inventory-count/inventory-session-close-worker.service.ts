@@ -1,3 +1,4 @@
+import { recordConditionalTransition } from '../../common/metrics/business-transition-metrics.registry';
 import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
@@ -92,6 +93,10 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
           endedAt: null,
           lastError: null,
         },
+      });
+      recordConditionalTransition('inventory_close_claim', claim.count, {
+        fromStatus: 'queued|running',
+        toStatus: 'running',
       });
       if (claim.count !== 1) {
         return false;

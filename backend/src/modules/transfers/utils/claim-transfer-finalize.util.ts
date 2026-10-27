@@ -1,3 +1,4 @@
+import { recordConditionalTransition, readTransitionTargetStatus } from '../../../common/metrics/business-transition-metrics.registry';
 import { BadRequestException } from '@nestjs/common';
 import type { Prisma } from '../../../../generated/prisma/client';
 
@@ -14,6 +15,10 @@ export const transitionOpenTransferInTx = async (
   const transition = await transferStore.transfer.updateMany({
     where: { id: transferId, status: { in: [...allowedStatuses] } },
     data,
+  });
+  recordConditionalTransition('transfer_open_status', transition.count, {
+    fromStatus: allowedStatuses.join('|'),
+    toStatus: readTransitionTargetStatus(data),
   });
   if (transition.count !== 1) {
     throw new BadRequestException(errorMessage);

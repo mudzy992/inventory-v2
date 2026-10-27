@@ -184,6 +184,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:structured-logs
 
+      - name: Verify business state-transition metrics
+        working-directory: backend
+        run: npm run test:integration:business-transition-metrics
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

@@ -1,3 +1,4 @@
+import { recordConditionalTransition } from '../../common/metrics/business-transition-metrics.registry';
 import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
@@ -79,6 +80,10 @@ export class NotificationOutboxRelayService implements OnModuleInit {
         leaseUntil: new Date(now.getTime() + LEASE_DURATION_MS),
         attempts: { increment: 1 },
       },
+    });
+    recordConditionalTransition('notification_outbox_claim', claimed.count, {
+      fromStatus: 'pending|running',
+      toStatus: 'running',
     });
     if (claimed.count !== 1) {
       return;

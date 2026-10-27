@@ -125,6 +125,18 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
   'http.metrics.min_request_count': {
     detail: 'Minimalan uzorak zahtjeva u intervalu prije nego stopa grešaka i p95 mogu aktivirati alarm.',
   },
+  'business.metrics.warn_rejected_count': {
+    detail: 'Operativni alarm kada se nakupi previše stale/duplih pokušaja poslovne promjene statusa.',
+  },
+  'business.metrics.warn_rejected_rate_percent': {
+    detail: 'Operativni alarm kada udio odbačenih conditional update pokušaja pređe prag.',
+  },
+  'business.metrics.warn_failed_terminal_count': {
+    detail: 'Operativni alarm kada previše poslova završi u failed terminalnom statusu.',
+  },
+  'business.metrics.min_transition_count': {
+    detail: 'Minimalan uzorak pokušaja u intervalu prije nego udio odbačenih može aktivirati alarm.',
+  },
   'rate_limit.metrics.warn_fail_open_count': {
     detail: 'Operativni alarm kada previše zahtjeva prođe bez Redis rate-limit provjere.',
   },

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { BusinessTransitionMetricsService } from './business-transition-metrics.service';
 import { HealthController } from './health.controller';
 import { HttpRequestMetricsService } from './http-request-metrics.service';
 import { InventoryCloseMetricsService } from './inventory-close-metrics.service';
@@ -22,6 +23,7 @@ import { INVENTORY_SESSION_CLOSE_QUEUE } from '../inventory-count/inventory-sess
   ],
   controllers: [HealthController],
   providers: [
+    BusinessTransitionMetricsService,
     HttpRequestMetricsService,
     InventoryCloseMetricsService,
     PostgresMetricsService,

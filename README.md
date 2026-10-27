@@ -83,14 +83,18 @@ automatski sa ostalim servisima. Detalji: [document-worker/README.md](document-w
 Backend emituje jedan red JSON-a po važnom infrastrukturnom događaju. Periodični
 (30 s) signali: `http_request_metrics` (latencijski histogram/p95, stopa 5xx i 4xx,
 normalizirane rute), `inventory_close_job_metrics` (queued/running/failed starost,
-istekli lease-ovi), `rate_limit_metrics` (odluke, 429 burst, fail-open/fail-closed
+istekli lease-ovi), `business_state_transition_metrics` (applied/rejected
+conditional state-transitioni po operaciji i terminalni ishodi),
+`rate_limit_metrics` (odluke, 429 burst, fail-open/fail-closed
 kvarovi i uzastopni Redis prekidi), `upload_reject_metrics`, `postgres_pool_latency`,
 `redis_connection_health`, `bullmq_queue_metrics` i `notification_outbox_backlog`.
 Pragovi za inventory close alarm (`inventory.close.metrics.*`) također su privatne
 postavke; default-i su 10 nezavršenih poslova, 300 s queued, 1800 s running i
 300 s neriješenog failed posla. `rate_limit.metrics.*` default-i su 5 fail-open
 odluka, 3 uzastopna kvara i 25 odbijenica (429) po intervalu; svaki fail-closed
-odbijen zahtjev odmah daje upozorenje. Pojedinačni Redis kvarovi se loguju kao
+odbijen zahtjev odmah daje upozorenje. `business.metrics.*` prate stale/duplе
+conditional update pokušaje (default: 20 odbijenica, 10% udjela, 10 terminalnih
+failed, minimalni uzorak 20). Pojedinačni Redis kvarovi se loguju kao
 `rate_limit_check_failed` bez klijentske IP adrese ili Redis ključa.
 Svaki HTTP zahtjev ima i `http_request` red sa `correlationId` iz `X-Request-Id`
 headera, metodom, statusom, trajanjem i normaliziranom `route`. Pragovi za HTTP
