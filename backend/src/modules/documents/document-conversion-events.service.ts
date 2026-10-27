@@ -3,7 +3,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { Interval } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
 import { QueueEvents, type Queue } from 'bullmq';
-import { buildBaseRedisOptions, readRedisConfig } from '../../redis/redis.config';
+import { buildBullMqRedisOptions, readRedisConfig } from '../../redis/redis.config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { DOCUMENT_GENERATION_QUEUE, type DocumentConversionJobPayload } from './document-generation.queue';
@@ -74,7 +74,7 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
   onModuleInit(): void {
     const config = readRedisConfig();
     const queueEvents = new QueueEvents(DOCUMENT_GENERATION_QUEUE, {
-      connection: buildBaseRedisOptions(config),
+      connection: buildBullMqRedisOptions(config),
       prefix: config.keyPrefix.replace(/:$/, ''),
     });
     this.queueEvents = queueEvents;

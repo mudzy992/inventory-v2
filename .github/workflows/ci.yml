@@ -209,6 +209,14 @@ jobs:
         working-directory: backend
         run: npm run test:integration:socketio-shared-adapter
 
+      - name: Verify Socket.IO ACL denial degrades instead of crashing
+        working-directory: backend
+        run: npm run test:integration:socketio-acl-denial
+
+      - name: Verify Redis ACL channel grants for Socket.IO and BullMQ
+        working-directory: backend
+        run: npm run test:integration:redis-acl-channels
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

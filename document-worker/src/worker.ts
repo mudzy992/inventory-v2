@@ -1,7 +1,7 @@
 import { Worker, type Job } from 'bullmq';
 import type { WorkerConfig } from './config';
 import { convertToPdf } from './convert';
-import { buildRedisOptions, bullmqPrefix } from './redis-connection';
+import { buildBullMqRedisOptions, bullmqPrefix } from './redis-connection';
 import type { DocumentConversionJobPayload, DocumentConversionJobResult } from './types';
 import { formatJobCorrelation } from './worker-log.util';
 
@@ -53,7 +53,7 @@ export const createDocumentWorker = (config: WorkerConfig): Worker<
       };
     },
     {
-      connection: buildRedisOptions(config.redis),
+      connection: buildBullMqRedisOptions(config.redis),
       prefix: bullmqPrefix(config.redis),
       concurrency: config.concurrency,
       // Standardni BullMQ "lock" produžava se automatski dok je posao

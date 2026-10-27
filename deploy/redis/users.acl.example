@@ -1,0 +1,34 @@
+# Canonical Redis ACL entry for the inventory-v2 application user.
+#
+# Copy the `user` line below into `acl/users.acl` on the central Redis
+# platform, replace <PASSWORD> with the real secret, replace <PREFIX> with the
+# value of REDIS_KEY_PREFIX (WITHOUT the trailing colon — default
+# "inventory-v2"), then run:
+#
+#   redis-cli -a "$REDIS_ADMIN_PASSWORD" ACL LOAD
+#   redis-cli -a "$REDIS_ADMIN_PASSWORD" ACL GETUSER inventory-v2
+#
+# Both ACL axes are required and are INDEPENDENT of each other:
+#   ~<PREFIX>:*  -> keys (cache, locks, BullMQ, rate limits)
+#   &<PREFIX>:*  -> Pub/Sub channels (BullMQ events, Socket.IO shared adapter)
+#
+# Redis 7 creates users with `resetchannels` by default, so a user that only
+# has `~<PREFIX>:*` will get `NOPERM No permissions to access a channel` on
+# `psubscribe <PREFIX>:#/#*`. That exact pattern is emitted by
+# @socket.io/redis-adapter because RedisIoAdapter sets the adapter `key` option
+# to `${REDIS_KEY_PREFIX}:` (ioredis keyPrefix does not apply to Pub/Sub).
+# Required channels (root namespace):
+#   PSUBSCRIBE <PREFIX>:#/#*
+#   SUBSCRIBE  <PREFIX>:-request#/#, <PREFIX>:-response#/#,
+#              <PREFIX>:-response#/#<uid>#
+#   PUBLISH    <PREFIX>:#/#… (and BullMQ channels under the same prefix)
+#
+# A broad `+@all -@admin -@dangerous` command policy is used here on purpose:
+# ioredis' ready check needs INFO, ioredis 5 sends CLIENT SETINFO, and BullMQ
+# needs EVAL/EVALSHA Lua scripting in addition to stream/list/sorted-set/hash
+# commands. If your platform enforces a stricter allowlist, keep at least
+# @pubsub, @scripting, @blocking, @stream, @list, @sortedset, @hash, @set,
+# @string, @keyspace, @read, @write, @slow and @connection. Key and channel
+# patterns remain the actual isolation boundary; never use `&*` or `~*` in a
+# shared Redis.
+user inventory-v2 on ><PASSWORD> ~<PREFIX>:* &<PREFIX>:* +@all -@admin -@dangerous

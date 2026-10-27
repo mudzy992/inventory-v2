@@ -8,7 +8,7 @@ import {
   QUEUE_METRICS_WARN_BACKLOG_COUNT,
   QUEUE_METRICS_WARN_WAITING_SECONDS,
 } from '../src/modules/health/utils/queue-metrics.util';
-import { buildBaseRedisOptions, readRedisConfig } from '../src/redis/redis.config';
+import { buildBullMqRedisOptions, readRedisConfig } from '../src/redis/redis.config';
 
 const assertTestRedis = (): void => {
   const config = readRedisConfig();
@@ -41,7 +41,7 @@ const main = async (): Promise<void> => {
   assertTestRedis();
   const config = readRedisConfig();
   const options = {
-    connection: buildBaseRedisOptions(config),
+    connection: buildBullMqRedisOptions(config),
     prefix: config.keyPrefix.replace(/:$/, ''),
   };
   const queueName = `ci-queue-metrics-${randomUUID()}`;

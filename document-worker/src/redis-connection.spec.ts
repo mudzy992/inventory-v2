@@ -3,7 +3,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { bullmqPrefix, buildRedisOptions, buildRedisTlsOptions } from './redis-connection';
+import {
+  bullmqPrefix,
+  buildBullMqRedisOptions,
+  buildRedisOptions,
+  buildRedisTlsOptions,
+} from './redis-connection';
 import type { WorkerConfig } from './config';
 
 const baseConfig: WorkerConfig['redis'] = {
@@ -59,4 +64,16 @@ test('buildRedisTlsOptions matches backend verification semantics for DNS and IP
 
 test('bullmqPrefix removes the trailing separator for BullMQ namespace handling', () => {
   assert.equal(bullmqPrefix(baseConfig), 'inventory-v2');
+});
+
+test('buildBullMqRedisOptions overrides only the BullMQ retry limit', () => {
+  const plain = buildRedisOptions(baseConfig);
+  const bullmq = buildBullMqRedisOptions(baseConfig);
+  assert.equal(plain.maxRetriesPerRequest, 3);
+  assert.equal(bullmq.maxRetriesPerRequest, null);
+  assert.equal(bullmq.enableReadyCheck, true);
+  assert.equal(bullmq.host, plain.host);
+  assert.equal(bullmq.port, plain.port);
+  assert.equal(bullmq.db, plain.db);
+  assert.equal(bullmq.tls, plain.tls);
 });

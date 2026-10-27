@@ -108,7 +108,12 @@ jedan red JSON-a sa stabilnim `event` imenom, `level` i `correlationId`; CI prov
 (`shared_redis` ili `in_memory`), a `/health/ready` ga vraća u polju
 `socketio: { mode, sharedAdapterRequired }`. Sa više backend replika postaviti
 `SOCKETIO_REQUIRE_SHARED_ADAPTER=true`: tada se pri nedostupnom Redisu startup
-prekida, a readiness vraća 503 umjesto tihog in-memory broadcasta.
+prekida, a readiness vraća 503 umjesto tihog in-memory broadcasta. Redis ACL
+za tog korisnika mora imati **obje** ose — `~inventory-v2:*` za ključeve i
+`&inventory-v2:*` za Pub/Sub kanale (Redis 7 starta sa `resetchannels`). Bez
+kanal grant-a adapter javlja `socketio_redis_acl_denied` i degradira umjesto da
+sruši proces; vodič i gotovo pravilo: [docs/redis-acl.md](docs/redis-acl.md) i
+[deploy/redis/users.acl.example](deploy/redis/users.acl.example).
 
 ## Plan i matrice
 

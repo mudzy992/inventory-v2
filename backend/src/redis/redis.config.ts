@@ -108,3 +108,19 @@ export const buildBaseRedisOptions = (config: RedisAppConfig): RedisOptions => (
   maxRetriesPerRequest: 3,
   enableReadyCheck: true,
 });
+
+/**
+ * BullMQ REQUIRES `maxRetriesPerRequest: null` on every Queue / Worker /
+ * QueueEvents connection: its blocking commands (`BRPOP`, `XREAD BLOCK`, …)
+ * must be allowed to wait indefinitely instead of being retried and rejected
+ * by ioredis. Passing `3` produced the runtime warning
+ * "Your redis options maxRetriesPerRequest must be null and will be
+ * overridden by BullMQ." — BullMQ silently overrode it anyway, so every
+ * BullMQ consumer must use this builder, NOT buildBaseRedisOptions().
+ * The general cache/lock client and the Socket.IO adapter keep the bounded
+ * value above, where a fast, explicit failure is the desired behaviour.
+ */
+export const buildBullMqRedisOptions = (config: RedisAppConfig): RedisOptions => ({
+  ...buildBaseRedisOptions(config),
+  maxRetriesPerRequest: null,
+});

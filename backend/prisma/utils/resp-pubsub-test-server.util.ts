@@ -27,6 +27,11 @@ export interface RespPubSubServer {
   close: () => Promise<void>;
 }
 
+export interface RespPubSubServerOptions {
+  /** Channels/patterns that must fail like a Redis 7 `resetchannels` ACL. */
+  denyChannels?: string[];
+}
+
 const CRLF = Buffer.from('\r\n');
 
 const bulk = (value: Buffer | string): Buffer => {
@@ -38,6 +43,8 @@ const array = (parts: (Buffer | string)[]): Buffer =>
   Buffer.concat([Buffer.from(`*${parts.length}\r\n`), ...parts.map((part) => bulk(part))]);
 
 const simple = (value: string): Buffer => Buffer.from(`+${value}\r\n`);
+
+const aclError = (): Buffer => Buffer.from('-NOPERM No permissions to access a channel\r\n');
 
 const integer = (value: number): Buffer => Buffer.from(`:${value}\r\n`);
 
@@ -85,7 +92,10 @@ const matchesPattern = (pattern: string, channel: string): boolean => {
   return pattern === channel;
 };
 
-export const startRespPubSubServer = async (): Promise<RespPubSubServer> => {
+export const startRespPubSubServer = async (
+  options: RespPubSubServerOptions = {},
+): Promise<RespPubSubServer> => {
+  const denied = new Set(options.denyChannels ?? []);
   const state: RespPubSubState = { subscribe: [], psubscribe: [], publish: [] };
   const connections = new Set<RespConnection>();
 
@@ -126,6 +136,10 @@ export const startRespPubSubServer = async (): Promise<RespPubSubServer> => {
         const isPattern = command === 'psubscribe';
         for (const raw of args.slice(1)) {
           const name = raw.toString('utf8');
+          if (denied.has(name)) {
+            connection.socket.write(aclError());
+            return;
+          }
           if (isPattern) {
             connection.psubscriptions.add(name);
             state.psubscribe.push(name);
@@ -159,6 +173,10 @@ export const startRespPubSubServer = async (): Promise<RespPubSubServer> => {
       case 'publish': {
         const channel = args[1] ?? Buffer.alloc(0);
         const message = args[2] ?? Buffer.alloc(0);
+        if (denied.has(channel.toString('utf8'))) {
+          connection.socket.write(aclError());
+          return;
+        }
         state.publish.push(channel.toString('utf8'));
         connection.socket.write(integer(fanOut(channel, message)));
         return;

@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { buildBaseRedisOptions, readRedisConfig } from '../redis/redis.config';
+import { buildBullMqRedisOptions, readRedisConfig } from '../redis/redis.config';
 
 /**
  * Globalna BullMQ konekcija. Namjerno POSEBNA ioredis konekcija od opšteg
@@ -18,7 +18,7 @@ import { buildBaseRedisOptions, readRedisConfig } from '../redis/redis.config';
       useFactory: () => {
         const config = readRedisConfig();
         return {
-          connection: buildBaseRedisOptions(config),
+          connection: buildBullMqRedisOptions(config),
           prefix: config.keyPrefix.replace(/:$/, ''),
           defaultJobOptions: {
             attempts: 3,

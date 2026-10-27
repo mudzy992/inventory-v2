@@ -3,7 +3,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { buildBaseRedisOptions, buildRedisTlsOptions, readRedisConfig } from './redis.config';
+import {
+  buildBaseRedisOptions,
+  buildBullMqRedisOptions,
+  buildRedisTlsOptions,
+  readRedisConfig,
+} from './redis.config';
 
 const REDIS_ENV_NAMES = [
   'REDIS_HOST',
@@ -141,4 +146,24 @@ test('buildRedisTlsOptions never emits a verification bypass and honours IP SAN 
   const ipHost = buildRedisTlsOptions({ tls: true, host: '10.20.30.40' });
   assert.deepEqual(ipHost, { rejectUnauthorized: true, minVersion: 'TLSv1.2' });
   assert.equal('servername' in (ipHost ?? {}), false);
+});
+
+test('buildBullMqRedisOptions satisfies BullMQ and keeps every other option identical', () => {
+  const config = {
+    host: 'redis.internal',
+    port: 6380,
+    db: 2,
+    keyPrefix: 'inventory-v2:',
+    tls: false,
+  };
+  const base = buildBaseRedisOptions(config);
+  const bullmq = buildBullMqRedisOptions(config);
+  assert.equal(base.maxRetriesPerRequest, 3, 'plain clients must fail fast');
+  assert.equal(bullmq.maxRetriesPerRequest, null, 'BullMQ must not warn/override a retry limit');
+  assert.equal(bullmq.enableReadyCheck, true);
+  assert.equal(bullmq.host, base.host);
+  assert.equal(bullmq.port, base.port);
+  assert.equal(bullmq.db, base.db);
+  assert.equal(bullmq.tls, base.tls);
+  assert.equal(typeof bullmq.retryStrategy, typeof base.retryStrategy);
 });

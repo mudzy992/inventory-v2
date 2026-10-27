@@ -7,6 +7,7 @@ import type { Server, ServerOptions } from 'socket.io';
 import { logStructuredEvent, safeErrorText } from '../common/logging/structured-event.logger';
 import type { CorsOriginPolicy } from '../common/utils/cors-origins.util';
 import { buildBaseRedisOptions, readRedisConfig } from './redis.config';
+import { buildSocketIoChannelContract } from './socketio-channel-contract.util';
 import {
   resolveSocketIoAdapterPolicy,
   setActiveSocketIoAdapterMode,
@@ -28,12 +29,37 @@ import {
  * centralna Redis platforma odbila (ili bi se miješali sa drugim
  * deploymentima na istom Redisu).
  *
- * Namjerno "graceful degradation": ako Redis nije dostupan pri startu,
+ * Namjerno "graceful degradation": ako Redis nije dostupan pri startu, ili
+ * ako ACL user nema prava na Pub/Sub kanale (Redis 7 `resetchannels`),
  * aplikacija NE pada — nastavlja sa default in-memory adapterom i loguje
- * upozorenje, te bilježi `mode: in_memory` za readiness. Deploymenti sa više
- * replika trebaju postaviti SOCKETIO_REQUIRE_SHARED_ADAPTER=true; tada
- * nedostupnost shared adaptera puca pri startu umjesto tihe degradacije.
+ * upozorenje, te bilježi `mode: in_memory` za readiness. Bez preflighta bi
+ * `psubscribe <prefix>:#/#*` odbijen sa NOPERM završio kao neuhvaćeni
+ * ReplyError i srušio proces kada adapter kasnije napravi pretplatu.
+ * Deploymenti sa više replika trebaju postaviti
+ * SOCKETIO_REQUIRE_SHARED_ADAPTER=true; tada nedostupnost shared adaptera
+ * puca pri startu umjesto tihe degradacije.
  */
+const PROBE_TIMEOUT_MS = 5000;
+
+/** Race a probe against a deadline without leaving an unhandled rejection. */
+const withProbeTimeout = async <T>(work: Promise<T>, label: string): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} timed out after ${PROBE_TIMEOUT_MS}ms`)),
+          PROBE_TIMEOUT_MS,
+        );
+        timer.unref();
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 export class RedisIoAdapter extends IoAdapter {
   protected readonly logger = new Logger('SocketIO/RedisAdapter');
   private adapterConstructor?: ReturnType<typeof createAdapter>;
@@ -50,6 +76,57 @@ export class RedisIoAdapter extends IoAdapter {
 
   getMode(): SocketIoAdapterMode {
     return this.mode;
+  }
+
+  /**
+   * Redis 7 ACL users start with `resetchannels`: holding `~<prefix>:*` for
+   * keys does NOT grant (P)SUBSCRIBE/PUBLISH on channels. Verify every channel
+   * the adapter will use BEFORE `server.adapter()` is called — the adapter
+   * library invokes `psubscribe()` without a callback, so a NOPERM rejection
+   * there becomes an unhandled rejection that terminates the process with a
+   * bare `ReplyError: NOPERM No permissions to access a channel`.
+   */
+  private async verifyPubSubAcl(
+    config: ReturnType<typeof readRedisConfig>,
+    pubClient: Redis,
+    subClient: Redis,
+  ): Promise<void> {
+    const contract = buildSocketIoChannelContract(config.keyPrefix);
+    // A separate connection avoids leaving the adapter's own subClient in a
+    // half-subscribed state if the probe is denied.
+    const probe = subClient.duplicate();
+    try {
+      await withProbeTimeout(
+        (async () => {
+          await probe.psubscribe(contract.psubscribePattern);
+          await probe.subscribe(...contract.subscribeChannels);
+          // This channel is deliberately outside the adapter's #/#* pattern,
+          // so the probe cannot deliver a bogus message to other replicas.
+          await pubClient.publish(contract.publishProbeChannel, 'acl-probe');
+        })(),
+        'Socket.IO Redis ACL Pub/Sub probe',
+      );
+    } catch (err) {
+      logStructuredEvent(this.logger, 'error', {
+        event: 'socketio_redis_acl_denied',
+        mode: 'in_memory',
+        redisUsername: config.username ?? 'default',
+        channelNamespace: contract.keyPrefix,
+        requiredChannelPattern: contract.recommendedAclChannelPattern,
+        requiredChannelCount: contract.requiredChannels.length,
+        error: safeErrorText(err),
+      });
+      throw new Error(
+        `Redis ACL denied Socket.IO Pub/Sub channels for user "${config.username ?? 'default'}" ` +
+          `(prefix "${contract.keyPrefix}"). Grant ${contract.recommendedAclChannelPattern} in ` +
+          `acl/users.acl and reload the ACL; Redis 7 defaults to resetchannels. ` +
+          `Required channels: ${contract.requiredChannels.join(', ')}. ` +
+          `Cause: ${safeErrorText(err)}`,
+        { cause: err },
+      );
+    } finally {
+      probe.disconnect();
+    }
   }
 
   async connectToRedis(): Promise<void> {
@@ -79,6 +156,11 @@ export class RedisIoAdapter extends IoAdapter {
           subClient?.once('error', reject);
         }),
       ]);
+
+      if (!pubClient || !subClient) {
+        throw new Error('Socket.IO Redis Pub/Sub clients were not created');
+      }
+      await this.verifyPubSubAcl(config, pubClient, subClient);
 
       this.pubClient = pubClient;
       this.subClient = subClient;

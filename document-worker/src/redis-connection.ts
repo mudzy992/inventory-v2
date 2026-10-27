@@ -44,5 +44,17 @@ export const buildRedisOptions = (config: WorkerConfig['redis']): RedisOptions =
   enableReadyCheck: true,
 });
 
+/**
+ * BullMQ requires `maxRetriesPerRequest: null` (blocking BRPOP/XREAD commands
+ * must wait indefinitely). `buildRedisOptions()` keeps the bounded value for
+ * plain ioredis probe clients; every BullMQ Worker/QueueEvents in this worker
+ * must use this builder instead. See backend
+ * `buildBullMqRedisOptions()` for the matching rationale.
+ */
+export const buildBullMqRedisOptions = (config: WorkerConfig['redis']): RedisOptions => ({
+  ...buildRedisOptions(config),
+  maxRetriesPerRequest: null,
+});
+
 export const bullmqPrefix = (config: WorkerConfig['redis']): string =>
   config.keyPrefix.replace(/:$/, '');

@@ -5,7 +5,7 @@ import type { DocumentConversionJobResult, DocumentConversionJobPayload } from '
 import { DOCUMENT_CONVERT_JOB_NAME, DOCUMENT_GENERATION_QUEUE } from '../src/modules/documents/document-generation.queue';
 import { DocumentConversionEventsService } from '../src/modules/documents/document-conversion-events.service';
 import { DocumentJobsService } from '../src/modules/documents/document-jobs.service';
-import { buildBaseRedisOptions, readRedisConfig } from '../src/redis/redis.config';
+import { buildBullMqRedisOptions, readRedisConfig } from '../src/redis/redis.config';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 const assertTestDatabase = (): void => {
@@ -79,7 +79,7 @@ const main = async (): Promise<void> => {
 
     const redisConfig = readRedisConfig();
     const bullOptions = {
-      connection: buildBaseRedisOptions(redisConfig),
+      connection: buildBullMqRedisOptions(redisConfig),
       prefix: redisConfig.keyPrefix.replace(/:$/, ''),
     };
     queue = new Queue<DocumentConversionJobPayload>(DOCUMENT_GENERATION_QUEUE, bullOptions);

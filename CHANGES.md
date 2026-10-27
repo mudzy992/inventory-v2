@@ -109,16 +109,24 @@ Ova aplikacija se ponaša kao "Application" primjer iz `redis-platform` isporuke
 poseban ACL user (`inventory-v2`), ograničen na `~inventory-v2:*` key/pubsub
 namespace preko `REDIS_KEY_PREFIX`. Da bi ovo stvarno radilo u Coolify-ju:
 
-1. Na centralnoj Redis platformi (`acl/users.acl`), dodati (ili iskoristiti već
-   dodat) ACL user unos:
+1. Na centralnoj Redis platformi (`acl/users.acl`) koristiti **kanonsko
+   pravilo** iz [`deploy/redis/users.acl.example`](deploy/redis/users.acl.example)
+   (cijeli vodič: [`docs/redis-acl.md`](docs/redis-acl.md)):
    ```
+   # <PREFIX> = REDIS_KEY_PREFIX bez dvotačke
    user inventory-v2 on ><JAKA_LOZINKA> \
      ~inventory-v2:* &inventory-v2:* \
-     +@read +@write +@keyspace +@list +@stream +@sortedset +@hash \
-     +@blocking +@pubsub \
-     -@admin -@dangerous -flushall -flushdb -shutdown -config -debug -keys
+     +@all -@admin -@dangerous
    ```
-   zatim `redis-cli -a $REDIS_ADMIN_PASSWORD ACL LOAD`.
+   **OBJE ose su obavezne i nezavisne:** `~inventory-v2:*` su ključevi,
+   `&inventory-v2:*` su Pub/Sub kanali. Redis 7 starta sa `resetchannels`, pa
+   korisnik koji ima samo `~inventory-v2:*` dobija
+   `NOPERM No permissions to access a channel` na
+   `PSUBSCRIBE inventory-v2:#/#*` (Socket.IO shared adapter). Ranija uža
+   allowlista kategorija ovdje nije dovoljna: ioredis šalje `INFO`/
+   `CLIENT SETINFO`, a BullMQ koristi `EVAL`/`EVALSHA` Lua skripte.
+   zatim `redis-cli -a $REDIS_ADMIN_PASSWORD ACL LOAD` i
+   `ACL GETUSER inventory-v2` za potvrdu `channels` reda.
 2. U Coolify env varijablama za ovaj backend servis postaviti `REDIS_PASSWORD` na
    istu vrijednost.
 3. Backend servis ove aplikacije mora biti na `redis_net` mreži (već dodato u
@@ -158,9 +166,11 @@ build-a nakon ove izmjene.
    `docker-compose.yml`, koji sad uključuje `redis_net`).
 6. Nakon deploya, provjeriti backend logove za:
    - `Redis ready (keyPrefix="inventory-v2:")` — opšti Redis klijent povezan.
-   - `Socket.IO Redis adapter connected` — WebSocket adapter povezan.
-   Ako umjesto toga piše "falling back to in-memory adapter" ili "connection
-   error", provjeriti ACL/lozinku/mrežu prije nego što se nastavi.
+   - `socketio_redis_adapter_connected` (`channelNamespace: "inventory-v2:"`) — WebSocket adapter povezan.
+   Ako umjesto toga piše `socketio_redis_acl_denied`, `socketio_redis_adapter_fallback`
+   ili "connection error", provjeriti **& kanal** grant, prefiks, lozinku i mrežu
+   prije nego što se nastavi (vidi `docs/redis-acl.md`). `/health/ready` vraća
+   `socketio.mode`; `in_memory` na više replika nije ispravan rad.
 7. Funkcionalni test: zatvoriti test inventurnu sesiju i potvrditi da se
    `inventory.close_job.updated` eventi i dalje primaju uživo u frontend-u
    (potvrđuje da BullMQ worker i Socket.IO adapter rade zajedno ispravno).
