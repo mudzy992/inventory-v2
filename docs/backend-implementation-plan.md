@@ -739,6 +739,16 @@ vrlo širok sekundarni smoke signal.
   stavku. Vodič `docs/performance-budgets.md`; CI korak
   `Verify performance budgets`; readiness sada čuva 8 operator vodiča.
 
+**CI dokaz.** Commit `3ca7aab` prolazi u run-u `40574749641` (`completed
+success` na sva tri joba). Novi korak `Verify performance budgets` (48) je
+zelen, kao i svi raniji gateovi (7, 19, 25–29, 47), lint (49), typecheck (50),
+797 backend unit testova (51), build (53) i `npm audit` (54). Izvještaj koraka
+48: `Performance budgets: PASS (7/7 within budget)` — CSV export 3/3 upita,
+max take 500/500, list 6/8 upita, page size 100/10000, offset 100000/100000,
+CSV escaping smoke ~2 ms / 2000 ms. Lokalno su uz `pipefail` potvrđeni 11/11
+novih specova, 36 root scenarija, svi statički gateovi, frontend/worker build i
+`npm audit` = 0 za sva tri workspace-a.
+
 **Ograničenje:** ovo nije load test pod stvarnim saobraćajem — ne mjeri
 konkurentnost, mrežnu latenciju ni PostgreSQL plan upita na velikom datasetu.
 `QueryRecorder` broji aplikacijske Prisma pozive (jedan `findMany` sa
