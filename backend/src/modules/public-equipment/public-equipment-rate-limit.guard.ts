@@ -6,6 +6,7 @@ import { RedisRateLimitGuard } from '../../redis/redis-rate-limit.guard';
 export class PublicEquipmentRateLimitGuard extends RedisRateLimitGuard {
   constructor(@Inject(RedisService) redisService: RedisService) {
     super(redisService, {
+      policyName: 'public_equipment',
       loggerContext: PublicEquipmentRateLimitGuard.name,
       maxEnvName: 'RATE_LIMIT_PUBLIC_EQUIPMENT_MAX',
       windowEnvName: 'RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC',

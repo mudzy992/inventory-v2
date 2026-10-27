@@ -168,6 +168,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:redis-metrics
 
+      - name: Verify rate-limit decision/outage metrics
+        working-directory: backend
+        run: npm run test:integration:rate-limit-metrics
+
       - name: Verify BullMQ queue metrics
         working-directory: backend
         run: npm run test:integration:queue-metrics

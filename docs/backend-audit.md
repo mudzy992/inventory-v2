@@ -26,7 +26,7 @@ Glavni dug nije nedostatak poslovne funkcionalnosti, nego **pouzdanost rubnih sl
 | Asinhroni poslovi i oporavak | 6.5/10 | Document Engine ima dobar DB/queue reconciliation obrazac; zatvaranje inventure nema isti nivo oporavka i ima nepodudaranje DB statusa sa BullMQ retry-jem. |
 | Testovi | 6.5/10 | `npm run test:unit`: 261 test prošao u 53 suite-a kroz 36 fajlova. Repo sadrži 54 `*.spec.ts`, ali je većina testova util/scope funkcija, a malo je controller/DB/integration testova. |
 | Sigurnost zavisnosti | 5.5/10 | `npm audit` na backend lockfile-u je prijavio 24 nalaza (1 critical, 17 high, 5 moderate, 1 low) u trenutno instaliranom stablu; postoje ispravke za prijavljene pakete. |
-| Operativna vidljivost | 8.5/10 | `/health/ready` sada pokriva DB, Redis, BullMQ i Socket.IO; logovi imaju request/job correlation ID, redakciju i strukturirane JSON signale za notification outbox, BullMQ redove, inventory close age/status i istekle lease-ove, PostgreSQL pool/latenciju, Redis ready/reconnect/PING stanje, odbijene upload zahtjeve te agregiranu HTTP latenciju/stopu grešaka po normaliziranim rutama. Preostaje postepeni prelazak preostalih legacy free-form logova i metrike za poslovne state transition-e. |
+| Operativna vidljivost | 8.6/10 | `/health/ready` sada pokriva DB, Redis, BullMQ i Socket.IO; logovi imaju request/job correlation ID, redakciju i strukturirane JSON signale za notification outbox, BullMQ redove, inventory close age/status i istekle lease-ove, rate-limit odluke/Redis kvarove, PostgreSQL pool/latenciju, Redis ready/reconnect/PING stanje, odbijene upload zahtjeve te agregiranu HTTP latenciju/stopu grešaka po normaliziranim rutama. Rate-limit guard više ne loguje free-form poruke sa IP/ključevima. Preostaje postepeni prelazak preostalih legacy free-form logova i metrike za poslovne state transition-e. |
 | **Kompletan backend** | **6.6/10** | Dobar i aktivno korišten poslovni temelj; drugi prolaz je otkrio i stored-XSS put kroz HTML prenosnice, uz već navedene integritetske i upload rizike. |
 
 Ocjene su heurističke, kodne ocjene za planiranje rada — nisu procjena dostupnosti produkcije niti potvrda eksploatabilnosti svakog nalaza.
@@ -397,7 +397,7 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Rizici:** login rate-limit fail-open je konfigurabilan; auth scope cache mora biti invalidiran svim putanjama; `RedisIoAdapter` ima fallback na in-memory mode, ali readiness ne dokazuje da je adapter u shared Redis modu. Inventory close queue recovery trenutno slabiji od Documents. Ovaj audit ne provjerava live Redis ACL/ACL key pattern niti stvarno učitavanje Coolify secret-a.
 
-**Remediation update:** `INCR` i TTL sada su atomski preko Lua; login guard je registrovan u `AuthModule`, a javni QR dobio je zaseban Redis IP bucket (60/min default). P1 test Redis TLS sa stvarnim chain-om i Node hostname verification, queue recovery integration i multi-instance Socket.IO room/key-prefix testovi ostaju otvoreni.
+**Remediation update:** `INCR` i TTL sada su atomski preko Lua; login guard je registrovan u `AuthModule`, a javni QR dobio je zaseban Redis IP bucket (60/min default). Fail-open/fail-closed odluke sada imaju procesne brojače, strukturirani `rate_limit_check_failed` log bez IP/ključeva i 30-sekundni `rate_limit_metrics` signal sa podešivim pragovima. P1 test Redis TLS sa stvarnim chain-om i Node hostname verification, queue recovery integration i multi-instance Socket.IO room/key-prefix testovi ostaju otvoreni.
 
 ### API bootstrap / HTTP — **6.0/10**
 
