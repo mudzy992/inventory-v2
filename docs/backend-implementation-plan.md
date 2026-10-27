@@ -831,6 +831,14 @@ scenarija (uključujući TLS_VERIFIED), 8 N-5..N-12 statičkih tvrdnji u
 `Verify independent audit findings (N-5..N-12)`. Ocjena koda: **8.8/10**
 (performanse 6.5→8.5, integritet 8.5→9.3, testovi 6.5→8.5).
 
+**CI dokaz.** Commit `2b8f592` prolazi u run-u `40586562199` (`completed
+success` na sva tri joba). Korak `Verify independent audit findings (N-5..N-12)`
+(50) je zelen, kao i scope freshness (49), performance budgets (48),
+strukturirani logovi (36), lint (51), typecheck (52), 824 backend unit testa
+(53), build (55) i `npm audit` (56). Lokalno su potvrđeni 19 novih unit
+scenarija, 37 root scenarija, svi statički gateovi, frontend/worker build i
+`npm audit` = 0 za sva tri workspace-a.
+
 **Ostaje otvoreno (P2/P3, ne blokira):** N-9 sirovi query parametri, N-10 tihi
 `JWT_REFRESH_TTL` fallback, N-11 rate-limit na refresh/logout, N-13 rasuti role
 checkovi, N-14 magic advisory lock brojevi, N-15 razdvajanje 3 050-line servisa.

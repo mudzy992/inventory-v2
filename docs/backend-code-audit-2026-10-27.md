@@ -180,7 +180,13 @@ globalni CSP/CORP, maskiranje identiteta na javnom QR-u.
 Ovaj audit je **snapshot**, ne zamjena za CI: svaki gornji ispravljeni nalaz ima
 odgovarajući gate koji će pasti ako se regresija vrati.
 
-**CI potvrda ispravki:** run `40581127648` (`completed success` na sva tri
+**CI potvrda paketa N-5/6/7/8/12:** run `40586562199` (`completed success` na
+sva tri joba) — korak 50 `Verify independent audit findings (N-5..N-12)` zelen,
+kao i 49 scope freshness, 48 performance budgets, 36 structured logs, 53 unit
+(824 testa), 55 build i 56 `npm audit`. Lokalno uz `pipefail`: 19 novih unit
+scenarija, 37 root scenarija, svi statički gateovi i `npm audit` = 0.
+
+**CI potvrda ispravki N-1…N-4:** run `40581127648` (`completed success` na sva tri
 joba) — korak 49 `Verify authorization scope cache freshness`, 48 `Verify
 performance budgets`, 36 `Verify structured operational logs`, 43 `Verify auth
 session revocation`, 52 `Run backend unit specs` (803 testa), 54 build i 55
