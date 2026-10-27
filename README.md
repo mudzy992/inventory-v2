@@ -78,6 +78,18 @@ Engine — DOCX/XLSX/ODT → PDF preko LibreOffice-a, BullMQ
 `document-generation` red). Interni je, bez javne domene — pokreće se
 automatski sa ostalim servisima. Detalji: [document-worker/README.md](document-worker/README.md).
 
+## Operativni signali u logovima
+
+Backend emituje jedan red JSON-a po važnom infrastrukturnom događaju. Periodični
+(30 s) signali: `http_request_metrics` (latencijski histogram/p95, stopa 5xx i 4xx,
+normalizirane rute), `upload_reject_metrics`, `postgres_pool_latency`,
+`redis_connection_health`, `bullmq_queue_metrics` i `notification_outbox_backlog`.
+Svaki HTTP zahtjev ima i `http_request` red sa `correlationId` iz `X-Request-Id`
+headera, metodom, statusom, trajanjem i normaliziranom `route`. Pragovi za HTTP
+alarm (`http.metrics.*`) su privatne postavke u administratorskom UI-ju; default-i
+su 5% 5xx, 1000 ms p95, 5 apsolutnih 5xx i minimalni uzorak od 20 zahtjeva.
+Logovi ne sadrže query stringove u agregatima, tijela, tokene ni imena datoteka.
+
 ## Plan i matrice
 
 - [Plan overview](.cursor/plans/inventory-v2/00_overview.md)

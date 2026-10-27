@@ -113,6 +113,18 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
   'upload.metrics.warn_reject_count': {
     detail: 'Operativni alarm u logovima kada se u 30 sekundi nakupi previše odbijenih upload zahtjeva.',
   },
+  'http.metrics.warn_error_rate_percent': {
+    detail: 'Operativni alarm u logovima kada udio 5xx odgovora u intervalu dosegne prag.',
+  },
+  'http.metrics.warn_p95_ms': {
+    detail: 'Operativni alarm u logovima kada histogramska p95 latencija zahtjeva pređe prag.',
+  },
+  'http.metrics.warn_5xx_count': {
+    detail: 'Operativni alarm u logovima nakon apsolutnog broja 5xx odgovora u intervalu.',
+  },
+  'http.metrics.min_request_count': {
+    detail: 'Minimalan uzorak zahtjeva u intervalu prije nego stopa grešaka i p95 mogu aktivirati alarm.',
+  },
   'transfer.template_placeholders_help': {
     display: 'info',
     detail: 'Referentna lista placeholdera za Word šablon prenosnice po skladištu.',

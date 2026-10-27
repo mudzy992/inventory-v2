@@ -26,7 +26,7 @@ Glavni dug nije nedostatak poslovne funkcionalnosti, nego **pouzdanost rubnih sl
 | Asinhroni poslovi i oporavak | 6.5/10 | Document Engine ima dobar DB/queue reconciliation obrazac; zatvaranje inventure nema isti nivo oporavka i ima nepodudaranje DB statusa sa BullMQ retry-jem. |
 | Testovi | 6.5/10 | `npm run test:unit`: 261 test prošao u 53 suite-a kroz 36 fajlova. Repo sadrži 54 `*.spec.ts`, ali je većina testova util/scope funkcija, a malo je controller/DB/integration testova. |
 | Sigurnost zavisnosti | 5.5/10 | `npm audit` na backend lockfile-u je prijavio 24 nalaza (1 critical, 17 high, 5 moderate, 1 low) u trenutno instaliranom stablu; postoje ispravke za prijavljene pakete. |
-| Operativna vidljivost | 8.2/10 | `/health/ready` sada pokriva DB, Redis, BullMQ i Socket.IO; logovi imaju request/job correlation ID, redakciju i strukturirane JSON signale za notification outbox, BullMQ redove, PostgreSQL pool/latenciju, Redis ready/reconnect/PING stanje i odbijene upload zahtjeve. Preostaje postepeni prelazak preostalih legacy free-form logova i metrike za poslovne state transition-e. |
+| Operativna vidljivost | 8.4/10 | `/health/ready` sada pokriva DB, Redis, BullMQ i Socket.IO; logovi imaju request/job correlation ID, redakciju i strukturirane JSON signale za notification outbox, BullMQ redove, PostgreSQL pool/latenciju, Redis ready/reconnect/PING stanje, odbijene upload zahtjeve te agregiranu HTTP latenciju/stopu grešaka po normaliziranim rutama. Preostaje postepeni prelazak preostalih legacy free-form logova, inventory close age/status metrika i metrike za poslovne state transition-e. |
 | **Kompletan backend** | **6.6/10** | Dobar i aktivno korišten poslovni temelj; drugi prolaz je otkrio i stored-XSS put kroz HTML prenosnice, uz već navedene integritetske i upload rizike. |
 
 Ocjene su heurističke, kodne ocjene za planiranje rada — nisu procjena dostupnosti produkcije niti potvrda eksploatabilnosti svakog nalaza.
@@ -403,7 +403,9 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Dobro:** global `ValidationPipe` sa `whitelist`, `forbidNonWhitelisted`, `transform`; global prefix može biti prazan; trust proxy postavljen za Coolify/Traefik; CORS više origin-a podržan.
 
-**Rizici:** CORS fail-open fallback (P2); trust proxy je numeric one-hop i sigurnost zavisi od toga da backend nije direktno izložen i da je ispred tačno pouzdan proxy; nema vidljivog Helmet, global HTTP rate-limit, request ID ili centralnog payload/upload limit policy-ja. Preporuka je testirati stvarni proxy lanac, ne samo promijeniti `trust proxy` naslijepo.
+**Rizici:** CORS fail-open fallback (P2); trust proxy je numeric one-hop i sigurnost zavisi od toga da backend nije direktno izložen i da je ispred tačno pouzdan proxy; nema vidljivog Helmet niti global HTTP rate-limit policy-ja. Preporuka je testirati stvarni proxy lanac, ne samo promijeniti `trust proxy` naslijepo.
+
+**Remediation update:** request/correlation ID, redakcija logova, `http_request` po zahtjevu i agregirani `http_request_metrics` signal (latencijski histogram, stopa 5xx, normalizirane rute) su implementirani; preostaje odluka o Helmetu i globalnom rate-limitu.
 
 ## 6. Fazni plan implementacije
 

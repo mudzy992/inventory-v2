@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { HealthController } from './health.controller';
+import { HttpRequestMetricsService } from './http-request-metrics.service';
 import { PostgresMetricsService } from './postgres-metrics.service';
 import { QueueMetricsService } from './queue-metrics.service';
 import { RedisMetricsService } from './redis-metrics.service';
@@ -19,6 +20,7 @@ import { INVENTORY_SESSION_CLOSE_QUEUE } from '../inventory-count/inventory-sess
   ],
   controllers: [HealthController],
   providers: [
+    HttpRequestMetricsService,
     PostgresMetricsService,
     QueueMetricsService,
     RedisMetricsService,

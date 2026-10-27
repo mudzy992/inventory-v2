@@ -168,6 +168,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:queue-metrics
 
+      - name: Verify HTTP request latency/error metrics
+        working-directory: backend
+        run: npm run test:integration:http-request-metrics
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint
