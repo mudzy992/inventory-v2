@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../auth/authorization-policy.util';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { OrgUnit } from '../../../generated/prisma/client';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
@@ -8,7 +9,7 @@ export class OrgScopeService {
   constructor(private readonly prisma: PrismaService) {}
 
   hasFullAccess(user: AuthenticatedUser): boolean {
-    return user.role === 'admin';
+    return isSystemAdmin(user);
   }
 
   async resolveScopedOrgUnitIds(user: AuthenticatedUser): Promise<string[] | null> {

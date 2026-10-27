@@ -553,9 +553,13 @@ tri mutacije repo politike. Vodič: `docs/deployment-readiness.md`.
 - Svaki nalaz koji se tiče production konekcije/TLS treba potvrditi prema stvarnom deployment-u, jer kod može primati dodatne Node/PG env konfiguracije koje nisu dio repozitorija. `node scripts/check-deployment-readiness.mjs --env .env` automatizira sve provjere koje se mogu uraditi iz konfiguracije; certifikati, live ACL i proxy topologija ostaju ručna potvrda.
 
 **Neovisni code-only audit (2026-10-27):** vidi
-`docs/backend-code-audit-2026-10-27.md` — ocjena **8.1/10**, nakon paketa N-5/6/7/8/12 **8.8/10** (§0.19 plana), izvedena iz
-33 758 linija koda, sa 15 novih nalaza (P1 zastarjeli scope keš je ispravljen),
-poređenjem sa optimističnim tvrdnjama dokumentacije i formalno delegiranim
-preostalim deployment stavkama.
+`docs/backend-code-audit-2026-10-27.md` — ocjena **8.1/10**, nakon paketa
+N-5/6/7/8/12 **8.8/10** (§0.19 plana), a nakon završnog paketa
+N-9/10/11/13/14/15 i deployment automatizacije **~9.5/10** (§9 audita, §0.20
+plana). Izvedena iz 33 758 linija koda, sa 15 novih nalaza (P1 zastarjeli scope
+keš je ispravljen), poređenjem sa optimističnim tvrdnjama dokumentacije i
+formalno delegiranim preostalim deployment stavkama. Vlasniku i dalje ostaje
+stvarni staging p95 load test, fizička SAN potvrda i mrežna topologija proxy
+lanca — sandbox to ne može dokazati; sve ostalo je pod CI dokazom.
 
 **Zaključna ocjena nakon drugog prolaza:** backend ima kvalitetnu poslovnu osnovu i značajan dio zaštitnih util-a već postoji; ukupnu ocjenu revidiram sa početnih 6.8 na **6.6/10** zbog dodatno potvrđenih HTML injection/CSV export rizika, ciklične kategorijske hijerarhije i slabih numeric-setting granica. Najveći brzi dobitak je zatvaranje dependency/upload/setup/assignment/queue/XSS rupa. Nakon Faza 1–3 i potvrde integration testovima, ponovna procjena bi trebala biti bliža **8/10**, uz pretpostavku da testovi potvrde DB/Redis TLS i state recovery.

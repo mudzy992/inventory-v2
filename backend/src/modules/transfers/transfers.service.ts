@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import {
   BadRequestException,
   ForbiddenException,
@@ -504,7 +505,7 @@ export class TransfersService {
     if (!(await this.canAccessTransfer(user, transfer))) {
       throw new ForbiddenException('Transfer outside your scope');
     }
-    if (transfer.isCrossServiceTransfer && user.role !== 'admin') {
+    if (transfer.isCrossServiceTransfer && !isSystemAdmin(user)) {
       throw new ForbiddenException('Only admin can finalize cross-service transfers');
     }
     await this.assertCanFinalizeUpload(user, transfer);
@@ -582,7 +583,7 @@ export class TransfersService {
       'transfer.allow_finalize_without_upload',
       false,
     );
-    if (user.role === 'admin' && allowWithoutUpload) {
+    if (isSystemAdmin(user) && allowWithoutUpload) {
       return;
     }
     const requireSignedPdf = await this.settingsService.getBooleanValue(
@@ -694,7 +695,7 @@ export class TransfersService {
     if (!featureEnabled) {
       throw new BadRequestException('Cross-service transfers are disabled');
     }
-    if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+    if (!isSystemAdmin(user) && !this.moderatorScope.isModerator(user)) {
       throw new ForbiddenException('Only admin or moderator can create cross-service transfers');
     }
     if (this.moderatorScope.isModerator(user)) {

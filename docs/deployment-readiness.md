@@ -78,6 +78,7 @@ može izvršiti umjesto čovjeka) moraju biti potvrđene prije nego se prebace u
 | `public-qr-cap` | `PUBLIC_EQUIPMENT_MAX_MOVEMENTS` 1–1000 |
 | `transfer-raw-disposition` | `TRANSFER_RAW_DOCUMENT_DISPOSITION` — `attachment` (pass) / `inline` (warn) / neispravno (fail) |
 | `db-cert-san` / `redis-cert-san` | MANUAL potvrda cert SAN-a; `TLS_VERIFIED=true` ih označava kao potvrđene (vlasnik je potvrdio da je TLS aktivan na Redis i PostgreSQL) |
+| `trust-proxy-hops` | `TRUST_PROXY_HOPS` 0–8 (default 1); 0 = warn (backend direktno izložen) |
 | `document-job-stale-bound` | `DOCUMENT_JOB_STALE_TIMEOUT_MS` (300000–86400000) mora biti > `DOCUMENT_WORKER_CONVERT_TIMEOUT_MS` + 30 s |
 
 ## Kako riješiti MANUAL upozorenja
@@ -92,12 +93,25 @@ operatersku potvrdu konfiguracije certifikata.
 2. **Redis cert SAN** — isto za `REDIS_HOST:$REDIS_PORT` (TLS), uz `REDIS_CA_CERT_PATH` u oba kontejnera (backend + document-worker).
 3. **ACL kanali** — `ACL GETUSER inventory-v2`; `channels` mora sadržavati `&inventory-v2:*`, `&inventory-v2:#/#*` i `&inventory-v2:#/notifications#*`. Kanonsko pravilo: `deploy/redis/users.acl.example`, vodič: `docs/redis-acl.md`.
 4. **Replike** — postaviti `BACKEND_REPLICAS` u env-u koji prosljeđuješ alatu, pa `SOCKETIO_REQUIRE_SHARED_ADAPTER=true` i istovremeni restart svih replika.
-5. **Proxy lanac** — potvrditi da je pred backendom tačno jedan pouzdan proxy (`trust proxy = 1`); alat ne može vidjeti stvarnu mrežnu topologiju.
+5. **Proxy lanac** — broj pouzdanih hopova više nije hardkodiran: postaviti
+   `TRUST_PROXY_HOPS` (default `1` za Traefik/Coolify, `0` samo ako je backend
+   direktno izložen). `resolveTrustProxyHops()` odbija neispravne vrijednosti pri
+   bootu, a readiness alat ima `trust-proxy-hops` provjeru. Alat i dalje ne vidi
+   stvarnu mrežnu topologiju — vlasnik potvrđuje da je broj tačan; previše
+   hopova dopušta spoofiranje `X-Forwarded-For`, premalo svodi sav rate limiting
+   na jednu proxy IP adresu.
+6. **Staging p95 load test** — `node scripts/load-test.mjs --base-url <STAGING>
+   --duration 30 --concurrency 20 --p95-ms 500 --json report.json` (vodič:
+   `docs/load-testing.md`). CI pokriva harness i SLO matematiku; stvarni brojevi
+   na produkcijskom datasetu ostaju vlasnički korak.
 
 ## CI
 
 Korak `Verify deployment readiness contract` pokreće repo modu i
 `scripts/check-deployment-readiness.spec.mjs` (unit scenarija za svako
-pravilo). Tu je i `Verify queue recovery contract` koji održava matricu iz
+pravilo). Tu su i `Verify staging load-test harness` (`scripts/load-test.spec.mjs`)
+i `Verify Redis ACL channel grants for Socket.IO and BullMQ` koji na živom
+Redis 7 `ACL GETUSER` odgovoru traži sve kanonske channel grantove. Tu je i
+`Verify queue recovery contract` koji održava matricu iz
 `docs/queue-recovery.md`. Time se sprječava da neko slučajno promijeni sigurni default u
 compose fajlu ili izbaci neki operator guide, a da CI ne javi.

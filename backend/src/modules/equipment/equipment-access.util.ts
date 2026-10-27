@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import { ForbiddenException } from '@nestjs/common';
 import type { Equipment, Employee } from '../../../generated/prisma/client';
 import type { ModeratorScopeService } from '../../common/services/moderator-scope.service';
@@ -19,7 +20,7 @@ export const canReadEquipment = async (
   prisma?: PrismaService,
   moderatorScope?: ModeratorScopeService,
 ): Promise<boolean> => {
-  if (user.role === 'admin') {
+  if (isSystemAdmin(user)) {
     return true;
   }
   if (isEquipmentHeldByUser(user, equipment)) {
@@ -76,7 +77,7 @@ export const assertCanWriteEquipment = async (
   prisma?: PrismaService,
   moderatorScope?: ModeratorScopeService,
 ): Promise<void> => {
-  if (user.role === 'admin') {
+  if (isSystemAdmin(user)) {
     return;
   }
   if (user.role === 'skladistar') {

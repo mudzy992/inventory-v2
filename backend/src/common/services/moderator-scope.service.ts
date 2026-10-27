@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../auth/authorization-policy.util';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { OrgUnit, UserRole, Warehouse } from '../../../generated/prisma/client';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
@@ -38,7 +39,7 @@ export class ModeratorScopeService {
   ) {}
 
   isSystemAdmin(user: AuthenticatedUser): boolean {
-    return user.role === 'admin';
+    return isSystemAdmin(user);
   }
 
   isModerator(user: AuthenticatedUser): boolean {
@@ -415,7 +416,7 @@ export class ModeratorScopeService {
     if (!target) {
       return false;
     }
-    if (target.role === 'admin' || target.role === 'moderator') {
+    if (isSystemAdmin(target) || target.role === 'moderator') {
       return false;
     }
     if (target.employee && scopedSet.has(target.employee.orgUnitId)) {

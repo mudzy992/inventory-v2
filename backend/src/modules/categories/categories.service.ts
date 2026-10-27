@@ -15,6 +15,10 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { SearchCategoriesQueryDto } from './dto/search-categories-query.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { wouldCreateCategoryCycle } from './utils/category-cycle.util';
+import {
+  ADVISORY_LOCKS,
+  advisoryLockSql,
+} from '../../common/database/advisory-locks.util';
 
 export interface CategoryTreeNode {
   id: string;
@@ -115,7 +119,7 @@ export class CategoriesService {
       // Serialize tree reparent operations so concurrent updates cannot each
       // validate against a stale hierarchy and jointly introduce a cycle.
       // Return an integer row instead of Prisma having to deserialize PostgreSQL's `void` lock result.
-      await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(1800043170, 24681)) AS category_tree_lock`;
+      await tx.$queryRaw(advisoryLockSql(ADVISORY_LOCKS.categoryTree));
       const categories = await tx.category.findMany({ select: { id: true, parentId: true } });
       if (parentId && !categories.some((category) => category.id === parentId)) {
         throw new NotFoundException('Category not found');

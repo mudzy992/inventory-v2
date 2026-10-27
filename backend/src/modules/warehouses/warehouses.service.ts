@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import {
   BadRequestException,
   ForbiddenException,
@@ -134,7 +135,7 @@ export class WarehousesService {
     equipmentId: string,
   ): Promise<Equipment> {
     await this.assertCanAccess(user, warehouseId);
-    if (user.role !== 'admin') {
+    if (!isSystemAdmin(user)) {
       await this.assertKeeperCanManageWarehouse(user, warehouseId);
     }
     const equipment = await this.prisma.equipment.findUnique({ where: { id: equipmentId } });
@@ -242,7 +243,7 @@ export class WarehousesService {
   }
 
   async assertKeeperCanManageWarehouse(user: AuthenticatedUser, warehouseId: string): Promise<void> {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (user.role !== 'skladistar') {
@@ -291,7 +292,7 @@ export class WarehousesService {
   }
 
   private async assertCanAccess(user: AuthenticatedUser, warehouseId: string): Promise<void> {
-    if (user.role === 'admin' || user.role === 'evidenticar') {
+    if (isSystemAdmin(user) || user.role === 'evidenticar') {
       return;
     }
     if (this.moderatorScope.isModerator(user)) {

@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import {
   BadRequestException,
   ForbiddenException,
@@ -198,7 +199,7 @@ export class WarehouseTransferTemplateService {
     warehouseId: string,
     recordReject = false,
   ): Promise<void> {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (user.role === 'moderator') {

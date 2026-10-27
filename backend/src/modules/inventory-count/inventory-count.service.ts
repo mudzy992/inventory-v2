@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import {
   BadRequestException,
@@ -72,138 +73,25 @@ import { isRelocationAlreadyApplied } from './utils/is-relocation-already-applie
 import { lockActiveInventorySessionInTx } from './utils/lock-active-inventory-session-in-tx.util';
 import { deleteInventorySessionCascadeInTx } from './utils/delete-inventory-session-cascade.util';
 import { getEquipmentInventoryLabel } from '../../common/utils/equipment-accounting-tracked.util';
-
-const OPEN_INVENTORY_SESSION_STATUSES = ['draft', 'active', 'closing'] as const;
-
-const INVENTORY_COUNTABLE_EQUIPMENT_STATUS = {
-  notIn: ['rashodovano', 'za_rashod'] as const,
-} satisfies Prisma.EnumEquipmentStatusFilter;
-
-const SESSION_LIST_INCLUDE = {
-  orgUnit: { include: { effectiveLocationCity: { include: { canton: true } } } },
-  _count: { select: { committees: true } },
-} satisfies Prisma.InventorySessionInclude;
-
-const COMMITTEE_LIST_INCLUDE = {
-  warehouse: { select: { id: true, name: true } },
-  category: { select: { id: true, name: true } },
-  members: { include: { employee: { select: { id: true, firstName: true, lastName: true } } } },
-  _count: { select: { lines: true } },
-} satisfies Prisma.InventoryCommitteeInclude;
-
-const COMMITTEE_LINE_LIST_INCLUDE = {
-  equipment: {
-    select: {
-      id: true,
-      inventoryNumber: true,
-      status: true,
-      categoryId: true,
-      currentHolder: { select: { id: true, firstName: true, lastName: true } },
-    },
-  },
-  pendingAction: { select: { id: true, status: true } },
-  generatedTransfer: { select: { id: true, status: true, documentNumber: true, scannedDocUrl: true } },
-} satisfies Prisma.InventoryLineInclude;
-
-const EQUIPMENT_SCOPE_INCLUDE = {
-  category: { select: { id: true, name: true } },
-  currentHolder: { select: { id: true, firstName: true, lastName: true, orgUnitId: true, title: true } },
-  warehouse: { select: { id: true, name: true, cityId: true } },
-} satisfies Prisma.EquipmentInclude;
-
-const PRINT_SCOPE_EQUIPMENT_INCLUDE = {
-  ...EQUIPMENT_SCOPE_INCLUDE,
-  stockLot: { select: { id: true, productName: true } },
-} satisfies Prisma.EquipmentInclude;
-
-const SESSION_SORT_FIELDS: Record<string, string> = {
-  year: 'year',
-  createdAt: 'createdAt',
-  name: 'name',
-};
-
-const COMMITTEE_SORT_FIELDS: Record<string, string> = {
-  createdAt: 'createdAt',
-};
-
-const INVENTORY_LINE_SORT_FIELDS: Record<string, string> = {
-  createdAt: 'createdAt',
-  status: 'status',
-};
-
-const PENDING_ACTION_RESPONSE_SELECT = {
-  id: true,
-  sessionId: true,
-  committeeId: true,
-  equipmentId: true,
-  inventoryLineId: true,
-  kind: true,
-  payload: true,
-  status: true,
-  attempts: true,
-  lastError: true,
-  appliedAt: true,
-  createdByUserId: true,
-  createdAt: true,
-  updatedAt: true,
-} satisfies Prisma.InventoryPendingActionSelect;
-
-type InventoryCloseJobResponseInput = {
-  id: string;
-  sessionId: string;
-  status: string;
-  totalCount: number;
-  appliedCount: number;
-  failedCount: number;
-  skippedCount: number;
-  startedAt: Date | null;
-  endedAt: Date | null;
-  lastError: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-const toPublicInventoryCloseJob = (job: InventoryCloseJobResponseInput) => ({
-  id: job.id,
-  sessionId: job.sessionId,
-  status: job.status,
-  totalCount: job.totalCount,
-  appliedCount: job.appliedCount,
-  failedCount: job.failedCount,
-  skippedCount: job.skippedCount,
-  startedAt: job.startedAt,
-  endedAt: job.endedAt,
-  lastError: job.lastError,
-  createdAt: job.createdAt,
-  updatedAt: job.updatedAt,
-});
-
-const EQUIPMENT_SCOPE_SORT_FIELDS: Record<string, string> = {
-  inventoryNumber: 'inventoryNumber',
-  entryDate: 'entryDate',
-};
-
-interface CommitteeMemberInput {
-  employeeId: string;
-  role: 'predsjednik' | 'clan';
-}
-
-interface CreateSessionInput {
-  name: string;
-  orgUnitId: string;
-  year: number;
-}
-
-interface CreateCommitteeInput {
-  sessionId: string;
-  warehouseId: string;
-  categoryId: string;
-  inventoryMembers: CommitteeMemberInput[];
-  disposalMembers: CommitteeMemberInput[];
-  name?: string;
-}
-
-type UpdateCommitteeInput = Omit<CreateCommitteeInput, 'sessionId'>;
+import {
+  OPEN_INVENTORY_SESSION_STATUSES,
+  INVENTORY_COUNTABLE_EQUIPMENT_STATUS,
+  SESSION_LIST_INCLUDE,
+  COMMITTEE_LIST_INCLUDE,
+  COMMITTEE_LINE_LIST_INCLUDE,
+  EQUIPMENT_SCOPE_INCLUDE,
+  PRINT_SCOPE_EQUIPMENT_INCLUDE,
+  SESSION_SORT_FIELDS,
+  COMMITTEE_SORT_FIELDS,
+  INVENTORY_LINE_SORT_FIELDS,
+  PENDING_ACTION_RESPONSE_SELECT,
+  toPublicInventoryCloseJob,
+  EQUIPMENT_SCOPE_SORT_FIELDS,
+  CommitteeMemberInput,
+  CreateSessionInput,
+  CreateCommitteeInput,
+  UpdateCommitteeInput,
+} from './inventory-count.constants';
 
 @Injectable()
 export class InventoryCountService {
@@ -748,7 +636,7 @@ export class InventoryCountService {
     if (!committee.membersConfigured) {
       throw new BadRequestException('Auto-generisani slotovi se ne mogu brisati');
     }
-    if (user && user.role !== 'admin' && user.role !== 'moderator') {
+    if (user && !isSystemAdmin(user) && user.role !== 'moderator') {
       throw new ForbiddenException('Samo administrator ili moderator može brisati konfigurisane komisije');
     }
     if (user && committee.warehouseId) {
@@ -899,7 +787,7 @@ export class InventoryCountService {
     if (!committee) {
       throw new NotFoundException('Inventory committee not found');
     }
-    if (user.role !== 'admin') {
+    if (!isSystemAdmin(user)) {
       if (this.moderatorScope.isModerator(user)) {
         if (!committee.warehouseId) {
           throw new ForbiddenException('Only committee members can access inventory scope');
@@ -1146,7 +1034,7 @@ export class InventoryCountService {
     if (orgUnitId) {
       filters.push({ orgUnitId });
     }
-    if (user.role !== 'admin' && user.role !== 'evidenticar') {
+    if (!isSystemAdmin(user) && user.role !== 'evidenticar') {
       if (user.role === 'moderator') {
         const orgIds = await this.moderatorScope.expandModeratorOrgRoots(user.moderatorOrgRoots);
         const warehouseIds = user.moderatorWarehouseIds;
@@ -1203,7 +1091,7 @@ export class InventoryCountService {
     sessionId: string,
   ): Promise<Prisma.InventoryCommitteeWhereInput> {
     const base: Prisma.InventoryCommitteeWhereInput = { sessionId };
-    if (user.role === 'admin' || user.role === 'evidenticar') {
+    if (isSystemAdmin(user) || user.role === 'evidenticar') {
       return base;
     }
     if (user.role === 'popis_koordinator') {
@@ -1252,7 +1140,7 @@ export class InventoryCountService {
       throw new NotFoundException('Inventory committee not found');
     }
     await this.assertSessionAccess(user, committee.sessionId);
-    if (user.role === 'admin' || user.role === 'evidenticar') {
+    if (isSystemAdmin(user) || user.role === 'evidenticar') {
       return;
     }
     const actor = await this.prisma.user.findUnique({
@@ -1339,7 +1227,7 @@ export class InventoryCountService {
   async getFreezeBannerForUser(user: AuthenticatedUser) {
     await this.assertInventoryCountEnabled();
     const warehouseIds =
-      user.role === 'admin' ? null : await this.resolveFreezeWarehouseIdsForUser(user);
+      isSystemAdmin(user) ? null : await this.resolveFreezeWarehouseIdsForUser(user);
     if (warehouseIds !== null && warehouseIds.length === 0) {
       return { activeSessions: [], productionLockSessions: [] };
     }
@@ -1574,7 +1462,7 @@ export class InventoryCountService {
     note?: string,
   ) {
     await this.assertWarehouseInventoryEnabled();
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       throw new ForbiddenException('Administrator cannot record warehouse inventory lines');
     }
     const committee = await this.getWarehouseCommitteeOrThrow(committeeId);
@@ -1752,7 +1640,7 @@ export class InventoryCountService {
     },
   ) {
     await this.assertInventoryCountEnabled();
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       throw new ForbiddenException('Administrator cannot record inventory lines');
     }
     const committee = await this.prisma.inventoryCommittee.findUnique({
@@ -1927,7 +1815,7 @@ export class InventoryCountService {
 
   async closeCommittee(user: AuthenticatedUser, committeeId: string) {
     await this.assertInventoryCountEnabled();
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       throw new ForbiddenException('Administrator cannot close inventory committee list');
     }
     const committee = await this.prisma.inventoryCommittee.findUnique({
@@ -2046,7 +1934,7 @@ export class InventoryCountService {
 
   async retryFailedCloseSession(user: AuthenticatedUser, sessionId: string, reason: string) {
     await this.assertInventoryCountEnabled();
-    if (user.role !== 'admin') {
+    if (!isSystemAdmin(user)) {
       throw new ForbiddenException('Only administrators can retry a failed inventory close job');
     }
     const normalizedReason = reason.trim();
@@ -2315,7 +2203,7 @@ export class InventoryCountService {
       where: { id: user.id },
       select: { employeeId: true },
     });
-    if (!actor?.employeeId && user.role !== 'admin') {
+    if (!actor?.employeeId && !isSystemAdmin(user)) {
       return [];
     }
     const approvals = await this.prisma.disposalInventoryApproval.findMany({
@@ -2327,7 +2215,7 @@ export class InventoryCountService {
       },
       orderBy: { createdAt: 'asc' },
     });
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return approvals;
     }
     return approvals.filter((row) => {
@@ -2362,7 +2250,7 @@ export class InventoryCountService {
     });
     const president = approval.disposalCommission.members.find((m) => m.role === 'predsjednik');
     const isPresident = president?.employeeId === actor?.employeeId;
-    if (user.role !== 'admin' && !isPresident) {
+    if (!isSystemAdmin(user) && !isPresident) {
       throw new ForbiddenException('Only disposal commission president can review');
     }
     if (!approved && !note?.trim()) {

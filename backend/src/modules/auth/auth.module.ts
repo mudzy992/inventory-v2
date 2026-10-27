@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { RefreshTokenCleanupService } from './refresh-token-cleanup.service';
 import { RedisRateLimitGuard } from '../../redis/redis-rate-limit.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { AuthSessionRateLimitGuard } from './auth-session-rate-limit.guard';
 
 @Module({
   imports: [
@@ -24,7 +25,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, RefreshTokenCleanupService, RedisRateLimitGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    RefreshTokenCleanupService,
+    RedisRateLimitGuard,
+    AuthSessionRateLimitGuard,
+  ],
   exports: [AuthService],
 })
 export class AuthModule {}

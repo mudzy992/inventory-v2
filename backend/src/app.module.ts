@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { resolve } from 'node:path';
 import { CommonModule } from './common/common.module';
@@ -29,6 +30,7 @@ import { NavModule } from './modules/nav/nav.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { QueuesModule } from './queues/bullmq.module';
+import { UuidParamPipe } from './common/pipes/uuid-param.pipe';
 
 @Module({
   imports: [
@@ -65,5 +67,6 @@ import { QueuesModule } from './queues/bullmq.module';
     UploadsModule,
     NotificationsModule,
   ],
+  providers: [{ provide: APP_PIPE, useClass: UuidParamPipe }],
 })
 export class AppModule {}

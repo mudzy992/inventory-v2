@@ -13,6 +13,8 @@ import { ReviewDisposalApprovalDto } from './dto/review-disposal-approval.dto';
 import { RetryCloseJobDto } from './dto/retry-close-job.dto';
 import { InventoryCountService } from './inventory-count.service';
 import { EquipmentDisposalListService } from './equipment-disposal-list.service';
+import { EnsureDraftQueryDto } from './dto/ensure-draft-query.dto';
+import { CommitteeSetupOptionsQueryDto } from './dto/committee-setup-options-query.dto';
 import { MarkDisposalListDto, WithdrawDisposalListDto } from './dto/mark-disposal-list.dto';
 
 @Controller('inventory-sessions')
@@ -54,12 +56,12 @@ export class InventoryCountController {
 
   @Post('ensure-draft')
   @Roles(UserRole.admin)
-  ensureDraft(@Query('year') year?: string, @Query('orgUnitId') orgUnitId?: string) {
-    const parsedYear = year ? Number(year) : new Date().getFullYear();
-    if (!orgUnitId) {
-      return this.inventoryCountService.ensureDraftSessionsForAllDistributions(parsedYear);
+  ensureDraft(@Query() query: EnsureDraftQueryDto) {
+    const year = query.year ?? new Date().getFullYear();
+    if (!query.orgUnitId) {
+      return this.inventoryCountService.ensureDraftSessionsForAllDistributions(year);
     }
-    return this.inventoryCountService.ensureDraftSessionForDistribution(orgUnitId, parsedYear);
+    return this.inventoryCountService.ensureDraftSessionForDistribution(query.orgUnitId, year);
   }
 
   @Post(':id/reconcile-slots')
@@ -72,13 +74,12 @@ export class InventoryCountController {
   @Roles(UserRole.admin, UserRole.moderator, UserRole.popis_koordinator)
   getCommitteeSetupOptions(
     @Param('id') sessionId: string,
-    @Query('warehouseId') warehouseId: string,
-    @Query('excludeCommitteeId') excludeCommitteeId?: string,
+    @Query() query: CommitteeSetupOptionsQueryDto,
   ) {
     return this.inventoryCountService.getCommitteeSetupOptions(
       sessionId,
-      warehouseId,
-      excludeCommitteeId,
+      query.warehouseId,
+      query.excludeCommitteeId,
     );
   }
 

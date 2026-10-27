@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import {
   BadRequestException,
   ConflictException,
@@ -169,7 +170,7 @@ export class WarehouseStockService {
     user: AuthenticatedUser,
     query: ListStockLotsQueryDto,
   ): Promise<PaginatedResponse<ReturnType<typeof this.mapLotForUser>>> {
-    if (user.role !== 'evidenticar' && user.role !== 'admin') {
+    if (user.role !== 'evidenticar' && !isSystemAdmin(user)) {
       throw new ForbiddenException('Only registrar or admin can list assigned stock');
     }
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
@@ -198,7 +199,7 @@ export class WarehouseStockService {
     user: AuthenticatedUser,
     query: ListStockLotsQueryDto,
   ): Promise<PaginatedResponse<StockLotProductGroup>> {
-    if (user.role !== 'evidenticar' && user.role !== 'admin') {
+    if (user.role !== 'evidenticar' && !isSystemAdmin(user)) {
       throw new ForbiddenException('Only registrar or admin can list assigned stock groups');
     }
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
@@ -486,7 +487,7 @@ export class WarehouseStockService {
     dto: UpdateStockLotSpecDto,
   ) {
     await this.settingsService.assertFeatureEnabled('features.registrar_stock');
-    if (user.role !== 'evidenticar' && user.role !== 'admin') {
+    if (user.role !== 'evidenticar' && !isSystemAdmin(user)) {
       throw new ForbiddenException('Only registrar can define stock specifications');
     }
     const lot = await this.getLotOrThrow(lotId);
@@ -523,7 +524,7 @@ export class WarehouseStockService {
     await this.settingsService.assertFeatureEnabled('features.transfers');
     if (
       user.role !== 'evidenticar' &&
-      user.role !== 'admin' &&
+      !isSystemAdmin(user) &&
       !this.moderatorScope.isModerator(user)
     ) {
       throw new ForbiddenException('Only registrar, admin, or moderator can issue stock');
@@ -572,7 +573,7 @@ export class WarehouseStockService {
     const isCrossWarehouse =
       destWarehouseId !== null && destWarehouseId !== lot.warehouseId;
     if (isCrossWarehouse) {
-      if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+      if (!isSystemAdmin(user) && !this.moderatorScope.isModerator(user)) {
         throw new ForbiddenException(WAREHOUSE_STOCK_MESSAGES.crossWarehouseAdminOnly);
       }
       await this.settingsService.assertFeatureEnabled('transfer.allow_admin_cross_warehouse_issue');
@@ -696,7 +697,7 @@ export class WarehouseStockService {
 
   async commissionUnit(user: AuthenticatedUser, lotId: string, dto: CommissionStockLotDto) {
     await this.settingsService.assertFeatureEnabled('features.registrar_stock');
-    if (user.role !== 'evidenticar' && user.role !== 'admin') {
+    if (user.role !== 'evidenticar' && !isSystemAdmin(user)) {
       throw new ForbiddenException('Only registrar can commission stock');
     }
     const lot = await this.getLotOrThrow(lotId);
@@ -773,7 +774,7 @@ export class WarehouseStockService {
     user: AuthenticatedUser,
     warehouseId: string,
   ): Promise<void> {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (user.role === 'skladistar') {
@@ -788,7 +789,7 @@ export class WarehouseStockService {
   }
 
   private async assertCanAccessWarehouse(user: AuthenticatedUser, warehouseId: string): Promise<void> {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (user.role === 'skladistar') {
@@ -813,7 +814,7 @@ export class WarehouseStockService {
   }
 
   private async assertCanAccessLot(user: AuthenticatedUser, lot: WarehouseStockLot): Promise<void> {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (user.role === 'skladistar') {

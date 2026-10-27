@@ -24,6 +24,7 @@ import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { UploadTransferTemplateDto } from './dto/upload-transfer-template.dto';
 import { WarehouseTransferTemplateService } from './warehouse-transfer-template.service';
 import { WarehousesService } from './warehouses.service';
+import { ResolveEffectiveWarehouseQueryDto } from './dto/resolve-effective-warehouse-query.dto';
 
 @Controller('warehouses')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -41,11 +42,8 @@ export class WarehousesController {
 
   @Get('resolve/effective')
   @Roles(UserRole.admin, UserRole.moderator, UserRole.evidenticar, UserRole.skladistar)
-  resolveEffective(
-    @Query('orgUnitId') orgUnitId: string,
-    @Query('cityId') cityId?: string,
-  ) {
-    return this.warehousesService.resolveEffective(orgUnitId, cityId);
+  resolveEffective(@Query() query: ResolveEffectiveWarehouseQueryDto) {
+    return this.warehousesService.resolveEffective(query.orgUnitId, query.cityId);
   }
 
   @Get(':id')

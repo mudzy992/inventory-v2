@@ -67,6 +67,9 @@ jobs:
           node scripts/check-deployment-readiness.mjs
           node --test scripts/check-deployment-readiness.spec.mjs
 
+      - name: Verify staging load-test harness
+        run: node --test scripts/load-test.spec.mjs
+
       - name: Verify queue recovery contract
         run: |
           node scripts/check-queue-recovery-contract.mjs
@@ -259,9 +262,13 @@ jobs:
         working-directory: backend
         run: npm run test:integration:scope-cache-freshness
 
-      - name: Verify independent audit findings (N-5..N-12)
+      - name: Verify independent audit findings (N-5..N-15)
         working-directory: backend
         run: npm run test:integration:audit-findings
+
+      - name: Verify N-9..N-15 unit contracts
+        working-directory: backend
+        run: npm run test:unit:n9-n15
 
       - name: Lint backend
         working-directory: backend

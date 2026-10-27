@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Employee, Prisma } from '../../../generated/prisma/client';
 import { RegistrarScopeService } from '../../common/services/registrar-scope.service';
@@ -388,7 +389,7 @@ export class EmployeesService {
       filters.push({ orgUnitId: query.orgUnitId });
     }
     if (query.withoutUserAccount) {
-      if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+      if (!isSystemAdmin(user) && !this.moderatorScope.isModerator(user)) {
         throw new ForbiddenException('Only administrators can list employees without user accounts');
       }
       filters.push({ user: { is: null } });
@@ -410,7 +411,7 @@ export class EmployeesService {
     if (user.role === 'user') {
       throw new ForbiddenException('Users can only access their own employee record');
     }
-    if (user.role === 'admin' || user.role === 'skladistar') {
+    if (isSystemAdmin(user) || user.role === 'skladistar') {
       return;
     }
     if (this.moderatorScope.isModerator(user)) {
@@ -428,7 +429,7 @@ export class EmployeesService {
   private async assertCanCreateEmployee(user: AuthenticatedUser, orgUnitId: string): Promise<void> {
     await this.settingsService.assertFeatureEnabled('features.employees');
     await this.assertOrgUnitExists(orgUnitId);
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (this.moderatorScope.isModerator(user)) {
@@ -450,7 +451,7 @@ export class EmployeesService {
     dto: UpdateEmployeeDto,
   ): Promise<void> {
     await this.settingsService.assertFeatureEnabled('features.employees');
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       if (dto.orgUnitId) {
         await this.assertOrgUnitExists(dto.orgUnitId);
       }

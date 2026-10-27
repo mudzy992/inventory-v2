@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../auth/authorization-policy.util';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import { InventoryProductionModeService } from './inventory-production-mode.service';
@@ -26,7 +27,7 @@ export class InventoryFreezeService {
   ) {}
 
   private canBypassInventoryFreeze(user: AuthenticatedUser): boolean {
-    return user.role === 'admin' || user.role === 'moderator';
+    return isSystemAdmin(user) || user.role === 'moderator';
   }
 
   async assertNoEquipmentMutation(

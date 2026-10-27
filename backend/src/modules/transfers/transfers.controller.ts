@@ -29,6 +29,7 @@ import {
   buildTransferDocumentHeaders,
   resolveTransferDocumentDisposition,
 } from './utils/transfer-document-security.util';
+import { GeneratedDocumentFormatQueryDto } from './dto/generated-document-format-query.dto';
 
 @Controller('transfers')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -106,10 +107,10 @@ export class TransfersController {
   async getGeneratedDocument(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Query('format') format?: string,
+    @Query() query: GeneratedDocumentFormatQueryDto,
   ): Promise<StreamableFile> {
     await this.transfersService.findOne(user, id);
-    const resolvedFormat = format === 'pdf' ? 'pdf' : 'docx';
+    const resolvedFormat = query.format === 'pdf' ? 'pdf' : 'docx';
     const file = await this.transferDocumentGeneration.getGeneratedFileStream(
       id,
       resolvedFormat,

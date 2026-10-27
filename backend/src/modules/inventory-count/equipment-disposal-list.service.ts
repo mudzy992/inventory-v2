@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import {
   BadRequestException,
   ForbiddenException,
@@ -208,7 +209,7 @@ export class EquipmentDisposalListService {
     note?: string,
   ) {
     await this.assertPreListEnabled();
-    if (user.role !== 'admin') {
+    if (!isSystemAdmin(user)) {
       throw new ForbiddenException(DISPOSAL_MESSAGES.removeAdminOnly);
     }
     const session = await this.getSessionOrThrow(sessionId);
@@ -347,7 +348,7 @@ export class EquipmentDisposalListService {
     user: AuthenticatedUser,
     session: { id: string; orgUnitId: string },
   ): Promise<void> {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (user.role === 'evidenticar') {
@@ -366,7 +367,7 @@ export class EquipmentDisposalListService {
     user: AuthenticatedUser,
     sessionId: string,
   ): Promise<Prisma.EquipmentDisposalListItemWhereInput> {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return { sessionId };
     }
     const equipmentWhere = await this.registrarScope.buildEquipmentWhere(user);

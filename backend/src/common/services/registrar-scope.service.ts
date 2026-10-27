@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../auth/authorization-policy.util';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type {
   Employee,
@@ -60,7 +61,7 @@ export class RegistrarScopeService {
   ) {}
 
   hasFullAccess(user: AuthenticatedUser): boolean {
-    return user.role === 'admin';
+    return isSystemAdmin(user);
   }
 
   async loadAssignments(userId: string): Promise<RegistrarScopeAssignment[]> {

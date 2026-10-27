@@ -6,6 +6,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import type { InitializeSetupDto } from './dto/initialize-setup.dto';
 import { EVIDENS_APP_NAME, collectUsernames, slugifyCatalogCode } from './utils/setup-bootstrap.util';
+import {
+  ADVISORY_LOCKS,
+  advisoryLockSql,
+} from '../../common/database/advisory-locks.util';
 
 export interface SetupBootstrapResult {
   cantonId: string;
@@ -54,7 +58,7 @@ export class SetupBootstrapService {
       // Serialize the first bootstrap across backend replicas. The inner count
       // then runs after the previous transaction commits or rolls back.
       // Return an integer row instead of Prisma having to deserialize PostgreSQL's `void` lock result.
-      await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(1800043170, 13579)) AS setup_bootstrap_lock`;
+      await tx.$queryRaw(advisoryLockSql(ADVISORY_LOCKS.setupBootstrap));
       const existing = await tx.user.count();
       if (existing > 0) {
         throw new ConflictException('Application is already initialized');

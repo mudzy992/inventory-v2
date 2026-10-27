@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import {
   BadRequestException,
   ConflictException,
@@ -373,7 +374,7 @@ export class EquipmentService {
     if (!existing) {
       throw new NotFoundException('Equipment not found');
     }
-    if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+    if (!isSystemAdmin(user) && !this.moderatorScope.isModerator(user)) {
       throw new ForbiddenException('Only admin or moderator can reactivate equipment');
     }
     if (this.moderatorScope.isModerator(user)) {
@@ -442,7 +443,7 @@ export class EquipmentService {
       this.prisma,
       this.moderatorScope,
     );
-    if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+    if (!isSystemAdmin(user) && !this.moderatorScope.isModerator(user)) {
       throw new ForbiddenException('Only admin or moderator can delete equipment');
     }
     await this.prisma.equipment.delete({ where: { id } });

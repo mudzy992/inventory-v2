@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import { Injectable } from '@nestjs/common';
 import type { NotificationType } from '../../../generated/prisma/client';
 import { ModeratorScopeService } from '../../common/services/moderator-scope.service';
@@ -54,7 +55,7 @@ export class NavService {
     if (pendingTransfers > 0) {
       badges.transfers = (badges.transfers ?? 0) + pendingTransfers;
     }
-    if (user.role === 'admin' || user.role === 'moderator') {
+    if (isSystemAdmin(user) || user.role === 'moderator') {
       try {
         const alerts = await this.relocationService.getAdminAlerts(user);
         const relocationCount =

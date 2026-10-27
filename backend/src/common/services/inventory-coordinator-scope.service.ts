@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../auth/authorization-policy.util';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import type { CoordinatorScopeAssignment } from '../types/coordinator-scope.type';
@@ -8,7 +9,7 @@ export class InventoryCoordinatorScopeService {
   constructor(private readonly prisma: PrismaService) {}
 
   hasFullAccess(user: AuthenticatedUser): boolean {
-    return user.role === 'admin';
+    return isSystemAdmin(user);
   }
 
   async loadAssignments(userId: string): Promise<CoordinatorScopeAssignment[]> {

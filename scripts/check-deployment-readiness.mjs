@@ -39,6 +39,10 @@ export const REQUIRED_REPO_KNOBS = [
   'PUBLIC_EQUIPMENT_MAX_MOVEMENTS',
   'TRANSFER_RAW_DOCUMENT_DISPOSITION',
   'DOCUMENT_JOB_STALE_TIMEOUT_MS',
+  'TRUST_PROXY_HOPS',
+  'RATE_LIMIT_AUTH_SESSION_MAX',
+  'RATE_LIMIT_AUTH_SESSION_WINDOW_SEC',
+  'RATE_LIMIT_AUTH_SESSION_FAIL_CLOSED',
 ];
 
 export const REQUIRED_DOCS = [
@@ -51,6 +55,7 @@ export const REQUIRED_DOCS = [
   'docs/performance-budgets.md',
   'docs/backend-code-audit-2026-10-27.md',
   'docs/deployment-readiness.md',
+  'docs/load-testing.md',
 ];
 
 export const SAFE_COMPOSE_DEFAULTS = [
@@ -62,6 +67,8 @@ export const SAFE_COMPOSE_DEFAULTS = [
   'DATABASE_POOL_MAX:-10',
   'TRANSFER_RAW_DOCUMENT_DISPOSITION:-attachment',
   'DOCUMENT_JOB_STALE_TIMEOUT_MS:-1800000',
+  'TRUST_PROXY_HOPS:-1',
+  'RATE_LIMIT_AUTH_SESSION_MAX:-120',
 ];
 
 export const CA_MOUNT_PREFIXES = ['/run/secrets/', '/etc/ssl/'];
@@ -336,6 +343,18 @@ export function evaluateDeployment(env, options = {}) {
   );
 
   const headersOff = value(env, 'SECURITY_HEADERS_ENABLED') === 'false';
+  // --- Proxy chain (previously MANUAL) ------------------------------------
+  const proxyHops = intInRange(value(env, 'TRUST_PROXY_HOPS') || '1', 0, 8);
+  add(
+    result,
+    'trust-proxy-hops',
+    proxyHops === null ? 'fail' : proxyHops === 0 ? 'warn' : 'pass',
+    proxyHops === null
+      ? 'TRUST_PROXY_HOPS must be an integer 0..8'
+      : `trust proxy = ${proxyHops} (explicit, validated at boot)`,
+    proxyHops === 0 ? 'Backend appears directly exposed; put a TLS reverse proxy in front.' : undefined,
+  );
+
   add(
     result,
     'security-headers',

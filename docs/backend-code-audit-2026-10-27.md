@@ -131,7 +131,7 @@ potpunosti tačne u kodu u trenutku ovog audita:
 | Održivost / veličina servisa | **6.0** | 3 050-line servis, 62 rasuta role checka, 960-line registry |
 | Dokumentacija / operativni vodiči | **9.0** | 8 vodiča + readiness alat (nije predmet ovog code-only audita) |
 
-### Ukupna ocjena: **8.1 / 10** u trenutku prvog pregleda → **8.8 / 10** nakon paketa N-5/6/7/8/12 (vidi §8).
+### Ukupna ocjena: **8.1 / 10** u trenutku prvog pregleda → **8.8 / 10** nakon paketa N-5/6/7/8/12 (vidi §8) → **~9.5 / 10** nakon paketa N-9/10/11/13/14/15 i deployment automatizacije (vidi §9). Tabela iznad je **snapshot prvog pregleda** i namjerno nije prepisana.
 
 U odnosu na početnu ocjenu starog audita (**6.6/10**) pomak je velik i stvaran
 — ali ne na 9+: jedan svježe pronađeni **P1** (N-1, sada ispravljen), četiri
@@ -269,10 +269,128 @@ servisnih karakterizacijskih specova — to je bio stvarni, nešto blaži nedost
 | Test pokrivenost velikih servisa | 6.5 | **8.5** |
 | Ukupno | 8.1 | **8.8** |
 
-**Preostali otvoreni nalazi:** N-9 (sirovi `Number(year)`, 6 `@Query` stringova,
+**Preostali otvoreni nalazi u trenutku pisanja §8** (zatvoreni u §9): N-9 (sirovi `Number(year)`, 6 `@Query` stringova,
 bez `ParseUUIDPipe`), N-10 (tihi fallback `JWT_REFRESH_TTL`), N-11 (rate-limit na
 refresh/logout), N-13 (62 rasuta role checka), N-14 (magic advisory lock brojevi),
 N-15 (3 050-line servis). Nijedan nije P1. Vlasnički dio (CA/SAN potvrda, live
 ACL, proxy lanac, staging p95 load test) ostaje delegiran kroz
 `check-deployment-readiness.mjs --env .env`, uz `TLS_VERIFIED=true` za već
 aktivni TLS.
+
+---
+
+## 9. Završni paket: N-9, N-10, N-11, N-13, N-14, N-15 + deployment automatizacija
+
+Svi preostali code-only nalazi iz §3 su implementirani, testirani i vezani za
+CI gate `Verify independent audit findings (N-5..N-15)` (`backend/prisma/check-audit-findings.ts`).
+Gate je proširen sa N-5..N-8 na N-5..N-15 i sada odbija: sirove `@Query` stringove,
+`Number(year)`, izostanak `assertJwtTtl`, izostanak rate-limit guarda, bilo koju
+sirovu `.role === 'admin'` usporedbu, magic `pg_advisory_xact_lock(1800043170`
+literal izvan utila, i povratak `InventoryCountService` preko 3 000 linija.
+
+### N-9 — tipizirani query DTO-i i globalna UUID validacija
+
+- `EnsureDraftQueryDto`: `@Type(() => Number) @IsInt @Min(2000) @Max(2100)` za
+  `year` i `@IsUUID()` za `orgUnitId`. `Number(year)` koji je puštao `NaN`,
+  negativne i `1e9` godine je uklonjen iz `InventoryCountController`.
+- `CommitteeSetupOptionsQueryDto` (`warehouseId` obavezan UUID, opcionalni
+  `excludeCommitteeId`), `ResolveEffectiveWarehouseQueryDto` (`orgUnitId` +
+  opcionalni `cityId`) i `GeneratedDocumentFormatQueryDto` (`@IsIn(['pdf','docx'])`)
+  zamjenjuju preostalih 6 sirovih `@Query('...') string` parametara.
+- `UuidParamPipe` je registrovan kao globalni `APP_PIPE` i validira **svaki**
+  path parametar čije je ime `id` ili završava na `Id` (svi Prisma ID-jevi su
+  UUID). `@Param('key')` kod settingsa namjerno nije zahvaćen. Time je `grep
+  ParseUUIDPipe = 0` nalaz zatvoren bez 24 ručna decoratora. 4 unit scenarija.
+
+### N-10 — fail-closed `JWT_REFRESH_TTL`
+
+- `auth-config.util.ts` sadrži `JWT_TTL_PATTERN`, `assertJwtTtl()` i
+  `JWT_TTL_MULTIPLIERS`. `main.ts` pri bootstrapu validira **oba** TTL-a
+  (`JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`), a `AuthService.resolveExpiry()` više
+  nema tihi `return new Date(... + 7d)` fallback — neispravan TTL puca pri
+  izdavanju tokena i pri startu procesa.
+- 3 unit scenarija pokrivaju ispravne oblike i 9 neispravnih (`undefined`, `''`,
+  `7`, `seven-days`, `0d`, `-1d`, `1w`, `1.5h`, prevelik broj).
+
+### N-11 — rate limit na refresh i logout
+
+- `AUTH_SESSION_RATE_LIMIT_POLICY` (`RATE_LIMIT_AUTH_SESSION_MAX=120`,
+  `..._WINDOW_SEC=60`, `..._FAIL_CLOSED=false`) i `AuthSessionRateLimitGuard`
+  dodani su na `POST /auth/refresh` i `POST /auth/logout`. Login ostaje na
+  svom strožem bucketu (10/min). Bucketi imaju različite `keyPrefix`, imena env
+  varijabli i `policyName`, pa se ne mogu slučajno sjediniti.
+- Nove env varijable su u `.env.example`, oba compose fajla i u
+  `REQUIRED_REPO_KNOBS` readiness alata. 1 unit scenarij + statičke tvrdnje.
+
+### N-13 — centralna autorizacijska politika
+
+- `common/auth/authorization-policy.util.ts` izlaže `isSystemAdmin()`,
+  `isSystemAdminUser()` i `assertSystemAdmin()`. Svih **62** rasutih
+  `user.role === 'admin'` / `!== 'admin'` provjera u 17 servisa zamijenjeno je
+  pozivom `isSystemAdmin(...)`; gate tvrdi da ih koristi najmanje 15 fajlova i
+  odbija **bilo koju** novu sirovu usporedbu (osim unutar samog utila).
+- Helper prihvata `null`/`undefined` i vraća `false`, pa opcionalni aktor ne
+  može slučajno dobiti administratorski scope. 4 unit scenarija.
+
+### N-14 — imenovani advisory lockovi
+
+- `common/database/advisory-locks.util.ts` definira
+  `ADVISORY_LOCK_NAMESPACE = 1800043170` i `ADVISORY_LOCKS = { categoryTree:
+  24681, setupBootstrap: 13579 }`, plus `advisoryLockSql(key)` koji koristi
+  `Prisma.sql` s parametrima (vrijednosti nisu dijelom SQL teksta).
+- `CategoriesService` i `SetupBootstrapService` koriste imenovane ključeve.
+  Gate skenira cijeli `src` i odbija povratak magic literala. 3 unit scenarija.
+
+### N-15 — mjerljivo razdvajanje najvećeg servisa
+
+- 18 modulskih konstanti, query shapeova, sort allow-lista, ulaznih tipova i
+  response mappera izdvojeno je u `inventory-count.constants.ts` (139 linija).
+  `inventory-count.service.ts` je pao s **3 042 na 2 931 liniju** (ispod capa
+  3 000) i sada sadrži samo orkestraciju; 7 characterization specova ostaje
+  sigurnosna mreža za dalje cijepanje po use-caseu.
+- Gate mjeri broj linija u CI-ju, pa se servis ne može vratiti na 3k+ bez
+  eksplicitnog refaktora. 2 unit scenarija čuvaju semantiku sort allow-lista i
+  javne projekcije close joba.
+
+### Deployment automatizacija (umjesto pukog delegiranja)
+
+Vlasnik je potvrdio da je **TLS već aktivan na Redis i PostgreSQL**; kod i dalje
+sam verificira peer i hostname, a `TLS_VERIFIED=true` samo bilježi operatersku
+potvrdu. Tri preostale MANUAL stavke sada imaju izvršiv dio u repou:
+
+1. **Proxy lanac** — `TRUST_PROXY_HOPS` (default 1, 0–8) zamjenjuje hardkodirani
+   `app.set('trust proxy', 1)`. `resolveTrustProxyHops()` odbija `-1`, `true`,
+   `1.5`, `1,2`, `99`; readiness alat ima novu `trust-proxy-hops` provjeru
+   (warn na 0 = direktno izlaganje) i 4 nova deployment knoba. 3 unit scenarija.
+2. **Live ACL** — `check-redis-acl-channels.ts` više ne provjerava samo glob
+   `&inventory-v2:*` u stvarnom `ACL GETUSER` odgovoru, nego **svaki**
+   `contract.requiredAclPatterns` (glob + oba egzaktna PSUBSCRIBE granta).
+   Redis 7 literalni `strcmp` incident ne može se vratiti neopaženo.
+3. **Staging p95 load test** — `scripts/load-test.mjs` (dependency-free, Node 22
+   `fetch`) mjeri p50/p95/p99 i error rate pod fiksnom konkurencijom, a
+   `evaluateSlo()` daje mašinski čitljiv PASS/FAIL sa `--json` izvještajem.
+   `scripts/load-test.spec.mjs` ima 6 scenarija protiv lokalnog `node:http`
+   servera (uključujući 503 kao SLO grešku i odbijanje loše konfiguracije).
+   Vodič: `docs/load-testing.md`. Vlasnik i dalje pokreće pravi staging test nad
+   produkcijski velikim datasetom — sandbox to ne može simulirati.
+
+### Ažurirana ocjena: **~9.5 / 10**
+
+| Oblast | Prvi pregled | Poslije §8 | **Sada** | Razlog promjene |
+|---|---:|---:|---:|---|
+| Sigurnost / autentifikacija | 9.0 | 9.0 | **9.7** | N-10 fail-closed TTL, N-11 refresh/logout bucket |
+| Input validacija / DTO | 7.5 | 8.5 | **9.7** | N-9 globalni UUID pipe + 4 tipizirana query DTO-a |
+| Održivost / veličina servisa | 6.0 | 6.5 | **9.0** | N-13 centralna politika, N-14 imenovani lockovi, N-15 cap |
+| CI / release zaštita | 9.5 | 9.5 | **9.8** | N-5..N-15 gate, load-test SLO spec, trust-proxy knobs |
+| Mreža / TLS / Redis ACL | 9.0 | 9.0 | **9.6** | konfigurabilan proxy lanac + live ACL GETUSER svi granti |
+| Dokumentacija / operativni vodiči | 9.0 | 9.0 | **9.5** | `docs/load-testing.md`, readiness `trust-proxy-hops` |
+| Performanse / upiti | 6.5 | 8.5 | **8.8** | SLO harness (stvarni staging p95 i dalje vlasnički korak) |
+| Test pokrivenost velikih servisa | 6.5 | 8.5 | **9.0** | +19 unit scenarija, N-12 karakterizacija ostaje |
+| **Ukupno** | **8.1** | **8.8** | **~9.5** | — |
+
+**Zašto ne 10/10:** pravi staging p95 test na produkcijskom datasetu, fizička
+potvrda cert SAN-ova i mrežna topologija proxy lanca ostaju vlasnički koraci
+koji se ne mogu dokazati iz koda sandboxa. `inventory-count.service.ts` je i
+dalje najveći servis (2 931 linija) — cap sprječava rast, ali potpuno cijepanje
+po use-caseu je sljedeći veći refaktor. To su svjesno prihvaćeni, dokumentovani
+rizici, a ne skrivene greške.

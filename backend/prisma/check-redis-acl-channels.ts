@@ -270,8 +270,15 @@ const liveChecks = async (root: string): Promise<void> => {
       `&${KEY_PREFIX}bull*`,
       '+@all',
     );
+    // canonical ACL GETUSER must contain every required channel pattern, not
+    // just the glob: Redis 7 matches PSUBSCRIBE against ACL patterns literally.
     const aclInfo = String(await admin.call('ACL', 'GETUSER', GOOD_USER));
-    assert.match(aclInfo, /inventory-v2:\*/u, 'canonical ACL must actually contain the channel grant');
+    for (const pattern of contract.requiredAclPatterns) {
+      assert.ok(
+        aclInfo.includes(pattern),
+        `canonical ACL GETUSER must contain every required channel pattern (missing ${pattern})`,
+      );
+    }
 
     // 4. The documented user can perform every Pub/Sub operation the adapter needs.
     const goodSub = makeClient(GOOD_USER, goodPassword);

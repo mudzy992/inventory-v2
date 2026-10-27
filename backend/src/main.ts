@@ -12,12 +12,14 @@ import { CorrelationLogger } from './common/logging/correlation.logger';
 import { correlationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { CORRELATION_ID_RESPONSE_HEADER } from './common/utils/correlation-id.util';
 import { RedisService } from './redis/redis.service';
+import { assertJwtTtl } from './modules/auth/auth-config.util';
 import {
   globalRateLimitMiddleware,
   resolveGlobalRateLimitPolicy,
   resolveSecurityHeadersPolicy,
   securityHeadersMiddleware,
 } from './common/http/http-hardening.util';
+import { resolveTrustProxyHops } from './common/http/trust-proxy.util';
 
 loadEnv({ path: resolve(process.cwd(), '../.env') });
 loadEnv({ path: resolve(process.cwd(), '.env') });
@@ -28,12 +30,16 @@ const bootstrap = async (): Promise<void> => {
     logger: new CorrelationLogger(),
   });
   const configService = app.get(ConfigService);
+  assertJwtTtl(configService.get<string>('JWT_ACCESS_TTL') ?? '15m', 'JWT_ACCESS_TTL');
+  assertJwtTtl(configService.get<string>('JWT_REFRESH_TTL') ?? '7d', 'JWT_REFRESH_TTL');
   app.use(correlationIdMiddleware);
 
   // Backend je uvijek iza Traefik/Coolify reverse proxyja u produkciji —
   // bez ovoga, `request.ip` (koristi ga npr. RedisRateLimitGuard) bi
   // vidio internu Docker network IP proxyja umjesto stvarnog klijenta.
-  app.set('trust proxy', 1);
+  // Broj pouzdanih hopova je eksplicitan i validiran (TRUST_PROXY_HOPS),
+  // umjesto hardkodiranog `1` koji nije bilo moguće provjeriti u deployu.
+  app.set('trust proxy', resolveTrustProxyHops(process.env));
 
   // HTTP hardening: safe security-header subset always available (reversible
   // via env), plus an OPT-IN global rate limit. CSP is not set GLOBALLY — the

@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { assertJwtTtl, JWT_TTL_MULTIPLIERS, JWT_TTL_PATTERN } from './auth-config.util';
 import {
   Injectable,
   UnauthorizedException,
@@ -197,18 +198,10 @@ export class AuthService {
   }
 
   private resolveExpiry(ttl: string): Date {
-    const match = /^(\d+)([smhd])$/.exec(ttl);
-    if (!match) {
-      return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    }
+    const normalized = assertJwtTtl(ttl, 'JWT_REFRESH_TTL');
+    const match = JWT_TTL_PATTERN.exec(normalized)!;
     const amount = Number(match[1]);
-    const unit = match[2];
-    const multipliers: Record<string, number> = {
-      s: 1000,
-      m: 60 * 1000,
-      h: 60 * 60 * 1000,
-      d: 24 * 60 * 60 * 1000,
-    };
-    return new Date(Date.now() + amount * (multipliers[unit] ?? multipliers.d));
+    const unit = match[2]!;
+    return new Date(Date.now() + amount * JWT_TTL_MULTIPLIERS[unit]!);
   }
 }

@@ -48,6 +48,20 @@ export const LOGIN_RATE_LIMIT_POLICY: RedisRateLimitPolicy = {
   unavailableMessage: 'Prijava trenutno nije dostupna. Pokušajte ponovo.',
 };
 
+export const AUTH_SESSION_RATE_LIMIT_POLICY: RedisRateLimitPolicy = {
+  policyName: 'auth_session',
+  loggerContext: 'AuthSessionRateLimitGuard',
+  maxEnvName: 'RATE_LIMIT_AUTH_SESSION_MAX',
+  windowEnvName: 'RATE_LIMIT_AUTH_SESSION_WINDOW_SEC',
+  failClosedEnvName: 'RATE_LIMIT_AUTH_SESSION_FAIL_CLOSED',
+  defaultMax: 120,
+  defaultWindowSeconds: 60,
+  defaultFailClosed: false,
+  keyPrefix: 'ratelimit:auth-session',
+  exceededMessage: 'Previ\u0161e zahtjeva za sesiju. Poku\u0161ajte ponovo za kratko vrijeme.',
+  unavailableMessage: 'Usluga sesije trenutno nije dostupna. Poku\u0161ajte ponovo.',
+};
+
 /**
  * Fixed-window rate limit guard po klijentskoj IP adresi, sa zasebnim
  * Redis namespace-om i konfiguracijom za svaki endpoint policy.

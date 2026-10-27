@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import {
   BadRequestException,
   ForbiddenException,
@@ -162,7 +163,7 @@ export class MaintenancePartsService {
     dto: ReceiveMaintenanceLotDto,
   ) {
     await this.assertEnabled();
-    if (user.role !== 'skladistar' && user.role !== 'admin' && user.role !== 'evidenticar' && !this.moderatorScope.isModerator(user)) {
+    if (user.role !== 'skladistar' && !isSystemAdmin(user) && user.role !== 'evidenticar' && !this.moderatorScope.isModerator(user)) {
       throw new ForbiddenException('Not allowed to receive maintenance stock');
     }
     if (user.role === 'skladistar') {
@@ -254,7 +255,7 @@ export class MaintenancePartsService {
         status: 'spremno_za_izdavanje',
       },
     ];
-    if (user.role !== 'admin') {
+    if (!isSystemAdmin(user)) {
       filters.push(await this.registrarScope.buildStockLotWhere(user));
     }
     return this.prisma.warehouseStockLot.findMany({
@@ -266,7 +267,7 @@ export class MaintenancePartsService {
 
   async installPart(user: AuthenticatedUser, equipmentId: string, dto: InstallMaintenancePartDto) {
     await this.assertEnabled();
-    if (user.role !== 'evidenticar' && user.role !== 'admin') {
+    if (user.role !== 'evidenticar' && !isSystemAdmin(user)) {
       throw new ForbiddenException('Only registrar can install maintenance parts');
     }
     const equipment = await this.getHostEquipmentForWrite(equipmentId);
@@ -368,7 +369,7 @@ export class MaintenancePartsService {
 
   async replacePart(user: AuthenticatedUser, partId: string, dto: ReplaceMaintenancePartDto) {
     await this.assertEnabled();
-    if (user.role !== 'evidenticar' && user.role !== 'admin') {
+    if (user.role !== 'evidenticar' && !isSystemAdmin(user)) {
       throw new ForbiddenException('Only registrar can replace maintenance parts');
     }
     const oldPart = await this.getPartOrThrow(partId);
@@ -477,7 +478,7 @@ export class MaintenancePartsService {
   }
 
   private async assertWarehouseReadAccess(user: AuthenticatedUser, warehouseId: string): Promise<void> {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (user.role === 'skladistar') {

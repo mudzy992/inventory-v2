@@ -1,3 +1,4 @@
+import { isSystemAdmin } from '../../common/auth/authorization-policy.util';
 import {
   BadRequestException,
   ForbiddenException,
@@ -315,7 +316,7 @@ export class EmployeeRelocationService {
 
   async listForUser(user: AuthenticatedUser, query: ListRelocationQueryDto) {
     await this.settingsService.assertFeatureEnabled('features.employee_relocation');
-    if (user.role !== 'admin' && user.role !== 'evidenticar' && user.role !== 'moderator') {
+    if (!isSystemAdmin(user) && user.role !== 'evidenticar' && user.role !== 'moderator') {
       throw new ForbiddenException('Only admin, moderator, or registrar can list relocation cases');
     }
     const { pageSize, maxPageSize } = await resolveListPageSize(query.pageSize, this.settingsService);
@@ -353,7 +354,7 @@ export class EmployeeRelocationService {
         page,
         pageSize: take,
       }),
-      user.role === 'admin' || user.role === 'moderator'
+      isSystemAdmin(user) || user.role === 'moderator'
         ? paginate({
             findMany: (args) =>
               this.prisma.employeeRelocationCase.findMany({
@@ -365,7 +366,7 @@ export class EmployeeRelocationService {
               }),
             count: (args) => this.prisma.employeeRelocationCase.count(args),
             where:
-              user.role === 'admin'
+              isSystemAdmin(user)
                 ? { status: 'open' as const }
                 : { AND: [{ status: 'open' as const }, await this.buildModeratorCaseWhere(user)] },
             orderBy: caseOrderBy,
@@ -387,7 +388,7 @@ export class EmployeeRelocationService {
       status: { in: ['pending_source', 'rejected'] },
       case: { status: 'open' },
     };
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return base;
     }
     if (user.role === 'moderator') {
@@ -413,7 +414,7 @@ export class EmployeeRelocationService {
       status: 'pending_dest',
       case: { status: 'open' },
     };
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return base;
     }
     if (user.role === 'moderator') {
@@ -572,7 +573,7 @@ export class EmployeeRelocationService {
 
   async mapLineCatalog(user: AuthenticatedUser, lineId: string, dto: MapCatalogDto) {
     await this.settingsService.assertFeatureEnabled('features.employee_relocation');
-    if (user.role !== 'admin' && !this.moderatorScope.isModerator(user)) {
+    if (!isSystemAdmin(user) && !this.moderatorScope.isModerator(user)) {
       throw new ForbiddenException('Samo administrator ili moderator može mapirati šifrarnik');
     }
     const line = await this.getLineOrThrow(lineId);
@@ -960,7 +961,7 @@ export class EmployeeRelocationService {
     user: AuthenticatedUser,
     line: Prisma.EmployeeRelocationLineGetPayload<{ include: typeof lineInclude }>,
   ) {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (this.moderatorScope.isModerator(user)) {
@@ -977,7 +978,7 @@ export class EmployeeRelocationService {
     user: AuthenticatedUser,
     line: Prisma.EmployeeRelocationLineGetPayload<{ include: typeof lineInclude }>,
   ) {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return;
     }
     if (this.moderatorScope.isModerator(user)) {
@@ -994,7 +995,7 @@ export class EmployeeRelocationService {
     user: AuthenticatedUser,
     line: Prisma.EmployeeRelocationLineGetPayload<{ include: typeof lineInclude }>,
   ) {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return true;
     }
     const regs = await findRegistrarUserIds(
@@ -1010,7 +1011,7 @@ export class EmployeeRelocationService {
     user: AuthenticatedUser,
     line: Prisma.EmployeeRelocationLineGetPayload<{ include: typeof lineInclude }>,
   ) {
-    if (user.role === 'admin') {
+    if (isSystemAdmin(user)) {
       return true;
     }
     const regs = await findRegistrarUserIds(
