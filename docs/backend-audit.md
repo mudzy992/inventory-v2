@@ -427,9 +427,9 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Dobro:** global `ValidationPipe` sa `whitelist`, `forbidNonWhitelisted`, `transform`; global prefix može biti prazan; trust proxy postavljen za Coolify/Traefik; CORS više origin-a podržan.
 
-**Rizici:** CORS fail-open fallback (P2); trust proxy je numeric one-hop i sigurnost zavisi od toga da backend nije direktno izložen i da je ispred tačno pouzdan proxy; nema vidljivog Helmet niti global HTTP rate-limit policy-ja. Preporuka je testirati stvarni proxy lanac, ne samo promijeniti `trust proxy` naslijepo.
+**Rizici:** trust proxy je numeric one-hop i sigurnost zavisi od toga da backend nije direktno izložen i da je ispred tačno pouzdan proxy — **stvarni proxy lanac i dalje treba potvrditi u deploymentu**. CSP/CORP nisu postavljeni namjerno (vidi dole).
 
-**Remediation update:** request/correlation ID, redakcija logova, `http_request` po zahtjevu i agregirani `http_request_metrics` signal (latencijski histogram, stopa 5xx, normalizirane rute) su implementirani; preostaje odluka o Helmetu i globalnom rate-limitu.
+**Remediation update:** request/correlation ID, redakcija logova, `http_request` po zahtjevu i agregirani `http_request_metrics` signal su implementirani. CORS je fail-closed u produkciji. **HTTP hardening (§0.13 plana):** dependency-free sigurnosni headeri (`nosniff`, `DENY`, `no-referrer`, `Permissions-Policy`), uklonjen `X-Powered-By`, HSTS samo za HTTPS zahtjeve, `no-store` na `/auth/*` i `/setup/*`; globalni rate limit je implementiran ali **ostaje opt-in** (`GLOBAL_RATE_LIMIT_ENABLED=false`) jer mijenja ponašanje svih ruta. `/health/*` je izuzet, ključevi su hashirani, odluke idu u `rate_limit_metrics`. 11 unit scenarija + `check-http-hardening.ts` nad pravim `node:http` serverom (429 prag, fail-open/closed) sa mutacijskim dokazom. **Ostaje vlasniku:** CSP strategija za HTML prenosnicu, CORP, prag i uključivanje globalnog limita, potvrda proxy lanca.
 
 ## 6. Fazni plan implementacije
 

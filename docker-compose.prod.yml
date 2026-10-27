@@ -41,6 +41,12 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      SECURITY_HEADERS_ENABLED: ${SECURITY_HEADERS_ENABLED:-true}
+      HSTS_MAX_AGE_SECONDS: ${HSTS_MAX_AGE_SECONDS:-15552000}
+      GLOBAL_RATE_LIMIT_ENABLED: ${GLOBAL_RATE_LIMIT_ENABLED:-false}
+      GLOBAL_RATE_LIMIT_MAX: ${GLOBAL_RATE_LIMIT_MAX:-300}
+      GLOBAL_RATE_LIMIT_WINDOW_SEC: ${GLOBAL_RATE_LIMIT_WINDOW_SEC:-60}
+      GLOBAL_RATE_LIMIT_FAIL_CLOSED: ${GLOBAL_RATE_LIMIT_FAIL_CLOSED:-false}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       # Ovaj standalone Redis nema ACL (samo requirepass) — default user.

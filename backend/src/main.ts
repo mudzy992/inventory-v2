@@ -11,6 +11,13 @@ import { resolveCorsOriginPolicy } from './common/utils/cors-origins.util';
 import { CorrelationLogger } from './common/logging/correlation.logger';
 import { correlationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { CORRELATION_ID_RESPONSE_HEADER } from './common/utils/correlation-id.util';
+import { RedisService } from './redis/redis.service';
+import {
+  globalRateLimitMiddleware,
+  resolveGlobalRateLimitPolicy,
+  resolveSecurityHeadersPolicy,
+  securityHeadersMiddleware,
+} from './common/http/http-hardening.util';
 
 loadEnv({ path: resolve(process.cwd(), '../.env') });
 loadEnv({ path: resolve(process.cwd(), '.env') });
@@ -27,6 +34,26 @@ const bootstrap = async (): Promise<void> => {
   // bez ovoga, `request.ip` (koristi ga npr. RedisRateLimitGuard) bi
   // vidio internu Docker network IP proxyja umjesto stvarnog klijenta.
   app.set('trust proxy', 1);
+
+  // HTTP hardening: safe security-header subset always available (reversible
+  // via env), plus an OPT-IN global rate limit. CSP is deliberately not set —
+  // the generated transfer document is text/html with inline styling, so a
+  // policy there remains an explicit owner decision.
+  const expressApp = app.getHttpAdapter().getInstance() as {
+    disable: (setting: string) => void;
+  };
+  expressApp.disable('x-powered-by');
+  const securityHeadersPolicy = resolveSecurityHeadersPolicy(process.env);
+  const globalRateLimitPolicy = resolveGlobalRateLimitPolicy(process.env);
+  app.use(securityHeadersMiddleware(securityHeadersPolicy));
+  if (globalRateLimitPolicy.enabled) {
+    const redisService = app.get(RedisService);
+    app.use(
+      globalRateLimitMiddleware(globalRateLimitPolicy, (key, windowSeconds) =>
+        redisService.incrementRateLimitCounter(key, windowSeconds),
+      ),
+    );
+  }
 
   const corsOrigin = resolveCorsOriginPolicy(
     configService.get<string>('CORS_ORIGIN'),
@@ -63,6 +90,15 @@ const bootstrap = async (): Promise<void> => {
     event: 'backend_bootstrap_config',
     apiPrefix,
     corsOrigin,
+  });
+  logStructuredEvent(logger, 'log', {
+    event: 'http_hardening_config',
+    securityHeadersEnabled: securityHeadersPolicy.enabled,
+    hstsMaxAgeSeconds: securityHeadersPolicy.hstsMaxAgeSeconds,
+    globalRateLimitEnabled: globalRateLimitPolicy.enabled,
+    globalRateLimitMax: globalRateLimitPolicy.max,
+    globalRateLimitWindowSeconds: globalRateLimitPolicy.windowSeconds,
+    globalRateLimitFailClosed: globalRateLimitPolicy.failClosed,
   });
 
   app.useGlobalPipes(

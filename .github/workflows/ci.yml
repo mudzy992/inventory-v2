@@ -229,6 +229,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:upload-read-policy
 
+      - name: Verify HTTP hardening policy
+        working-directory: backend
+        run: npm run test:integration:http-hardening
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint
