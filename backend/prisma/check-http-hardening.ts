@@ -87,10 +87,11 @@ const staticChecks = (): void => {
     'resolveSecurityHeadersPolicy(process.env)',
     'resolveGlobalRateLimitPolicy(process.env)',
     'http_hardening_config',
-    "app.set('trust proxy', 1)",
+    "app.set('trust proxy', resolveTrustProxyHops(process.env))",
     'resolveCorsOriginPolicy(',
     'app.get(RedisService)',
     'incrementRateLimitCounter(',
+    "from './common/http/trust-proxy.util'",
   ]) {
     assert.ok(main.includes(expected), `main.ts must wire ${expected}`);
   }

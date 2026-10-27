@@ -242,7 +242,11 @@ const main = async (): Promise<void> => {
     );
     assert.ok(healthModuleSource.includes('RateLimitMetricsService'));
     const mainSource = readFileSync(resolve('src/main.ts'), 'utf8');
-    assert.ok(mainSource.includes("app.set('trust proxy', 1)"));
+    assert.ok(
+      mainSource.includes("app.set('trust proxy', resolveTrustProxyHops(process.env))"),
+      'main.ts must wire the validated TRUST_PROXY_HOPS value',
+    );
+    assert.ok(mainSource.includes("from './common/http/trust-proxy.util'"));
     const expectedSettings: Record<string, number> = {
       'rate_limit.metrics.warn_fail_open_count': 5,
       'rate_limit.metrics.warn_consecutive_failures': 3,
