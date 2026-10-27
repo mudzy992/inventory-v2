@@ -125,6 +125,18 @@ export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
   'http.metrics.min_request_count': {
     detail: 'Minimalan uzorak zahtjeva u intervalu prije nego stopa grešaka i p95 mogu aktivirati alarm.',
   },
+  'inventory.close.metrics.warn_pending_count': {
+    detail: 'Operativni alarm kada se u bazi nakupi previše nezavršenih inventory close poslova.',
+  },
+  'inventory.close.metrics.warn_queued_age_seconds': {
+    detail: 'Operativni alarm kada najstariji queued close posao predugo čeka na BullMQ vlasnika.',
+  },
+  'inventory.close.metrics.warn_running_age_seconds': {
+    detail: 'Operativni alarm kada aktivni close posao predugo traje i možda je zaglavljen.',
+  },
+  'inventory.close.metrics.warn_failed_age_seconds': {
+    detail: 'Operativni alarm kada failed close posao predugo čeka ručni administratorski retry.',
+  },
   'transfer.template_placeholders_help': {
     display: 'info',
     detail: 'Referentna lista placeholdera za Word šablon prenosnice po skladištu.',

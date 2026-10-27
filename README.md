@@ -82,8 +82,12 @@ automatski sa ostalim servisima. Detalji: [document-worker/README.md](document-w
 
 Backend emituje jedan red JSON-a po važnom infrastrukturnom događaju. Periodični
 (30 s) signali: `http_request_metrics` (latencijski histogram/p95, stopa 5xx i 4xx,
-normalizirane rute), `upload_reject_metrics`, `postgres_pool_latency`,
+normalizirane rute), `inventory_close_job_metrics` (queued/running/failed starost,
+istekli lease-ovi), `upload_reject_metrics`, `postgres_pool_latency`,
 `redis_connection_health`, `bullmq_queue_metrics` i `notification_outbox_backlog`.
+Pragovi za inventory close alarm (`inventory.close.metrics.*`) također su privatne
+postavke; default-i su 10 nezavršenih poslova, 300 s queued, 1800 s running i
+300 s neriješenog failed posla.
 Svaki HTTP zahtjev ima i `http_request` red sa `correlationId` iz `X-Request-Id`
 headera, metodom, statusom, trajanjem i normaliziranom `route`. Pragovi za HTTP
 alarm (`http.metrics.*`) su privatne postavke u administratorskom UI-ju; default-i
