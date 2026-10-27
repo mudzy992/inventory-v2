@@ -109,7 +109,10 @@ test('buildBaseRedisOptions keeps TLS peer verification and loads a configured C
 
   try {
     const options = buildBaseRedisOptions({
-      ...readRedisConfig(),
+      host: 'redis.internal',
+      port: 6380,
+      db: 0,
+      keyPrefix: 'inventory-v2:',
       tls: true,
       caCertPath: caPath,
     });
@@ -117,7 +120,7 @@ test('buildBaseRedisOptions keeps TLS peer verification and loads a configured C
     assert.deepEqual(options.tls.ca, readFileSync(caPath));
     assert.equal(options.tls.rejectUnauthorized, true);
     assert.equal(options.tls.minVersion, 'TLSv1.2');
-    assert.equal(options.tls.servername, 'redis-core');
+    assert.equal(options.tls.servername, 'redis.internal');
     assert.equal(options.tls.checkServerIdentity, undefined);
   } finally {
     rmSync(directory, { recursive: true, force: true });
