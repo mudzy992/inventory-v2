@@ -511,6 +511,8 @@ Faze su namjerno inkrementalne. Svaka faza završava testovima i produkcijskim r
 
 **Exit kriterij:** izmjerena p95 latencija/DB query budget, bez regresije domena, servisi razdvojeni samo uz adekvatne tests.
 
+**Remediation update — query budget (§0.17 plana):** `check-performance-budgets.ts` sada u CI-ju mjeri determinističke jedinice posla: CSV export od 1200 redova mora koristiti tačno 3 cursor upita po 500 (bez N+1), list request ≤ 8 DB poziva, javni QR ≤ 25 upita (≤ 20 org-unit lookupa, nikad `orgUnit.findMany()`), bulk prijem ≤ 100 stavki, page size ≤ 10 000 i offset ≤ 100 000. `QueryRecorder` + `verifyQueryBudget()` odbijaju neograničen `findMany()` i prevelik `take`. Wall-clock se prati samo kao široki smoke prag (2000 CSV escape poziva < 2 s). 11 unit scenarija + statički gate nad izvornim kodom; vodič `docs/performance-budgets.md`. **Ostaje vlasniku:** pravi staging load test (`k6`/`autocannon`) sa produkcijski anonimizovanim datasetom i p95 SLO kroz `http_request_metrics`.
+
 ## 7. Predloženi red rada po modulima
 
 | Red | Modul(i) | Prva konkretna stavka | Prioritet |

@@ -48,6 +48,7 @@ export const REQUIRED_DOCS = [
   'docs/upload-read-policy.md',
   'docs/transfer-document-security.md',
   'docs/queue-recovery.md',
+  'docs/performance-budgets.md',
   'docs/deployment-readiness.md',
 ];
 

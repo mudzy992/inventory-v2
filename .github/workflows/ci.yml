@@ -251,6 +251,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:transfer-document-security
 
+      - name: Verify performance budgets
+        working-directory: backend
+        run: npm run test:integration:performance-budgets
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint
