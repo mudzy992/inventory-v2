@@ -516,6 +516,14 @@ compose i vodič. **Mutacijski dokaz:** uklanjanje registracije
 oba padaju (exit 1); nakon vraćanja gate prolazi. CI korak:
 `Verify HTTP hardening policy`.
 
+**CI dokaz.** Commit `cd19f0e` prolazi u run-u `40558495208` (`completed
+success` na sva tri joba). Novi korak `Verify HTTP hardening policy` (43) je
+zelen, kao i strukturirani logovi (33), raniji gateovi (40–42), lint (44),
+typecheck (45), 769 backend unit testova (46), build (48) i `npm audit` (49).
+Lokalno su uz `pipefail` potvrđeni 11/11 novih specova, 14/14 FE guardova,
+16/16 worker unit testova, frontend build, svi statički gateovi i `npm audit`
+= 0 za sva tri workspace-a.
+
 **Ostaje vlasniku:** CSP strategija za HTML prenosnicu (nonce/hash ili PDF
 attachment), eventualni CORP, odluka hoće li se globalni limit uključiti i s
 kojim pragom, te `GLOBAL_RATE_LIMIT_FAIL_CLOSED=true` ako se dostupnost
