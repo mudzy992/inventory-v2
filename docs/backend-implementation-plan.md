@@ -571,6 +571,15 @@ ACL grant, nesiguran compose default, obrisan operator vodič) — sve padaju.
 Ručno su potvrđeni i `PASS WITH WARNINGS` za realističan hardened `.env` i
 `FAIL` (11 grešaka) za namjerno loš `.env`.
 
+**CI dokaz.** Commit `e35b00b` prolazi u run-u `40561846255` (`completed
+success` na sva tri joba). Novi korak `Verify deployment readiness contract`
+(6) je zelen, kao i svi raniji gateovi (41–44), lint (45), typecheck (46), 769
+backend unit testova (47), build (49) i `npm audit` (50). Lokalno su uz
+`pipefail` potvrđeni 14/14 novih scenarija, 12/12 container policy scenarija,
+repo moda (`11 pass, 0 fail`), hardened `--env` moda (`PASS WITH WARNINGS` sa
+3 očekivane MANUAL provjere), namjerno loš `--env` (`FAIL`, 11 grešaka),
+frontend build i `npm audit` = 0 za sva tri workspace-a.
+
 **Ograničenje:** alat ne može vidjeti stvarni certifikat, live ACL korisnika ni
 mrežnu topologiju iza proxyja — zato su te tri provjere namjerno `MANUAL/WARN`
 i opisane u vodiču. On garantuje da **konfiguracija u repou i env fajlu** ne
