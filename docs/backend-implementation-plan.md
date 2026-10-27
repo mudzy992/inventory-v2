@@ -239,6 +239,18 @@ source (`ACLCheckChannelAgainstList`) je potvrdio literalni `strcmp`, nakon
 čega su kanonsko pravilo, contract util, preflight, unit specovi i live check
 ažurirani za oba namespacea.
 
+**CI dokaz.** Run `40513334908` je prvo pao na novom live ACL koraku i time
+otkrio literalno `PSUBSCRIBE` poređenje; nakon ispravke commit `a12a7d2`
+prolazi u run-u `40516953348` (`completed success` na sva tri joba). Koraci
+`Verify Socket.IO ACL denial degrades instead of crashing` (38) i
+`Verify Redis ACL channel grants for Socket.IO and BullMQ` (39) su zeleni, kao i
+lint, typecheck, 712 backend unit testova, 14 FE guardova, 16 worker unit
+testova, buildovi i `npm audit` = 0 za sva tri workspace-a. Log koraka 39
+sadrži `Redis ACL channel check passed (3 canonical & grants, literal
+PSUBSCRIBE matching proven on real Redis 7, adapter preflight degrades instead
+of crashing, BullMQ retry policy enforced)` i pravi `socketio_redis_acl_denied`
+zapis za preuski ACL.
+
 **Ostaje vlasniku/deploymentu:** primijeniti kanonsko pravilo na centralnoj
 Redis platformi, `ACL LOAD`, **restartovati backend i document-worker**
 (postojeće konekcije ne ponavljaju `PSUBSCRIBE`), te potvrditi
