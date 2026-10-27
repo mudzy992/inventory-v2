@@ -455,6 +455,19 @@ containment na obje putanje i `path` bez curenja u select/frontend.
 i vraćanje `path: true` u select oba padaju (exit 1); nakon vraćanja gate
 prolazi. CI korak: `Verify upload read allow-list and path containment`.
 
+**CI dokaz / ispravka.** Prvi run `40553884541` je pao na koraku
+`Verify structured operational logs` (33): novi error messages su koristili
+`${String(...)}` u template literalima, što gate `check-structured-logs.ts`
+namjerno zabranjuje kao raw interpolaciju. Zamijenjeno je sa
+`JSON.stringify(...)`. Ispravka `11caadb` prolazi u run-u `40554511456`
+(`completed success` na sva tri joba): korak
+`Verify upload read allow-list and path containment` (42) je zelen, kao i
+strukturirani logovi (33), raniji gateovi (40, 41), lint (43), typecheck (44),
+758 backend unit testova (45), build (47) i `npm audit` (48). Lokalno su uz
+`pipefail` potvrđeni 14/14 novih specova, 14/14 FE guardova, 16/16 worker
+unit testova, frontend build, svi statički gateovi i `npm audit` = 0 za sva tri
+workspace-a.
+
 **Ograničenje:** containment ne dereferencira simboličke linkove — `UPLOAD_DIR`
 mora biti pouzdan direktorij. Ako se doda novi entity type, obavezno je
 slijediti 4-koračni proces u `docs/upload-read-policy.md`.
