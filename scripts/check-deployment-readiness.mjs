@@ -37,6 +37,7 @@ export const REQUIRED_REPO_KNOBS = [
   'GLOBAL_RATE_LIMIT_WINDOW_SEC',
   'GLOBAL_RATE_LIMIT_FAIL_CLOSED',
   'PUBLIC_EQUIPMENT_MAX_MOVEMENTS',
+  'TRANSFER_RAW_DOCUMENT_DISPOSITION',
 ];
 
 export const REQUIRED_DOCS = [
@@ -44,6 +45,7 @@ export const REQUIRED_DOCS = [
   'docs/http-hardening.md',
   'docs/public-qr-privacy.md',
   'docs/upload-read-policy.md',
+  'docs/transfer-document-security.md',
   'docs/deployment-readiness.md',
 ];
 
@@ -54,6 +56,7 @@ export const SAFE_COMPOSE_DEFAULTS = [
   'PUBLIC_EQUIPMENT_MAX_MOVEMENTS:-200',
   'SOCKETIO_REQUIRE_SHARED_ADAPTER:-false',
   'DATABASE_POOL_MAX:-10',
+  'TRANSFER_RAW_DOCUMENT_DISPOSITION:-attachment',
 ];
 
 export const CA_MOUNT_PREFIXES = ['/run/secrets/', '/etc/ssl/'];
@@ -360,6 +363,20 @@ export function evaluateDeployment(env, options = {}) {
       'Set GLOBAL_RATE_LIMIT_FAIL_CLOSED=true if protection should win.',
     );
   }
+
+  const rawDisposition = value(env, 'TRANSFER_RAW_DOCUMENT_DISPOSITION') || 'attachment';
+  const dispositionValid = rawDisposition === 'attachment' || rawDisposition === 'inline';
+  add(
+    result,
+    'transfer-raw-disposition',
+    !dispositionValid ? 'fail' : rawDisposition === 'inline' ? 'warn' : 'pass',
+    !dispositionValid
+      ? 'TRANSFER_RAW_DOCUMENT_DISPOSITION must be attachment or inline'
+      : rawDisposition === 'inline'
+        ? 'RAW HTML document renders inline (strict CSP + sandbox still enforced)'
+        : 'RAW HTML document is served as a download (attachment)',
+    'Prefer attachment; inline still has hash-based CSP, sandbox and escaping.',
+  );
 
   const qrCap = intInRange(value(env, 'PUBLIC_EQUIPMENT_MAX_MOVEMENTS') || '200', 1, 1000);
   add(

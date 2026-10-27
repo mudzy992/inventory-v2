@@ -21,11 +21,13 @@ stilovima; umjesto toga je napravljen eksplicitan, reverzibilan policy sloj.
 isključiti sa `SECURITY_HEADERS_ENABLED=false`, a HSTS sa
 `HSTS_MAX_AGE_SECONDS=0` (0–31 536 000; default 15 552 000 = 180 dana).
 
-**CSP se namjerno ne postavlja.** `buildTransferRawDocumentHtml()` vraća
-`text/html` sa inline stilovima; strogi CSP bi zahtijevao nonce/hash strategiju
-i promjenu tog dokumenta. To je preostala **odluka vlasnika**. Isto vrijedi za
-`Cross-Origin-Resource-Policy`: API se poziva sa druge subdomene, pa bi
-`same-origin` mogao blokirati legitimne `no-cors` resurse.
+**Globalni CSP se namjerno ne postavlja.** `buildTransferRawDocumentHtml()`
+vraća `text/html` sa inline stilovima; globalna politika bi bila krhka. Umjesto
+toga taj endpoint sada računa **vlastiti hash-based CSP + sandbox** iz stvarnog
+`<style>` bloka (vidi `docs/transfer-document-security.md`), pa je ranija
+odluka o CSP-ju zatvorena za tu površinu. `Cross-Origin-Resource-Policy` i
+eventualni globalni CSP ostaju odluka vlasnika: API se poziva sa druge
+subdomene, pa bi `same-origin` mogao blokirati legitimne `no-cors` resurse.
 
 HSTS se šalje samo kad `X-Forwarded-Proto: https` (prva vrijednost) ili kada je
 socket TLS — lokalni/plain-HTTP development nikad ne dobija browser pin koji se
@@ -75,8 +77,9 @@ efektivnim vrijednostima (bez tajni).
 
 ## Preostale odluke vlasnika
 
-- CSP strategija za generirani HTML dokument (nonce/hash ili prelazak na PDF
-  attachment) i eventualni `Cross-Origin-Resource-Policy`.
+- ~~CSP strategija za generirani HTML dokument~~ **(zatvoreno: hash-based CSP +
+  sandbox + attachment u `docs/transfer-document-security.md`)**; eventualni
+  globalni CSP i `Cross-Origin-Resource-Policy` i dalje ostaju otvoreni.
 - Hoće li se `GLOBAL_RATE_LIMIT_ENABLED` uključiti u produkciji i s kojim
   pragom (preporuka: početi sa 300/60 s i pratiti `rate_limit_metrics`).
 - `GLOBAL_RATE_LIMIT_FAIL_CLOSED=true` samo ako je dostupnost žrtvovana zarad

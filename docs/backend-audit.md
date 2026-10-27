@@ -91,6 +91,18 @@ Root modul je `backend/src/app.module.ts`; globalni prefix je konfigurabilan pre
 7. **Početni setup je javno dostupan ako `SETUP_TOKEN` nije postavljen.** To je namjerna bootstrap mogućnost, ali inicijalizacija zavisi od javnog poziva. Provjera `user.count()` u `SetupService` je van bootstrap transakcije; unutrašnja provjera je u transakciji, ali bez zaključavanja/serializacije praznog users skupa dvije paralelne inicijalizacije sa različitim username-ima mogu proći count provjere. Učiniti setup token obaveznim u produkciji i zaštititi inicijalizaciju DB-level/advisory lock-om ili izolacijom koja garantuje jedan pobjednički bootstrap. Upis company settings-a nakon bootstrap transakcije takođe treba spojiti ili imati oporavak.
 **Stored XSS provjera — P1 ako je isti browser origin.** `buildTransferRawDocumentHtml()` interpolira vrijednosti iz baze direktno u HTML tekst (`reason`, `notes`, imena, label-e i inventurni broj); transfer DTO dozvoljava slobodne stringove za `reason`/`notes`. Kontroler vraća rezultat kao `text/html`, bez vidljivog escaping-a ili attachment zaglavlja. Ako se ruta servira pod istim originom kao aplikacija, korisnik sa pravom kreiranja prenosnice može sačuvati HTML/JS, a skripta se izvršava u originu korisnika koji otvori dokument. Potvrditi origin/proxy u deployment-u; bez obzira na to, escape-ovati svaki tekstualni čvor (ili generisati bezbjedan PDF/attachment) i dodati regression test sa `<script>`, `</td><script>` i atributnim payload-ima.
 
+   **Remediation update — ZATVORENO (§0.15 plana):** `escapeHtmlText()` već
+   escape-uje sve dinamičke čvorove uz regression testove sa
+   `</td><script>…</script>&` i atributnim payload-ima. Sada je dodan drugi
+   sloj: `assertSafeTransferDocument()` (HTML5 doctype + tag allow-list +
+   zabrana `on*`/`javascript:`/sirovog `<` u `<style>`), hash-based CSP sa
+   `sandbox` izračunat iz stvarnog `<style>` bloka svakog odgovora,
+   `Content-Disposition: attachment` (default, reverzibilno na `inline`),
+   sanitizovano ime fajla, `nosniff`, `DENY`, `no-referrer` i `no-store`.
+   `check-transfer-document-security.ts` u CI-ju ima 5 mutacija. Vodič:
+   `docs/transfer-document-security.md`. **Ostaje vlasniku:** potvrda
+   origin/proxy topologije i odluka o `inline` režimu za print.
+
 ### P2 — zatvoriti u narednom ciklusu
 
 8. **DTO validacija ne pokriva sve write body-je.** `UpdateSettingBody` je TypeScript `interface`; inline tipovi `{ note?: string }` i `{ approved: boolean; note?: string }` imaju runtime tip `Object`. Nest `ValidationPipe`/class-validator nema metapodatke za njih pa ih `whitelist`/`forbidNonWhitelisted` ne štiti kao DTO klase. Napraviti DTO klase sa validatorima i limitima dužina, enum vrijednostima i transformacijom.
@@ -317,7 +329,7 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Dobro:** jaka domenska provjera warehouse/person/signer alignment; transfer broj se alocira u transakciji; promjena transfer + equipment na finalizaciji je transakcijska; document generation je odvojena i ima status/retry API; cross-service transfer ograničen.
 
-**Rizici:** servis 829 LOC plus document service 299 LOC. Finalize/markPrinted/cancel prvo učitavaju status pa zatim ažuriraju; konkurentna finalizacija može proći dvije provjere prije prvog commita. RAW HTML dokument direktno interpolira DB/DTO vrijednosti bez escaping-a (P1 provjera istog browser origin-a, iznad). Post-create notification/document generation je izvan transfer DB create tx, pa job/notification failure može ostaviti validan transfer bez pratećeg side effect-a (Document Engine oporavlja neke tokove). Dodati state version/conditional write i outbox/retry.
+**Rizici:** servis 829 LOC plus document service 299 LOC. Finalize/markPrinted/cancel prvo učitavaju status pa zatim ažuriraju; konkurentna finalizacija može proći dvije provjere prije prvog commita. ~~RAW HTML dokument direktno interpolira DB/DTO vrijednosti bez escaping-a~~ **(zatvoreno: escaping + tag allow-list + hash-CSP/sandbox + attachment, vidi §0.15)**. Post-create notification/document generation je izvan transfer DB create tx, pa job/notification failure može ostaviti validan transfer bez pratećeg side effect-a (Document Engine oporavlja neke tokove). Dodati state version/conditional write i outbox/retry.
 
 **Plan:** P1 concurrency/idempotency tests i conditional status update; P2 outbox dla notification/document enqueue; P3 razdvojiti policy, status transitions i report queries.
 

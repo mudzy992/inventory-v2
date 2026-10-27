@@ -36,9 +36,9 @@ const bootstrap = async (): Promise<void> => {
   app.set('trust proxy', 1);
 
   // HTTP hardening: safe security-header subset always available (reversible
-  // via env), plus an OPT-IN global rate limit. CSP is deliberately not set —
-  // the generated transfer document is text/html with inline styling, so a
-  // policy there remains an explicit owner decision.
+  // via env), plus an OPT-IN global rate limit. CSP is not set GLOBALLY — the
+  // generated RAW HTML transfer document computes its own hash-based CSP in
+  // transfers.controller.ts (see docs/transfer-document-security.md).
   const expressApp = app.getHttpAdapter().getInstance() as {
     disable: (setting: string) => void;
   };

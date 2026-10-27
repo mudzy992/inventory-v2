@@ -76,6 +76,7 @@ services:
       - RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC=${RATE_LIMIT_PUBLIC_EQUIPMENT_WINDOW_SEC:-60}
       - RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED=${RATE_LIMIT_PUBLIC_EQUIPMENT_FAIL_CLOSED:-false}
       - PUBLIC_EQUIPMENT_MAX_MOVEMENTS=${PUBLIC_EQUIPMENT_MAX_MOVEMENTS:-200}
+      - TRANSFER_RAW_DOCUMENT_DISPOSITION=${TRANSFER_RAW_DOCUMENT_DISPOSITION:-attachment}
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads
       - /data/coolify/ssl/coolify-ca.crt:/etc/ssl/certs/coolify-ca.crt:ro

@@ -2,15 +2,16 @@ import {
   Body,
   Controller,
   Get,
-  Header,
   Param,
   Patch,
   Post,
   Query,
+  Res,
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { createReadStream } from 'node:fs';
+import type { Response } from 'express';
 import { UserRole } from '../../../generated/prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -24,6 +25,10 @@ import { ManualPreuzeoLabelQueryDto } from './dto/manual-preuzeo-label-query.dto
 import { SignTransferDto } from './dto/sign-transfer.dto';
 import { TransferDocumentGenerationService } from './transfer-document-generation.service';
 import { TransfersService } from './transfers.service';
+import {
+  buildTransferDocumentHeaders,
+  resolveTransferDocumentDisposition,
+} from './utils/transfer-document-security.util';
 
 @Controller('transfers')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -74,11 +79,26 @@ export class TransfersController {
     return this.transfersService.create(user, body);
   }
 
+  /**
+   * Generated HTML from business data. Headers are computed from the ACTUAL
+   * document (hash-based CSP + tag allow-list assertion) and the response is
+   * an attachment by default so it is never rendered in the API origin.
+   */
   @Get(':id/raw-document')
   @Roles(UserRole.admin, UserRole.evidenticar, UserRole.moderator)
-  @Header('Content-Type', 'text/html; charset=utf-8')
-  getRawDocument(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    return this.transfersService.getRawDocumentHtml(user, id);
+  async getRawDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<string> {
+    const html = await this.transfersService.getRawDocumentHtml(user, id);
+    const disposition = resolveTransferDocumentDisposition(
+      process.env.TRANSFER_RAW_DOCUMENT_DISPOSITION,
+    );
+    for (const [name, value] of Object.entries(buildTransferDocumentHeaders(html, disposition))) {
+      res.setHeader(name, value);
+    }
+    return html;
   }
 
   @Get(':id/generated-document')

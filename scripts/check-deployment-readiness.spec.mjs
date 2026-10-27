@@ -39,6 +39,7 @@ const GOOD = {
   GLOBAL_RATE_LIMIT_WINDOW_SEC: '60',
   GLOBAL_RATE_LIMIT_FAIL_CLOSED: 'false',
   PUBLIC_EQUIPMENT_MAX_MOVEMENTS: '200',
+  TRANSFER_RAW_DOCUMENT_DISPOSITION: 'attachment',
 };
 
 const statusOf = (result, id) => result.checks.find((check) => check.id === id)?.status;
@@ -191,6 +192,18 @@ test('pool budget, headers, HSTS, rate-limit and QR cap bounds are enforced', ()
   const enabled = evaluateDeployment(withOverrides({ GLOBAL_RATE_LIMIT_ENABLED: 'true' }));
   assert.equal(statusOf(enabled, 'global-rate-limit-fail-open'), 'warn');
   assert.equal(statusOf(evaluateDeployment(withOverrides({ PUBLIC_EQUIPMENT_MAX_MOVEMENTS: '5000' })), 'public-qr-cap'), 'fail');
+});
+
+test('raw HTML disposition is validated and inline mode warns', () => {
+  assert.equal(statusOf(evaluateDeployment(GOOD), 'transfer-raw-disposition'), 'pass');
+  assert.equal(
+    statusOf(evaluateDeployment(withOverrides({ TRANSFER_RAW_DOCUMENT_DISPOSITION: 'inline' })), 'transfer-raw-disposition'),
+    'warn',
+  );
+  assert.equal(
+    statusOf(evaluateDeployment(withOverrides({ TRANSFER_RAW_DOCUMENT_DISPOSITION: 'download' })), 'transfer-raw-disposition'),
+    'fail',
+  );
 });
 
 test('formatReport never prints secret values but includes remediation for failures', () => {

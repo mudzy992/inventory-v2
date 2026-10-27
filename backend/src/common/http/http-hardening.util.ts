@@ -12,11 +12,13 @@ import { writeStructuredLog } from '../logging/structured-log.util';
  * Dependency-free HTTP hardening layer (the audit's "Helmet / global rate
  * limit" decision, implemented as an explicit, reversible policy).
  *
- * Security headers are ON by default but use only a safe subset: no
- * Content-Security-Policy is emitted because the app serves a generated
- * `text/html` transfer document with inline styling — CSP remains an owner
- * decision. HSTS is emitted only for requests that actually arrived over
- * HTTPS, so local/plain-HTTP dev never gets an unremovable browser pin.
+ * Security headers are ON by default but use only a safe subset: no GLOBAL
+ * Content-Security-Policy is emitted. The generated `text/html` transfer
+ * document computes its own hash-based CSP per response in
+ * transfer-document-security.util.ts, so a global policy would be both
+ * redundant and fragile. HSTS is emitted only for requests that actually
+ * arrived over HTTPS, so local/plain-HTTP dev never gets an unremovable
+ * browser pin.
  *
  * The global rate limit is OFF by default (owner decision) and, when enabled,
  * uses the same atomic Lua counter and process metrics as the per-route

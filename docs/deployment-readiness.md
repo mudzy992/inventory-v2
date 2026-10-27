@@ -47,7 +47,8 @@ može izvršiti umjesto čovjeka) moraju biti potvrđene prije nego se prebace u
 - Kanonski `deploy/redis/users.acl.example` ima `&<PREFIX>:*`, oba **egzaktna**
   `&<PREFIX>:#/#*` / `&<PREFIX>:#/notifications#*` granta i `+info`.
 - Postoje svi operator guides (`redis-acl`, `http-hardening`,
-  `public-qr-privacy`, `upload-read-policy`, ovaj fajl).
+  `public-qr-privacy`, `upload-read-policy`, `transfer-document-security`,
+  ovaj fajl).
 - `REDIS_KEY_PREFIX` default se poklapa s ACL namespace-om.
 
 ## Šta se provjerava (`--env` moda)
@@ -74,6 +75,7 @@ može izvršiti umjesto čovjeka) moraju biti potvrđene prije nego se prebace u
 | `global-rate-limit` | granice 1–100 000 / 1–3600 s (uključeno je odluka vlasnika) |
 | `global-rate-limit-fail-open` | upozorenje kad limit koristi fail-open |
 | `public-qr-cap` | `PUBLIC_EQUIPMENT_MAX_MOVEMENTS` 1–1000 |
+| `transfer-raw-disposition` | `TRANSFER_RAW_DOCUMENT_DISPOSITION` — `attachment` (pass) / `inline` (warn) / neispravno (fail) |
 
 ## Kako riješiti MANUAL upozorenja
 

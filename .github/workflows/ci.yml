@@ -238,6 +238,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:http-hardening
 
+      - name: Verify generated HTML document security
+        working-directory: backend
+        run: npm run test:integration:transfer-document-security
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint
