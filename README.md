@@ -110,9 +110,11 @@ jedan red JSON-a sa stabilnim `event` imenom, `level` i `correlationId`; CI prov
 `SOCKETIO_REQUIRE_SHARED_ADAPTER=true`: tada se pri nedostupnom Redisu startup
 prekida, a readiness vraća 503 umjesto tihog in-memory broadcasta. Redis ACL
 za tog korisnika mora imati **obje** ose — `~inventory-v2:*` za ključeve i
-`&inventory-v2:*` za Pub/Sub kanale (Redis 7 starta sa `resetchannels`). Bez
-kanal grant-a adapter javlja `socketio_redis_acl_denied` i degradira umjesto da
-sruši proces; vodič i gotovo pravilo: [docs/redis-acl.md](docs/redis-acl.md) i
+`&` unose za Pub/Sub kanale (Redis 7 starta sa `resetchannels`). Pošto Redis
+poredi `PSUBSCRIBE` pattern doslovno, pored `&inventory-v2:*` obavezni su i
+`&inventory-v2:#/#*` i `&inventory-v2:#/notifications#*`. Bez tačnih grantova
+adapter javlja `socketio_redis_acl_denied` i degradira umjesto da sruši proces;
+vodič i gotovo pravilo: [docs/redis-acl.md](docs/redis-acl.md) i
 [deploy/redis/users.acl.example](deploy/redis/users.acl.example).
 
 ## Plan i matrice

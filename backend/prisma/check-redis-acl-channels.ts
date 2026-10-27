@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import type { INestApplicationContext } from '@nestjs/common';
 import Redis from 'ioredis';
 import {
+  SOCKETIO_NAMESPACES,
   assertAclChannelCoverage,
   buildSocketIoChannelContract,
   parseAclChannelPatterns,
@@ -27,6 +28,7 @@ const PREFIX = 'inventory-v2';
 const KEY_PREFIX = `${PREFIX}:`;
 const GOOD_USER = 'acl_probe_socketio_ok';
 const NARROW_USER = 'acl_probe_socketio_narrow';
+const GLOB_USER = 'acl_probe_socketio_glob';
 const ACL_TEMPLATE = join('..', 'deploy', 'redis', 'users.acl.example');
 const ADAPTER_ENV = [
   'REDIS_HOST',
@@ -80,10 +82,26 @@ const staticChecks = (root: string): void => {
 
   // 1. The canonical rule really covers the pattern from the crash report.
   assert.equal(contract.psubscribePattern, 'inventory-v2:#/#*');
-  assert.deepEqual(channelPatterns, ['inventory-v2:*']);
+  assert.deepEqual(
+    channelPatterns,
+    contract.requiredAclPatterns.map((pattern) => pattern.slice(1)),
+    'the canonical ACL must contain the glob AND an exact & grant per PSUBSCRIBE pattern',
+  );
   assert.deepEqual(keyPatterns, ['inventory-v2:*']);
   assertAclChannelCoverage(contract, channelPatterns);
   assert.ok(ruleTokens.includes('+@pubsub') || ruleTokens.includes('+@all'));
+
+  // The declared Socket.IO namespaces must match the ACL contract exactly:
+  // Redis 7 compares PSUBSCRIBE patterns literally, so a new namespace needs
+  // a new & grant (src/acl.c: ACLCheckChannelAgainstList, is_pattern branch).
+  const gateway = readFileSync(
+    resolve(root, 'src', 'modules', 'notifications', 'notifications.gateway.ts'),
+    'utf8',
+  );
+  const declared = [...gateway.matchAll(/namespace:\s*'([^']+)'/gu)].map((match) =>
+    match[1].startsWith('/') ? match[1] : `/${match[1]}`,
+  );
+  assert.deepEqual(['/', ...declared], [...SOCKETIO_NAMESPACES]);
 
   // 2. The documented prefix must match the application's env examples.
   const envExample = readFileSync(resolve(root, '..', '.env.example'), 'utf8');
@@ -149,6 +167,7 @@ const liveChecks = async (root: string): Promise<void> => {
   const contract = buildSocketIoChannelContract(KEY_PREFIX);
   const goodPassword = password();
   const narrowPassword = password();
+  const globPassword = password();
   const open: Redis[] = [];
   const adapters: RedisIoAdapter[] = [];
   const previous = new Map(ADAPTER_ENV.map((name) => [name, process.env[name]]));
@@ -198,7 +217,22 @@ const liveChecks = async (root: string): Promise<void> => {
       'resetchannels',
       ...ruleTokens,
     );
-    // 2. Deliberately under-scoped ACL: key access, but only BullMQ-ish channels.
+    // 2. The historically documented glob-only ACL — must still fail on a
+    //    real Redis because PSUBSCRIBE patterns are compared literally.
+    await admin.call(
+      'ACL',
+      'SETUSER',
+      GLOB_USER,
+      'on',
+      `>${globPassword}`,
+      'resetkeys',
+      'resetchannels',
+      `~${KEY_PREFIX}*`,
+      `&${KEY_PREFIX}*`,
+      '+@all',
+      '+info',
+    );
+    // 3. Deliberately under-scoped ACL: key access, but only BullMQ-ish channels.
     await admin.call(
       'ACL',
       'SETUSER',
@@ -214,10 +248,14 @@ const liveChecks = async (root: string): Promise<void> => {
     const aclInfo = String(await admin.call('ACL', 'GETUSER', GOOD_USER));
     assert.match(aclInfo, /inventory-v2:\*/u, 'canonical ACL must actually contain the channel grant');
 
-    // 3. The documented user can perform every Pub/Sub operation the adapter needs.
+    // 4. The documented user can perform every Pub/Sub operation the adapter needs.
     const goodSub = makeClient(GOOD_USER, goodPassword);
     const goodCmd = makeClient(GOOD_USER, goodPassword);
-    await withTimeout(goodSub.psubscribe(contract.psubscribePattern), 6000, 'good PSUBSCRIBE');
+    await withTimeout(
+      goodSub.psubscribe(...contract.psubscribePatterns),
+      6000,
+      'good PSUBSCRIBE',
+    );
     await withTimeout(
       goodSub.subscribe(...contract.subscribeChannels),
       6000,
@@ -253,10 +291,32 @@ const liveChecks = async (root: string): Promise<void> => {
     );
     await goodCmd.del(`${KEY_PREFIX}acl_probe`);
 
-    // 4. The narrow ACL reproduces the exact production NOPERM error.
+    // 5. A glob-only ACL reproduces the exact production NOPERM error even
+    //    though PUBLISH/SUBSCRIBE are allowed by that glob.
+    const globSub = makeClient(GLOB_USER, globPassword);
+    await expectsNoperM(
+      withTimeout(
+        globSub.psubscribe(...contract.psubscribePatterns),
+        6000,
+        'glob-only PSUBSCRIBE',
+      ),
+      'glob-only ACL psubscribe',
+    );
+    const globCmd = makeClient(GLOB_USER, globPassword);
+    await withTimeout(
+      globCmd.publish(`${KEY_PREFIX}#/#glob-probe`, 'x'),
+      6000,
+      'glob-only PUBLISH',
+    );
+
+    // 6. The narrow ACL is denied on both pub/sub directions.
     const narrowSub = makeClient(NARROW_USER, narrowPassword);
     await expectsNoperM(
-      withTimeout(narrowSub.psubscribe(contract.psubscribePattern), 6000, 'narrow PSUBSCRIBE'),
+      withTimeout(
+        narrowSub.psubscribe(...contract.psubscribePatterns),
+        6000,
+        'narrow PSUBSCRIBE',
+      ),
       'narrow ACL psubscribe',
     );
     const narrowCmd = makeClient(NARROW_USER, narrowPassword);
@@ -269,7 +329,7 @@ const liveChecks = async (root: string): Promise<void> => {
       'narrow ACL publish',
     );
 
-    // 5. Runtime preflight: canonical user gets shared_redis; narrow user
+    // 7. Runtime preflight: canonical user gets shared_redis; narrow user
     //    degrades instead of crashing the process with an unhandled ReplyError.
     setAdapterEnvironment(GOOD_USER, goodPassword, false);
     const healthy = new RedisIoAdapter(undefined as unknown as INestApplicationContext);
@@ -292,8 +352,8 @@ const liveChecks = async (root: string): Promise<void> => {
     );
 
     console.log(
-      `Redis ACL channel check passed (${contract.psubscribePattern} covered by ` +
-        `${contract.recommendedAclChannelPattern}, real ACL grant/deny proven, ` +
+      `Redis ACL channel check passed (${contract.requiredAclPatterns.length} canonical & grants, ` +
+        `literal PSUBSCRIBE matching proven on real Redis 7, ` +
         `adapter preflight degrades instead of crashing, BullMQ retry policy enforced).`,
     );
   } catch (error) {
@@ -311,6 +371,7 @@ const liveChecks = async (root: string): Promise<void> => {
     if (admin?.status === 'ready') {
       await admin.call('ACL', 'DELUSER', GOOD_USER).catch(() => undefined);
       await admin.call('ACL', 'DELUSER', NARROW_USER).catch(() => undefined);
+      await admin.call('ACL', 'DELUSER', GLOB_USER).catch(() => undefined);
     }
     for (const client of open) client.disconnect();
     for (const name of ADAPTER_ENV) {

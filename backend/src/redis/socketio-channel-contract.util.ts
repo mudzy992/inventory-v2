@@ -3,34 +3,50 @@
  * `@socket.io/redis-adapter` when it is created with
  * `{ key: config.keyPrefix }` (see redis-io.adapter.ts).
  *
- * The adapter's constructor (dist/index.js) derives:
- *   channel                 = `${key}#${nsp.name}#`            -> root nsp: `<prefix>#/#`
+ * The adapter's constructor (dist/index.js) derives, per Socket.IO namespace:
+ *   channel                 = `${key}#${nsp.name}#`
  *   requestChannel          = `${key}-request#${nsp.name}#`
  *   responseChannel         = `${key}-response#${nsp.name}#`
  *   specificResponseChannel = `${responseChannel}${uid}#`
- * and then calls `psubscribe(channel + "*")`, `subscribe([...])` and
- * `publish(channel + ...)`. ioredis `keyPrefix` does NOT apply to any of
- * those commands, which is why the adapter `key` option is mandatory.
+ * and calls `psubscribe(channel + "*")`, `subscribe([...])`, `publish(...)`.
+ * ioredis `keyPrefix` does NOT apply to any of those commands, which is why
+ * the adapter `key` option is mandatory.
  *
- * Redis 7 ACLs default to `resetchannels`: a user with only `~<prefix>:*`
- * key grants can read/write its keys but CANNOT (P)SUBSCRIBE or PUBLISH.
- * Every channel above must be matched by an `&<prefix>:*` channel pattern,
- * otherwise Redis replies `NOPERM No permissions to access a channel` on
- * `psubscribe <prefix>:#/#*` — an unhandled rejection that kills the process.
+ * TWO independent Redis ACL axes matter here: `~<prefix>:*` grants keys and
+ * `&<pattern>` grants Pub/Sub channels. Redis 7 creates users with
+ * `resetchannels`, so a user with only key grants gets
+ * `NOPERM No permissions to access a channel`.
+ *
+ * CRITICAL Redis 7 detail (src/acl.c, ACLCheckChannelAgainstList):
+ *   "the pattern provided in PSUBSCRIBE can only be matched as a literal
+ *    against an ACL pattern (using plain string compare)"
+ * i.e. `is_pattern && !strcmp(pattern, channel)`. PUBLISH/SUBSCRIBE use glob
+ * matching, but PSUBSCRIBE needs an EXACT `&` entry for every pattern the
+ * client subscribes to. `&inventory-v2:*` alone is therefore NOT enough for
+ * `PSUBSCRIBE inventory-v2:#/#*` — the exact pattern must be granted too.
+ * Only `+allchannels` (or `&*`) bypasses the literal comparison.
  */
+
+/** Socket.IO namespaces used by this application (root one is always present). */
+export const SOCKETIO_NAMESPACES = ['/', '/notifications'] as const;
 
 export interface SocketIoChannelContract {
   /** Normalized, trailing-colon form, e.g. `inventory-v2:`. */
   keyPrefix: string;
-  /** The exact PSUBSCRIBE pattern emitted for the root namespace. */
+  namespaces: string[];
+  /** Root-namespace PSUBSCRIBE pattern — the one seen in the NOPERM incident. */
   psubscribePattern: string;
-  /** Representative SUBSCRIBE channels (the last one has a random uid in prod). */
+  /** Every PSUBSCRIBE pattern the adapter installs (one per namespace). */
+  psubscribePatterns: string[];
+  /** Representative SUBSCRIBE channels (specific-response uid is dynamic). */
   subscribeChannels: string[];
-  /** A channel that is NOT matched by psubscribePattern — safe for a PUBLISH probe. */
+  /** A channel NOT matched by any psubscribe pattern — safe for a PUBLISH probe. */
   publishProbeChannel: string;
-  /** Everything an ACL must allow. */
+  /** Everything the ACL must allow. */
   requiredChannels: string[];
-  /** Copy-paste channel grant for acl/users.acl. */
+  /** Exact `&` grants for acl/users.acl (glob for channels + literal patterns). */
+  requiredAclPatterns: string[];
+  /** Human-readable, copy-pasteable grant list. */
   recommendedAclChannelPattern: string;
 }
 
@@ -40,20 +56,32 @@ export const buildSocketIoChannelContract = (rawKeyPrefix: string): SocketIoChan
     throw new Error('REDIS_KEY_PREFIX must not be empty');
   }
   const keyPrefix = trimmed.endsWith(':') ? trimmed : `${trimmed}:`;
-  const psubscribePattern = `${keyPrefix}#/#*`;
-  const subscribeChannels = [
-    `${keyPrefix}-request#/#`,
-    `${keyPrefix}-response#/#`,
-    `${keyPrefix}-response#/#acl-probe#`,
-  ];
+  const namespaces = [...SOCKETIO_NAMESPACES];
+  const psubscribePatterns = namespaces.map((nsp) => `${keyPrefix}#${nsp}#*`);
+  const subscribeChannels = namespaces.flatMap((nsp) => [
+    `${keyPrefix}-request#${nsp}#`,
+    `${keyPrefix}-response#${nsp}#`,
+    `${keyPrefix}-response#${nsp}#acl-probe#`,
+  ]);
   const publishProbeChannel = `${keyPrefix}__acl_probe__`;
+  const requiredAclPatterns = [
+    `&${keyPrefix}*`,
+    ...psubscribePatterns.map((pattern) => `&${pattern}`),
+  ];
   return {
     keyPrefix,
-    psubscribePattern,
+    namespaces,
+    psubscribePattern: psubscribePatterns[0],
+    psubscribePatterns,
     subscribeChannels,
     publishProbeChannel,
-    requiredChannels: [psubscribePattern, ...subscribeChannels, publishProbeChannel],
-    recommendedAclChannelPattern: `&${keyPrefix}*`,
+    requiredChannels: [
+      ...psubscribePatterns,
+      ...subscribeChannels,
+      publishProbeChannel,
+    ],
+    requiredAclPatterns,
+    recommendedAclChannelPattern: requiredAclPatterns.join(' '),
   };
 };
 
@@ -91,7 +119,7 @@ export const redisGlobToRegExp = (glob: string): RegExp => {
 const aclRuleTokens = (aclText: string, prefix: string): string[] => {
   const logical = aclText
     .split(/\r?\n/)
-    .map((line) => line.split('#')[0])
+    .map((line) => (/^\s*#/u.test(line) ? '' : line))
     .map((line) => line.replace(/\\\s*$/u, ''))
     .join(' ')
     .replaceAll('<PREFIX>', prefix);
@@ -119,7 +147,10 @@ export const parseAclKeyPatterns = (aclText: string, prefix = 'inventory-v2'): s
 export interface AclCoverage {
   covered: boolean;
   missing: string[];
+  /** Literal PSUBSCRIBE patterns that lack an exact `&` grant. */
+  missingPatterns: string[];
   patterns: string[];
+  allChannels: boolean;
 }
 
 export const checkAclChannelCoverage = (
@@ -130,11 +161,27 @@ export const checkAclChannelCoverage = (
     const stripped = pattern.startsWith('&') ? pattern.slice(1) : pattern;
     return stripped ? [stripped] : [];
   });
+  const allChannels = patterns.includes('*');
+  // Redis compares PSUBSCRIBE patterns literally (strcmp), not with a glob.
+  const missingPatterns = allChannels
+    ? []
+    : contract.psubscribePatterns.filter((required) => !patterns.includes(required));
   const regexes = patterns.map(redisGlobToRegExp);
-  const missing = contract.requiredChannels.filter(
-    (channel) => !regexes.some((regex) => regex.test(channel)),
-  );
-  return { covered: missing.length === 0, missing, patterns };
+  const plainChannels = [...contract.subscribeChannels, contract.publishProbeChannel];
+  const missingChannels = allChannels
+    ? []
+    : plainChannels.filter((channel) => !regexes.some((regex) => regex.test(channel)));
+  const missing = [
+    ...missingPatterns.map((pattern) => `${pattern} (exact & grant required)`),
+    ...missingChannels,
+  ];
+  return {
+    covered: missing.length === 0,
+    missing,
+    missingPatterns,
+    patterns,
+    allChannels,
+  };
 };
 
 export const assertAclChannelCoverage = (
@@ -145,8 +192,8 @@ export const assertAclChannelCoverage = (
   if (covered) return;
   throw new Error(
     `Redis ACL channel patterns [${aclChannelPatterns.join(', ') || 'none'}] do not allow ` +
-      `Socket.IO Pub/Sub channels ${missing.join(', ')}. ` +
-      `Add ${contract.recommendedAclChannelPattern} (or +allchannels) to the Redis user and ` +
-      `reload the ACL; Redis 7 defaults to resetchannels.`,
+      `Socket.IO Pub/Sub channels: ${missing.join(', ')}. ` +
+      `Redis 7 matches PSUBSCRIBE patterns literally, so grant ` +
+      `${contract.recommendedAclChannelPattern} (or +allchannels) and reload the ACL.`,
   );
 };

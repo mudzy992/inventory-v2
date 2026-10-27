@@ -98,7 +98,9 @@ export class RedisIoAdapter extends IoAdapter {
     try {
       await withProbeTimeout(
         (async () => {
-          await probe.psubscribe(contract.psubscribePattern);
+          // Redis 7 compares PSUBSCRIBE patterns literally against `&` ACL
+          // entries, so every namespace pattern needs its own exact grant.
+          await probe.psubscribe(...contract.psubscribePatterns);
           await probe.subscribe(...contract.subscribeChannels);
           // This channel is deliberately outside the adapter's #/#* pattern,
           // so the probe cannot deliver a bogus message to other replicas.

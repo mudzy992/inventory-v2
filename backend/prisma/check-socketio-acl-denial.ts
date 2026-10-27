@@ -84,10 +84,12 @@ const main = async (): Promise<void> => {
     const healthy = createAdapter();
     await withTimeout(healthy.adapter.connectToRedis(), 6000, 'granted startup');
     assert.equal(healthy.adapter.getMode(), 'shared_redis');
-    assert.ok(
-      granted.state.psubscribe.includes(contract.psubscribePattern),
-      'the preflight must exercise the exact production psubscribe pattern',
-    );
+    for (const pattern of contract.psubscribePatterns) {
+      assert.ok(
+        granted.state.psubscribe.includes(pattern),
+        `the preflight must exercise the exact production psubscribe pattern ${pattern}`,
+      );
+    }
     assert.ok(
       granted.state.publish.includes(contract.publishProbeChannel),
       'the preflight must exercise PUBLISH permission',
@@ -99,7 +101,7 @@ const main = async (): Promise<void> => {
 
     // 2. Denied: the same pattern is rejected with the production NOPERM reply.
     const denied = await startRespPubSubServer({
-      denyChannels: [contract.psubscribePattern],
+      denyChannels: [...contract.psubscribePatterns],
     });
     servers.push(denied);
     setEnvironment(denied.port, false);

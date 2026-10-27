@@ -116,15 +116,19 @@ namespace preko `REDIS_KEY_PREFIX`. Da bi ovo stvarno radilo u Coolify-ju:
    # <PREFIX> = REDIS_KEY_PREFIX bez dvotačke
    user inventory-v2 on ><JAKA_LOZINKA> \
      ~inventory-v2:* &inventory-v2:* \
-     +@all -@admin -@dangerous
+     &inventory-v2:#/#* &inventory-v2:#/notifications#* \
+     +@all -@admin -@dangerous +info
    ```
    **OBJE ose su obavezne i nezavisne:** `~inventory-v2:*` su ključevi,
-   `&inventory-v2:*` su Pub/Sub kanali. Redis 7 starta sa `resetchannels`, pa
-   korisnik koji ima samo `~inventory-v2:*` dobija
-   `NOPERM No permissions to access a channel` na
-   `PSUBSCRIBE inventory-v2:#/#*` (Socket.IO shared adapter). Ranija uža
-   allowlista kategorija ovdje nije dovoljna: ioredis šalje `INFO`/
-   `CLIENT SETINFO`, a BullMQ koristi `EVAL`/`EVALSHA` Lua skripte.
+   `&…` su Pub/Sub kanali. Redis 7 starta sa `resetchannels`, ali — što je
+   ključno — za `PSUBSCRIBE` poredi pattern **doslovno** (`strcmp`), ne kao
+   glob. Zato `&inventory-v2:*` sam po sebi NIJE dovoljan: potrebna su dva
+   dodatna, egzaktna `&` unosa za `inventory-v2:#/#*` (root namespace) i
+   `inventory-v2:#/notifications#*`. Bez njih Redis vraća
+   `NOPERM No permissions to access a channel` na `PSUBSCRIBE inventory-v2:#/#*`.
+   Svaki novi Socket.IO namespace traži svoj `&` unos. Ranija uža allowlista
+   kategorija ovdje nije dovoljna: ioredis šalje `INFO`/`CLIENT SETINFO`, a
+   BullMQ koristi `EVAL`/`EVALSHA` Lua skripte (`+info` gasi ioredis warning).
    zatim `redis-cli -a $REDIS_ADMIN_PASSWORD ACL LOAD` i
    `ACL GETUSER inventory-v2` za potvrdu `channels` reda.
 2. U Coolify env varijablama za ovaj backend servis postaviti `REDIS_PASSWORD` na
