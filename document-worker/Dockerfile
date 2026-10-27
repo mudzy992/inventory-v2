@@ -11,10 +11,12 @@
 
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
-# Nema package-lock.json u repo-u dok se prvi put ne pokrene `npm install` —
-# fallback na `npm install` ako `npm ci` ne uspije zbog nedostajućeg lockfile-a.
-RUN npm ci 2>/dev/null || npm install
+# Lockfile je obavezan i mora biti commitovan: `npm ci` je jedini dozvoljeni
+# install u image-u. Raniji `npm ci 2>/dev/null || npm install` je maskirao
+# neuspjeh (oštećen lockfile, integrity mismatch, nedostupan registry) i tiho
+# gradjio image sa nepovezanim, unpinned verzijama paketa.
+COPY package.json package-lock.json ./
+RUN npm ci
 
 
 FROM deps AS build

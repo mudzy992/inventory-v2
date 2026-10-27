@@ -165,3 +165,12 @@ REDIS_PASSWORD=... npm run dev   # tsx watch, ostale env varijable imaju razumne
 Zahtijeva lokalno instaliran `soffice` (LibreOffice) na PATH-u, ili
 pokretanje kroz Docker (`docker compose -f ../docker-compose.prod.yml build
 document-worker`).
+
+**Lockfile je obavezan.** Produkcijski `Dockerfile` kopira tačan
+`package.json` + `package-lock.json` i pokreće isključivo `npm ci` — nema
+`npm install` fallbacka niti potiskivanja grešaka. Ako mijenjaš zavisnosti,
+pokreni `npm install` lokalno i commituj oba fajla; u suprotnom CI korak
+`Verify container dependency and lockfile policy`
+(`node scripts/check-container-dependency-policy.mjs` iz korijena repo-a)
+odbija build. Lokalni `npm install` iznad je samo za development — image
+koristi isključivo `npm ci`.

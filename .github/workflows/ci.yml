@@ -57,6 +57,11 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
+      - name: Verify container dependency and lockfile policy
+        run: |
+          node scripts/check-container-dependency-policy.mjs
+          node --test scripts/check-container-dependency-policy.spec.mjs
+
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci
