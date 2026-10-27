@@ -138,8 +138,9 @@ const main = async (): Promise<void> => {
       assert.equal(row.lastError, DOCUMENT_JOB_STALE_RECOVERY_ERROR);
       assert.ok(row.endedAt, 'terminal job must have endedAt');
       assert.equal(await outboxCount(id), 1, 'exactly one durable terminal notification');
+      // BullMQ returns null (older) or undefined (current) for a removed job.
       const bullJob = await queue.getJob(id);
-      assert.equal(bullJob, null, 'stuck BullMQ job must be removed so a zombie worker cannot resurrect it');
+      assert.ok(!bullJob, 'stuck BullMQ job must be removed so a zombie worker cannot resurrect it');
     }
 
     const freshRow = await prisma.documentJob.findUniqueOrThrow({ where: { id: freshRunning } });
