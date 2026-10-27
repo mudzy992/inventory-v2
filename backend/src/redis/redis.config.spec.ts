@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { buildBaseRedisOptions, readRedisConfig } from './redis.config';
+import { buildBaseRedisOptions, buildRedisTlsOptions, readRedisConfig } from './redis.config';
 
 const REDIS_ENV_NAMES = [
   'REDIS_HOST',
@@ -115,8 +115,27 @@ test('buildBaseRedisOptions keeps TLS peer verification and loads a configured C
     });
     assert.ok(options.tls);
     assert.deepEqual(options.tls.ca, readFileSync(caPath));
-    assert.notEqual(options.tls.rejectUnauthorized, false);
+    assert.equal(options.tls.rejectUnauthorized, true);
+    assert.equal(options.tls.minVersion, 'TLSv1.2');
+    assert.equal(options.tls.servername, 'redis-core');
+    assert.equal(options.tls.checkServerIdentity, undefined);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('buildRedisTlsOptions never emits a verification bypass and honours IP SAN hosts', () => {
+  const withoutTls = buildRedisTlsOptions({ tls: false, host: 'redis.internal' });
+  assert.equal(withoutTls, undefined);
+
+  const dnsHost = buildRedisTlsOptions({ tls: true, host: 'redis.internal' });
+  assert.deepEqual(dnsHost, {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2',
+    servername: 'redis.internal',
+  });
+
+  const ipHost = buildRedisTlsOptions({ tls: true, host: '10.20.30.40' });
+  assert.deepEqual(ipHost, { rejectUnauthorized: true, minVersion: 'TLSv1.2' });
+  assert.equal('servername' in (ipHost ?? {}), false);
 });

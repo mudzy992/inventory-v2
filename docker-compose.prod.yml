@@ -57,6 +57,9 @@ services:
     # Upload root na hostu; unutra aplikacija gradi prenosnice/, templates/, ...
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads
+      # Za vanjski Redis sa privatnim CA: postaviti REDIS_TLS=true i
+      # REDIS_CA_CERT_PATH=/run/secrets/redis-ca.crt, pa odkomentirati mount.
+      # - /etc/ssl/private/redis-ca.crt:/run/secrets/redis-ca.crt:ro
     networks:
       - web
       - internal
@@ -114,6 +117,8 @@ services:
       DOCUMENT_WORKER_HEALTH_PORT: "8080"
     volumes:
       - /mnt/shared-app-files/inventory-v2:/app/uploads
+      # Isti privatni Redis CA kao backend (kada REDIS_TLS=true); read-only.
+      # - /etc/ssl/private/redis-ca.crt:/run/secrets/redis-ca.crt:ro
     networks:
       - internal
     restart: unless-stopped

@@ -76,7 +76,11 @@ Ako Redis koristi interni/self-signed CA, postaviti `REDIS_TLS=true` i
 `REDIS_CA_CERT_PATH=/run/secrets/redis-ca.crt`, te montirati CA fajl kao
 read-only secret na tu putanju u **oba** servisa (backend i worker). Bez
 `REDIS_CA_CERT_PATH`, TLS koristi Node.js sistemski trust store. Verifikacija
-certifikata i hostname-a ostaje uključena; nemojte je isključivati globalno.
+certifikata i hostname-a ostaje uključena (`rejectUnauthorized: true`,
+`minVersion: TLSv1.2`, SNI = `REDIS_HOST` za DNS host); nemojte je isključivati
+globalno. SAN certifikata mora sadržavati `REDIS_HOST`. Automatizirani dokaz
+stvarnog CA chain-a i hostname verifikacije je CI korak
+`Verify Redis TLS certificate and hostname verification`.
 
 ## Sigurnost / produkcijska otpornost
 

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { bullmqPrefix, buildRedisOptions } from './redis-connection';
+import { bullmqPrefix, buildRedisOptions, buildRedisTlsOptions } from './redis-connection';
 import type { WorkerConfig } from './config';
 
 const baseConfig: WorkerConfig['redis'] = {
@@ -24,7 +24,10 @@ test('buildRedisOptions preserves peer verification and loads a private CA', () 
   try {
     const options = buildRedisOptions({ ...baseConfig, tls: true, caCertPath: caPath });
     assert.deepEqual(options.tls?.ca, readFileSync(caPath));
-    assert.notEqual(options.tls?.rejectUnauthorized, false);
+    assert.equal(options.tls?.rejectUnauthorized, true);
+    assert.equal(options.tls?.minVersion, 'TLSv1.2');
+    assert.equal(options.tls?.servername, 'redis.internal');
+    assert.equal(options.tls?.checkServerIdentity, undefined);
     assert.equal(options.maxRetriesPerRequest, 3);
     assert.equal(options.enableReadyCheck, true);
   } finally {
@@ -34,7 +37,24 @@ test('buildRedisOptions preserves peer verification and loads a private CA', () 
 
 test('buildRedisOptions leaves TLS disabled only when explicitly configured off', () => {
   assert.equal(buildRedisOptions(baseConfig).tls, undefined);
-  assert.deepEqual(buildRedisOptions({ ...baseConfig, tls: true }).tls, {});
+  assert.deepEqual(buildRedisOptions({ ...baseConfig, tls: true }).tls, {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2',
+    servername: 'redis.internal',
+  });
+});
+
+test('buildRedisTlsOptions matches backend verification semantics for DNS and IP hosts', () => {
+  assert.equal(buildRedisTlsOptions({ tls: false, host: 'redis.internal' }), undefined);
+  assert.deepEqual(buildRedisTlsOptions({ tls: true, host: 'redis.internal' }), {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2',
+    servername: 'redis.internal',
+  });
+  assert.deepEqual(buildRedisTlsOptions({ tls: true, host: '127.0.0.1' }), {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2',
+  });
 });
 
 test('bullmqPrefix removes the trailing separator for BullMQ namespace handling', () => {

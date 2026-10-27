@@ -188,6 +188,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:business-transition-metrics
 
+      - name: Verify Redis TLS certificate and hostname verification
+        working-directory: backend
+        run: npm run test:integration:redis-tls-handshake
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { isIP } from 'node:net';
 import type { RedisOptions } from 'ioredis';
 
 /**
@@ -72,8 +73,28 @@ export const readRedisConfig = (): RedisAppConfig => {
 };
 
 /**
+ * Explicit TLS settings for every Redis consumer. Node's defaults already
+ * verify peers, but relying on an implicit default makes a future refactor
+ * (or a stray env value) able to silently disable verification. `servername`
+ * is only set for DNS hosts: an IP literal is checked against the certificate's
+ * IP subjectAltName instead. Keep this identical to
+ * `document-worker/src/redis-connection.ts::buildRedisTlsOptions`.
+ */
+export const buildRedisTlsOptions = (
+  config: Pick<RedisAppConfig, 'tls' | 'caCertPath' | 'host'>,
+): RedisOptions['tls'] => {
+  if (!config.tls) return undefined;
+  return {
+    ...(config.caCertPath ? { ca: readFileSync(config.caCertPath) } : {}),
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2',
+    ...(isIP(config.host) === 0 ? { servername: config.host } : {}),
+  };
+};
+
+/**
  * Bazne (bez keyPrefix-a) ioredis opcije — koriste ih BullMQ i Socket.IO.
- * TLS koristi sistemski trust store ili montirani CA, uz standardnu provjeru
+ * TLS koristi sistemski trust store ili montirani CA, uz eksplicitnu provjeru
  * certifikata i hostname-a. Retry strategija ostaje brza i ograničena.
  */
 export const buildBaseRedisOptions = (config: RedisAppConfig): RedisOptions => ({
@@ -82,11 +103,7 @@ export const buildBaseRedisOptions = (config: RedisAppConfig): RedisOptions => (
   username: config.username,
   password: config.password,
   db: config.db,
-  tls: config.tls
-    ? config.caCertPath
-      ? { ca: readFileSync(config.caCertPath) }
-      : {}
-    : undefined,
+  tls: buildRedisTlsOptions(config),
   retryStrategy: (attempts: number) => Math.min(attempts * 200, 5000),
   maxRetriesPerRequest: 3,
   enableReadyCheck: true,
