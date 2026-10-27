@@ -122,6 +122,8 @@ Unit spec `backend/src/prisma/database-config.util.spec.ts` pokriva SNI za DNS/I
 
 Mutacijski dokaz: privremeno uklanjanje `key` opcije iz `createAdapter` uzrokuje pad checka na tvrdnji „prefix B must not reach prefix A clients". Unit specovi: `socketio-adapter.registry.spec.ts` (režim, validacija flaga, live env) i prošireni `health.controller.spec.ts` (readiness sa shared i degradiranim adapterom).
 
+**CI dokaz.** Commit `166a92c` prolazi u run-u `40500839777` (`completed success` na backend, frontend i document-worker jobovima). Korak `Verify multi-instance Socket.IO shared Redis adapter` (35), raniji TLS koraci (33, 34), lint, typecheck, svih 688 backend unit testova, frontend guardovi i dependency audit su zeleni. `socket.io-client@4.8.3` je dodan kao dev zavisnost uz ažuriran `backend/package-lock.json`; `npm audit` za backend i worker i dalje prijavljuje 0 nalaza.
+
 **Ostaje vlasniku/deploymentu:** postaviti `SOCKETIO_REQUIRE_SHARED_ADAPTER=true` na višereplikanskim okruženjima, potvrditi da Redis ACL dozvoljava `&<prefix>:*` pub/sub kanale, te isplanirati istovremeni restart svih replika pri rolloutu.
 
 ## 4. Talas 1 — sigurnosni P1 nalazi
