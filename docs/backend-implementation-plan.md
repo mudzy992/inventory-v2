@@ -686,6 +686,19 @@ ima 8 scenarija sa 6 mutacija (CI korak, npm skripta, simbol, `stuck` grana,
 compose bound). CI koraci: `Verify queue recovery contract` i
 `Verify stale DocumentJob recovery`.
 
+**CI dokaz / ispravka.** Prvi run `40571136024` je pao samo na koraku
+`Verify stale DocumentJob recovery` (29): BullMQ `queue.getJob()` za uklonjeni
+posao vraća `undefined`, a test je očekivao `null`. Ispravka `8b812ee` prolazi
+u run-u `40571636153` (`completed success` na sva tri joba) — korak 29 zelen,
+kao i `Verify queue recovery contract` (7), svih osam prethodnih recovery
+provjera, lint (48), typecheck (49), 786 backend unit testova (50), build (52) i
+`npm audit` (53). Log koraka 29 sadrži dva očekivana
+`document_job_stale_recovered_failed` zapisa (`bullJobState: waiting`,
+`ageMs ~1 860 000`, `staleTimeoutMs: 300000`). Lokalno su uz `pipefail`
+potvrđeni 7/7 policy specova, 8/8 recovery-contract scenarija, 16/16 readiness
+scenarija, 12/12 container policy scenarija, svi statički gateovi, 786 backend
+unit testova, frontend/worker build i `npm audit` = 0.
+
 **Ograničenje:** zombi worker i dalje može fizički pisati fajl ako je Bull posao
 bio zaključan (`remove()` ne uspijeva), ali ne može promijeniti terminalni DB
 status ni duplirati notifikaciju. `UPLOAD_DIR` mora biti pouzdan. Load test za
