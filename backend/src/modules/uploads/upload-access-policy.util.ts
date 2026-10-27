@@ -40,7 +40,7 @@ export const requireAuthorizableStoredUpload = (
   }
   if (!isReadableUploadEntityType(entityType)) {
     throw new ForbiddenException(
-      `No read policy is registered for upload entity type ${String(entityType)}`,
+      `No read policy is registered for upload entity type ${JSON.stringify(entityType)}`,
     );
   }
   return { type: entityType, entityId };

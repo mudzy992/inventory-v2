@@ -189,7 +189,9 @@ export class UploadsService {
         return;
       default: {
         const exhaustive: never = type;
-        throw new ForbiddenException(`No upload read authorizer for ${String(exhaustive)}`);
+        throw new ForbiddenException(
+          `No upload read authorizer for the upload entity type (${JSON.stringify(exhaustive)})`,
+        );
       }
     }
   }
