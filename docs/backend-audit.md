@@ -99,6 +99,19 @@ Root modul je `backend/src/app.module.ts`; globalni prefix je konfigurabilan pre
    **Remediation update (zatvoreno kodno + CI dokazom, vidi §0.10 plana):** handshake sada radi `isActive` lookup; oba deaktivacijska puta koriste zajednički `prepareUserSessionRevocation()` (marker `auth:revoked:<id>` prije commit-a, fail-closed na Redis grešku) i `revokeRefreshTokensInTransaction()` u istoj transakciji kao `user.update`. `JwtStrategy` keš unosi sadrže `cachedAt` izmjeren prije DB čitanja i prihvataju se samo ako su mlađi od markera, pa ni kasni `setJson` ne može oživjeti deaktivirani identitet. `AuthService.refresh()` ponovo provjerava `isActive` unutar transakcije. `disconnectUser()` loguje `notifications_user_sockets_disconnected`. Live CI nad pravim Redis 7 + PostgreSQL dokazuje odbacivanje keša/tokena i reaktivaciju. **Ostaje vlasniku:** `SOCKETIO_REQUIRE_SHARED_ADAPTER=true` za više replika (u `in_memory` fallbacku disconnect ne doseže udaljene instance).
 10. **Refresh-token rotacija nije atomska.** `AuthService.refresh()` prvo učita token, zatim posebno označi `revokedAt`, pa tek onda izda novi token. Dva simultana poziva mogu oba proći početnu provjeru i izdati dva refresh tokena. Zamijeniti sa conditional `updateMany where revokedAt=null` i provjerom `count === 1` unutar transakcije; dodati race test. Takođe planirati cleanup istečenih `RefreshToken` redova.
 11. **Javni QR pregled vraća identitet i neograničenu historiju.** `PublicEquipmentService` eksplicitno vraća puno ime, titulu, put organizacione jedinice i sve transfere sa imenima strana. To može biti legitimno za poslovnu funkciju, ali je javno dostupno bez login-a; definisati privacy policy / minimalni DTO (npr. ograničiti historiju, maskirati osobe) i uvesti rate-limit/anti-enumeration. Komentar u kodu potvrđuje da transferi nisu ograničeni po broju, a učitava se i cijela org hijerarhija na cache miss.
+
+   **Remediation update (kodno zatvoreno, vidi §0.11 plana):** odluka vlasnika
+   je zadržati sva polja uz dokumentovan `accepted-risk`; zato je tačan DTO
+   oblik **zamrznut** kroz `public-equipment.contract.ts` (12 polja, 10 PII
+   putanja), backend i frontend interfejse poredi CI gate zasnovan na
+   TypeScript compiler API-ju, a `assertPublicEquipmentShape()` fail-closed
+   odbija nerecenzirano polje u runtime-u. Historija je ograničena
+   `PUBLIC_EQUIPMENT_MAX_MOVEMENTS` (default 200, hard cap 1000) direktno u
+   Prisma `take`; org putanja se gradi iz ograničenog lanca predaka umjesto
+   `orgUnit.findMany()` cijelog stabla. Rate limit i feature flag su već
+   postojali. Detalji: `docs/public-qr-privacy.md`. **Ostaje vlasniku:**
+   eventualno maskiranje/kraća historija, `FAIL_CLOSED=true` i load test.
+
 12. **Public/operational readiness je preplitak.** Backend `/health` izvrši samo `SELECT 1`; ne signalizira Redis, BullMQ queue, Socket.IO adapter ili Document Worker. Coolify healthcheck stoga može prikazati backend healthy dok login-rate-limit, queue ili real-time događaji ne rade. Uvesti odvojene liveness/readiness provjere i jasno definisati da li Redis outage ruši readiness ili samo degradira pojedine funkcije.
 13. **CORS je fail-open ako `CORS_ORIGIN` nedostaje.** `main.ts` postavlja `origin: true` i `credentials: true`; komentari kažu da je fallback namijenjen dev/debug, ali kod ga ne blokira u production. WebSocket CORS takođe reflektuje origin. Produkcijski startup treba odbiti praznu/široku allow-listu, osim ako je eksplicitni deployment režim dev.
 14. **Cache invalidacija / side-effect granice nisu svugdje jedinstvene.** Settings/defaults se inicijalizuju pojedinačnim upisima na `OnModuleInit`; kod multi-instance starta moguće su konkurentne inicijalizacije. Redis cache je best-effort (što je ispravno za čitanja), ali autorizacijski cache zahtijeva dosljednu invalidaciju kroz sve puteve promjene usera.
@@ -364,9 +377,9 @@ Ocjene koriste isti kriterij: ispravnost/zaštita podataka, autorizacija, valida
 
 **Dobro:** response DTO je eksplicitan, ne vraća cijeli Prisma model; specifikacije se labeliraju; Redis cache ublažava DB opterećenje.
 
-**Rizici:** javno vraća holder puno ime/titulu/org put i cijelu historiju svih transfera; nema rate limit-a/anti-enumeration. Query učitava sve transfere i cijeli org unit set. Potencijalna privatnost i DoS/expensive query su P2.
+**Rizici:** javno vraća holder puno ime/titulu/org put i historiju transfera (do 200 po defaultu); prihvaćeni privatnosni rizik je dokumentovan. Anti-enumeration se oslanja na UUID + rate limit; load test još nije urađen.
 
-**Remediation update:** odvojeni Redis rate limit po IP-u uveden je na javni QR endpoint (podrazumijevano 60 zahtjeva/60 sekundi, konfigurabilan i u Compose fajlovima); regression test pokriva 429 i outage policy. Historijska i dalje otvorena stavka: product/privacy odluka o identitetu i broju javno prikazanih transfera, anti-enumeration i performance/load testovi.
+**Remediation update:** odvojeni Redis rate limit po IP-u uveden je na javni QR endpoint (podrazumijevano 60 zahtjeva/60 sekundi, konfigurabilan i u Compose fajlovima); regression test pokriva 429 i outage policy. **Privacy contract (zatvoreno kodno + CI dokazom, §0.11 plana):** `PUBLIC_EQUIPMENT_SHAPES` zamrzava 12 root i 4 ugniježđena oblika; `check-public-equipment-contract.ts` preko TypeScript compiler API-ja poredi backend i frontend DTO sa kontraktom, provjerava runtime aserciju, `take`, rate-limit guard, jedinu GET rutu, feature flag, env/compose i vodič. `PUBLIC_EQUIPMENT_MAX_MOVEMENTS` (1–1000, default 200) ograničava historiju; org stablo više se ne učitava cijelo. Mutacijski dokaz: dodano `holderEmail` i uklonjeno `disposalReason` padaju u gate-u. Vodič: `docs/public-qr-privacy.md`. **Ostaje vlasniku:** odluka o maskiranju imena/kraćoj historiji, `FAIL_CLOSED=true` i load test.
 
 ### 4.24 Documents — **8.0/10**
 
@@ -455,7 +468,7 @@ Faze su namjerno inkrementalne. Svaka faza završava testovima i produkcijskim r
 
 1. Dodati optimistic concurrency/version ili conditional `updateMany where status/balance=expected` u transfer finalization, stock decrement, inventory committee close/recordLine i setup-sensitive reference.
 2. Dodati unique constraint-e za svaku poslovnu uniqueness garanciju koja se trenutno radi samo check-then-create; mapirati P2002 u stabilne API poruke.
-3. Dogovoriti javni QR data contract: koje lične podatke/historiju je dopušteno objaviti, koliko historije, rate limit i anti-enumeration.
+3. ~~Dogovoriti javni QR data contract~~ **(zatvoreno: `docs/public-qr-privacy.md`, zamrznut contract + cap; odluka = zadržati polja uz accepted-risk)**.
 4. Uskladiti feature flag enforcement za čitanje i pisanje; dokumentovati namjerne exceptions.
 5. Neutralisati spreadsheet formula injection u CSV exportu i zaštititi category parent update od descendant ciklusa.
 6. Validirati numeric setting opsege po ključu i enforce-ovati finite/integer/relational constraints.
@@ -493,7 +506,7 @@ Faze su namjerno inkrementalne. Svaka faza završava testovima i produkcijskim r
 | 5 | Inventory Count + Scheduler | Close job state machine, queue recovery, concurrency testovi; zatim lock/timezone. | P1/P2 |
 | 6 | Prisma/DB connection | Dokazati TLS/CA, migration drift i connection budget. | P1 |
 | 7 | Settings + API DTO + Health | Validacija body-ja, secure CORS default, readiness. | P2 |
-| 8 | Public Equipment | Privacy contract, list cap, rate limiting. | P2 |
+| 8 | Public Equipment | ~~Privacy contract, list cap, rate limiting~~ **(zatvoreno: zamrznut contract + `PUBLIC_EQUIPMENT_MAX_MOVEMENTS`, rate limiting ranije; vidi §0.11)**. | P2 |
 | 9 | Transfers + Equipment + Categories + Warehouse Stock | RAW HTML escaping, CSV formula safety/streaming, category-cycle guard, atomarni state/balance checks i integration coverage. | P1/P2 |
 | 10 | Remaining CRUD/read modules | Tests/constraints/response contracts. | P2/P3 |
 | 11 | Refactor/performance | Tek nakon characterization tests + baseline metrics. | P3 |

@@ -221,6 +221,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:auth-session-revocation
 
+      - name: Verify public QR privacy contract
+        working-directory: backend
+        run: npm run test:integration:public-equipment-contract
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

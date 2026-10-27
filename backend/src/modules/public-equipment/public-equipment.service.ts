@@ -1,10 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type {
-  Employee,
-  OrgUnit,
-  Transfer,
-  Warehouse,
-} from '../../../generated/prisma/client';
+import type { Employee, Transfer, Warehouse } from '../../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import {
@@ -14,6 +9,12 @@ import {
 } from '../../common/utils/equipment-display.util';
 import { SettingsService } from '../settings/settings.service';
 import { resolveEquipmentDisposalReason } from '../../common/utils/resolve-equipment-disposal-reason.util';
+import {
+  PUBLIC_EQUIPMENT_ORG_UNIT_MAX_DEPTH,
+  assertPublicEquipmentShape,
+  buildOrgUnitPath,
+  resolvePublicEquipmentMovementLimit,
+} from './public-equipment.contract';
 
 export interface PublicEquipmentHolder {
   fullName: string;
@@ -51,22 +52,6 @@ export interface PublicEquipmentResponse {
 
 function employeeFullName(employee: Pick<Employee, 'firstName' | 'lastName'>): string {
   return `${employee.firstName} ${employee.lastName}`.trim();
-}
-
-function buildOrgUnitPath(orgUnitsById: Map<string, Pick<OrgUnit, 'id' | 'name' | 'parentId'>>, orgUnitId: string): string {
-  const parts: string[] = [];
-  const seen = new Set<string>();
-  let currentId: string | null = orgUnitId;
-  while (currentId && !seen.has(currentId)) {
-    seen.add(currentId);
-    const unit = orgUnitsById.get(currentId);
-    if (!unit) {
-      break;
-    }
-    parts.unshift(unit.name);
-    currentId = unit.parentId;
-  }
-  return parts.join(' → ');
 }
 
 function resolveTransferPartyLabel(
@@ -109,16 +94,19 @@ export class PublicEquipmentService {
     private readonly redisService: RedisService,
   ) {}
 
+  /** Bounded at startup; an invalid env value fails the service construction. */
+  private readonly movementLimit = resolvePublicEquipmentMovementLimit(
+    process.env.PUBLIC_EQUIPMENT_MAX_MOVEMENTS,
+  );
+
   // Javni, neautentifikovani, QR-kod-vođen endpoint (skeniranje sa telefona)
-  // — potencijalno najveći anonimni saobraćaj u cijeloj aplikaciji, a svaki
-  // poziv bez keša radi: 1 equipment upit sa 4 nivoa relacija (uključujući
-  // SVE transfere), + 1 NEOGRANIČEN orgUnit.findMany() (svi org unit-i u
-  // sistemu, na svaki poziv, radi izgradnje org-unit path-a). Oprema se
-  // mijenja rijetko u odnosu na potencijalnu frekvenciju QR skeniranja, pa
-  // je kratak TTL kеš ovdje čist dobitak bez praktičnog rizika po
-  // korisničko iskustvo (30-60s stara "trenutna lokacija opreme" na
-  // javnoj stranici je zanemarljivo, informativna stranica nije izvor
-  // istine za bilo kakvu poslovnu odluku).
+  // — potencijalno najveći anonimni saobraćaj u cijeloj aplikaciji. Ranije
+  // je svaki cache miss učitao SVE transfere i CIJELO org stablo; sada se
+  // historija ograničava `take` (PUBLIC_EQUIPMENT_MAX_MOVEMENTS), a org
+  // putanja gradi samo iz lanca predaka držaoca. Odgovor prolazi kroz
+  // assertPublicEquipmentShape() — zamrznuti privacy contract. Oprema se
+  // mijenja rijetko, pa je kratak TTL keš čist dobitak: informativna
+  // stranica nije izvor istine za bilo kakvu poslovnu odluku.
   private static readonly CACHE_TTL_SECONDS = 60;
 
   async findOne(id: string): Promise<PublicEquipmentResponse> {
@@ -149,6 +137,8 @@ export class PublicEquipmentService {
         warehouse: true,
         transfers: {
           orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+          // The public endpoint must never serialise an unbounded history.
+          take: this.movementLimit,
           include: {
             fromPerson: true,
             toPerson: true,
@@ -162,10 +152,11 @@ export class PublicEquipmentService {
       throw new NotFoundException('Equipment not found');
     }
 
-    const orgUnits = await this.prisma.orgUnit.findMany({
-      select: { id: true, name: true, parentId: true },
-    });
-    const orgUnitsById = new Map(orgUnits.map((unit) => [unit.id, unit]));
+    // Only walk the holder's ancestor chain instead of loading every org unit
+    // in the system on a public, unauthenticated request.
+    const orgUnitsById = equipment.currentHolder
+      ? await this.loadOrgUnitAncestors(equipment.currentHolder.orgUnitId)
+      : new Map<string, { id: string; name: string; parentId: string | null }>();
 
     const employeesById = new Map<string, Pick<Employee, 'firstName' | 'lastName'>>();
     for (const transfer of equipment.transfers) {
@@ -198,7 +189,7 @@ export class PublicEquipmentService {
       equipment.notes,
     );
 
-    return {
+    const response: PublicEquipmentResponse = {
       id: equipment.id,
       inventoryNumber: equipment.inventoryNumber,
       isAccountingTracked: equipment.isAccountingTracked,
@@ -237,5 +228,32 @@ export class PublicEquipmentService {
       })),
       disposalReason,
     };
+    // Fail closed: never publish an unreviewed field from a public endpoint.
+    assertPublicEquipmentShape(response);
+    return response;
+  }
+
+  private async loadOrgUnitAncestors(
+    startId: string,
+  ): Promise<Map<string, { id: string; name: string; parentId: string | null }>> {
+    const units = new Map<string, { id: string; name: string; parentId: string | null }>();
+    const seen = new Set<string>();
+    let currentId: string | null = startId;
+    while (
+      currentId &&
+      units.size < PUBLIC_EQUIPMENT_ORG_UNIT_MAX_DEPTH &&
+      !seen.has(currentId)
+    ) {
+      seen.add(currentId);
+      const unit: { id: string; name: string; parentId: string | null } | null =
+        await this.prisma.orgUnit.findUnique({
+          where: { id: currentId },
+          select: { id: true, name: true, parentId: true },
+        });
+      if (!unit) break;
+      units.set(unit.id, unit);
+      currentId = unit.parentId;
+    }
+    return units;
   }
 }

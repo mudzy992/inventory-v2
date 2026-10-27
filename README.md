@@ -117,6 +117,10 @@ adapter javlja `socketio_redis_acl_denied` i degradira umjesto da sruši proces;
 vodič i gotovo pravilo: [docs/redis-acl.md](docs/redis-acl.md) i
 [deploy/redis/users.acl.example](deploy/redis/users.acl.example).
 
+Javni QR endpoint ima zamrznut, recenziran DTO oblik: svako novo polje mora
+proći kroz [privacy contract](docs/public-qr-privacy.md), a historija kretanja
+je ograničena sa `PUBLIC_EQUIPMENT_MAX_MOVEMENTS` (default 200).
+
 ## Plan i matrice
 
 - [Plan overview](.cursor/plans/inventory-v2/00_overview.md)
