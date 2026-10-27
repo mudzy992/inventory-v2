@@ -309,6 +309,7 @@ export class UsersService {
         );
       }
     }
+    const isChangingPassword = Boolean(dto.password);
     const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : undefined;
     // Write the revocation marker BEFORE the transaction: no post-commit
     // window where a cached identity stays valid, and a Redis failure aborts
@@ -316,7 +317,11 @@ export class UsersService {
     await prepareUserSessionRevocation(
       this.redisService.getClient(),
       id,
-      isDeactivatingUser ? 'user_deactivated' : 'user_updated',
+      isDeactivatingUser
+        ? 'user_deactivated'
+        : isChangingPassword
+          ? 'password_changed'
+          : 'user_updated',
     );
     const deactivationAt = new Date();
     const user = await this.prisma.$transaction(async (tx) => {
@@ -370,9 +375,10 @@ export class UsersService {
         },
         include: userInclude,
       });
-      if (isDeactivatingUser) {
-        // Same transaction as user.update(): a deactivated account must not
-        // keep usable refresh tokens in the database.
+      if (isDeactivatingUser || isChangingPassword) {
+        // Same transaction as user.update(): an old refresh token must not be
+        // able to mint a new access token after deactivation OR a password
+        // reset. Business commit and session revocation are atomic.
         await revokeRefreshTokensInTransaction(tx, id, deactivationAt);
       }
       if (isDeactivatingUser && employeeId) {

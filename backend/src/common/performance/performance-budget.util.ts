@@ -21,6 +21,7 @@ export const PERFORMANCE_BUDGETS = {
   maxOrgUnitPathDepth: 20,
   maxPublicQrQueries: 25,
   bulkReceiptMaxItems: 100,
+  maxDtoArrayItems: 200,
   maxListRequestQueries: 8,
   documentWorkerConvertTimeoutMs: 120_000,
   documentJobStaleBoundMs: 30 * 60 * 1000,

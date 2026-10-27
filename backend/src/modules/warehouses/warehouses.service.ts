@@ -23,6 +23,7 @@ import { WarehouseResolutionService } from '../../common/services/warehouse-reso
 import { loadKeeperWarehouseIds } from '../../common/utils/warehouse-keeper-access.util';
 import { WAREHOUSE_MESSAGES } from '../../common/utils/warehouse-messages.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { invalidateScopeCaches } from '../../common/services/scope-cache.registry';
 import { SettingsService } from '../settings/settings.service';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
 import { ListWarehousesQueryDto } from './dto/list-warehouses-query.dto';
@@ -198,6 +199,7 @@ export class WarehousesService {
       },
     });
     await this.replaceKeepers(warehouse.id, dto.keeperUserIds);
+    invalidateScopeCaches();
     return this.getWarehouseOrThrow(warehouse.id);
   }
 
@@ -235,6 +237,7 @@ export class WarehousesService {
     if (dto.keeperUserIds) {
       await this.replaceKeepers(id, dto.keeperUserIds);
     }
+    invalidateScopeCaches();
     return this.getWarehouseOrThrow(id);
   }
 

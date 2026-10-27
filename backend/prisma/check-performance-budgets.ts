@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { escapeCsvCell } from '../src/common/utils/csv-cell.util';
 import { iterateCursorPages } from '../src/common/utils/cursor-pages.util';
 import { MAX_PAGE_OFFSET, parsePagination } from '../src/common/utils/pagination.util';
@@ -64,6 +64,26 @@ const staticChecks = (): void => {
   assert.equal(/orgUnit\.findMany\(/u.test(publicService), false, 'public QR must not load the whole org tree');
   assert.match(publicContract, /PUBLIC_EQUIPMENT_MOVEMENTS_MAX\s*=\s*1000/u);
   assert.match(bulkDto, /@ArrayMaxSize\(100\)/u, 'bulk receipt must cap items at 100');
+  // Every array DTO must be bounded — otherwise a single request can force an
+  // unbounded loop of DB lookups (e.g. setCategoryLinks, scope assignments).
+  const dtoRoot = resolve(ROOT, 'src');
+  const dtoFiles: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('dto.ts')) dtoFiles.push(full);
+    }
+  };
+  walk(dtoRoot);
+  const unbounded = dtoFiles.filter((file) => {
+    const source = readFileSync(file, 'utf8');
+    if (!source.includes('@IsArray')) return false;
+    const cap = /@ArrayMaxSize\((\d+)\)/u.exec(source);
+    return !cap || Number(cap[1]) > PERFORMANCE_BUDGETS.maxDtoArrayItems;
+  });
+  assert.deepEqual(unbounded, [], `array DTOs must carry @ArrayMaxSize <= ${PERFORMANCE_BUDGETS.maxDtoArrayItems}`);
+  measure('bounded array DTOs', dtoFiles.length - unbounded.length, dtoFiles.length - unbounded.length, unbounded.length === 0);
   assert.ok(registry.includes("lists.max_page_size"), 'page-size settings must exist');
   assert.ok(registry.includes('maxValue'), 'numeric settings must declare bounds');
 

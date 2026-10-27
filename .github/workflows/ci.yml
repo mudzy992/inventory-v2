@@ -255,6 +255,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:performance-budgets
 
+      - name: Verify authorization scope cache freshness
+        working-directory: backend
+        run: npm run test:integration:scope-cache-freshness
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

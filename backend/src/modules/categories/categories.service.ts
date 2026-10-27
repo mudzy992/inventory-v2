@@ -9,6 +9,7 @@ import {
 import { CATEGORY_MESSAGES } from '../../common/utils/category-messages.util';
 import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { invalidateScopeCaches } from '../../common/services/scope-cache.registry';
 import { SettingsService } from '../settings/settings.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { SearchCategoriesQueryDto } from './dto/search-categories-query.dto';
@@ -73,7 +74,7 @@ export class CategoriesService {
     const categoryKind = dto.categoryKind ?? (dto.parentId ? 'ASSET' : 'ASSET');
     const fields = normalizeUnitCategoryFields(dto.fields);
     const optionalFields = normalizeLotCategoryFields(dto.optionalFields ?? []);
-    return this.prisma.category.create({
+    const category = await this.prisma.category.create({
       data: {
         name: dto.name,
         description: dto.description,
@@ -83,6 +84,8 @@ export class CategoriesService {
         optionalFields: optionalFields as unknown as Prisma.InputJsonValue,
       },
     });
+    invalidateScopeCaches();
+    return category;
   }
 
   async update(id: string, dto: UpdateCategoryDto): Promise<Category> {
@@ -102,7 +105,9 @@ export class CategoriesService {
     };
 
     if (dto.parentId === undefined) {
-      return this.prisma.category.update({ where: { id }, data });
+      const updated = await this.prisma.category.update({ where: { id }, data });
+      invalidateScopeCaches();
+      return updated;
     }
     const parentId = dto.parentId;
 
@@ -118,7 +123,9 @@ export class CategoriesService {
       if (wouldCreateCategoryCycle(id, parentId, categories)) {
         throw new BadRequestException('Category hierarchy cannot contain a cycle');
       }
-      return tx.category.update({ where: { id }, data });
+      const updated = await tx.category.update({ where: { id }, data });
+      invalidateScopeCaches();
+      return updated;
     });
   }
 
@@ -133,6 +140,7 @@ export class CategoriesService {
       throw new BadRequestException(CATEGORY_MESSAGES.deleteHasEquipment);
     }
     await this.prisma.category.delete({ where: { id } });
+    invalidateScopeCaches();
   }
 
   async assertLeafCategory(categoryId: string): Promise<Category> {

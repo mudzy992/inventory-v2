@@ -42,6 +42,7 @@ const main = async (): Promise<void> => {
   // 1. No free-form template/string logger calls remain in production code.
   const freeForm = /\blogger\.(?:log|warn|error|debug|verbose|fatal)\(\s*(?:`|'|")/u;
   const rawInterpolation = /\$\{String\(/u;
+  const rawConsole = /\bconsole\.(?:log|warn|error|debug|info)\s*\(/u;
   const violations: string[] = [];
   let structuredCalls = 0;
   for (const file of files) {
@@ -52,6 +53,9 @@ const main = async (): Promise<void> => {
     }
     if (rawInterpolation.test(source)) {
       violations.push(`${name}: raw String() template interpolation`);
+    }
+    if (rawConsole.test(source)) {
+      violations.push(`${name}: raw console.* call bypasses structured JSON logging`);
     }
     for (const match of source.matchAll(/logStructuredEvent\(/gu)) {
       structuredCalls += 1;

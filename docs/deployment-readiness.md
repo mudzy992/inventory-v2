@@ -48,7 +48,8 @@ može izvršiti umjesto čovjeka) moraju biti potvrđene prije nego se prebace u
   `&<PREFIX>:#/#*` / `&<PREFIX>:#/notifications#*` granta i `+info`.
 - Postoje svi operator guides (`redis-acl`, `http-hardening`,
   `public-qr-privacy`, `upload-read-policy`, `transfer-document-security`,
-  `queue-recovery`, `performance-budgets`, ovaj fajl).
+  `queue-recovery`, `performance-budgets`, `backend-code-audit-2026-10-27`,
+  ovaj fajl).
 - `REDIS_KEY_PREFIX` default se poklapa s ACL namespace-om.
 
 ## Šta se provjerava (`--env` moda)

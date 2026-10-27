@@ -1,4 +1,5 @@
-import { ArrayMinSize, IsArray, IsString, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize, ArrayMinSize, IsArray, IsString, MinLength } from 'class-validator';
 
 export class SetupLocationDto {
   @IsString()
@@ -6,6 +7,7 @@ export class SetupLocationDto {
   cantonName!: string;
 
   @IsArray()
+  @ArrayMaxSize(200)
   @ArrayMinSize(1)
   @IsString({ each: true })
   cities!: string[];

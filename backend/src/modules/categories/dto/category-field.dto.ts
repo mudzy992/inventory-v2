@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayMaxSize, IsArray, IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 
 export class CategoryFieldDto {
   @IsString()
@@ -18,6 +19,7 @@ export class CategoryFieldDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(200)
   @IsString({ each: true })
   options?: string[];
 }

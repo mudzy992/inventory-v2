@@ -49,6 +49,7 @@ export const REQUIRED_DOCS = [
   'docs/transfer-document-security.md',
   'docs/queue-recovery.md',
   'docs/performance-budgets.md',
+  'docs/backend-code-audit-2026-10-27.md',
   'docs/deployment-readiness.md',
 ];
 

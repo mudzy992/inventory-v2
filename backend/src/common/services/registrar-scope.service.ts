@@ -21,6 +21,10 @@ import type {
 } from '../utils/resolve-effective-warehouse.util';
 import { LocationResolutionService } from './location-resolution.service';
 import { OrgScopeService } from './org-scope.service';
+import {
+  getScopeCacheVersion,
+  isScopeCacheStale,
+} from './scope-cache.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -30,6 +34,24 @@ export class RegistrarScopeService {
   private orgUnitsCache: OrgUnitWarehouseRow[] | null = null;
   private warehousesCache: WarehouseRow[] | null = null;
   private orgIdsByWarehouseCache = new Map<string, Set<string>>();
+  private cacheLoadedAt = 0;
+  private cacheVersion = -1;
+
+  /**
+   * Authorization scope data must never be immortal. A version bump from any
+   * write path forces an immediate reload; the TTL is the safety net for a
+   * missed bump or a change made by another process.
+   */
+  private refreshCachesIfStale(): void {
+    if (!isScopeCacheStale(this.cacheLoadedAt, this.cacheVersion)) return;
+    this.categoryChildrenByParent = new Map();
+    this.categoryCacheLoaded = false;
+    this.orgUnitsCache = null;
+    this.warehousesCache = null;
+    this.orgIdsByWarehouseCache = new Map();
+    this.cacheLoadedAt = Date.now();
+    this.cacheVersion = getScopeCacheVersion();
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -722,6 +744,7 @@ export class RegistrarScopeService {
   }
 
   private async ensureOrgWarehouseCache(): Promise<void> {
+    this.refreshCachesIfStale();
     if (this.orgUnitsCache && this.warehousesCache) {
       return;
     }
@@ -736,6 +759,7 @@ export class RegistrarScopeService {
   }
 
   private async ensureCategoryCache(): Promise<void> {
+    this.refreshCachesIfStale();
     if (this.categoryCacheLoaded) {
       return;
     }

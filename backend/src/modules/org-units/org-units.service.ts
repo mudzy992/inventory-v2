@@ -13,6 +13,7 @@ import { assertValidOrgUnitParentChild } from '../../common/utils/org-hierarchy-
 import { AUTOCOMPLETE_SEARCH_LIMIT } from '../../common/dto/autocomplete-search-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
+import { invalidateScopeCaches } from '../../common/services/scope-cache.registry';
 import { SettingsService } from '../settings/settings.service';
 import { CreateOrgUnitDto } from './dto/create-org-unit.dto';
 import { SearchOrgUnitsQueryDto } from './dto/search-org-units-query.dto';
@@ -130,6 +131,7 @@ export class OrgUnitsService {
       refreshSigner: true,
       refreshLocation: true,
     });
+    invalidateScopeCaches();
     return this.findOne(user, unit.id);
   }
 
@@ -175,6 +177,7 @@ export class OrgUnitsService {
       refreshSigner: signerChanged || parentChanged,
       refreshLocation: locationChanged || parentChanged,
     });
+    invalidateScopeCaches();
     return this.findOne(user, id);
   }
 
@@ -190,6 +193,7 @@ export class OrgUnitsService {
       throw new BadRequestException(ORG_HIERARCHY_MESSAGES.deleteHasEmployees);
     }
     await this.prisma.orgUnit.delete({ where: { id } });
+    invalidateScopeCaches();
   }
 
   private async assertModeratorWrites(user: AuthenticatedUser): Promise<void> {

@@ -60,6 +60,13 @@ const staticChecks = (): void => {
   }
   const gateway = readFileSync(resolve(SRC, 'modules/notifications/notifications.gateway.ts'), 'utf8');
   assert.match(gateway, /notifications_user_sockets_disconnected/u);
+  assert.match(users, /isChangingPassword/u, 'password change must be detected');
+  assert.match(
+    users,
+    /isDeactivatingUser \|\| isChangingPassword/u,
+    'password change must revoke refresh tokens in the same transaction',
+  );
+  assert.match(users, /'password_changed'/u);
   assert.match(
     auth,
     /\$transaction\(async \(tx\) => \{[\s\S]{0,600}tx\.user\.findUnique\(/u,

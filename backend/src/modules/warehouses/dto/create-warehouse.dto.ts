@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsBoolean,
@@ -32,6 +33,7 @@ export class CreateWarehouseDto {
   isActive?: boolean;
 
   @IsArray()
+  @ArrayMaxSize(200)
   @ArrayMinSize(1)
   @IsUUID('4', { each: true })
   keeperUserIds!: string[];

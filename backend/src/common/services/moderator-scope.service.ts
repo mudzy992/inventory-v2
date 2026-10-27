@@ -6,6 +6,10 @@ import { isModeratorAssignableOrgType } from '../utils/moderator-org-types.util'
 import { OrgScopeService } from './org-scope.service';
 import { WarehouseResolutionService } from './warehouse-resolution.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  getScopeCacheVersion,
+  isScopeCacheStale,
+} from './scope-cache.registry';
 
 const MODERATOR_ASSIGNABLE_ROLES: UserRole[] = [
   'evidenticar',
@@ -17,6 +21,15 @@ const MODERATOR_ASSIGNABLE_ROLES: UserRole[] = [
 @Injectable()
 export class ModeratorScopeService {
   private scopedOrgCache = new Map<string, string[]>();
+  private cacheLoadedAt = 0;
+  private cacheVersion = -1;
+
+  private refreshCacheIfStale(): void {
+    if (!isScopeCacheStale(this.cacheLoadedAt, this.cacheVersion)) return;
+    this.scopedOrgCache.clear();
+    this.cacheLoadedAt = Date.now();
+    this.cacheVersion = getScopeCacheVersion();
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -50,6 +63,7 @@ export class ModeratorScopeService {
     if (rootIds.length === 0) {
       return [];
     }
+    this.refreshCacheIfStale();
     const cacheKey = rootIds.slice().sort().join(',');
     const cached = this.scopedOrgCache.get(cacheKey);
     if (cached) {
