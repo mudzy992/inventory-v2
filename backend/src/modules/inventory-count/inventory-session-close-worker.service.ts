@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -71,7 +72,10 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
     const { sessionId } = job.data;
     const dbJob = await this.prisma.inventorySessionCloseJob.findUnique({ where: { sessionId } });
     if (!dbJob) {
-      this.logger.warn(`No inventorySessionCloseJob DB row found for session ${sessionId}, skipping.`);
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'inventory_close_job_row_missing',
+        sessionId,
+      });
       return;
     }
 
@@ -101,7 +105,11 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
       return true;
     });
     if (!claimed) {
-      this.logger.debug(`Session ${sessionId} close job is already claimed or terminal; skipping.`);
+      logStructuredEvent(this.logger, 'debug', {
+        event: 'inventory_close_job_skipped',
+        sessionId,
+        reason: 'claimed_or_terminal',
+      });
       return;
     }
 
@@ -134,7 +142,11 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
       void renewLease()
         .catch((error: unknown) => {
           leaseLost = true;
-          this.logger.error(`Inventory close lease renewal failed for session ${sessionId}: ${String(error)}`);
+          logStructuredEvent(this.logger, 'error', {
+            event: 'inventory_close_lease_renewal_failed',
+            sessionId,
+            error: safeErrorText(error),
+          });
         })
         .finally(() => {
           heartbeatInFlight = false;
@@ -272,9 +284,13 @@ export class InventorySessionCloseWorkerService extends WorkerHost {
 
           retryCount += 1;
           const delayMs = getPendingActionRetryDelayMs(retryCount);
-          this.logger.warn(
-            `Transient error applying pending action ${action.id}; retry ${retryCount + 1}/${MAX_PENDING_ACTION_ATTEMPTS} in ${delayMs}ms.`,
-          );
+          logStructuredEvent(this.logger, 'warn', {
+            event: 'inventory_pending_action_retry_scheduled',
+            actionId: action.id,
+            attempt: retryCount + 1,
+            maxAttempts: MAX_PENDING_ACTION_ATTEMPTS,
+            delayMs,
+          });
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
       }

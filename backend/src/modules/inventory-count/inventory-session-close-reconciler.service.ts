@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
@@ -58,13 +59,18 @@ export class InventorySessionCloseReconcilerService implements OnModuleInit {
             { jobId: buildInventoryCloseRecoveryJobId(job.id, job.updatedAt) },
           );
         } catch (error) {
-          this.logger.error(
-            `Failed to enqueue inventory close job for session ${job.sessionId}: ${String(error)}`,
-          );
+          logStructuredEvent(this.logger, 'error', {
+            event: 'inventory_close_reconcile_enqueue_failed',
+            sessionId: job.sessionId,
+            error: safeErrorText(error),
+          });
         }
       }
     } catch (error) {
-      this.logger.error(`Failed to reconcile queued inventory close jobs: ${String(error)}`);
+      logStructuredEvent(this.logger, 'error', {
+        event: 'inventory_close_reconcile_failed',
+        error: safeErrorText(error),
+      });
     } finally {
       this.reconciliationRunning = false;
     }

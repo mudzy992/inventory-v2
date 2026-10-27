@@ -1,3 +1,4 @@
+import { logStructuredEvent } from './common/logging/structured-event.logger';
 import { config as loadEnv } from 'dotenv';
 import { resolve } from 'node:path';
 import { Logger, ValidationPipe } from '@nestjs/common';
@@ -58,8 +59,11 @@ const bootstrap = async (): Promise<void> => {
   // Namjerno logovano pri svakom pokretanju — najbrži način da se u Coolify
   // logovima potvrdi da su API_PREFIX i CORS_ORIGIN stvarno stigli iz env-a
   // onako kako se očekuje, bez potrebe za exec-om u kontejner.
-  logger.log(`API_PREFIX="${apiPrefix}" (prazno = bez path-prefiksa)`);
-  logger.log(`CORS_ORIGIN resolved to: ${JSON.stringify(corsOrigin)}`);
+  logStructuredEvent(logger, 'log', {
+    event: 'backend_bootstrap_config',
+    apiPrefix,
+    corsOrigin,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -70,7 +74,7 @@ const bootstrap = async (): Promise<void> => {
   );
   const port = Number(configService.get<string>('BACKEND_PORT', '3000'));
   await app.listen(port);
-  logger.log(`Backend listening on port ${port}`);
+  logStructuredEvent(logger, 'log', { event: 'backend_listening', port });
 };
 
 void bootstrap();

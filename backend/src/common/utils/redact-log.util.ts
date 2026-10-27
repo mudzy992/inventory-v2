@@ -1,7 +1,10 @@
 const SENSITIVE_JSON_VALUE =
   /("(?:authorization|cookie|password|passwordHash|refreshToken|accessToken|token|secret|jwt|apiKey)"\s*:\s*)"[^"]*"/giu;
+// The leading boundary includes quotes/brackets because `redactSensitiveText`
+// also runs over already-serialised JSON: an error message such as
+// `"error":"password=hunter2 ..."` must be redacted inside that string too.
 const PLAIN_SECRET_ASSIGNMENT =
-  /(^|[\s,;])(password|passwordHash|refreshToken|accessToken|token|secret|jwt|apiKey)=([^\s,;}"']+)/giu;
+  /(^|[\s,;"'[{])(password|passwordHash|refreshToken|accessToken|token|secret|jwt|apiKey)=([^\s,;}"']+)/giu;
 const BEARER_TOKEN = /(Bearer\s+)[A-Za-z0-9._~+/=-]+/giu;
 const JWT = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu;
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu;

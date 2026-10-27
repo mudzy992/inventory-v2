@@ -1,6 +1,6 @@
 import { redactSensitiveText } from '../utils/redact-log.util';
 
-export type StructuredLogLevel = 'log' | 'warn' | 'error';
+export type StructuredLogLevel = 'log' | 'warn' | 'error' | 'debug';
 
 export interface StructuredLogPayload {
   event: string;
@@ -27,7 +27,7 @@ export const writeStructuredLog = (
   payload: StructuredLogPayload,
 ): string => {
   const line = formatStructuredLogLine(level, payload);
-  const stream = level === 'log' ? process.stdout : process.stderr;
+  const stream = level === 'log' || level === 'debug' ? process.stdout : process.stderr;
   stream.write(`${line}\n`);
   return line;
 };

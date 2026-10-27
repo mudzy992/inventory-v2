@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import {
   BadRequestException,
   ConflictException,
@@ -2042,9 +2043,11 @@ export class InventoryCountService {
         { jobId: randomUUID() },
       );
     } catch (error) {
-      this.logger.error(
-        `Inventory close job persisted but enqueue failed for session ${session.id}: ${String(error)}`,
-      );
+      logStructuredEvent(this.logger, 'error', {
+        event: 'inventory_close_enqueue_failed',
+        sessionId: session.id,
+        error: safeErrorText(error),
+      });
     }
     return toPublicInventoryCloseJob(job);
   }
@@ -2102,9 +2105,11 @@ export class InventoryCountService {
         { jobId: randomUUID() },
       );
     } catch (error) {
-      this.logger.error(
-        `Admin retry persisted but enqueue failed for session ${sessionId}: ${String(error)}`,
-      );
+      logStructuredEvent(this.logger, 'error', {
+        event: 'inventory_close_admin_retry_enqueue_failed',
+        sessionId,
+        error: safeErrorText(error),
+      });
     }
     return toPublicInventoryCloseJob(job);
   }

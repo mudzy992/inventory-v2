@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { buildEffectiveSignerMap } from '../../common/utils/resolve-effective-signer.util';
@@ -266,7 +267,10 @@ export class SetupBootstrapService {
     try {
       await this.settingsService.invalidateValues(companySettings);
     } catch (error) {
-      this.logger.warn(`Initial setup committed but settings cache invalidation failed: ${String(error)}`);
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'setup_settings_cache_invalidation_failed',
+        error: safeErrorText(error),
+      });
     }
     return result;
   }

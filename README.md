@@ -97,6 +97,9 @@ headera, metodom, statusom, trajanjem i normaliziranom `route`. Pragovi za HTTP
 alarm (`http.metrics.*`) su privatne postavke u administratorskom UI-ju; default-i
 su 5% 5xx, 1000 ms p95, 5 apsolutnih 5xx i minimalni uzorak od 20 zahtjeva.
 Logovi ne sadrže query stringove u agregatima, tijela, tokene ni imena datoteka.
+Svi aplikacijski logovi (uključujući greške workera, schedulera i dokumenata) su
+jedan red JSON-a sa stabilnim `event` imenom, `level` i `correlationId`; CI provjera
+`test:integration:structured-logs` zabranjuje nove free-form `logger.*` poruke.
 
 ## Plan i matrice
 

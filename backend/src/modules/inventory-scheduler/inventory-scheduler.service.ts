@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
@@ -47,7 +48,10 @@ export class InventorySchedulerService {
     // dodatnih izmjena.
     const lockToken = await this.redisService.acquireLock(DAILY_JOB_LOCK_KEY, DAILY_JOB_LOCK_TTL_MS);
     if (!lockToken) {
-      this.logger.debug('Daily inventory job skipped — lock held by another instance.');
+      logStructuredEvent(this.logger, 'debug', {
+        event: 'inventory_scheduler_job_skipped',
+        reason: 'lock_held',
+      });
       return;
     }
     let renewalInFlight: Promise<void> | undefined;
@@ -57,11 +61,16 @@ export class InventorySchedulerService {
         .renewLock(DAILY_JOB_LOCK_KEY, lockToken, DAILY_JOB_LOCK_TTL_MS)
         .then((renewed) => {
           if (!renewed) {
-            this.logger.error('Inventory scheduler lock lease was lost while the job was running.');
+            logStructuredEvent(this.logger, 'error', {
+              event: 'inventory_scheduler_lock_lease_lost',
+            });
           }
         })
         .catch((error: unknown) => {
-          this.logger.error(`Inventory scheduler lock renewal failed: ${String(error)}`);
+          logStructuredEvent(this.logger, 'error', {
+            event: 'inventory_scheduler_lock_renewal_failed',
+            error: safeErrorText(error),
+          });
         })
         .finally(() => {
           renewalInFlight = undefined;
@@ -75,7 +84,11 @@ export class InventorySchedulerService {
       try {
         today = getZonedCalendarParts(new Date(), timeZone);
       } catch (error) {
-        this.logger.error(`Invalid inventory scheduler timezone "${timeZone}": ${String(error)}`);
+        logStructuredEvent(this.logger, 'error', {
+          event: 'inventory_scheduler_invalid_timezone',
+          timeZone,
+          error: safeErrorText(error),
+        });
         return;
       }
       const lockDate = await this.productionModeService.getLockMonthDay();
@@ -115,18 +128,25 @@ export class InventorySchedulerService {
           year,
         );
         if (result.skipped) {
-          this.logger.warn(
-            `Jan 1 draft skipped for ${distribution.name}: open session "${result.session.name}"`,
-          );
+          logStructuredEvent(this.logger, 'warn', {
+            event: 'inventory_jan1_draft_skipped',
+            distributionId: distribution.id,
+            reason: 'open_session',
+          });
           continue;
         }
-        this.logger.log(
-          `Jan 1 draft session ${result.created ? 'created' : 'reconciled'} for ${distribution.name} year ${year}`,
-        );
+        logStructuredEvent(this.logger, 'log', {
+          event: 'inventory_jan1_draft_session',
+          distributionId: distribution.id,
+          year,
+          outcome: result.created ? 'created' : 'reconciled',
+        });
       } catch (error) {
-        this.logger.error(
-          `Jan 1 draft job failed for distribution ${distribution.id}: ${String(error)}`,
-        );
+        logStructuredEvent(this.logger, 'error', {
+          event: 'inventory_jan1_draft_job_failed',
+          distributionId: distribution.id,
+          error: safeErrorText(error),
+        });
       }
     }
   }
@@ -151,20 +171,26 @@ export class InventorySchedulerService {
           year,
         );
         if (created.skipped) {
-          this.logger.warn(
-            `Lock day draft skipped for ${distribution.name}: open session "${created.session.name}"`,
-          );
+          logStructuredEvent(this.logger, 'warn', {
+            event: 'inventory_lock_day_draft_skipped',
+            distributionId: distribution.id,
+            reason: 'open_session',
+          });
           continue;
         }
         if (created.created) {
-          this.logger.log(
-            `Draft session created for ${distribution.name} (${distribution.id}) year ${year}`,
-          );
+          logStructuredEvent(this.logger, 'log', {
+            event: 'inventory_lock_day_draft_created',
+            distributionId: distribution.id,
+            year,
+          });
         }
       } catch (error) {
-        this.logger.error(
-          `Lock day job failed for distribution ${distribution.id}: ${String(error)}`,
-        );
+        logStructuredEvent(this.logger, 'error', {
+          event: 'inventory_lock_day_job_failed',
+          distributionId: distribution.id,
+          error: safeErrorText(error),
+        });
       }
     }
   }
@@ -181,9 +207,16 @@ export class InventorySchedulerService {
     for (const session of sessions) {
       try {
         await this.inventoryCountService.activateSession(session.id);
-        this.logger.log(`Auto-activated session ${session.id}`);
+        logStructuredEvent(this.logger, 'log', {
+          event: 'inventory_session_auto_activated',
+          sessionId: session.id,
+        });
       } catch (error) {
-        this.logger.warn(`Auto-activate skipped for ${session.id}: ${String(error)}`);
+        logStructuredEvent(this.logger, 'warn', {
+          event: 'inventory_session_auto_activate_skipped',
+          sessionId: session.id,
+          error: safeErrorText(error),
+        });
       }
     }
   }

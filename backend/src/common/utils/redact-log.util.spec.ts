@@ -38,6 +38,20 @@ test('redactLogValue handles nested objects, errors and unknown values', () => {
   assert.equal(redactLogValue(42), 42);
 });
 
+test('redacts secret assignments embedded in a serialised JSON string', () => {
+  const line = JSON.stringify({
+    event: 'worker_failed',
+    error: 'DB password=ci-secret token=abc failed at /app/tmp/db',
+    level: 'error',
+  });
+  const redacted = redactSensitiveText(line);
+  assert.ok(!redacted.includes('ci-secret'));
+  assert.ok(!redacted.includes('token=abc'));
+  assert.ok(!redacted.includes('/app/tmp/db'));
+  assert.ok(redacted.includes('[redacted]'));
+  assert.deepEqual(JSON.parse(redacted).event, 'worker_failed');
+});
+
 test('preserves ordinary operational text', () => {
   const raw = 'event=http_request path=/transfers status=200 durationMs=12';
   assert.equal(redactSensitiveText(raw), raw);

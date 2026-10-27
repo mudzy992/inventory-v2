@@ -1,3 +1,4 @@
+import { logStructuredEvent } from '../../common/logging/structured-event.logger';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -51,13 +52,19 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     }
     client.data.userId = userId;
     await client.join(`user:${userId}`);
-    this.logger.debug(`Client connected: user=${userId}`);
+    logStructuredEvent(this.logger, 'debug', {
+      event: 'notifications_client_connected',
+      userId,
+    });
   }
 
   handleDisconnect(client: Socket): void {
     const userId = client.data.userId as string | undefined;
     if (userId) {
-      this.logger.debug(`Client disconnected: user=${userId}`);
+      logStructuredEvent(this.logger, 'debug', {
+        event: 'notifications_client_disconnected',
+        userId,
+      });
     }
   }
 

@@ -180,6 +180,10 @@ jobs:
         working-directory: backend
         run: npm run test:integration:http-request-metrics
 
+      - name: Verify structured operational logs
+        working-directory: backend
+        run: npm run test:integration:structured-logs
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint

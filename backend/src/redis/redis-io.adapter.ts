@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../common/logging/structured-event.logger';
 import { Logger } from '@nestjs/common';
 import type { INestApplicationContext } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
@@ -58,12 +59,16 @@ export class RedisIoAdapter extends IoAdapter {
       ]);
 
       this.adapterConstructor = createAdapter(pubClient, subClient);
-      this.logger.log('Socket.IO Redis adapter connected — WebSocket broadcast now horizontally scalable.');
+      logStructuredEvent(this.logger, 'log', {
+        event: 'socketio_redis_adapter_connected',
+        horizontallyScalable: true,
+      });
     } catch (err) {
-      this.logger.warn(
-        `Socket.IO Redis adapter connection failed, falling back to in-memory adapter ` +
-          `(OK for single-instance deployment, NOT sufficient if scaled horizontally): ${String(err)}`,
-      );
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'socketio_redis_adapter_fallback',
+        mode: 'in_memory',
+        error: safeErrorText(err),
+      });
     }
   }
 

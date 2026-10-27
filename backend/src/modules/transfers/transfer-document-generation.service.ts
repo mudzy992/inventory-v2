@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import {
   BadRequestException,
   HttpException,
@@ -69,7 +70,10 @@ export class TransferDocumentGenerationService implements OnModuleInit {
       );
       return existsSync(absolutePath) ? absolutePath : null;
     } catch (error) {
-      this.logger.warn(`Ignoring invalid stored generated document path: ${String(error)}`);
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'transfer_generated_document_path_rejected',
+        error: safeErrorText(error),
+      });
       return null;
     }
   }
@@ -106,14 +110,19 @@ export class TransferDocumentGenerationService implements OnModuleInit {
       for (const transfer of transfers) {
         await this.generateForTransfer(transfer.id, transfer.createdByUserId ?? undefined).catch(
           (error: unknown) => {
-            this.logger.warn(
-              `Queued DOCX generation failed for transfer ${transfer.id}: ${String(error)}`,
-            );
+            logStructuredEvent(this.logger, 'warn', {
+              event: 'transfer_docx_queued_generation_failed',
+              transferId: transfer.id,
+              error: safeErrorText(error),
+            });
           },
         );
       }
     } catch (error) {
-      this.logger.error(`DOCX generation reconciliation failed: ${String(error)}`);
+      logStructuredEvent(this.logger, 'error', {
+        event: 'transfer_docx_reconciliation_failed',
+        error: safeErrorText(error),
+      });
     } finally {
       this.reconcilingDocxJobs = false;
     }
@@ -228,9 +237,11 @@ export class TransferDocumentGenerationService implements OnModuleInit {
           });
         }
       } catch (error) {
-        this.logger.warn(
-          `PDF enqueue failed for transfer ${transferId} (DOCX saved): ${String(error)}`,
-        );
+        logStructuredEvent(this.logger, 'warn', {
+          event: 'transfer_pdf_enqueue_failed',
+          transferId,
+          error: safeErrorText(error),
+        });
       }
     } catch (error) {
       await this.prisma.transfer.updateMany({
@@ -250,7 +261,11 @@ export class TransferDocumentGenerationService implements OnModuleInit {
     try {
       await this.generateForTransfer(transferId, requestedByUserId);
     } catch (error) {
-      this.logger.warn(`DOCX generation failed for committed transfer ${transferId}: ${String(error)}`);
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'transfer_docx_generation_failed',
+        transferId,
+        error: safeErrorText(error),
+      });
     }
   }
 
@@ -507,7 +522,11 @@ export class TransferDocumentGenerationService implements OnModuleInit {
     try {
       await this.retryDocxGeneration(transferId, requestedByUserId);
     } catch (error) {
-      this.logger.warn(`Lazy DOCX generation failed for transfer ${transferId}: ${String(error)}`);
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'transfer_docx_lazy_generation_failed',
+        transferId,
+        error: safeErrorText(error),
+      });
     }
   }
 

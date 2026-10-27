@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -23,15 +24,22 @@ export class RefreshTokenCleanupService {
         maxBatches: CLEANUP_MAX_BATCHES,
       });
       if (result.deleted > 0) {
-        this.logger.log(`Removed ${result.deleted} expired refresh-token records.`);
+        logStructuredEvent(this.logger, 'log', {
+          event: 'refresh_token_cleanup_completed',
+          deletedCount: result.deleted,
+        });
       }
       if (result.hasMore) {
-        this.logger.warn(
-          `Expired refresh-token cleanup reached its ${CLEANUP_MAX_BATCHES}-batch limit; remaining records will be handled by the next run.`,
-        );
+        logStructuredEvent(this.logger, 'warn', {
+          event: 'refresh_token_cleanup_batch_limit',
+          maxBatches: CLEANUP_MAX_BATCHES,
+        });
       }
     } catch (error) {
-      this.logger.error(`Expired refresh-token cleanup failed: ${String(error)}`);
+      logStructuredEvent(this.logger, 'error', {
+        event: 'refresh_token_cleanup_failed',
+        error: safeErrorText(error),
+      });
     } finally {
       this.cleanupRunning = false;
     }

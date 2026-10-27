@@ -38,14 +38,17 @@ test('routes log to stdout and warn/error to stderr', (t) => {
   });
 
   const infoLine = writeStructuredLog('log', { event: 'redis_client_ready', ready: true });
+  const debugLine = writeStructuredLog('debug', { event: 'document_conversion_reused' });
   const warnLine = writeStructuredLog('warn', { event: 'redis_client_close', ready: false });
   const errorLine = writeStructuredLog('error', { event: 'redis_client_error', ready: false });
 
-  assert.equal(out.length, 1);
+  assert.equal(out.length, 2);
   assert.equal(err.length, 2);
   assert.equal(out[0], `${infoLine}\n`);
+  assert.equal(out[1], `${debugLine}\n`);
   assert.equal(err[0], `${warnLine}\n`);
   assert.equal(err[1], `${errorLine}\n`);
+  assert.equal(JSON.parse(debugLine).level, 'debug');
   assert.equal(JSON.parse(warnLine).level, 'warn');
   assert.equal(JSON.parse(errorLine).level, 'error');
 });

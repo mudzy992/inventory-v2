@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -91,7 +92,10 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
       // QueueEvents (i njegova interna Redis konekcija) se sama re-konektuje
       // uz ugrađeni ioredis retryStrategy — greška ovdje je samo
       // dijagnostička, ne fatalna.
-      this.logger.warn(`QueueEvents connection error (auto-retrying): ${String(err)}`);
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'document_queue_events_connection_error',
+        error: safeErrorText(err),
+      });
     });
 
     // Ne blokiramo boot ako je Redis trenutno nedostupan. QueueEvents se
@@ -101,7 +105,10 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
       .waitUntilReady()
       .then(() => this.reconcileStaleJobs())
       .catch((error: unknown) => {
-        this.logger.warn(`Document job startup reconciliation could not wait for QueueEvents: ${String(error)}`);
+        logStructuredEvent(this.logger, 'warn', {
+          event: 'document_startup_reconcile_queue_events_unavailable',
+          error: safeErrorText(error),
+        });
       });
   }
 
@@ -123,12 +130,18 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
       try {
         staleJobs = await this.documentJobs.findActiveJobs();
       } catch (err) {
-        this.logger.warn(`reconcileStaleJobs: could not read DocumentJob rows: ${String(err)}`);
+        logStructuredEvent(this.logger, 'warn', {
+          event: 'document_stale_job_read_failed',
+          error: safeErrorText(err),
+        });
         return;
       }
       if (staleJobs.length === 0) return;
 
-      this.logger.log(`Reconciling ${staleJobs.length} DocumentJob row(s) left queued/running...`);
+      logStructuredEvent(this.logger, 'log', {
+        event: 'document_stale_job_reconcile_started',
+        count: staleJobs.length,
+      });
       for (const documentJob of staleJobs) {
         try {
           // BullMQ jobId === DocumentJob.id (vidi DocumentConversionQueueService).
@@ -175,7 +188,11 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
           // već konzistentan (queued/running) — ništa za uraditi, normalan
           // event tok će ga dalje ažurirati.
         } catch (err) {
-          this.logger.warn(`reconcileStaleJobs: failed for DocumentJob ${documentJob.id}: ${String(err)}`);
+          logStructuredEvent(this.logger, 'warn', {
+            event: 'document_stale_job_reconcile_failed',
+            documentJobId: documentJob.id,
+            error: safeErrorText(err),
+          });
         }
       }
     } finally {
@@ -194,7 +211,12 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
         await this.notify(jobId, 'running');
       }
     } catch (err) {
-      this.logger.warn(`handleActive(${jobId}) failed: ${String(err)}`);
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'document_job_event_handler_failed',
+        handler: 'active',
+        jobId,
+        error: safeErrorText(err),
+      });
     }
   }
 
@@ -205,7 +227,12 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
       await this.syncCompletedDocument(documentJob);
       await this.notify(jobId, 'done');
     } catch (err) {
-      this.logger.warn(`handleCompleted(${jobId}) failed: ${String(err)}`);
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'document_job_event_handler_failed',
+        handler: 'completed',
+        jobId,
+        error: safeErrorText(err),
+      });
     }
   }
 
@@ -234,12 +261,21 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
         // attempts counter radi vidljivosti u DB-u dok se ne desi sljedeći
         // pokušaj.
         await this.documentJobs.incrementAttempts(jobId);
-        this.logger.debug(
-          `Document job ${jobId} attempt ${attemptsMade}/${maxAttempts} failed, BullMQ will retry: ${failedReason}`,
-        );
+        logStructuredEvent(this.logger, 'debug', {
+          event: 'document_job_retry_scheduled',
+          jobId,
+          attemptsMade,
+          maxAttempts,
+          reason: failedReason,
+        });
       }
     } catch (err) {
-      this.logger.warn(`handleFailed(${jobId}) failed: ${String(err)}`);
+      logStructuredEvent(this.logger, 'warn', {
+        event: 'document_job_event_handler_failed',
+        handler: 'failed',
+        jobId,
+        error: safeErrorText(err),
+      });
     }
   }
 
@@ -279,9 +315,10 @@ export class DocumentConversionEventsService implements OnModuleInit, OnModuleDe
         default:
         // Document Engine podržava i buduće tipove dokumenata.
         // Ako domena nema poseban completion sync, nema dodatnog DB upisa.
-        this.logger.debug(
-            `No domain completion sync registered for sourceType=${documentJob.sourceType}`,
-        );
+        logStructuredEvent(this.logger, 'debug', {
+          event: 'document_job_completion_sync_missing',
+          sourceType: documentJob.sourceType,
+        });
     }
     }
 }

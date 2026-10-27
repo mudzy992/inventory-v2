@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { randomUUID } from 'node:crypto';
@@ -49,7 +50,10 @@ export class NotificationOutboxRelayService implements OnModuleInit {
         await this.deliverOne(row);
       }
     } catch (error) {
-      this.logger.error(`Notification outbox scan failed: ${String(error)}`);
+      logStructuredEvent(this.logger, 'error', {
+        event: 'notification_outbox_scan_failed',
+        error: safeErrorText(error),
+      });
     } finally {
       this.active = false;
     }
@@ -119,7 +123,11 @@ export class NotificationOutboxRelayService implements OnModuleInit {
           lastError: error instanceof Error ? error.message : String(error),
         },
       });
-      this.logger.error(`Notification outbox delivery failed for ${candidate.id}: ${String(error)}`);
+      logStructuredEvent(this.logger, 'error', {
+        event: 'notification_outbox_delivery_failed',
+        outboxId: candidate.id,
+        error: safeErrorText(error),
+      });
     }
   }
 }

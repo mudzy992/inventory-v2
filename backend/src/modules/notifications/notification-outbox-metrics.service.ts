@@ -1,3 +1,4 @@
+import { logStructuredEvent, safeErrorText } from '../../common/logging/structured-event.logger';
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -47,7 +48,10 @@ export class NotificationOutboxMetricsService {
         this.logger.log(line);
       }
     } catch (error) {
-      this.logger.error(`notification_outbox_backlog collection failed: ${String(error)}`);
+      logStructuredEvent(this.logger, 'error', {
+        event: 'notification_outbox_collection_failed',
+        error: safeErrorText(error),
+      });
     } finally {
       this.active = false;
     }

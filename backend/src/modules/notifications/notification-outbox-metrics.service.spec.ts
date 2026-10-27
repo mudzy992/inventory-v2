@@ -160,5 +160,8 @@ test('database outage is contained and logged without crashing the scheduler', a
 
   assert.equal(logs.length, 1);
   assert.equal(logs[0]?.level, 'error');
-  assert.match(logs[0]?.line ?? '', /collection failed/);
+  const payload = JSON.parse(logs[0]?.line ?? '{}') as Record<string, unknown>;
+  assert.equal(payload.event, 'notification_outbox_collection_failed');
+  assert.equal(payload.level, 'error');
+  assert.ok(typeof payload.error === 'string');
 });
