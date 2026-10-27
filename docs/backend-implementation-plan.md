@@ -141,6 +141,8 @@ Mutacijski dokaz: privremeno uklanjanje `key` opcije iz `createAdapter` uzrokuje
 
 **Workflow i dokumentacija.** `backend/prisma/migrations/README.md` je osvježen: nova migracija → pregled SQL-a → `schema.prisma` → `npm run prisma:manifest` → commit migracije + manifesta + sheme. Ako se manifest ne regeneriše, CI namjerno pada. README također opisuje marker za destruktivni SQL.
 
+**CI dokaz.** Commit `e52827b` prolazi u run-u `40504534546` (`completed success` na backend, frontend i document-worker jobovima). Novi korak `Verify migration history and schema snapshot` (9) je zelen, kao i `Validate Prisma schema and migrations` (7), `Verify SQL-only migration invariant` (8), lint (37), typecheck (38), svih 698 backend unit testova (39) i build (41). Lokalno su potvrđeni i `test:unit:migration-drift` (10/10), idempotentna regeneracija manifesta, Redis/PostgreSQL TLS handshake dokazi, Socket.IO shared adapter, business-transition i structured-logs integracije, 14/14 FE guardova, 15/15 worker unit testova, worker build i `npm audit` = 0 nalaza.
+
 **Ograničenje (namjerno):** ovo je repozitorijski gate, ne live introspection. `prisma migrate diff --from-config-datasource --to-schema …` nad **staging kopijom** baze ostaje deployment korak za otkrivanje ručnih DDL promjena na živoj bazi; sandbox ne može preuzeti Prisma schema-engine, pa je on svjesno ostavljen vlasniku umjesto da se doda neprovjerljiv CI korak.
 
 ## 4. Talas 1 — sigurnosni P1 nalazi
