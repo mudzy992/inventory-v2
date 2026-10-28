@@ -308,11 +308,27 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
                   {settings.presetId === 'custom' ? (
                     <option value="custom">Prilagođeno (ručne mjere)</option>
                   ) : null}
-                  {LABEL_PRESETS.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.name} — {preset.detail}
-                    </option>
-                  ))}
+                  <optgroup label="Fornax F (ILK)">
+                    {LABEL_PRESETS.filter((preset) => preset.group === 'fornax').map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name} — {preset.detail}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Avery / Zweckform">
+                    {LABEL_PRESETS.filter((preset) => preset.group === 'avery').map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name} — {preset.detail}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Generičke mreže (običan papir)">
+                    {LABEL_PRESETS.filter((preset) => preset.group === 'generic').map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name} — {preset.detail}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
                 <div className="grid grid-cols-2 gap-2 mt-3" role="group" aria-label="Orijentacija lista">
                   {(

@@ -32,6 +32,25 @@ describe('label-print-layout presets', () => {
     expect(layout.labelHeightMm).toBeCloseTo(38.11, 1);
   });
 
+  it('Fornax F-20 yields 56 labels of 52.5 x 21.2 mm', () => {
+    const preset = LABEL_PRESETS.find((row) => row.id === 'fornax-f-20')!;
+    const layout = computeLabelLayout(withGeometry(preset.geometry));
+    expect(layout.labelsPerPage).toBe(56);
+    expect(layout.labelWidthMm).toBeCloseTo(52.5, 1);
+    expect(layout.labelHeightMm).toBeCloseTo(21.2, 1);
+  });
+
+  it('Fornax catalog: every F preset matches its declared label count', () => {
+    const fornax = LABEL_PRESETS.filter((preset) => preset.group === 'fornax');
+    expect(fornax.length).toBeGreaterThanOrEqual(19);
+    for (const preset of fornax) {
+      const expected = Number(/^(\d+)/.exec(preset.detail)?.[1]);
+      const layout = computeLabelLayout(withGeometry({ ...preset.geometry, presetId: preset.id }));
+      expect(layout.labelsPerPage, preset.id).toBe(expected);
+      expect(layout.errors.filter((e) => !e.includes('premala')), preset.id).toEqual([]);
+    }
+  });
+
   it('L7651 yields 65 mini labels', () => {
     const preset = LABEL_PRESETS.find((row) => row.id === 'avery-l7651')!;
     const layout = computeLabelLayout(withGeometry(preset.geometry));
@@ -49,8 +68,11 @@ describe('label-print-layout presets', () => {
   it('flags tiny labels as an error and sub-3mm margins as a warning', () => {
     const layout = computeLabelLayout(withGeometry({ columns: 12, rows: 30, marginLeftMm: 40, marginRightMm: 40 }));
     expect(layout.errors.length).toBeGreaterThan(0);
-    const borderless = computeLabelLayout(withGeometry({ marginTopMm: 0 }));
+    const borderless = computeLabelLayout(withGeometry({ marginTopMm: 0, presetId: 'custom' }));
     expect(borderless.warnings.some((row) => row.includes('3 mm'))).toBe(true);
+    // Factory die-cut presets are edge-to-edge by design — no borderless noise.
+    const presetEdge = computeLabelLayout(withGeometry({ marginTopMm: 0, presetId: 'fornax-f-21' }));
+    expect(presetEdge.warnings.some((row) => row.includes('3 mm'))).toBe(false);
   });
 });
 

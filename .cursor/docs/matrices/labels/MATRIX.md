@@ -4,7 +4,7 @@
 
 - Komponenta `LabelPrintSheet` — **A4 studio za naljepnice** (layout endžin: `frontend/src/components/labels/label-print-layout.ts`)
 - Format: A4 uspravno/vodoravno, `@page size: A4`, margine lista (mm), kolone/redovi, razmaci ↔/↕ — veličina naljepnice se izračunava
-- Standardni formati (Avery-kompatibilni): L7651 (65), L7159 (24), L7160 (21, zadano), L7161 (18), L7162 (16), L7163 (14), L7165 (8), L7167 (1) + generičke mreže 2×5 i 4×10; ručna izmjena geometrije ⇒ „Prilagođeno"
+- Standardni formati, grupisani u izboru: **Fornax F (ILK)** — F-01 (65), F-10 (64), F-20 (56 · 52,5×21,2), F-21 (40), F-30 (24), F-40 (33), F-41 (30), F-42/F-43/F-44 (24), F-46 (15), F-50 (12), F-51 (8), F-60 (16), F-65 (12), F-67/F-70 (8), F-71 (4), F-83 registratori (4); **Avery/Zweckform** — L7651 (65), L7159 (24), L7160 (21, zadano), L7161 (18), L7162 (16), L7163 (14), L7165 (8), L7167 (1); generičke mreže 2×5 i 4×10. Ručna izmjena geometrije ⇒ „Prilagođeno". Okrugli Fornax formati (F-02/F-03/F-04) namjerno nisu ponuđeni (nisu za QR).
 - Početna pozicija: preskakanje polja na prvom listu (unos ili klik na pregled) za djelimično iskorištene listove; kopije po artiklu (1–50)
 - Sadržaj: naziv opreme, naziv lota, kategorija, serijski, inventurni broj/linija za upis, tekst „Skeniraj za detalje"; QR pozicija (lijevo/gore) i veličina (40–100 %); gustina teksta se prilagođava visini naljepnice (micro < 16 mm, compact < 26 mm)
 - Vodilje: isprekidani okvir u pregledu uvijek; u štampi samo ako je uključeno „Štampaj vodilje"
