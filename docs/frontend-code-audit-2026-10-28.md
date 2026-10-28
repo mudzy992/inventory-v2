@@ -180,3 +180,31 @@ npm audit --audit-level=low
 ```
 
 Sve navedeno je uključeno u `Branch CI` → job `Frontend checks`.
+
+---
+
+## 8. CI dokaz (Branch CI)
+
+Završni zeleni run **`40703019197`** (`completed success`) na sva tri joba:
+`Frontend checks`, `Backend checks (PostgreSQL + Redis)`,
+`Document worker checks`. Ključni koraci u frontend jobu:
+
+| Korak | Rezultat |
+| --- | --- |
+| `Typecheck frontend` | success |
+| `Verify frontend design system and a11y contract` | success |
+| `Run frontend unit specs` | success (56 scenarija) |
+| `Build frontend` | success |
+| `Verify frontend bundle budget` | success |
+| `Audit frontend dependencies` | success (0 nalaza) |
+
+U backend jobu su i dalje zeleni `Verify independent audit findings (N-5..N-15)`,
+`Verify N-9..N-15 unit contracts` i `Audit backend dependencies`.
+
+**Incident tokom isporuke:** prvi run `40701684727` je pao isključivo na
+`Audit backend dependencies` jer je tog dana objavljena nova niskorizična
+savjetodavna napomena `GHSA-gcqx-w48m-w2h4` (`deepmerge >=4.2.0 <=4.3.1`) u
+dev lancu `@nestjs/cli`. Riješeno `overrides.deepmerge = "4.1.2"` uz zadržan
+`nest build`, `tsc`, lint i 844 backend unit testa; detalj u
+`docs/backend-implementation-plan.md` §0.21. Frontend job je u oba runa bio
+zelen.

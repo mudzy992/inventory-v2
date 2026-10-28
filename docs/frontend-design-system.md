@@ -86,3 +86,10 @@ utilitije generisane iz tokena (`bg-panel`, `text-ink`, `border-line`,
 - **Potpuni dizajn svih poslovnih stranica.** Redizajn pokriva omotač, prijavu
   i zajedničke primitive; stranice zadržavaju postojeći izgled, ali nasljeđuju
   globalni fokus, kontrast, tokene i dijeljene kontrole.
+
+## CI dokaz
+
+Završni run **`40703019197`** — `Frontend checks: success`, uključujući
+`Verify frontend design system and a11y contract`, `Run frontend unit specs`
+(56/56) i `Verify frontend bundle budget`. Audit nalaza i ocjena:
+`docs/frontend-code-audit-2026-10-28.md`.
