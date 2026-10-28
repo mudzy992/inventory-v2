@@ -99,7 +99,9 @@ export function QRScannerPage() {
   };
 
   return (
-    <div>
+    <div className="ds-skip-link-container">
+      <a href="#qr-scanner-content" className="ds-skip-link">Preskoči na QR skener</a>
+      <div id="qr-scanner-content">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <QrCode size={28} className="text-blue-500" /> QR Skener
@@ -109,7 +111,7 @@ export function QRScannerPage() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-6">
         <div className="max-w-md mx-auto">
-          <div className="bg-gray-900 rounded-2xl aspect-square flex flex-col items-center justify-center mb-6 relative overflow-hidden">
+          <div className="bg-gray-900 rounded-2xl aspect-square flex flex-col items-center justify-center mb-6 relative overflow-hidden forced-colors:border-2 forced-colors:border-white print:hidden">
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-48 h-48 border-2 border-white/30 rounded-2xl">
                 <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-lg" />
@@ -137,6 +139,7 @@ export function QRScannerPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && void handleSearch()}
                 placeholder="INV-RS-2024-0001 ili QR kod..."
+                aria-label="Unesite inventurni broj ili QR kod za pretragu opreme"
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
             </div>
@@ -203,6 +206,7 @@ export function QRScannerPage() {
           showTransferActions={admin}
         />
       ) : null}
+    </div>
     </div>
   );
 }
