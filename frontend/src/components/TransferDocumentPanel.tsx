@@ -321,7 +321,7 @@ export const TransferDocumentPanel = ({
     : 'w-full h-[360px] border rounded bg-white';
 
   const drawerPreview = isDrawer && showAutoPreview ? (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col forced-colors:border-2 forced-colors:border-system prefers-contrast:high-contrast prefers-reduced-motion:reduce-motion print:shadow-none print:border-0">
       {isPreviewLoading ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-gray-500">Učitavanje PDF pregleda…</p>
@@ -504,7 +504,7 @@ export const TransferDocumentPanel = ({
 
   if (isDrawer) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col forced-colors:border-2 forced-colors:border-system prefers-contrast:high-contrast prefers-reduced-motion:reduce-motion print:shadow-none print:border-0">
         <div className="shrink-0 border-b border-gray-100 bg-white px-4 py-3 md:px-5">
           <div className="flex flex-wrap items-center gap-2">{actionButtons}</div>
           {finalizeBlocked ? (
