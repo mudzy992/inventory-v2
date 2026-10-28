@@ -108,7 +108,7 @@ jobs:
           node <<'NODE'
           const http = require('http');
           const assert = require('assert');
-          // Minimal contract check: endpoint returns 200 and 8-key whitelist for any authenticated user
+          // Minimal contract check: endpoint returns 200 and whitelisted keys (7) for any authenticated user
           // In CI this is covered by integration tests; here we verify the endpoint exists in controller.
           const fs = require('fs');
           const controllerSource = fs.readFileSync('src/modules/settings/settings.controller.ts', 'utf8');
