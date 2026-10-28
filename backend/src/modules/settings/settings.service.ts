@@ -45,6 +45,17 @@ export class SettingsService {
   // veliku većinu ponovljenih upita bez primjetnog staleness rizika;
   // eksplicitna invalidacija na svaki upis (updateValue/upsertValues)
   // dodatno smanjuje taj prozor na praktično nulu za normalne tokove.
+  private static readonly EFFECTIVE_SETTING_KEYS = [
+    'transfer.allow_finalize_without_upload',
+    'transfer.allow_evidenticar_cross_city',
+    'transfer.generation.enabled',
+    'upload.max_mb',
+    'transfer.require_signed_pdf_upload',
+    'features.moderator_role',
+    'features.inventory_manual_committee_create',
+    'inventory.auto_create_draft_session',
+  ];
+
   private static readonly CACHE_TTL_SECONDS = 30;
 
   constructor(
@@ -141,6 +152,23 @@ export class SettingsService {
       orderBy: { key: 'asc' },
     });
     return rows.map((row) => this.toResponse(row));
+  }
+
+  async findEffective(): Promise<Record<string, string | number | boolean>> {
+    const result: Record<string, string | number | boolean> = {};
+    for (const key of SettingsService.EFFECTIVE_SETTING_KEYS) {
+      const definition = getSettingDefinition(key);
+      if (!definition) {
+        continue;
+      }
+      const row = await this.getRow(key);
+      if (row) {
+        result[key] = this.parseValue(row.value, row.valueType);
+      } else {
+        result[key] = definition.defaultValue;
+      }
+    }
+    return result;
   }
 
   async upsertValues(

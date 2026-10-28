@@ -22,6 +22,20 @@ export class SettingsController {
     return this.settingsService.findByScope('private');
   }
 
+  @Get('effective')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    UserRole.admin,
+    UserRole.moderator,
+    UserRole.evidenticar,
+    UserRole.popis_koordinator,
+    UserRole.user,
+    UserRole.skladistar,
+  )
+  getEffectiveSettings() {
+    return this.settingsService.findEffective();
+  }
+
   @Patch(':key')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)

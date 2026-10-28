@@ -20,7 +20,7 @@ import {
   type TransferDocumentPreviewMode,
 } from './transfers/use-transfer-document-preview';
 import { cn } from '../utils/cn';
-import { useAdminSettings } from '../contexts/admin-settings-context';
+import { useEffectiveSettings } from '../hooks/use-effective-settings';
 import { isAdmin, isEvidenticar, isModerator } from '../store';
 import { useToast } from '../contexts/toast-context';
 import {
@@ -54,14 +54,14 @@ export const TransferDocumentPanel = ({
   layout = 'inline',
   autoPreview = false,
 }: TransferDocumentPanelProps) => {
-  const { getBoolean, getNumber, settings: adminSettings } = useAdminSettings();
+  const { getBoolean: getEffectiveBoolean, getNumber: getEffectiveNumber, settings: effectiveSettings } = useEffectiveSettings();
   const { toastError } = useToast();
   const { isConnected } = useNotifications();
-  const isPdfGenerationEnabled = adminSettings['transfer.generate_print_pdf'] !== false;
-  const maxUploadMb = getNumber('upload.max_mb', 10);
+  const isPdfGenerationEnabled = getEffectiveBoolean('transfer.generate_print_pdf', true);
+  const maxUploadMb = getEffectiveNumber('upload.max_mb', 10);
   const allowFinalizeWithoutUpload =
-    isAdmin() && getBoolean('transfer.allow_finalize_without_upload', false);
-  const requireSignedPdf = getBoolean('transfer.require_signed_pdf_upload', true);
+    isAdmin() && getEffectiveBoolean('transfer.allow_finalize_without_upload', false);
+  const requireSignedPdf = getEffectiveBoolean('transfer.require_signed_pdf_upload', true);
   const [isLoading, setIsLoading] = useState(false);
   const [docxStatus, setDocxStatus] = useState<
     'not_requested' | 'queued' | 'running' | 'done' | 'failed'
@@ -296,7 +296,7 @@ export const TransferDocumentPanel = ({
   const canShowDocx =
     canShowTransferGeneratedDocx(generatedDocumentState) && (inventoryMode || isRaw);
   const canShowPdf =
-    canShowTransferGeneratedPdf(generatedDocumentState, adminSettings) && (inventoryMode || isRaw);
+    canShowTransferGeneratedPdf(generatedDocumentState, effectiveSettings) && (inventoryMode || isRaw);
   const pdfNotice = isPdfGenerationEnabled
     ? describeGeneratedPdfStatus(pdfStatus, hasGeneratedPdf, pdfError)
     : null;

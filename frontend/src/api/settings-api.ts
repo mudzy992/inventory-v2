@@ -24,6 +24,9 @@ export interface SettingDto {
 export const fetchPrivateSettingsApi = (): Promise<SettingDto[]> =>
   apiRequest<SettingDto[]>('/settings/private');
 
+export const fetchEffectiveSettingsApi = (): Promise<Record<string, string | number | boolean>> =>
+  apiRequest<Record<string, string | number | boolean>>('/settings/effective');
+
 export const patchSettingApi = (
   key: string,
   value: string | number | boolean,

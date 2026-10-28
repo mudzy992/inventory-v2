@@ -60,6 +60,28 @@ test('ensureDefaults uses one idempotent upsert transaction and invalidates cach
   );
 });
 
+test('findEffective returns the 8 whitelisted setting keys with their database or default values', async () => {
+  const { service } = createService();
+  // Mock getRow to return null for all keys so defaults are used
+  const originalGetRow = (service as any).getRow.bind(service);
+  (service as any).getRow = async () => null;
+
+  const result = await service.findEffective();
+
+  assert.equal(typeof result, 'object');
+  assert.ok('transfer.allow_finalize_without_upload' in result);
+  assert.ok('transfer.allow_evidenticar_cross_city' in result);
+  assert.ok('transfer.generation.enabled' in result);
+  assert.ok('upload.max_mb' in result);
+  assert.ok('transfer.require_signed_pdf_upload' in result);
+  assert.ok('features.moderator_role' in result);
+  assert.ok('features.inventory_manual_committee_create' in result);
+  assert.ok('inventory.auto_create_draft_session' in result);
+  assert.equal(Object.keys(result).length, 8);
+  // Restore mock (not strictly needed since service is isolated)
+  (service as any).getRow = originalGetRow;
+});
+
 test('ensureDefaults does not invalidate cache when the defaults transaction fails', async () => {
   const failure = new Error('transaction rolled back');
   const { service, invalidatedKeys } = createService({ failTransaction: failure });
