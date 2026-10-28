@@ -4,6 +4,12 @@
 **Osnova:** [`frontend-audit.md`](./frontend-audit.md), koji sadrži nalaze, izvore u kodu i početnu faznu podjelu
 **Opseg:** React/TypeScript SPA, API ugovor i error state, auth/session, notifications/socket, print/export, testovi, build/CI, deployment i UX pristupačnost.
 
+> **Ažuriranje 2026-10-28:** većina ovog plana je realizirana kroz prethodne
+> pakete, a preostali UX/a11y/dizajn dio kroz novi
+> [`frontend-code-audit-2026-10-28.md`](./frontend-code-audit-2026-10-28.md) i
+> [`frontend-design-system.md`](./frontend-design-system.md). Ovaj dokument
+> zadržavamo kao historijsku razradu kriterija prihvatanja.
+
 > Plan je zasnovan na statičkom pregledu koda. Ne mijenja ponašanje aplikacije i nije potvrda produkcijskog UX-a. Promjene korisničkih tokova/statusa treba prije implementacije potvrditi sa stvarnim korisnicima i uskladiti sa backend pravilima.
 
 ## 1. Cilj i načela

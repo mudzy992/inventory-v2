@@ -10,6 +10,11 @@ implementaciju i test. Polazni commit: `611d26d` (čisto radno stablo).
 Cilj: **precizna, mjerljiva slika frontend-a**, provedena kroz kod, testove i
 CI — uz **moderan redizajn** aplikacijskog omotača i prijave.
 
+**Odnos prema starim dokumentima:** `docs/frontend-audit.md` (5.2/10, 98
+TypeScript grešaka) i `docs/frontend-implementation-plan.md` su historijski
+snapshot ranijeg baseline-a. Njihovi nalazi su već bili ispravljeni prije ovog
+audita — ovdje mjerimo **stanje na `611d26d`**, ne ponavljamo stare nalaze.
+
 ---
 
 ## 1. Izmjerene metrike (prije → poslije)

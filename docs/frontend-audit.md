@@ -5,6 +5,14 @@
 **Izvor istine:** `frontend/src`, `frontend/package.json`/lockfile, `frontend/tsconfig.json`, Vite, Docker i Nginx konfiguracija.
 **Opseg:** analiza autentikacije/tokena, API klijenta, ruta i UI autorizacije, globalnog stanja, glavnih domena, HTML/print tokova, zavisnosti, testova, build-a i isporuke SPA-a. Nisu pregledani produkcijski response headers, CORS/TLS/firewall, browser telemetry niti izvršen penetration test.
 
+
+> **Ažuriranje 2026-10-28:** ovaj dokument je **historijski snapshot** starog
+> baseline-a (5.2/10, 98 TypeScript grešaka, 6 dependency nalaza). Ti nalazi su
+> u međuvremenu ispravljeni — `npx tsc --noEmit` i `npm audit --audit-level=low`
+> sada prolaze. Autoritativni, svježi code-only audit je
+> [`frontend-code-audit-2026-10-28.md`](./frontend-code-audit-2026-10-28.md),
+> a dizajn sistem je u [`frontend-design-system.md`](./frontend-design-system.md).
+
 > Ovo je preventivni plan na osnovu repozitorija; ne mijenja aplikacijski kod i ne potvrđuje ponašanje stvarnog deployment-a. Autoritativna kontrola pristupa i validacija moraju ostati na backendu.
 >
 > Detaljna implementacijska razrada, kriteriji prihvatanja, testni scenariji i release gate nalaze se u [`frontend-implementation-plan.md`](./frontend-implementation-plan.md).

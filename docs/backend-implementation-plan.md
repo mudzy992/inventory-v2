@@ -893,6 +893,21 @@ ostaje stvarni staging p95 test na produkcijskom datasetu, fizička SAN potvrda
 i mrežna topologija proxy lanca; to se ne može dokazati iz sandboxa.
 
 
+
+### 0.21 Dev-dependency advisory: `deepmerge` override (2026-10-28)
+
+CI run `40701684727` je pao na koraku `Audit backend dependencies` iako ovaj
+paket nije mijenjao backend: nova savjetodavna napomena
+`GHSA-gcqx-w48m-w2h4` (`deepmerge >=4.2.0 <=4.3.1`, prototype poisoning) pogodila
+je isključivo **dev** lanac `@nestjs/cli@11 → fork-ts-checker-webpack-plugin@9 →
+deepmerge@4.3.1`. Kako `deepmerge` još nema patchiranu 4.x verziju, u
+`backend/package.json` je dodan `overrides.deepmerge = "4.1.2"` (verzija prije
+uvođenja ranjivog `mergeObject()` koda). `npm audit --audit-level=low` ponovo
+daje 0 nalaza u sva tri workspace-a, `npx nest build`, `tsc --noEmit`, lint i
+844 backend unit testa prolaze. Produkcijski runtime dependency tree nije
+diran — `deepmerge` se ne nalazi u nijednom produkcijskom image layeru.
+
+
 ## 4. Talas 1 — sigurnosni P1 nalazi
 
 ### 1.1 Dependency nadogradnje kao odvojeni, mali paketi
