@@ -1,5 +1,9 @@
 # Changelog — labels
 
+## 2026-10-28 (3)
+
+- Audit sadržaja naljepnice prema specifikaciji (QR → naziv opreme → kategorija → serijski → inventurni): naziv opreme je sada `stockLot.productName` na **svim** formatima (prije se na naljepnicama < 26 mm nije štampao — F-20/F-01/F-10/F-40!), dva toggle-a za naziv spojena u jedan (`showEquipmentName`, migracija starih postavki), inventurni broj zaključan kao obavezan (uklonjen toggle, `sanitize` ga forsira na `true`).
+
 ## 2026-10-28 (2)
 
 - Dodata kompletna Fornax F (ILK) porodica preseta (19 formata, uklj. F-20 52,5×21,2 mm / 56 po listu), grupisan izbor formata (Fornax / Avery / generičke), upozorenje za borderless margine samo kod prilagođenih mjera (fabrički formati „bez ruba" ga ne okidaju).

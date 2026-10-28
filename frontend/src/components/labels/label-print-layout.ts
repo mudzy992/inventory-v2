@@ -23,10 +23,11 @@ export interface LabelPrintSettings {
   /** Number of cells to skip on the first sheet (partially used sticker sheet). */
   startOffset: number;
   copiesPerItem: number;
-  showDisplayName: boolean;
-  showLotName: boolean;
+  /** Equipment name: stock-lot productName, falling back to the specification name. */
+  showEquipmentName: boolean;
   showCategory: boolean;
   showSerial: boolean;
+  /** Inventory number is mandatory on every label — kept in settings only for storage compatibility; sanitize forces it to true. */
   showInventoryNumber: boolean;
   showScanHint: boolean;
   qrPosition: LabelQrPosition;
@@ -155,8 +156,7 @@ export const DEFAULT_LABEL_SETTINGS: LabelPrintSettings = {
   ...DEFAULT_PRESET.geometry,
   startOffset: 0,
   copiesPerItem: 1,
-  showDisplayName: true,
-  showLotName: true,
+  showEquipmentName: true,
   showCategory: true,
   showSerial: true,
   showInventoryNumber: true,
@@ -257,9 +257,20 @@ const clamp = (value: unknown, fallback: number, min: number, max: number): numb
 export const sanitizeLabelSettings = (raw: Partial<LabelPrintSettings> | null | undefined): LabelPrintSettings => {
   const base = DEFAULT_LABEL_SETTINGS;
   if (!raw || typeof raw !== 'object') return { ...base };
-  const merged: LabelPrintSettings = { ...base, ...raw };
+  // Legacy storage (v1) had separate showLotName/showDisplayName toggles.
+  const legacy = raw as Partial<LabelPrintSettings> & { showLotName?: boolean; showDisplayName?: boolean };
+  const merged: LabelPrintSettings = {
+    ...base,
+    ...raw,
+    showEquipmentName:
+      typeof raw.showEquipmentName === 'boolean'
+        ? raw.showEquipmentName
+        : Boolean(legacy.showLotName ?? legacy.showDisplayName ?? true),
+  };
   return {
     ...merged,
+    // Inventurni broj je obavezan na svakoj naljepnici — ne može se isključiti.
+    showInventoryNumber: true,
     presetId: typeof merged.presetId === 'string' ? merged.presetId : 'custom',
     orientation: merged.orientation === 'landscape' ? 'landscape' : 'portrait',
     columns: Math.round(clamp(merged.columns, base.columns, 1, 12)),

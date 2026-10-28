@@ -189,8 +189,9 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
     const metaSizeMm = density === 'full' ? 2.4 : 2.1;
     const invSizeMm = density === 'full' ? 4 : 3.2;
 
-    const showName = settings.showDisplayName && density !== 'micro' && Boolean(displayName);
-    const showLot = settings.showLotName && density === 'full' && Boolean(lotName);
+    // Naziv opreme: productName iz stock lota; fallback naziv iz specifikacija.
+    const equipmentName = lotName || displayName;
+    const showName = settings.showEquipmentName && density !== 'micro' && Boolean(equipmentName);
     const showCat = settings.showCategory && density !== 'micro' && Boolean(category?.name);
     const showSerial = settings.showSerial && density !== 'micro' && Boolean(serial);
     const showHint = settings.showScanHint && density === 'full';
@@ -200,17 +201,12 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
         className={`flex-1 min-w-0 flex flex-col justify-center ${settings.qrPosition === 'top' ? 'items-center text-center' : 'text-left'}`}
         style={{ gap: '0.6mm' }}
       >
-        {showLot ? (
-          <p className="font-semibold text-gray-900 leading-tight line-clamp-2" style={{ fontSize: `${nameSizeMm}mm` }}>
-            {lotName}
-          </p>
-        ) : null}
         {showName ? (
           <p
-            className={`${showLot ? 'text-gray-700' : 'font-semibold text-gray-900'} leading-tight line-clamp-2`}
-            style={{ fontSize: `${showLot ? metaSizeMm + 0.3 : nameSizeMm}mm` }}
+            className={`font-semibold text-gray-900 leading-tight ${density === 'full' ? 'line-clamp-2' : 'line-clamp-1'}`}
+            style={{ fontSize: `${nameSizeMm}mm` }}
           >
-            {displayName}
+            {equipmentName}
           </p>
         ) : null}
         {showCat ? (
@@ -223,21 +219,20 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
             <span className="text-gray-500">{serial.label}:</span> {serial.value}
           </p>
         ) : null}
-        {settings.showInventoryNumber ? (
-          isTracked ? (
-            <p className="font-mono font-bold text-gray-900 tracking-tight" style={{ fontSize: `${invSizeMm}mm` }}>
-              {item.inventoryNumber}
-            </p>
-          ) : (
-            <p
-              className="font-mono font-bold text-gray-900 tracking-tight border-b border-gray-900"
-              style={{ fontSize: `${invSizeMm}mm`, minHeight: `${invSizeMm + 1}mm`, minWidth: '24mm' }}
-              aria-label="Prazna linija za ručni upis inventurnog broja"
-            >
-              {'\u00A0'}
-            </p>
-          )
-        ) : null}
+        {/* Inventurni broj je OBAVEZAN — uvijek se štampa (evidencijska: linija za ručni upis). */}
+        {isTracked ? (
+          <p className="font-mono font-bold text-gray-900 tracking-tight" style={{ fontSize: `${invSizeMm}mm` }}>
+            {item.inventoryNumber}
+          </p>
+        ) : (
+          <p
+            className="font-mono font-bold text-gray-900 tracking-tight border-b border-gray-900"
+            style={{ fontSize: `${invSizeMm}mm`, minHeight: `${invSizeMm + 1}mm`, minWidth: '24mm' }}
+            aria-label="Prazna linija za ručni upis inventurnog broja"
+          >
+            {'\u00A0'}
+          </p>
+        )}
         {showHint ? (
           <p className="text-gray-500" style={{ fontSize: `${metaSizeMm - 0.2}mm` }}>
             Skeniraj za detalje
@@ -407,11 +402,13 @@ export const LabelPrintSheet = ({ items, categories, onClose }: LabelPrintSheetP
 
               <section>
                 <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Sadržaj naljepnice</h3>
-                <ToggleField id="lc-name" label="Naziv opreme (specifikacije)" checked={settings.showDisplayName} onChange={(v) => patchSettings({ showDisplayName: v })} />
-                <ToggleField id="lc-lot" label="Naziv lota / proizvoda" checked={settings.showLotName} onChange={(v) => patchSettings({ showLotName: v })} />
+                <ToggleField id="lc-name" label="Naziv opreme (productName iz lota)" checked={settings.showEquipmentName} onChange={(v) => patchSettings({ showEquipmentName: v })} />
                 <ToggleField id="lc-cat" label="Kategorija" checked={settings.showCategory} onChange={(v) => patchSettings({ showCategory: v })} />
-                <ToggleField id="lc-serial" label="Serijski broj (ako postoji)" checked={settings.showSerial} onChange={(v) => patchSettings({ showSerial: v })} />
-                <ToggleField id="lc-inv" label="Inventurni broj / linija za upis" checked={settings.showInventoryNumber} onChange={(v) => patchSettings({ showInventoryNumber: v })} />
+                <ToggleField id="lc-serial" label="Serijski broj (ako postoji vrijednost)" checked={settings.showSerial} onChange={(v) => patchSettings({ showSerial: v })} />
+                <label htmlFor="lc-inv" className="flex items-center gap-2 text-sm text-gray-700 py-0.5">
+                  <input id="lc-inv" type="checkbox" checked disabled className="w-4 h-4 rounded border-gray-300 accent-blue-600" />
+                  Inventurni broj — <strong>obavezno</strong> (uvijek se štampa)
+                </label>
                 <ToggleField id="lc-hint" label="Tekst „Skeniraj za detalje”" checked={settings.showScanHint} onChange={(v) => patchSettings({ showScanHint: v })} />
                 <div className="grid grid-cols-2 gap-2 mt-2">
                   <div>

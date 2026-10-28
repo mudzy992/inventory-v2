@@ -108,6 +108,14 @@ describe('sanitizeLabelSettings', () => {
     expect(result.showInventoryNumber).toBe(true);
   });
 
+  it('forces the mandatory inventory number on and migrates legacy name toggles', () => {
+    expect(sanitizeLabelSettings({ showInventoryNumber: false }).showInventoryNumber).toBe(true);
+    const legacyOff = sanitizeLabelSettings({ showLotName: false, showDisplayName: false } as never);
+    expect(legacyOff.showEquipmentName).toBe(false);
+    const legacyOn = sanitizeLabelSettings({ showLotName: true } as never);
+    expect(legacyOn.showEquipmentName).toBe(true);
+  });
+
   it('falls back to defaults for garbage input', () => {
     expect(sanitizeLabelSettings(null)).toEqual(DEFAULT_LABEL_SETTINGS);
     expect(sanitizeLabelSettings({ orientation: 'sideways' as never }).orientation).toBe('portrait');
