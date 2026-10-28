@@ -54,7 +54,7 @@ Potpuni wipe baze (dev): `cd backend && npx prisma migrate reset`.
 1. Kopiraj `.env.example` → `.env` (već postoji template).
 2. Popuni **eksterni PostgreSQL** (`DATABASE_HOST`, `DATABASE_URL`, …) — ovo je primarna baza.
    MySQL konfiguracija je zadržana u `.env.example` kao zakomentarisani backup/rollback — vidi
-   [migracija-mysql-postgres.md](migracija-mysql-postgres.md).
+   [docs/migration-mysql-postgres.md](docs/migration-mysql-postgres.md).
 3. Podesi `DATABASE_POOL_MAX` prema broju backend replika i PostgreSQL `max_connections` (default 10; vidi komentar u `.env.example`).
 4. Postavi `JWT_SECRET`.
 5. **Ne** stavljaj `NODE_ENV` u `.env` — Vite dev to ne podržava (koristi se samo u Dockeru).
@@ -127,6 +127,7 @@ replike i hardening stavke (vodič: [docs/deployment-readiness.md](docs/deployme
 
 ## Plan i matrice
 
-- [Plan overview](.cursor/plans/inventory-v2/00_overview.md)
-- [Checklist](.cursor/plans/inventory-v2/CHECKLIST.md)
-- [Design tokens](.cursor/docs/design-tokens.md)
+- [Status — završeno / nije](docs/STATUS.md) · [Backlog — šta je ostalo](docs/BACKLOG.md)
+- [Indeks dokumentacije](docs/README.md) · [Coolify env (bez tajni)](docs/coolify-env.md)
+- [Plan overview](.cursor/plans/inventory-v2/00_overview.md) · [Checklist](.cursor/plans/inventory-v2/CHECKLIST.md)
+- [Katalog planova](.cursor/plans/INDEX.md) · [Matrice](.cursor/docs/matrices/INDEX.md) · [Design tokens](.cursor/docs/design-tokens.md)

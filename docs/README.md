@@ -1,44 +1,64 @@
-# Dokumentacija — Evidens Inventory v2
+# Dokumentacija — Evidens (Inventory v2)
 
-Repo: `arena/60c1635e-inventory-v2` (`2baffcd`)
+**Počni ovdje.** Statusi: [STATUS.md](./STATUS.md) (šta je završeno) ·
+[BACKLOG.md](./BACKLOG.md) (šta je ostalo). Ovaj fajl je tematski indeks;
+fajlovi se ne premještaju jer CI gate `Verify deployment readiness contract`
+zahtijeva operativne vodiče na ovim putanjama.
 
-## Modul A — Poslovne matrice i nelogičnosti (BM-1..BM-6)
-- `docs/module-a-business-matrix.md` — nalazi (`BM-1`..`BM-6`), plan implementacije, implementacija (`GET /settings/effective`, `useEffectiveSettings()`, `ROLE_PAGE_MATRIX`, `warehouse-inventory` admin, `moderator_role` dinamička, `manual_committee_create` uklonjen).
-- `docs/backend-code-audit-2026-10-27.md` — backend audit, ocena ~9.5/10.
-- `docs/backend-implementation-plan.md` — istorija implementacije (`N-1`..`N-15`).
-- `docs/backend-audit.md` — historical snapshot.
+## Mapa repoa
 
-## Modul B — Printanje i QR naljepnice (`QR/Print` modernizacija)
-- `docs/module-b-print-qr.md` — nalazi (`BM-B1`..`BM-B6`), plan implementacije, implementacija (`TransferDocumentPanel` redizajn, `QRScannerPage` modernizacija, `bundle budget`, `deployment readiness`, `document-worker/Dockerfile`).
-- `docs/frontend-code-audit-2026-10-28.md` — frontend audit, ocena ~9.2/10.
-- `docs/frontend-design-system.md` — `Evidens Surface` dizajn sistem (29 tokena, 16 površina, WCAG AA, `forced-colors`, `prefers-contrast`, `prefers-reduced-motion`).
-- `docs/frontend-audit.md` — historical snapshot (oznacen kao `historical snapshot`).
-- `docs/frontend-implementation-plan.md` — označen kao `historical snapshot`.
+```
+inventory-v2/
+├── backend/           NestJS 11 + Prisma 7 + PostgreSQL (24 modula, 164 spec fajla)
+├── frontend/          React + Vite + Tailwind (stranice po ulogama, Evidens Surface)
+├── document-worker/   Document Engine — LibreOffice DOCX/XLSX/ODT → PDF (BullMQ, interno)
+├── docs/              ova dokumentacija (operativa + auditi + moduli A/B)
+├── deploy/redis/      kanonski Redis ACL template
+├── scripts/           readiness / load-test / container-policy alati (bez zavisnosti)
+├── .cursor/docs/      matrice (22 modula) + dizajn tokeni + Full Effect specifikacija
+├── .cursor/plans/     historijski planovi sesija — katalog: .cursor/plans/INDEX.md
+├── docker-compose.yml        Coolify (kanonski produkcijski put)
+├── docker-compose.prod.yml   standalone Traefik (alternativni put)
+├── .env.example       jedini env template u repou (bez tajni)
+└── CHANGES.md         changelog Redis/Socket.IO isporuke
+```
 
-## Ostalo
-- `docs/deployment-readiness.md` — deployment automatizacija (`TRUST_PROXY_HOPS`, 23 knoba, `REQUIRED_DOCS`).
-- `docs/http-hardening.md` — HTTP sigurnost (`TRUST_PROXY_HOPS`, TLS, rate-limit).
-- `docs/load-testing.md` — dependency-free p95 SLO harness (`scripts/load-test.mjs`).
-- `docs/performance-budgets.md` — performance budžeti (bundle, latencija, memorija).
-- `docs/public-qr-privacy.md` — javni QR privatnost (`public_equipment_lookup`, `public_equipment.contract`).
-- `docs/queue-recovery.md` — BullMQ queue recovery (`QueueEvents`, `DocumentJob`, outbox).
-- `docs/redis-acl.md` — Redis 7 ACL (`PSUBSCRIBE`, `&inventory-v2:#`, `+info`).
-- `docs/transfer-document-security.md` — prenosnica sigurnost (PDF upload, potpis, `upload.max_mb`).
-- `docs/upload-read-policy.md` — upload čitanje (`upload-access-policy.util`)
-- `CHANGES.md` — promjene.
-- `README.md` — osnovni opis aplikacije.
+## Tematski raspored
 
-## CI dokazi
-- `.github/workflows/ci.yml` — 47 `Verify` koraka (backend `N-5`..`N-15`, frontend `design/a11y contract`, `bundle budget`, `unit specs`, `deployment readiness`, `load-test` harness, `effective settings endpoint`).
-- Poslednji zeleni CI: `40703641414` (`completed success`).
-- Nepotpuni CI (`40701684727`) — `deepmerge` advisory (`GHSA-gcqx-w48m-w2h4`), ispravljeno (`54bcf77` `overrides.deepmerge = 4.1.2`).
-- `docs/backend-code-audit-2026-10-27.md` §9 ocena: **~9.5/10** (`N-5`..`N-15` zatvoreni, `load-test` SLO harness, `TRUST_PROXY_HOPS`, `live ACL checker`).
-- `docs/frontend-code-audit-2026-10-28.md` ocena: **~9.2/10** (`F-1`..`F-12` zatvoreni, `Vitest` 56 scenarija, `bundle budget`, `AST a11y/design contract`, `Evidens Surface`).
+### 1. Status i planiranje
+- [STATUS.md](./STATUS.md) — jedinstveni registar završeno/nije po modulima i programima.
+- [BACKLOG.md](./BACKLOG.md) — preostala implementacija (P0–P3).
+- [../.cursor/plans/inventory-v2/CHECKLIST.md](../.cursor/plans/inventory-v2/CHECKLIST.md) — faze 0–12.
+- [../.cursor/plans/full-effect/CHECKLIST.md](../.cursor/plans/full-effect/CHECKLIST.md) — faze 13–18c (49/50).
 
-## Trenutni status
-- Grana: `arena/60c1635e-inventory-v2`
-- HEAD: `2baffcd` (poslednji push: `docs/module-a-business-matrix.md` ažuriran, `TransferDocumentPanel` `notes` dodan, `frontend/Dockerfilefr` ispravljen, `docs/module-b-print-qr.md` ažuriran, `bundle budget` proširen, `deployment readiness` proširen, `QRScannerPage` `public_equipment_lookup` usklađen, `TransferDocumentPanel` redizajn završen, `manual_committee_create` uklonjen, `moderator_role` aktivan, `GET /settings/effective` implementiran).
-- `git status`: čisto (`0` promijenjenih, `0` nepoznatih).
-- PR prema `master`: ne postoji.
-- `node_modules`: postoje u `backend/`, `frontend/`, `document-worker/`.
-- `prisma generate`: regenerisan (`.env` privremeni za sandbox).
+### 2. Poslovna pravila
+- [module-a-business-matrix.md](./module-a-business-matrix.md) — Modul A (BM-1..BM-6) ✅ implementiran.
+- [module-b-print-qr.md](./module-b-print-qr.md) — Modul B (print/QR) ✅ implementiran.
+- [../.cursor/docs/matrices/INDEX.md](../.cursor/docs/matrices/INDEX.md) — 22 matrice + [GUARDS_REGISTRY](../.cursor/docs/matrices/GUARDS_REGISTRY.md).
+- [frontend-design-system.md](./frontend-design-system.md) — Evidens Surface (29 tokena, WCAG AA).
+
+### 3. Operativa i sigurnost (operator vodiči)
+- [deployment-readiness.md](./deployment-readiness.md) — jedna PASS/WARN/FAIL provjera prije deploya (23 knoba).
+- [coolify-env.md](./coolify-env.md) — Coolify env varijable (bez tajni).
+- [redis-acl.md](./redis-acl.md) — Redis 7 ACL + Socket.IO kanali.
+- [http-hardening.md](./http-hardening.md) — headeri, HSTS, rate limit, trust proxy.
+- [public-qr-privacy.md](./public-qr-privacy.md) — zamrznuti javni QR DTO ugovor.
+- [upload-read-policy.md](./upload-read-policy.md) · [transfer-document-security.md](./transfer-document-security.md)
+- [queue-recovery.md](./queue-recovery.md) — BullMQ/DocumentJob oporavak i outbox.
+- [performance-budgets.md](./performance-budgets.md) · [load-testing.md](./load-testing.md)
+
+### 4. Auditi (nezavisni, code-only)
+- [backend-code-audit-2026-10-27.md](./backend-code-audit-2026-10-27.md) — ocjena ~9.5/10 (N-nalazi zatvoreni).
+- [frontend-code-audit-2026-10-28.md](./frontend-code-audit-2026-10-28.md) — ocjena ~9.2/10 (F-nalazi zatvoreni).
+
+### 5. Historijski snapshoti 🗄 (ne ažurirati — slika starog baseline-a)
+- [backend-audit.md](./backend-audit.md) · [frontend-audit.md](./frontend-audit.md)
+- [backend-implementation-plan.md](./backend-implementation-plan.md) · [frontend-implementation-plan.md](./frontend-implementation-plan.md)
+- [migration-mysql-postgres.md](./migration-mysql-postgres.md) — kako je rađen prelaz MySQL → PostgreSQL (rollback referenca).
+
+## Pravila održavanja
+
+1. Nova poslovna logika ⇒ ažurirati `MATRIX.md` + `CHANGELOG.md` matrice + red u `GUARDS_REGISTRY.md`.
+2. Nova isporuka ⇒ status u [STATUS.md](./STATUS.md), ostatak u [BACKLOG.md](./BACKLOG.md).
+3. Planovi u `.cursor/plans/` se ne prepisuju retroaktivno — služe kao trag sesija.
+4. Tajne nikad u repo (ni u `.md` ni u `.txt`): samo `.env.example` placeholderi + Coolify env.

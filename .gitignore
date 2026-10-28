@@ -12,6 +12,10 @@ build/
 .env.*.local
 !.env.example
 
+# Lokalne env kopije s tajnama — NIKAD u repo (vidi docs/BACKLOG.md P0)
+fajl.md
+fajl.txt
+
 # Uploads
 backend/uploads/*
 !backend/uploads/.gitkeep

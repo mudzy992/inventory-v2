@@ -4,7 +4,7 @@
 # Backend:  https://api.evidens.ba101.top (posebna subdomena, BEZ path-prefiksa — otud
 #   API_PREFIX prazan u env-u; vidi napomenu kod API_PREFIX ispod).
 # Baza: eksterni Postgres projekat na "db_net" mreži, host je container/service ime
-#   Postgres resursa u Coolify-ju (vidi DATABASE_HOST u fajl.txt).
+#   Postgres resursa u Coolify-ju (vidi docs/coolify-env.md).
 # Redis: eksterna centralna Redis platforma na "redis_net" mreži (redis-core service,
 #   ACL user ograničen na REDIS_KEY_PREFIX namespace). Koristi se za: JWT/settings
 #   cache, BullMQ (inventory session close queue, document generation queue), Socket.IO

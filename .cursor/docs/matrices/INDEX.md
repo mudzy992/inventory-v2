@@ -27,7 +27,12 @@ Detaljni guard audit (preconditions, BE/FE status, poruke): [GUARDS_REGISTRY.md]
 | `labels` | [labels/MATRIX.md](./labels/MATRIX.md) | QR / label generisanje |
 | `list-performance` | [list-performance/MATRIX.md](./list-performance/MATRIX.md) | Paginacija, prefetch |
 | `install-setup` | [install-setup/MATRIX.md](./install-setup/MATRIX.md) | First-run setup |
+| `setup-onboarding` | [setup-onboarding/MATRIX.md](./setup-onboarding/MATRIX.md) | Onboarding / početno podešavanje |
+| `moderator` | [moderator/MATRIX.md](./moderator/MATRIX.md) | Moderator (scoped admin) |
 | `deploy-traefik` | [deploy-traefik/MATRIX.md](./deploy-traefik/MATRIX.md) | Produkcijski deploy, Docker, Traefik |
+
+> Status svih matrica: implementirane u kodu; registar u [docs/STATUS.md](../../../docs/STATUS.md).
+> (Redovi `setup-onboarding` i `moderator` dodati 2026-10-28 — folderi su postojali, u indeksu ih nije bilo.)
 
 ## Guard slojevi
 

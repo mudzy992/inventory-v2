@@ -47,4 +47,4 @@ DROP TABLE "legacy_table";
 
 Bez tog markera drift check ne prolazi. Svaka izmjena markera ulazi u code review. Unit testovi za sva pravila su u `backend/prisma/utils/migration-drift.util.spec.ts` (`npm run test:unit:migration-drift`).
 
-Vidi `migracija-mysql-postgres.md` u root-u repoa za istorijski kontekst prelaska sa MySQL-a na PostgreSQL.
+Vidi `docs/migration-mysql-postgres.md` za istorijski kontekst prelaska sa MySQL-a na PostgreSQL.

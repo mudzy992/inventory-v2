@@ -97,9 +97,9 @@ Master checklist i HANDOFF: [`.cursor/plans/full-effect/CHECKLIST.md`](../full-e
 - [x] Faza 13 — effective signer + org hierarchy
 - [x] Faza 14 — RegistrarAssignment A/B
 - [x] Faza 15 — Transfer workflow v2 (backend; UI u 18)
-- [ ] Faza 16 — Skladištar scope + destroy
-- [ ] Faza 17 — Inventory freeze + disposal
-- [ ] Faza 18a–c — UI full effect
+- [x] Faza 16 — Skladištar scope + destroy *(usklađeno 2026-10-28: ✅ po `full-effect/CHECKLIST.md` §7)*
+- [x] Faza 17 — Inventory freeze + disposal *(usklađeno 2026-10-28: ✅ po `full-effect/CHECKLIST.md` §11)*
+- [x] Faza 18a–c — UI full effect *(usklađeno 2026-10-28: ✅ po `full-effect/CHECKLIST.md` §11.12)*
 
 ## Faza 7 — QA
 - [ ] Test plan izvršen

@@ -91,7 +91,7 @@ test('parseEnvFile handles comments, export, quotes and invalid keys', () => {
 test('repository policy passes on the real checkout', () => {
   const result = checkRepositoryPolicy(root);
   assert.equal(result.summary.fail, 0, formatReport(result));
-  assert.equal(result.checks.length, 11);
+  assert.equal(result.checks.length, 12);
   assert.ok(REQUIRED_REPO_KNOBS.length >= 17);
 });
 

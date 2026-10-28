@@ -102,7 +102,7 @@ Modul B obuhvata:
 
 ## 5. Trenutni status i sljedeći korak
 
-**Status:** Dokumentacija Modula B završena. **Ne diramo kod** za Modul B dok se ne završi Modul A Faza 2 (`GET /settings/effective` + `TransferDocumentPanel` ažuriranje) ili dok korisnik eksplicitno ne potvrdi početak Modula B implementacije.
+**Status:** ✅ Modul B je implementiran (Modul A Faza 2 je prethodno završena) — v. checkboxe iznad i `docs/STATUS.md`. Tekst ispod je historijski zapis pitanja iz faze planiranja.
 
 **Pitanja za korisnika:**
 - **P-B1:** Želiš li da Modul B implementacija počne **odmah** (paralelno s Modulom A Faza 2), ili **nakon završetka** Modula A?

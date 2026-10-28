@@ -293,7 +293,7 @@ Također `SKLADISTAR_PAGES` (`line 45`) uključuje `'warehouse-inventory'`, ali 
 
 ## 11. Trenutni status i sljedeći korak
 
-**Status:** Dokumentacija Modula A završena. **Ne diramo kod** dok ne dobijemo odgovore na pitanja `P-1` do `P-19` i potvrdu opsega (sve BM-ove ili samo kritične).
+**Status:** ✅ Modul A je implementiran nakon potvrde opsega (sve preporuke usvojene) — v. implementacijske checkboxe iznad i `docs/STATUS.md`. Tekst ispod je historijski zapis pitanja iz faze planiranja.
 
 **Pitanja za korisnika (sažeto):**
 1. `GET /settings/effective` za sve autentifikovane? Koji točno ključni vrijednosti u whitelistu?

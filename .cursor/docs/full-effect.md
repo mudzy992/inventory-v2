@@ -1,5 +1,12 @@
 # Full effect — organizacija + lokacije + potpisnici + skladišta + popis + rashod (requirements)
 
+> **Status (2026-10-28): ✅ IMPLEMENTIRANO 49/50** po
+> [`.cursor/plans/full-effect/CHECKLIST.md`](../plans/full-effect/CHECKLIST.md)
+> (faze 13–18c + skladišni lot). Ovaj fajl je **izvorna specifikacija** — sekcije
+> „Trenutno stanje“ i `[ ]` checkboxi u §11 opisuju stanje *prije* implementacije
+> i namjerno se ne prepisuju. Jedina otvorena stavka: server-PDF zapisnika
+> (v. `docs/BACKLOG.md`). Registar: `docs/STATUS.md`.
+
 Dokument definiše šta još treba implementirati da bi sistem u potpunosti podržao ciljano ponašanje:
 
 - krovna organizacija (direkcija) + segmenti (Distribucija / Snabdjevanje)

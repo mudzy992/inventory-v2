@@ -1,6 +1,6 @@
 # inventory-v2 — backend
 
-NestJS 11 + Prisma 7 + PostgreSQL (eksterni server; MySQL zadržan kao backup/rollback — vidi `migracija-mysql-postgres.md` u root-u repoa).
+NestJS 11 + Prisma 7 + PostgreSQL (eksterni server; MySQL zadržan kao backup/rollback — vidi `docs/migration-mysql-postgres.md`).
 
 ## Preduvjeti
 
