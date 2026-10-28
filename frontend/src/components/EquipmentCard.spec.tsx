@@ -77,11 +77,13 @@ describe('EquipmentCard (detalji opreme)', () => {
     expect(screen.getByText('Napomena vidljiva u detaljima')).toBeInTheDocument();
   });
 
-  it('prikazuje — kad oprema nema napomenu', async () => {
+  it('ne prikazuje polje Napomena kad oprema nema napomenu', async () => {
     equipmentState.current = { ...baseEquipment, notes: undefined };
     render(<EquipmentCard equipmentId="eq-1" onClose={vi.fn()} />);
 
-    expect(await screen.findByText('Napomena')).toBeInTheDocument();
+    // Modal se učitao (vidi se inv. broj), ali blok napomene ne postoji.
+    expect(await screen.findByText('INV-001')).toBeInTheDocument();
+    expect(screen.queryByText('Napomena')).not.toBeInTheDocument();
     expect(screen.queryByText('Napomena vidljiva u detaljima')).not.toBeInTheDocument();
   });
 });
