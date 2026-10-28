@@ -21,6 +21,7 @@ export function QRScannerPage() {
   const [recentEquipment, setRecentEquipment] = useState<Equipment[]>([]);
   const admin = isAdmin();
   const qrEnabled = getBoolean('features.qr_scanner', true);
+  const publicEquipmentLookupEnabled = getBoolean('features.public_equipment_lookup', true);
 
   const loadRecent = useCallback(async () => {
     try {
@@ -36,15 +37,15 @@ export function QRScannerPage() {
   }, []);
 
   useEffect(() => {
-    if (qrEnabled) {
+    if (qrEnabled && publicEquipmentLookupEnabled) {
       void loadRecent();
     }
-  }, [loadRecent, qrEnabled]);
+  }, [loadRecent, qrEnabled, publicEquipmentLookupEnabled]);
 
-  if (!qrEnabled) {
+  if (!qrEnabled || !publicEquipmentLookupEnabled) {
     return (
       <div className="p-6">
-        <EmptyState message="QR skener modul je isključen u postavkama aplikacije." />
+        <EmptyState message="QR skener ili javni pregled opreme je isključen u postavkama aplikacije." />
       </div>
     );
   }
