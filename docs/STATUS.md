@@ -64,7 +64,7 @@ Sve matrice: 22 modula u [.cursor/docs/matrices/](../.cursor/docs/matrices/INDEX
 | Docker Compose — Coolify (`docker-compose.yml`: backend+frontend+document-worker) | ✅ | kanonski produkcijski put |
 | Docker Compose — standalone Traefik (`docker-compose.prod.yml`) | ✅ | alternativni put, održavan |
 | Document Engine (`document-worker/`, LibreOffice DOCX/XLSX/ODT → PDF, BullMQ) | ✅ | interni servis, bez javne domene |
-| CI (`.github/workflows/ci.yml`, 3 joba, 40+ `Verify` gateova: TLS handshake, SIGKILL recovery, ACL, AST ugovori, bundle budžet…) | ✅ | status zadnjeg runa provjeriti na GitHubu (ovaj registar ga ne tvrdi) |
+| CI (`.github/workflows/ci.yml`, 3 joba, 40+ `Verify` gateova: TLS handshake, SIGKILL recovery, ACL, AST ugovori, bundle budžet…) | ✅ | potvrđeno: run `40764302306` (2026-10-28, grana `arena/fee90785-inventory-v2`) — backend, frontend i document-worker zeleni, uključujući buildove |
 | Deployment readiness alat (`scripts/check-deployment-readiness.mjs`, 23 knoba) | ✅ PASS u repo modu (provjereno 2026-10-28) | `--env` mod na serveru: 🟡 vlasnički korak |
 | Load-test harness (`scripts/load-test.mjs`, p95 SLO) | 🟡 harness ✅; mjerenje na stagingu ⬜ | `docs/load-testing.md` |
 | Redis ACL kanonsko pravilo + TLS | 🟡 kod ✅; live `ACL GETUSER`/SAN potvrda ⬜ (MANUAL) | `docs/redis-acl.md` |
