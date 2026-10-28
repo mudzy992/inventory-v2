@@ -3,7 +3,7 @@ name: Branch CI
 on:
   push:
     branches:
-      - arena/60c1635e-inventory-v2
+      - 'arena/**'
   workflow_dispatch:
 
 permissions:
