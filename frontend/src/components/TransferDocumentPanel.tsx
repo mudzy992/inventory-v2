@@ -74,7 +74,7 @@ export const TransferDocumentPanel = ({
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [hasRealtimeDocumentUpdate, setHasRealtimeDocumentUpdate] = useState(false);
   const refreshStatusRef = useRef<() => void>(() => undefined);
-  const notes = props.notes ?? (transfer as any).notes ?? null;
+  const resolvedNotes = notes ?? transfer.notes ?? null;
   const isDrawer = layout === 'drawer';
 
   useEffect(() => {
@@ -502,9 +502,9 @@ export const TransferDocumentPanel = ({
           <Download size={14} /> Preuzmi potpisani PDF
         </button>
       ) : null}
-      {notes ? (
+      {resolvedNotes ? (
         <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
-          <strong>Napomene:</strong> {notes}
+          <strong>Napomene:</strong> {resolvedNotes}
         </div>
       ) : null}
     </>
