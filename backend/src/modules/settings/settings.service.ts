@@ -52,7 +52,6 @@ export class SettingsService {
     'upload.max_mb',
     'transfer.require_signed_pdf_upload',
     'features.moderator_role',
-    'features.inventory_manual_committee_create',
     'inventory.auto_create_draft_session',
   ];
 

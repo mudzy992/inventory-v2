@@ -289,16 +289,6 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'modules',
   }),
   def({
-    key: 'features.inventory_manual_committee_create',
-    scope: 'private',
-    valueType: 'boolean',
-    defaultValue: false,
-    label: 'Ručno kreiranje komisije popisa',
-    description:
-      'Dozvoljava POST kreiranje komisije izvan auto-generisanih slotova (samo dev/legacy).',
-    group: 'modules',
-  }),
-  def({
     key: 'inventory.production_mode',
     scope: 'private',
     valueType: 'boolean',

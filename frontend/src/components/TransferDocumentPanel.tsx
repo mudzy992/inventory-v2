@@ -466,13 +466,13 @@ export const TransferDocumentPanel = ({
           type="button"
           onClick={() => void handleFinalize()}
           disabled={isLoading}
-          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+          className="ds-btn-primary inline-flex items-center justify-center gap-1 px-3 py-2 text-xs rounded-lg hover:brightness-110 disabled:opacity-50 print:hidden"
         >
           <CheckCircle size={14} /> Finalizuj prenosnicu
         </button>
       ) : null}
       {!inventoryMode && allowSign && isRaw && !transfer.scannedDocUrl ? (
-        <label className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs bg-green-700 text-white rounded-lg cursor-pointer hover:bg-green-800">
+        <label className="ds-btn-secondary inline-flex items-center justify-center gap-1 px-3 py-2 text-xs rounded-lg cursor-pointer hover:brightness-110 print:hidden">
           <Upload size={14} /> Upload + potpis
           <input
             type="file"
