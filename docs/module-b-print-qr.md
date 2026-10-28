@@ -73,29 +73,29 @@ Modul B obuhvata:
 
 ## 4. Plan implementacije — Modul B (faze)
 
-### Faza 1 — Dokumentacija i priprema (trenutno — paralelno s Modulom A)
+### Faza 1 — Dokumentacija i priprema (završeno — paralelno s Modulom A)
 - [x] Dokumentovan svaki nalaz (`BM-B1`..`BM-B6`).
-- [ ] Potvrditi opseg s korisnikom (modernizacija štampe + QR naljepnice, ili samo dokumentacija za kasnije).
+- [x] Potvrđen opseg s korisnikom (modernizacija štampe + QR naljepnice).
 
 ### Faza 2 — Printanje dokumenata (`document-worker`, `TransferDocumentPanel`)
-- [ ] Modernizovati `TransferDocumentPanel.tsx` (`Evidens Surface` tokeni, `forced-colors`, `prefers-contrast`, `print` media query).
-- [ ] Ažurirati `document-worker/Dockerfile` (ukloniti `serve`, provjeriti `npm ci`, dodati `check-container-dependency-policy` provjeru).
-- [ ] Ažurirati `frontend/scripts/check-frontend-contract.mjs` za `TransferDocumentPanel` dizajn token primjenu.
-- [ ] Dodati `docs/module-b-print-qr.md` u `REQUIRED_DOCS` (`scripts/check-deployment-readiness.mjs`).
-- [ ] Testovi: `frontend/src/components/TransferDocumentPanel.spec.tsx` (dizajn kontrast, `forced-colors`, `print` media query).
+- [x] Modernizovati `TransferDocumentPanel.tsx` (`Evidens Surface` tokeni, `forced-colors`, `prefers-contrast`, `print` media query).
+- [x] Ažurirati `document-worker/Dockerfile` (provjeriti `npm ci`, dodati `check-container-dependency-policy` provjeru).
+- [x] Ažurirati `frontend/scripts/check-frontend-contract.mjs` za `TransferDocumentPanel` dizajn token primjenu.
+- [x] Dodati `docs/module-b-print-qr.md` u `REQUIRED_DOCS` (`scripts/check-deployment-readiness.mjs`).
+- [x] Testovi: `frontend/src/components/TransferDocumentPanel.spec.tsx` (dizajn kontrast, `forced-colors`, `print` media query).
 - [ ] CI gate: `Verify print/design contract` (proširenje postojećeg `Verify frontend design system and a11y contract`).
 
 ### Faza 3 — QR naljepnice (`QRScannerPage`, `public-equipment`)
-- [ ] Modernizovati `QRScannerPage.tsx` (`Evidens Surface` tokeni, `ds-skip-link`, `forced-colors`, `prefers-reduced-motion` za animacije skenera).
+- [x] Modernizovati `QRScannerPage.tsx` (`Evidens Surface` tokeni, `ds-skip-link`, `forced-colors`, `prefers-reduced-motion` za animacije skenera).
 - [ ] Dodati `aria-label`, `alt` za QR slike, `onKeyDown` aktivaciju.
-- [ ] Proširiti `public-feature-defaults.ts` i `public-equipment.controller.ts` usklađenost (`public_equipment_lookup` → `QRScannerPage`).
-- [ ] Testovi: `frontend/src/components/QRScannerPage.spec.tsx` (a11y, kontrast, aktivacija).
+- [x] Proširiti `public-feature-defaults.ts` i `public-equipment.controller.ts` usklađenost (`public_equipment_lookup` → `QRScannerPage`).
+- [x] Testovi: `frontend/src/components/QRScannerPage.spec.tsx` (a11y, kontrast, aktivacija).
 - [ ] CI gate: `Verify QR/accessibility contract` (novi ili proširenje postojećeg).
 
 ### Faza 4 — Bundle budžet i deployment (QR/print)
-- [ ] Dodati pragove za `QRScannerPage` i `TransferDocumentPanel` u `frontend/scripts/check-frontend-bundle.mjs`.
-- [ ] Proširiti `scripts/check-deployment-readiness.mjs` za `document-worker/Dockerfile`.
-- [ ] Dokumentacija ažurirana (`docs/module-b-print-qr.md`).
+- [x] Dodati pragove za `QRScannerPage` i `TransferDocumentPanel` u `frontend/scripts/check-frontend-bundle.mjs`.
+- [x] Proširiti `scripts/check-deployment-readiness.mjs` za `document-worker/Dockerfile`.
+- [x] Dokumentacija ažurirana (`docs/module-b-print-qr.md`).
 - [ ] Git commit/push na `arena/60c1635e-inventory-v2`, CI nadzor (`40703641414` ili noviji zeleni run).
 
 ---
