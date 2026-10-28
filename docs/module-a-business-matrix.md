@@ -258,36 +258,36 @@ Također `SKLADISTAR_PAGES` (`line 45`) uključuje `'warehouse-inventory'`, ali 
 ### Faza 1 — Dokumentacija i potvrda (trenutno)
 - [x] Dokumentovan svaki BM nalaz.
 - [x] Identifikovana pitanja za korisnika (§2.5, §3.5, §4.5, §5.5, §6.5, §7.5, §8.4, §9.6).
-- [ ] Dobiti odgovore od korisnika i potvrditi opseg.
+- [x] Dobiti odgovore od korisnika i potvrditi opseg (potvrđeno od korisnika: 'potvrđujem sve tvoje preporuke').
 
 ### Faza 2 — Efektivni endpoint i whitelist (`GET /settings/effective`)
-- [ ] Dodati `GET /settings/effective` u `settings.controller.ts`.
-- [ ] Definisati `EffectiveSettingDto` (whitelist ~8 ključnih vrijednosti).
-- [ ] Ažurirati `settings.service.ts` da vraća efektivne vrijednosti za autentifikovane korisnike.
-- [ ] Dodati `useEffectiveSettings()` hook u FE (`frontend/src/contexts/` ili `frontend/src/hooks/`).
-- [ ] Ažurirati `public-feature-defaults.ts` i `settings-feature.util.ts` ako je potrebno.
-- [ ] Testovi: `settings.service.spec.ts` + FE hook spec.
-- [ ] CI gate: novi `Verify effective settings endpoint` korak (ili proširenje postojećeg).
+- [x] Dodati `GET /settings/effective` u `settings.controller.ts`.
+- [x] Definisati `EffectiveSettingDto` (whitelist ~8 ključnih vrijednosti).
+- [x] Ažurirati `settings.service.ts` da vraća efektivne vrijednosti za autentifikovane korisnike.
+- [x] Dodati `useEffectiveSettings()` hook u FE (`frontend/src/contexts/` ili `frontend/src/hooks/`).
+- [x] Ažurirati `public-feature-defaults.ts` i `settings-feature.util.ts` ako je potrebno.
+- [x] Testovi: `settings.service.spec.ts` + FE hook spec.
+- [x] CI gate: novi `Verify effective settings endpoint` korak (ili proširenje postojećeg).
 
 ### Faza 3 — Poslovna pravila (`BM-1`, `BM-1a`, `BM-1b`, `BM-5`, `BM-6`)
-- [ ] Ažurirati `TransferDocumentPanel.tsx` da koristi `useEffectiveSettings()`.
-- [ ] Ažurirati `transfer-guards.ts` da prima efektivni objekt i provjerava `isAdmin` gdje je potrebno.
-- [ ] Ažurirati `canAccessPageForRole` (`BM-5`: `warehouse-inventory` za admin; `BM-6`: `warehouses` za `evidenticar`, `inventory-count` za `moderator` ako se odluči).
-- [ ] Ažurirati `getDefaultPageCandidatesForRole` ako se promijeni matrica.
-- [ ] Testovi: karakterizacijski testovi 6 uloga × 19 stranica (`frontend/src/routes/role-page-access.spec.ts` ili novi fajl).
-- [ ] CI gate: `Verify role/page matrix consistency` — usporedba FE matrice s backend `@Roles` za svaku rutu.
+- [x] Ažurirati `TransferDocumentPanel.tsx` da koristi `useEffectiveSettings()`.
+- [x] Ažurirati `transfer-guards.ts` da prima efektivni objekt i provjerava `isAdmin` gdje je potrebno.
+- [x] Ažurirati `canAccessPageForRole` (`BM-5`: `warehouse-inventory` za admin; `BM-6`: `warehouses` za `evidenticar`, `inventory-count` za `moderator` ako se odluči).
+- [x] Ažurirati `getDefaultPageCandidatesForRole` ako se promijeni matrica.
+- [x] Testovi: karakterizacijski testovi 6 uloga × 19 stranica (`frontend/src/routes/role-page-access.spec.ts` ili novi fajl).
+- [x] CI gate: `Verify role/page matrix consistency` — usporedba FE matrice s backend `@Roles` za svaku rutu.
 
 ### Faza 4 — Mrtvi API i zastarjele funkcionalnosti (`BM-2`, `BM-3`, `BM-4`)
-- [ ] Odlučiti za `BM-2` (ručno kreiranje komisije): Option A (aktivirati) ili Option B (ukloniti).
-- [ ] Odlučiti za `BM-3` (`moderator_role`): aktivirati dinamičku provjeru ili ukloniti flag.
-- [ ] Konsolidovati `BM-4` (`SKLADISTAR_PAGES`, `POPIS_KOORDINATOR_PAGES`).
-- [ ] Testovi: `settings.service.spec.ts` za `moderator_role`, `inventory_manual_committee_create`.
-- [ ] CI gate: `Verify settings registry consistency` — provjera da svaki `scope: 'private'` ključ ima odgovarajuću FE obradu ili dokumentovano uklanjanje.
+- [x] Odlučiti za `BM-2` (ručno kreiranje komisije): Option A (aktivirati) ili Option B (ukloniti).
+- [x] Odlučiti za `BM-3` (`moderator_role`): aktivirati dinamičku provjeru ili ukloniti flag.
+- [x] Konsolidovati `BM-4` (`SKLADISTAR_PAGES`, `POPIS_KOORDINATOR_PAGES`).
+- [x] Testovi: `settings.service.spec.ts` za `moderator_role`, `inventory_manual_committee_create`.
+- [x] CI gate: `Verify settings registry consistency` — provjera da svaki `scope: 'private'` ključ ima odgovarajuću FE obradu ili dokumentovano uklanjanje.
 
 ### Faza 5 — Dokumentacija i završetak Modula A
-- [ ] Ažurirati `docs/module-a-business-matrix.md` sa rezultatima implementacije.
-- [ ] Ažurirati `docs/backend-implementation-plan.md` i `docs/frontend-implementation-plan.md`.
-- [ ] Osigurati da `git status` = čisto, CI zeleni (`40703641414` ili noviji), i da nema otvorenog PR-a prema `master`.
+- [x] Ažurirati `docs/module-a-business-matrix.md` sa rezultatima implementacije.
+- [x] Ažurirati `docs/backend-implementation-plan.md` i `docs/frontend-implementation-plan.md`.
+- [x] Osigurati da `git status` = čisto, CI zeleni (`40703641414` ili noviji), i da nema otvorenog PR-a prema `master`.
 
 ---
 

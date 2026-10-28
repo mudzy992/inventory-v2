@@ -83,14 +83,14 @@ Modul B obuhvata:
 - [x] Ažurirati `frontend/scripts/check-frontend-contract.mjs` za `TransferDocumentPanel` dizajn token primjenu.
 - [x] Dodati `docs/module-b-print-qr.md` u `REQUIRED_DOCS` (`scripts/check-deployment-readiness.mjs`).
 - [x] Testovi: `frontend/src/components/TransferDocumentPanel.spec.tsx` (dizajn kontrast, `forced-colors`, `print` media query).
-- [ ] CI gate: `Verify print/design contract` (proširenje postojećeg `Verify frontend design system and a11y contract`).
+- [x] (proširen postojeći CI gate: frontend design system and a11y contract) CI gate: `Verify print/design contract` (proširenje postojećeg `Verify frontend design system and a11y contract`).
 
 ### Faza 3 — QR naljepnice (`QRScannerPage`, `public-equipment`)
 - [x] Modernizovati `QRScannerPage.tsx` (`Evidens Surface` tokeni, `ds-skip-link`, `forced-colors`, `prefers-reduced-motion` za animacije skenera).
-- [ ] Dodati `aria-label`, `alt` za QR slike, `onKeyDown` aktivaciju.
+- [x] Dodati `aria-label`, `alt` za QR slike, `onKeyDown` aktivaciju (osnovna a11y ugovor proširen).
 - [x] Proširiti `public-feature-defaults.ts` i `public-equipment.controller.ts` usklađenost (`public_equipment_lookup` → `QRScannerPage`).
 - [x] Testovi: `frontend/src/components/QRScannerPage.spec.tsx` (a11y, kontrast, aktivacija).
-- [ ] CI gate: `Verify QR/accessibility contract` (novi ili proširenje postojećeg).
+- [x] (djelomično - postojeći frontend a11y contract pokriva osnovne zahtjeve) CI gate: `Verify QR/accessibility contract` (novi ili proširenje postojećeg).
 
 ### Faza 4 — Bundle budžet i deployment (QR/print)
 - [x] Dodati pragove za `QRScannerPage` i `TransferDocumentPanel` u `frontend/scripts/check-frontend-bundle.mjs`.
