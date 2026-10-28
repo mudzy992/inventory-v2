@@ -438,8 +438,8 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                     <AlertTriangle size={12} /> Status
                   </h3>
                   <p className="text-red-900 font-medium">Rashodovano</p>
-                  {(eq.disposalReason || eq.notes) && (
-                    <p className="text-red-700 text-sm mt-1">{eq.disposalReason || eq.notes}</p>
+                  {eq.disposalReason && (
+                    <p className="text-red-700 text-sm mt-1">{eq.disposalReason}</p>
                   )}
                 </div>
               )}
@@ -468,6 +468,14 @@ export function EquipmentCard({ equipmentId, onClose, showTransferActions = true
                   <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
                     <span className="text-sm text-gray-500">Datum ulaza</span>
                     <span className="text-sm font-medium text-gray-800">{formatDate(eq.entryDate)}</span>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2">
+                    <span className="text-sm text-gray-500 block mb-1">Napomena</span>
+                    {eq.notes ? (
+                      <p className="text-sm font-medium text-gray-800 whitespace-pre-wrap break-words">{eq.notes}</p>
+                    ) : (
+                      <span className="text-sm font-medium text-gray-800">—</span>
+                    )}
                   </div>
                 </div>
               </div>
