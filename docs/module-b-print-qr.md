@@ -96,7 +96,7 @@ Modul B obuhvata:
 - [x] Dodati pragove za `QRScannerPage` i `TransferDocumentPanel` u `frontend/scripts/check-frontend-bundle.mjs`.
 - [x] Proširiti `scripts/check-deployment-readiness.mjs` za `document-worker/Dockerfile`.
 - [x] Dokumentacija ažurirana (`docs/module-b-print-qr.md`).
-- [ ] Git commit/push na `arena/60c1635e-inventory-v2`, CI nadzor (`40703641414` ili noviji zeleni run).
+- [x] Git commit/push na `arena/60c1635e-inventory-v2`, CI nadzor (`40703641414` ili noviji zeleni run).
 
 ---
 
