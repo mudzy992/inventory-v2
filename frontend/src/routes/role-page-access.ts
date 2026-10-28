@@ -43,43 +43,38 @@ export const SKLADISTAR_PAGES: PageId[] = [
   'qr-scanner',
 ];
 
+export const ROLE_PAGE_MATRIX: Record<UserRole, PageId[]> = {
+  admin: [
+    'dashboard', 'equipment', 'equipment-by-category', 'transfers', 'documents',
+    'employees', 'user-management', 'inventory-count', 'disposal-commissions',
+    'employee-relocation', 'warehouses', 'warehouse-inventory', 'registrar-stock',
+    'my-equipment', 'qr-scanner', 'locations', 'categories', 'settings', 'organization',
+  ],
+  moderator: [
+    'dashboard', 'equipment', 'equipment-by-category', 'transfers', 'documents',
+    'employees', 'user-management', 'inventory-count', 'disposal-commissions',
+    'employee-relocation', 'warehouses', 'my-equipment', 'qr-scanner', 'organization',
+  ],
+  evidenticar: [
+    'dashboard', 'equipment', 'equipment-by-category', 'transfers', 'documents',
+    'employees', 'inventory-count', 'disposal-commissions', 'employee-relocation',
+    'registrar-stock', 'my-equipment', 'qr-scanner',
+  ],
+  skladistar: [
+    'dashboard', 'warehouses', 'warehouse-inventory', 'my-equipment', 'qr-scanner',
+  ],
+  popis_koordinator: [
+    'inventory-count', 'my-equipment', 'qr-scanner',
+  ],
+  user: [
+    'my-equipment', 'qr-scanner',
+  ],
+};
+
 export const canAccessPageForRole = (pageId: PageId, role: UserRole | null | undefined): boolean => {
-  const admin = role === 'admin';
-  const moderator = role === 'moderator';
-  const evidenticar = role === 'evidenticar';
-  const skladistar = role === 'skladistar';
-  const coordinator = role === 'popis_koordinator';
-  if (ADMIN_ONLY_PAGES.includes(pageId)) {
-    return admin;
-  }
-  if (pageId === 'warehouses') {
-    return admin || skladistar || moderator;
-  }
-  if (pageId === 'warehouse-inventory') {
-    return skladistar && !admin;
-  }
-  if (moderator) {
-    if (ADMIN_OR_MODERATOR_PAGES.includes(pageId) || MODERATOR_READ_PAGES.includes(pageId)) {
-      return true;
-    }
-    if (pageId === 'my-equipment' || pageId === 'qr-scanner') {
-      return true;
-    }
-    return false;
-  }
-  if (ADMIN_OR_EVIDENTICAR_PAGES.includes(pageId)) {
-    return admin || evidenticar;
-  }
-  if (ADMIN_OR_EVIDENTICAR_INVENTORY_PAGES.includes(pageId)) {
-    return admin || evidenticar || coordinator;
-  }
-  if (ADMIN_OR_MODERATOR_PAGES.includes(pageId)) {
-    return admin;
-  }
-  if (pageId === 'my-equipment' || pageId === 'qr-scanner') {
-    return true;
-  }
-  return false;
+  if (!role) return false;
+  const allowedPages = ROLE_PAGE_MATRIX[role] ?? [];
+  return allowedPages.includes(pageId);
 };
 
 export const canAccessPage = (pageId: PageId): boolean =>
