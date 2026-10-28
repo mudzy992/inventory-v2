@@ -27,6 +27,11 @@ const BUDGET = {
   totalCssRawKb: 130,
   totalCssGzipKb: 24,
   entryRawKb: 150,
+  // Component-specific budget extensions (Module B)
+  maxTransferPanelChunkRawKb: 500,
+  maxTransferPanelChunkGzipKb: 160,
+  maxQrScannerChunkRawKb: 200,
+  maxQrScannerChunkGzipKb: 65,
 };
 
 const kb = (bytes) => Math.round((bytes / 1024) * 10) / 10;
@@ -64,11 +69,43 @@ const main = () => {
     entryRawKb: kb(entries[0].raw),
   };
 
-  for (const [key, limit] of Object.entries(BUDGET)) {
+  const baseBudgetKeys = Object.keys(BUDGET).filter(
+    (k) => !k.includes('TransferPanel') && !k.includes('QrScanner')
+  );
+  for (const key of baseBudgetKeys) {
+    const limit = BUDGET[key];
     assert.ok(
       actual[key] <= limit,
       `${key}: ${actual[key]} kB exceeds the ${limit} kB budget`,
     );
+  }
+
+  // Component-specific budget checks (Module B)
+  const transferPanelChunk = js.find((file) => file.name.includes('TransferDocumentPanel') || file.name.includes('transfer-document'));
+  const qrScannerChunk = js.find((file) => file.name.includes('QRScannerPage') || file.name.includes('qr-scanner'));
+  if (transferPanelChunk) {
+    assert.ok(
+      kb(transferPanelChunk.raw) <= BUDGET.maxTransferPanelChunkRawKb,
+      `TransferDocumentPanel chunk ${transferPanelChunk.name} exceeds budget: ${kb(transferPanelChunk.raw)} kB raw`,
+    );
+    assert.ok(
+      kb(transferPanelChunk.gzip) <= BUDGET.maxTransferPanelChunkGzipKb,
+      `TransferDocumentPanel chunk gzip exceeds budget: ${kb(transferPanelChunk.gzip)} kB gzip`,
+    );
+  } else {
+    console.log('Note: TransferDocumentPanel chunk not found separately (included in larger chunk); budget check skipped.');
+  }
+  if (qrScannerChunk) {
+    assert.ok(
+      kb(qrScannerChunk.raw) <= BUDGET.maxQrScannerChunkRawKb,
+      `QRScannerPage chunk ${qrScannerChunk.name} exceeds budget: ${kb(qrScannerChunk.raw)} kB raw`,
+    );
+    assert.ok(
+      kb(qrScannerChunk.gzip) <= BUDGET.maxQrScannerChunkGzipKb,
+      `QRScannerPage chunk gzip exceeds budget: ${kb(qrScannerChunk.gzip)} kB gzip`,
+    );
+  } else {
+    console.log('Note: QRScannerPage chunk not found separately (included in larger chunk); budget check skipped.');
   }
 
   if (process.argv.includes('--json')) console.log(JSON.stringify({ pass: true, budget: BUDGET, actual }, null, 2));
