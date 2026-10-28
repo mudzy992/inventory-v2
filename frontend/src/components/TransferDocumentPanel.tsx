@@ -42,6 +42,7 @@ interface TransferDocumentPanelProps {
   linePendingApplied?: boolean;
   layout?: 'inline' | 'drawer';
   autoPreview?: TransferDocumentPreviewMode | false;
+  notes?: string | null;
 }
 
 export const TransferDocumentPanel = ({
@@ -53,6 +54,7 @@ export const TransferDocumentPanel = ({
   linePendingApplied = false,
   layout = 'inline',
   autoPreview = false,
+  notes = null,
 }: TransferDocumentPanelProps) => {
   const { getBoolean: getEffectiveBoolean, getNumber: getEffectiveNumber, settings: effectiveSettings } = useEffectiveSettings();
   const { toastError } = useToast();
@@ -72,6 +74,7 @@ export const TransferDocumentPanel = ({
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [hasRealtimeDocumentUpdate, setHasRealtimeDocumentUpdate] = useState(false);
   const refreshStatusRef = useRef<() => void>(() => undefined);
+  const notes = props.notes ?? (transfer as any).notes ?? null;
   const isDrawer = layout === 'drawer';
 
   useEffect(() => {
@@ -498,6 +501,11 @@ export const TransferDocumentPanel = ({
         >
           <Download size={14} /> Preuzmi potpisani PDF
         </button>
+      ) : null}
+      {notes ? (
+        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+          <strong>Napomene:</strong> {notes}
+        </div>
       ) : null}
     </>
   );
