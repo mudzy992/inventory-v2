@@ -58,7 +58,7 @@ export const ROLE_PAGE_MATRIX: Record<UserRole, PageId[]> = {
   evidenticar: [
     'dashboard', 'equipment', 'equipment-by-category', 'transfers', 'documents',
     'employees', 'inventory-count', 'disposal-commissions', 'employee-relocation',
-    'registrar-stock', 'my-equipment', 'qr-scanner',
+    'registrar-stock', 'my-equipment', 'qr-scanner', 'warehouses',
   ],
   skladistar: [
     'dashboard', 'warehouses', 'warehouse-inventory', 'my-equipment', 'qr-scanner',
