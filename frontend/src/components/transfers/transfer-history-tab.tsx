@@ -21,6 +21,7 @@ import {
 } from '../inventory-count/inventory-freeze-action-hint';
 import type { TransferRecord } from '../../types';
 import type { TransferWorkflowFilter } from '../../api/transfers-api';
+import { onKeyboardActivate } from '../../utils/keyboard-activation';
 
 type HistoryWorkflowTab = 'pending' | 'signed';
 
@@ -225,6 +226,9 @@ export const TransferHistoryTab = () => {
                     key={t.id}
                     className="border-t border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer"
                     onClick={() => setSelectedTransferId(t.id)}
+                  onKeyDown={onKeyboardActivate(() => setSelectedTransferId(t.id))}
+                  tabIndex={0}
+                  aria-label={`Prikaži prenos ${t.documentNumber}`}
                   >
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-medium text-gray-800">{t.documentNumber}</span>

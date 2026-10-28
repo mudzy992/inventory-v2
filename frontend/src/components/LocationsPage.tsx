@@ -354,7 +354,7 @@ export const LocationsPage = () => {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Naziv</label>
-              <input
+              <input aria-label="Naziv"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 className={inputClass}
@@ -363,7 +363,7 @@ export const LocationsPage = () => {
             {editTarget?.type === 'canton' ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Šifra (opcionalno)</label>
-                <input
+                <input aria-label="Šifra (opcionalno)"
                   value={editCode}
                   onChange={(e) => setEditCode(e.target.value)}
                   className={inputClass}

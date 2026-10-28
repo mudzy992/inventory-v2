@@ -23,7 +23,7 @@ export const CategoryFieldControl = ({ field, value, onChange }: CategoryFieldCo
         ))}
       </select>
     ) : (
-      <input
+      <input aria-label={field.name}
         type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
         value={value}
         onChange={(event) => onChange(event.target.value)}

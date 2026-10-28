@@ -82,7 +82,7 @@ function OrgTreeNode({ unit, level, state, employees, onEdit, onDelete, onAdd }:
         typeColors[unit.type] || 'border-l-gray-300 bg-gray-50'
       )}>
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 group">
-          <button
+          <button type="button"
             onClick={() => setExpanded(!expanded)}
             className="text-gray-400 hover:text-gray-600 flex-shrink-0 w-5"
           >
@@ -110,14 +110,14 @@ function OrgTreeNode({ unit, level, state, employees, onEdit, onDelete, onAdd }:
             <Users size={10} />{unitEmployees.length}
           </span>
           <div className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 flex gap-1 transition-opacity ml-auto">
-            <button onClick={() => onAdd(unit.id)} className="text-green-500 hover:text-green-700 p-0.5" title="Dodaj podjedinicu">
+            <button type="button" onClick={() => onAdd(unit.id)} className="text-green-500 hover:text-green-700 p-0.5" title="Dodaj podjedinicu">
               <Plus size={14} />
             </button>
-            <button onClick={() => onEdit(unit)} className="text-blue-500 hover:text-blue-700 p-0.5" title="Uredi">
+            <button type="button" onClick={() => onEdit(unit)} className="text-blue-500 hover:text-blue-700 p-0.5" title="Uredi">
               <Edit2 size={14} />
             </button>
             {children.length === 0 && unitEmployees.length === 0 && (
-              <button onClick={() => onDelete(unit.id)} className="text-red-500 hover:text-red-700 p-0.5" title="Obriši">
+              <button type="button" onClick={() => onDelete(unit.id)} className="text-red-500 hover:text-red-700 p-0.5" title="Obriši">
                 <Trash2 size={14} />
               </button>
             )}
@@ -598,7 +598,7 @@ export function OrganizationPage() {
               {editingUnit ? <OrgUnitWarehousesSection orgUnit={editingUnit} /> : null}
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
-              <button
+              <button type="button"
                 onClick={() => setShowForm(false)}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50"
               >

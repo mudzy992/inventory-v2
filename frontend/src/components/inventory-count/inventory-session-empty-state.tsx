@@ -40,7 +40,7 @@ export const InventorySessionEmptyState = ({
       </div>
       <div>
         <label className={labelClass}>Godina</label>
-        <input
+        <input aria-label="Godina"
           type="number"
           value={year}
           onChange={(event) => onYearChange(Number(event.target.value))}

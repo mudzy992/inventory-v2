@@ -445,7 +445,7 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Datum</label>
-                <input
+                <input aria-label="Datum"
                   type="date"
                   value={fDate}
                   onChange={(e) => setFDate(e.target.value)}
@@ -477,13 +477,13 @@ export function TransfersPage({ initialTab = 'history' }: TransfersPageProps) {
               </div>
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
-              <button
+              <button type="button"
                 onClick={() => setShowForm(false)}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50"
               >
                 Odustani
               </button>
-              <button
+              <button type="button"
                 onClick={() => void handleSave()}
                 disabled={evidenticar && !admin && wouldBeCrossService}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"

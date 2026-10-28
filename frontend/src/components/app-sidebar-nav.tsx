@@ -38,7 +38,7 @@ const NavSection = ({
   return (
     <div className={className}>
       {!collapsed ? (
-        <p className="px-4 text-xs text-slate-500 font-semibold uppercase mb-2">{label}</p>
+        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">{label}</p>
       ) : null}
       {children}
     </div>
@@ -128,7 +128,7 @@ export const AppSidebarNav = ({
 
   return (
     <>
-      <div className="p-4 border-b border-slate-700">
+      <div className="border-b border-line px-4 py-4">
         {collapsed ? (
           <div className="flex justify-center">
             <AppBrand variant="compact" iconOnly name={appName} showSubtitle={false} />
@@ -139,25 +139,25 @@ export const AppSidebarNav = ({
       </div>
 
       {currentEmployee && showUserInfo && !collapsed && (
-        <div className="p-4 border-b border-slate-700">
+        <div className="border-b border-line px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center text-sm font-bold">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand-ink">
               {currentEmployee.firstName[0]}{currentEmployee.lastName[0]}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">{currentEmployee.firstName} {currentEmployee.lastName}</p>
-              <p className="text-xs text-slate-400 truncate">{currentEmployee.title}</p>
+              <p className="truncate text-xs text-ink-muted">{currentEmployee.title}</p>
             </div>
           </div>
           <div className="mt-2">
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${roleColor}`}>
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${roleColor}`}>
               {roleLabel.toUpperCase()}
             </span>
           </div>
         </div>
       )}
 
-      <nav className="flex-1 py-4 overflow-y-auto space-y-4">
+      <nav className="ds-scroll-area flex-1 space-y-4 overflow-y-auto px-2 py-4" aria-label="Glavna navigacija">
         <NavSection
           label="Pregled"
           collapsed={collapsed}
@@ -180,10 +180,10 @@ export const AppSidebarNav = ({
                 type="button"
                 onClick={() => !collapsed && setEquipmentMenuOpen(!equipmentMenuOpen)}
                 className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                  'flex w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 text-sm transition-colors',
                   currentPage === 'equipment' || currentPage === 'equipment-by-category'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800',
+                    ? 'bg-brand-soft font-semibold text-brand-ink'
+                    : 'text-ink-muted hover:bg-subtle hover:text-ink',
                 )}
               >
                 <Package size={20} />
@@ -198,7 +198,7 @@ export const AppSidebarNav = ({
                 ) : null}
               </button>
               {(equipmentMenuOpen || collapsed) ? (
-                <div className={cn(!collapsed && 'ml-4 border-l border-slate-700')}>
+                <div className={cn(!collapsed && 'ml-4 border-l border-line')}>
                   <SidebarNavButton
                     pageId="equipment"
                     collapsed={collapsed}
@@ -206,7 +206,7 @@ export const AppSidebarNav = ({
                     icon={List}
                     visible={showNavPage('equipment')}
                     title="Sva oprema"
-                    className="py-2 text-slate-400 hover:text-white"
+                    className="py-2 text-ink-muted hover:text-ink"
                     badge={moduleBadges.equipment}
                     onNavigateComplete={onNavigateComplete}
                   />
@@ -217,7 +217,7 @@ export const AppSidebarNav = ({
                     icon={Layers}
                     visible={showNavPage('equipment-by-category')}
                     title="Po kategorijama"
-                    className="py-2 text-slate-400 hover:text-white"
+                    className="py-2 text-ink-muted hover:text-ink"
                     onNavigateComplete={onNavigateComplete}
                   />
                 </div>
@@ -456,12 +456,12 @@ export const AppSidebarNav = ({
       </nav>
 
       {(onLogout || showCollapseToggle) && (
-        <div className="border-t border-slate-700 p-2">
+        <div className="border-t border-line p-2">
           {onLogout ? (
             <button
               type="button"
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-2 text-xs text-slate-400 hover:text-red-400 transition-colors"
+              className="flex w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 text-xs text-ink-muted transition-colors hover:bg-subtle hover:text-danger-ink"
             >
               <LogOut size={16} />
               {!collapsed && <span>Odjavi se</span>}
@@ -471,7 +471,7 @@ export const AppSidebarNav = ({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="w-full flex items-center gap-3 px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors"
+              className="flex w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 text-xs text-ink-muted transition-colors hover:bg-subtle hover:text-ink"
             >
               {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
               {!collapsed && <span>Smanji meni</span>}

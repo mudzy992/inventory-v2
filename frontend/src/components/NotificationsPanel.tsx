@@ -86,7 +86,7 @@ export const NotificationsPanel = () => {
 
       {open ? (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <button type="button" className="fixed inset-0 z-40" aria-label="Zatvori obavještenja" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full mt-2 w-[min(100vw-2rem,24rem)] bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <h2 className="text-sm font-semibold text-gray-900">Notifikacije</h2>

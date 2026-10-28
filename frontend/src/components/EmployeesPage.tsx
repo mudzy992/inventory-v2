@@ -477,12 +477,12 @@ export function EmployeesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Ime *</label>
-                  <input type="text" value={fFirstName} onChange={e => setFFirstName(e.target.value)}
+                  <input aria-label="Ime *" type="text" value={fFirstName} onChange={e => setFFirstName(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Prezime *</label>
-                  <input type="text" value={fLastName} onChange={e => setFLastName(e.target.value)}
+                  <input aria-label="Prezime *" type="text" value={fLastName} onChange={e => setFLastName(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
               </div>
@@ -510,7 +510,7 @@ export function EmployeesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kadrovski broj</label>
-                  <input
+                  <input aria-label="Kadrovski broj"
                     type="text"
                     value={fStaffNumber}
                     onChange={(e) => setFStaffNumber(e.target.value)}
@@ -551,12 +551,12 @@ export function EmployeesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input type="email" value={fEmail} onChange={e => setFEmail(e.target.value)}
+                  <input aria-label="Email" type="email" value={fEmail} onChange={e => setFEmail(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
-                  <input type="text" value={fPhone} onChange={e => setFPhone(e.target.value)}
+                  <input aria-label="Telefon" type="text" value={fPhone} onChange={e => setFPhone(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
               </div>
@@ -614,7 +614,7 @@ export function EmployeesPage() {
               ) : null}
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
-              <button
+              <button type="button"
                 onClick={() => {
                   setShowForm(false);
                   setRelocationPreview(null);
@@ -625,21 +625,21 @@ export function EmployeesPage() {
                 Odustani
               </button>
               {showDeactivateConfirm ? (
-                <button
+                <button type="button"
                   onClick={() => void confirmDeactivateSave()}
                   className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
                 >
                   Potvrdi deaktivaciju
                 </button>
               ) : relocationPreview ? (
-                <button
+                <button type="button"
                   onClick={() => void confirmRelocationSave()}
                   className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium"
                 >
                   Potvrdi promjenu
                 </button>
               ) : (
-                <button
+                <button type="button"
                   onClick={() => void handleSave()}
                   disabled={previewLoading}
                   className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"

@@ -2,6 +2,7 @@
 
 /* Evidens — design tokens (Apple-linear) */
 @theme {
+  /* Legacy palette (kept for the ~250 existing page components). */
   --color-primary: #1d4ed8;
   --color-background: #f8fafc;
   --color-text: #0f172a;
@@ -11,6 +12,35 @@
   --color-surface: #ffffff;
   --color-muted: #64748b;
   --color-border: #e2e8f0;
+
+  /* Evidens Surface — semantic tokens. New/redesigned UI uses ONLY these;
+     see docs/frontend-design-system.md and src/design-system/tokens.ts. */
+  --color-canvas: #f7f9fc;
+  --color-panel: #ffffff;
+  --color-subtle: #f1f5f9;
+  --color-ink: #111827;
+  --color-ink-muted: #5b6779;
+  --color-ink-subtle: #7c8798;
+  --color-line: #e5eaf1;
+  --color-line-strong: #d4dce7;
+  --color-brand: #4f46e5;
+  --color-brand-hover: #4338ca;
+  --color-brand-soft: #eef2ff;
+  --color-brand-ink: #3730a3;
+  --color-success-ink: #15803d;
+  --color-warning-ink: #b45309;
+  --color-danger-ink: #b91c1c;
+  --color-danger-hover: #991b1b;
+  --color-success-soft: #ecfdf5;
+  --color-warning-soft: #fffbeb;
+  --color-danger-soft: #fef2f2;
+  --color-focus: #4f46e5;
+  --radius-surface: 0.875rem;
+  --radius-control: 0.625rem;
+  --shadow-surface: 0 1px 2px rgb(17 24 39 / 0.04), 0 1px 3px rgb(17 24 39 / 0.06);
+  --shadow-raised: 0 8px 24px -8px rgb(17 24 39 / 0.18), 0 2px 6px rgb(17 24 39 / 0.06);
+  --font-sans: "Inter var", "Inter", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 :root {
@@ -253,4 +283,158 @@ body.auth-flow #root {
     transform: none;
     transition: none;
   }
+}
+
+
+/* ==========================================================================
+   Evidens Surface — global baseline (F-4 focus, F-7 motion, F-10 shell)
+   ========================================================================== */
+@layer base {
+  :root {
+    color-scheme: light;
+    accent-color: var(--color-brand);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+  }
+
+  /* One consistent, high-contrast keyboard focus indicator for the whole app.
+     `:focus-visible` never fires for mouse users, so it costs nothing visually. */
+  :focus-visible {
+    /* !important is deliberate: legacy pages use Tailwind `outline-none`,
+       which lives in the utilities layer and would otherwise win. */
+    outline: 2px solid var(--color-focus) !important;
+    outline-offset: 2px !important;
+    border-radius: 2px;
+  }
+
+  /* Keep focus visible on dark/brand surfaces too. */
+  .ds-on-brand :focus-visible {
+    outline-color: #ffffff !important;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-soft);
+    color: var(--color-brand-ink);
+  }
+}
+
+/* Keyboard-only skip link, first tab stop of the application shell. */
+.ds-skip-link {
+  position: fixed;
+  inset-inline-start: 1rem;
+  inset-block-start: -4rem;
+  z-index: 100;
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius-control);
+  background: var(--color-brand);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-raised);
+  transition: inset-block-start 160ms ease;
+}
+.ds-skip-link:focus {
+  inset-block-start: 1rem;
+}
+
+/* Scrollbar: neutral, thin, always legible on the canvas. */
+.ds-scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+.ds-scroll-area::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.ds-scroll-area::-webkit-scrollbar-thumb {
+  background-color: var(--color-line-strong);
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+
+/* Reduced motion is a global accessibility requirement, not a per-page one. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .ds-skip-link {
+    transition: none;
+  }
+}
+
+/* Windows High Contrast / forced colors: never hide focus or borders. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 3px solid CanvasText;
+  }
+  .ds-card,
+  .ds-control {
+    border: 1px solid CanvasText;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --color-line: #b9c4d4;
+    --color-line-strong: #93a3bb;
+    --color-ink-muted: #3b4658;
+  }
+}
+
+/* ==========================================================================
+   Evidens Surface — authentication shell (light, split-screen)
+   ========================================================================== */
+.ds-auth-panel {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 10% 0%, rgb(129 140 248 / 0.35), transparent 60%),
+    radial-gradient(90% 70% at 90% 100%, rgb(13 148 136 / 0.28), transparent 65%),
+    var(--color-brand-ink);
+  color: rgb(255 255 255 / 0.92);
+}
+
+.ds-auth-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.22;
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.25) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.25) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+
+.ds-auth-card {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-surface);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-raised);
 }

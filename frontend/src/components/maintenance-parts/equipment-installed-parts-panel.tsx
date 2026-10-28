@@ -261,7 +261,7 @@ export const EquipmentInstalledPartsPanel = ({
           </div>
           <div>
             <label className={labelClass}>Količina</label>
-            <input
+            <input aria-label="Količina"
               type="number"
               min={1}
               className={inputClass}

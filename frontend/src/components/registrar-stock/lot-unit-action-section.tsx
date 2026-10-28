@@ -120,7 +120,7 @@ export const LotUnitActionSection = ({
           {isAccountingTracked ? (
             <div>
               <label className={labelClass}>Inventurni broj *</label>
-              <input
+              <input aria-label="Inventurni broj *"
                 type="text"
                 value={inventoryNumber}
                 onChange={(event) => onInventoryNumberChange(event.target.value)}

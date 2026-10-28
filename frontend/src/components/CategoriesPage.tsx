@@ -32,6 +32,7 @@ import { PageTabs } from './ui/page-tabs';
 import { PageHeaderRow } from './ui/page-header-row';
 import { inputClass, labelClass } from './ui/form-styles';
 import { ModalRoot } from './ui/modal-root';
+import { onKeyboardActivate } from '../utils/keyboard-activation';
 
 type CategoriesTabId = 'asset' | 'maintenance' | 'catalog';
 
@@ -295,6 +296,10 @@ export function CategoriesPage() {
                 <div
                   className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors bg-gradient-to-r from-blue-50 to-transparent"
                   onClick={() => setExpandedParentId(isExpanded ? null : parent.id)}
+                  onKeyDown={onKeyboardActivate(() => setExpandedParentId(isExpanded ? null : parent.id))}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
                 >
                   {isExpanded ? <FolderOpen size={20} className="text-blue-500" /> : <Folder size={20} className="text-blue-400" />}
                   <div className="flex-1 min-w-0">
@@ -304,7 +309,7 @@ export function CategoriesPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">{subCategories.length} podkategorija</span>
                     <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">{statsTotal} stavki</span>
-                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div role="presentation" className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                       <button type="button" onClick={() => openAddSub(parent.id)} className="text-green-500 hover:text-green-700 p-1" title="Dodaj podkategoriju">
                         <Plus size={14} />
                       </button>
@@ -375,6 +380,10 @@ export function CategoriesPage() {
                 <div
                   className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-amber-50/50 transition-colors bg-gradient-to-r from-amber-50 to-transparent"
                   onClick={() => setExpandedParentId(isExpanded ? null : parent.id)}
+                  onKeyDown={onKeyboardActivate(() => setExpandedParentId(isExpanded ? null : parent.id))}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
                 >
                   {isExpanded ? <FolderOpen size={20} className="text-amber-600" /> : <Wrench size={20} className="text-amber-500" />}
                   <div className="flex-1 min-w-0">
@@ -383,7 +392,7 @@ export function CategoriesPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">{subs.length} tipova</span>
-                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div role="presentation" className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                       <button type="button" onClick={() => openAddSub(parent.id, 'MAINTENANCE')} className="text-green-600 hover:text-green-800 p-1" title="Dodaj tip dijela">
                         <Plus size={14} />
                       </button>

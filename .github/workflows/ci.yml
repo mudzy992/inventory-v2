@@ -372,9 +372,21 @@ jobs:
         working-directory: frontend
         run: npx tsc --noEmit
 
+      - name: Verify frontend design system and a11y contract
+        working-directory: frontend
+        run: node scripts/check-frontend-contract.mjs --json
+
+      - name: Run frontend unit specs
+        working-directory: frontend
+        run: npm run test:unit
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+      - name: Verify frontend bundle budget
+        working-directory: frontend
+        run: node scripts/check-frontend-bundle.mjs --json
 
       - name: Audit frontend dependencies
         working-directory: frontend

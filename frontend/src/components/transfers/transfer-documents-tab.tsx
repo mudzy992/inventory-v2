@@ -26,6 +26,7 @@ import { TransferDocumentDrawer } from './transfer-document-drawer';
 import { PaginationControls } from '../ui/pagination-controls';
 import { PageTabs } from '../ui/page-tabs';
 import type { TransferRecord } from '../../types';
+import { onKeyboardActivate } from '../../utils/keyboard-activation';
 
 type DocumentsWorkflowTab = 'pending' | 'signed';
 
@@ -237,7 +238,7 @@ export const TransferDocumentsTab = () => {
         Dokumentacija prenosa opreme — generisani Word obrazac i potpisani PDF.
       </p>
 
-      <input
+      <input aria-label="Odaberi skenirani dokument"
         type="file"
         ref={fileInputRef}
         className="hidden"
@@ -292,6 +293,9 @@ export const TransferDocumentsTab = () => {
                   key={t.id}
                   className="border-t border-gray-50 hover:bg-gray-50 cursor-pointer"
                   onClick={() => setViewDoc(t.id)}
+                  onKeyDown={onKeyboardActivate(() => setViewDoc(t.id))}
+                  tabIndex={0}
+                  aria-label={`Prikaži dokument ${t.documentNumber}`}
                 >
                   <td className="px-3 py-2.5 font-mono text-xs font-semibold text-gray-800">
                     {t.documentNumber}

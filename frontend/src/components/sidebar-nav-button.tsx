@@ -50,8 +50,10 @@ export const SidebarNavButton = ({
       onClick={onNavigateComplete}
       className={({ isActive }) =>
         cn(
-          'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-          isActive || isAlsoActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800',
+          'flex w-full items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 text-sm transition-colors',
+          isActive || isAlsoActive
+            ? 'bg-brand-soft font-semibold text-brand-ink'
+            : 'text-ink-muted hover:bg-subtle hover:text-ink',
           className,
         )
       }
@@ -61,7 +63,7 @@ export const SidebarNavButton = ({
         {badge && badge > 0 ? (
           <span
             className={cn(
-              'absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-4 text-center',
+              'absolute -right-1.5 -top-1.5 h-4 min-w-[16px] rounded-full bg-danger-ink px-1 text-center text-[10px] font-semibold leading-4 text-white',
               collapsed ? 'block' : 'hidden',
             )}
             aria-hidden
@@ -75,7 +77,7 @@ export const SidebarNavButton = ({
           <span className="flex-1 flex items-center justify-between gap-2 min-w-0">
             <span className="truncate">{label}</span>
             {badge && badge > 0 ? (
-              <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-[18px] text-center">
+              <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-danger-ink text-white text-[10px] font-semibold leading-[18px] text-center">
                 {badge > 99 ? '99+' : badge}
               </span>
             ) : null}

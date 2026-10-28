@@ -10,6 +10,7 @@ import { ResponsiveTable } from '../ui/responsive-table';
 import { PaginationControls } from '../ui/pagination-controls';
 import { EquipmentCard } from '../EquipmentCard';
 import type { Equipment } from '../../types';
+import { onKeyboardActivate } from '../../utils/keyboard-activation';
 
 const categoryBadgeClass = 'inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600';
 
@@ -105,6 +106,9 @@ export const CurrentAssignmentsTab = () => {
                     key={eq.id}
                     className="border-t border-gray-50 hover:bg-blue-50/50 transition-colors cursor-pointer"
                     onClick={() => setViewEquipmentId(eq.id)}
+                    onKeyDown={onKeyboardActivate(() => setViewEquipmentId(eq.id))}
+                    tabIndex={0}
+                    aria-label={`Prikaži opremu ${eq.inventoryNumber ?? eq.id}`}
                   >
                     <td className="px-4 py-2.5 font-mono text-xs font-semibold text-blue-700">
                       {eq.inventoryNumber}

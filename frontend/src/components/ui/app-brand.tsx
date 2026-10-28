@@ -12,24 +12,40 @@ interface AppBrandProps {
   className?: string;
 }
 
-const BrandMark = ({ size }: { size: 'sm' | 'md' | 'lg' }) => {
+/** Geometric "stacked inventory" mark — no text glyph that breaks on font swap. */
+const BrandMark = ({ size, tone }: { size: 'sm' | 'md' | 'lg'; tone: 'brand' | 'on-dark' }) => {
   const box =
-    size === 'sm' ? 'w-8 h-8 rounded-lg text-xs' : size === 'md' ? 'w-12 h-12 rounded-xl text-sm' : 'w-16 h-16 rounded-2xl text-lg';
+    size === 'sm'
+      ? 'h-9 w-9 rounded-[0.7rem]'
+      : size === 'md'
+        ? 'h-12 w-12 rounded-[0.9rem]'
+        : 'h-16 w-16 rounded-[1.15rem]';
+  const icon = size === 'sm' ? 'h-5 w-5' : size === 'md' ? 'h-6 w-6' : 'h-8 w-8';
   return (
-    <div
+    <span
       className={cn(
-        'flex items-center justify-center font-bold tracking-tight shrink-0',
+        'inline-flex shrink-0 items-center justify-center shadow-surface',
         box,
-        size === 'lg'
-          ? 'bg-white/10 border border-white/20 text-white shadow-lg shadow-slate-950/30 backdrop-blur-md'
-          : size === 'md'
-            ? 'bg-teal-600 text-white shadow-md shadow-teal-900/20'
-            : 'bg-teal-600 text-white',
+        tone === 'brand' ? 'bg-brand text-white' : 'bg-white/10 text-white ring-1 ring-inset ring-white/25',
       )}
-      aria-hidden
+      aria-hidden="true"
     >
-      E
-    </div>
+      <svg viewBox="0 0 24 24" fill="none" className={icon} aria-hidden="true">
+        <path
+          d="M12 3.2 20.2 7.4 12 11.6 3.8 7.4 12 3.2Z"
+          fill="currentColor"
+          opacity="0.95"
+        />
+        <path
+          d="M4.6 11.4 11.4 14.7a1.5 1.5 0 0 0 1.2 0l6.8-3.3M4.6 15.6l6.8 3.3a1.5 1.5 0 0 0 1.2 0l6.8-3.3"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.75"
+        />
+      </svg>
+    </span>
   );
 };
 
@@ -44,49 +60,53 @@ export const AppBrand = ({
   if (variant === 'light') {
     return (
       <div className={cn('text-center', className)}>
-        <div className="inline-flex mb-3">
-          <BrandMark size="md" />
+        <div className="mb-3 inline-flex">
+          <BrandMark size="md" tone="brand" />
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{name}</h1>
-        {showSubtitle ? <p className="text-teal-700/80 text-sm mt-2 font-medium">{subtitle}</p> : null}
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{name}</h1>
+        {showSubtitle ? <p className="mt-2 text-sm font-medium text-ink-muted">{subtitle}</p> : null}
       </div>
     );
   }
+
   if (variant === 'compact') {
     if (iconOnly) {
       return (
-        <div className={cn('inline-flex', className)}>
-          <BrandMark size="sm" />
+        <div className={cn('inline-flex', className)} title={name}>
+          <BrandMark size="sm" tone="brand" />
         </div>
       );
     }
     return (
       <div className={cn('inline-flex items-center gap-2', className)}>
-        <BrandMark size="sm" />
-        <span className="font-semibold text-sm truncate">{name}</span>
+        <BrandMark size="sm" tone="brand" />
+        <span className="truncate text-sm font-semibold text-ink">{name}</span>
       </div>
     );
   }
+
   if (variant === 'sidebar') {
     return (
-      <div className={cn('flex items-center gap-3 min-w-0', className)}>
-        <BrandMark size="sm" />
+      <div className={cn('flex min-w-0 items-center gap-3', className)}>
+        <BrandMark size="sm" tone="brand" />
         <div className="min-w-0">
-          <h1 className="font-bold text-sm leading-tight truncate">{name}</h1>
+          <h1 className="truncate text-sm font-semibold leading-tight tracking-tight text-ink">{name}</h1>
           {showSubtitle ? (
-            <p className="text-xs text-slate-400 leading-tight truncate">{subtitle}</p>
+            <p className="truncate text-xs leading-tight text-ink-muted">{subtitle}</p>
           ) : null}
         </div>
       </div>
     );
   }
+
+  // `auth` is used by the dark setup-wizard presentation; keep white text.
   return (
     <div className={cn('text-center', className)}>
-      <div className="inline-flex mb-4">
-        <BrandMark size="lg" />
+      <div className="mb-4 inline-flex">
+        <BrandMark size="lg" tone="on-dark" />
       </div>
-      <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">{name}</h1>
-      {showSubtitle ? <p className="text-teal-200/80 text-sm mt-2">{subtitle}</p> : null}
+      <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{name}</h1>
+      {showSubtitle ? <p className="mt-2 text-sm text-white/70">{subtitle}</p> : null}
     </div>
   );
 };

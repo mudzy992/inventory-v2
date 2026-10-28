@@ -177,7 +177,7 @@ const WarehouseLineCard = ({ item, disabled, saving, onSave }: WarehouseLineCard
         </div>
         <div>
           <label className={labelClass}>Prebrojano</label>
-          <input
+          <input aria-label="Prebrojano"
             type="number"
             min={0}
             disabled={disabled}
@@ -188,7 +188,7 @@ const WarehouseLineCard = ({ item, disabled, saving, onSave }: WarehouseLineCard
         </div>
         <div>
           <label className={labelClass}>Napomena</label>
-          <input
+          <input aria-label="Napomena"
             type="text"
             disabled={disabled}
             value={note}

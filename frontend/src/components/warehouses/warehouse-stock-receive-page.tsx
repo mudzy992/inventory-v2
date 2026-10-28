@@ -198,7 +198,7 @@ export const WarehouseStockReceivePage = ({
               ) : null}
               <div>
                 <label className={labelClass}>Količina *</label>
-                <input
+                <input aria-label="Količina *"
                   type="number"
                   min={1}
                   value={line.quantity}
@@ -208,7 +208,7 @@ export const WarehouseStockReceivePage = ({
               </div>
               <div>
                 <label className={labelClass}>Datum ulaza *</label>
-                <input
+                <input aria-label="Datum ulaza *"
                   type="date"
                   value={line.entryDate}
                   onChange={(e) => updateLine(line.key, { entryDate: e.target.value })}
@@ -217,7 +217,7 @@ export const WarehouseStockReceivePage = ({
               </div>
               <div className="md:col-span-2">
                 <label className={labelClass}>Broj ugovora</label>
-                <input
+                <input aria-label="Broj ugovora"
                   type="text"
                   value={line.contractNumber}
                   onChange={(e) => updateLine(line.key, { contractNumber: e.target.value })}

@@ -31,7 +31,7 @@ export function EquipmentByCategoryPage() {
   const [showLabels, setShowLabels] = useState(false);
   const [labelItems, setLabelItems] = useState<Equipment[]>([]);
   const [loadingLabels, setLoadingLabels] = useState(false);
-  
+
   // Dynamic filters
   const [activeFilters, setActiveFilters] = useState<FilterCondition[]>([]);
   const [showFilterBuilder, setShowFilterBuilder] = useState(false);
@@ -44,7 +44,7 @@ export function EquipmentByCategoryPage() {
   const [specFieldId, setSpecFieldId] = useState('');
   const [specValue, setSpecValue] = useState('');
   const [showAllStatuses, setShowAllStatuses] = useState(false);
-  
+
   // Saved filter name
   const [filterName, setFilterName] = useState('');
   const [showSaveFilter, setShowSaveFilter] = useState(false);
@@ -186,29 +186,29 @@ export function EquipmentByCategoryPage() {
       { id: 'contractNumber', name: 'Broj ugovora', type: 'text' },
       { id: 'currentHolder', name: 'Zadužen na', type: 'text' },
     ];
-    
+
     if (selectedSub) {
       [...selectedSub.fields, ...selectedSub.optionalFields].forEach(f => {
         fields.push({ id: f.id, name: f.name, type: f.type });
       });
     }
-    
+
     return fields;
   }, [selectedSub]);
 
   function addFilter() {
     if (!newFilterField || !newFilterValue) return;
-    
+
     const field = availableFilterFields.find(f => f.id === newFilterField);
     if (!field) return;
-    
+
     setActiveFilters([...activeFilters, {
       fieldId: newFilterField,
       fieldName: field.name,
       operator: newFilterOperator,
       value: newFilterValue,
     }]);
-    
+
     setNewFilterField('');
     setNewFilterValue('');
     setShowFilterBuilder(false);
@@ -226,7 +226,7 @@ export function EquipmentByCategoryPage() {
   function saveFilter() {
     if (!filterName.trim()) return;
     if (!user) return;
-    
+
     const savedFilter = {
       id: uuidv4(),
       userId: user.id,
@@ -234,12 +234,12 @@ export function EquipmentByCategoryPage() {
       categoryId: selectedSubId || undefined,
       filters: activeFilters,
     };
-    
+
     setState(prev => ({
       ...prev,
       savedFilters: [...prev.savedFilters, savedFilter],
     }));
-    
+
     setFilterName('');
     setShowSaveFilter(false);
   }
@@ -268,11 +268,11 @@ export function EquipmentByCategoryPage() {
 
   function exportToCSV() {
     if (!selectedSub || filteredEquipment.length === 0) return;
-    
+
     const headers = ['Inventurni broj', 'Pripadnost', 'Status', 'Zadužen na', 'Ugovor', 'Datum ulaza'];
     selectedSub.fields.forEach(f => headers.push(f.name));
     selectedSub.optionalFields.forEach(f => headers.push(f.name));
-    
+
     const rows = filteredEquipment.map(e => {
       const holder = e.currentHolder ?? null;
       const row = [
@@ -287,7 +287,7 @@ export function EquipmentByCategoryPage() {
       selectedSub.optionalFields.forEach(f => row.push(e.specifications[f.id] || ''));
       return row;
     });
-    
+
     const csvContent = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -324,7 +324,7 @@ export function EquipmentByCategoryPage() {
 
       {/* Breadcrumb */}
       <div className="flex flex-wrap items-center gap-2 mb-4 text-sm">
-        <button 
+        <button type="button"
           onClick={() => { setSelectedParentId(null); setSelectedSubId(null); setSelectedLotKey(null); handleCloseEquipment(); }}
           className={`${!selectedParentId ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
         >
@@ -333,7 +333,7 @@ export function EquipmentByCategoryPage() {
         {selectedParent && (
           <>
             <ChevronRight size={14} className="text-gray-400" />
-            <button 
+            <button type="button"
               onClick={() => { setSelectedSubId(null); setSelectedLotKey(null); handleCloseEquipment(); }}
               className={`${!selectedSubId ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
             >
@@ -392,7 +392,7 @@ export function EquipmentByCategoryPage() {
                 { total: 0, zaduzeno: 0, skladiste: 0, rashodovano: 0 },
               );
               return (
-                <button
+                <button type="button"
                   key={parent.id}
                   onClick={() => setSelectedParentId(parent.id)}
                   className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 text-left hover:border-blue-200 hover:shadow-md transition-all group"
@@ -424,7 +424,7 @@ export function EquipmentByCategoryPage() {
                 rashodovano: 0,
               };
               return (
-                <button
+                <button type="button"
                   key={sub.id}
                   onClick={() => { setSelectedSubId(sub.id); setSelectedLotKey(null); }}
                   className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 text-left hover:border-blue-200 hover:shadow-md transition-all group"
@@ -574,26 +574,26 @@ export function EquipmentByCategoryPage() {
                   />
                 </div>
               ) : null}
-              <button
+              <button type="button"
                 onClick={() => setShowFilterBuilder(true)}
                 className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
               >
                 <Filter size={14} /> Dodaj filter
               </button>
               {activeFilters.length > 0 && (
-                <button onClick={clearAllFilters} className="text-xs text-red-500 hover:text-red-700">
+                <button type="button" onClick={clearAllFilters} className="text-xs text-red-500 hover:text-red-700">
                   Očisti filtere
                 </button>
               )}
               {activeFilters.length > 0 && (
-                <button
+                <button type="button"
                   onClick={() => setShowSaveFilter(true)}
                   className="text-xs text-blue-500 hover:text-blue-700"
                 >
                   Sačuvaj filter
                 </button>
               )}
-              <button
+              <button type="button"
                 onClick={exportToCSV}
                 className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
               >
@@ -624,7 +624,7 @@ export function EquipmentByCategoryPage() {
                     {filter.operator === 'lte' && '≤'}
                     {' '}
                     "{filter.value}"
-                    <button onClick={() => removeFilter(i)} className="text-blue-500 hover:text-blue-700 ml-1">
+                    <button type="button" onClick={() => removeFilter(i)} className="text-blue-500 hover:text-blue-700 ml-1">
                       <X size={12} />
                     </button>
                   </span>

@@ -684,7 +684,7 @@ export function EquipmentPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Datum ulaza na skladište</label>
-                  <input type="date" value={fEntryDate} onChange={e => setFEntryDate(e.target.value)}
+                  <input aria-label="Datum ulaza na skladište" type="date" value={fEntryDate} onChange={e => setFEntryDate(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
               </div>
@@ -731,7 +731,7 @@ export function EquipmentPage() {
                               {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
                           ) : (
-                            <input
+                            <input aria-label={f.name}
                               type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
                               value={fSpecs[f.id] || ''}
                               onChange={e => setFSpecs({ ...fSpecs, [f.id]: e.target.value })}
@@ -769,7 +769,7 @@ export function EquipmentPage() {
                                 {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
                               </select>
                             ) : (
-                              <input
+                              <input aria-label={f.name}
                                 type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
                                 value={fSpecs[f.id] || ''}
                                 onChange={e => setFSpecs({ ...fSpecs, [f.id]: e.target.value })}
@@ -794,8 +794,8 @@ export function EquipmentPage() {
               </div>
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
-              <button onClick={() => { setShowForm(false); setEditing(null); }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50">Odustani</button>
-              <button onClick={handleSave} disabled={isFrozen} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50">
+              <button type="button" onClick={() => { setShowForm(false); setEditing(null); }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50">Odustani</button>
+              <button type="button" onClick={handleSave} disabled={isFrozen} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50">
                 Sačuvaj
               </button>
             </div>

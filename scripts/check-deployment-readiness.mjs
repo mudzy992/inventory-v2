@@ -56,6 +56,8 @@ export const REQUIRED_DOCS = [
   'docs/backend-code-audit-2026-10-27.md',
   'docs/deployment-readiness.md',
   'docs/load-testing.md',
+  'docs/frontend-design-system.md',
+  'docs/frontend-code-audit-2026-10-28.md',
 ];
 
 export const SAFE_COMPOSE_DEFAULTS = [

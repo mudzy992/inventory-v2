@@ -212,7 +212,7 @@ export const EquipmentCatalogPanel = () => {
               </div>
               <div>
                 <label className={labelClass}>Šifra *</label>
-                <input
+                <input aria-label="Šifra *"
                   type="text"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
@@ -221,7 +221,7 @@ export const EquipmentCatalogPanel = () => {
               </div>
               <div>
                 <label className={labelClass}>Naziv *</label>
-                <input
+                <input aria-label="Naziv *"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}

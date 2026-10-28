@@ -8,6 +8,7 @@ import { useData } from './contexts/DataContext';
 import { AppRouter } from './routes/app-router';
 import { PublicEquipmentRoute } from './routes/public-equipment-route';
 import { HttpStatusPage } from './components/ui/http-status-page';
+import { AppLoadingScreen } from './components/ui/app-loading-screen';
 
 export default function App() {
   return (
@@ -48,9 +49,7 @@ function AppShell() {
 
   if (needsSetup === null || authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-600">
-        Učitavanje...
-      </div>
+      <AppLoadingScreen label="Učitavanje aplikacije…" detail="Provjera statusa i prijave" />
     );
   }
 
@@ -76,9 +75,7 @@ function AppShell() {
 
   if (dataLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-600">
-        Učitavanje podataka...
-      </div>
+      <AppLoadingScreen label="Učitavanje podataka…" detail="Priprema radnog okruženja" />
     );
   }
 

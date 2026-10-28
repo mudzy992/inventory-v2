@@ -36,7 +36,7 @@ export const CategoryLotSpecFields = ({ category, values, onChange }: CategoryLo
               ))}
             </select>
           ) : (
-            <input
+            <input aria-label={field.name}
               type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
               className={inputClass}
               value={values[field.id] ?? ''}

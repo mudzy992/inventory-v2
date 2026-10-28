@@ -179,7 +179,7 @@ export const WarehouseMaintenanceStockPanel = ({
               </div>
               <div>
                 <label className={labelClass}>Naziv artikla</label>
-                <input
+                <input aria-label="Naziv artikla"
                   className={inputClass}
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
@@ -188,7 +188,7 @@ export const WarehouseMaintenanceStockPanel = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>Količina</label>
-                  <input
+                  <input aria-label="Količina"
                     type="number"
                     min={1}
                     className={inputClass}
@@ -198,7 +198,7 @@ export const WarehouseMaintenanceStockPanel = ({
                 </div>
                 <div>
                   <label className={labelClass}>Datum prijema</label>
-                  <input
+                  <input aria-label="Datum prijema"
                     type="date"
                     className={inputClass}
                     value={entryDate}

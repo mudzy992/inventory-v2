@@ -1,9 +1,19 @@
-export const inputClass =
-  'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500';
+/**
+ * Shared form control classes built on Evidens Surface tokens.
+ * Keyboard focus is guaranteed by the global `:focus-visible` outline; here we
+ * only add a soft brand ring and a visible border on focus, never remove the
+ * outline (no outline reset).
+ */
+const base =
+  'w-full rounded-[var(--radius-control)] border border-line bg-panel px-3 py-2 text-sm text-ink ' +
+  'placeholder:text-ink-subtle transition-colors hover:border-line-strong ' +
+  'focus:border-brand focus:ring-2 focus:ring-brand/20 ' +
+  'disabled:cursor-not-allowed disabled:bg-subtle disabled:text-ink-subtle';
 
-export const selectClass =
-  'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500';
-
-export const labelClass = 'block text-xs font-medium text-gray-600 mb-1';
-
-export const cardClass = 'bg-white rounded-xl border border-gray-200 shadow-sm';
+export const inputClass = `${base} min-h-10`;
+export const selectClass = `${base} min-h-10 appearance-none pr-8`;
+export const textareaClass = `${base} min-h-24 resize-y`;
+export const labelClass = 'mb-1.5 block text-xs font-semibold text-ink-muted';
+export const cardClass =
+  'rounded-[var(--radius-surface)] border border-line bg-panel shadow-surface';
+export const fieldErrorClass = 'mt-1 text-xs font-medium text-danger-ink';
