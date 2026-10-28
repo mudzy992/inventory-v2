@@ -51,6 +51,7 @@ export const REQUIRED_DOCS = [
   'docs/public-qr-privacy.md',
   'docs/upload-read-policy.md',
   'docs/transfer-document-security.md',
+  'docs/module-b-print-qr.md',
   'docs/queue-recovery.md',
   'docs/performance-budgets.md',
   'docs/backend-code-audit-2026-10-27.md',
@@ -515,6 +516,15 @@ export function checkRepositoryPolicy(root) {
   );
 
   const missingDocs = REQUIRED_DOCS.filter((relative) => !existsSync(join(root, relative)));
+  // Module B document-worker readiness check (BM-B6)
+  const documentWorkerDockerfile = join(root, 'document-worker', 'Dockerfile');
+  const documentWorkerReady = existsSync(documentWorkerDockerfile) && readFileSync(documentWorkerDockerfile, 'utf8').includes('npm ci');
+  add(
+    result,
+    'repo-document-worker-readiness',
+    documentWorkerReady ? 'pass' : 'fail',
+    documentWorkerReady ? 'document-worker Dockerfile uses npm ci' : 'document-worker Dockerfile missing or does not use npm ci',
+  );
   add(
     result,
     'repo-operator-guides',
