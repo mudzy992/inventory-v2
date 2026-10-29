@@ -6,10 +6,11 @@ alwaysApply: true
 
 # Inventory v2
 
-- Monorepo: `backend/` + `frontend/` only (no mobile).
+- Monorepo: `backend/` + `frontend/` + `mobile/`.
 - Stack: NestJS, TypeScript strict, Prisma 7, PostgreSQL (external server via env; MySQL zadržan kao backup/rollback — vidi migracija-mysql-postgres.md).
 - Frontend: React 19, Vite, Tailwind 4, BS default i18n.
-- Deploy: `evidens.ba101.top`, API prefix `/backend`, Traefik `web` + `websecure` + `le`.
+- Mobile: Expo 58, React Native, Android-only (`top.ba101.evidens`), API `https://api.evidens.ba101.top`.
+- Deploy: `evidens.ba101.top` (web), `api.evidens.ba101.top` (API, bez `/backend` prefiksa).
 - Plan: `.cursor/plans/inventory-v2/` — plan-first for multi-phase work.
 - Matrices: `.cursor/docs/matrices/*/MATRIX.md` — update on logic changes.
 - Settings: novi modul/feature ⇒ registry + enforcement + matrica (vidi `settings-registry.mdc`).

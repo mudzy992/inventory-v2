@@ -1,5 +1,9 @@
 # Settings matrica — CHANGELOG
 
+## 2026-10-29
+
+- `features.mobile_app` (public, default true) — Evidens Android klijent; isključeno prikazuje blocked ekran na startu.
+
 ## 2026-07-02
 
 - `transfer.generation.enabled`, `on_zaduzenje`, `on_razduzenje` → **public** scope (UI forme prenosa i upozorenje bez prenosnice za sve uloge).

@@ -40,7 +40,7 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "eas:android": "bash scripts/eas-android.sh",
     "build:android": "bash scripts/build-android-local.sh",
     "test:parse-qr": "node --experimental-strip-types --no-warnings src/features/scan/parse-qr.spec.ts",

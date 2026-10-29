@@ -39,6 +39,7 @@
 | `features.inventory_count` | true | `inventory-count` |
 | `features.my_equipment` | true | `my-equipment` |
 | `features.qr_scanner` | true | `qr-scanner` |
+| `features.mobile_app` | true | Evidens Android klijent |
 | `features.public_equipment_lookup` | true | Javni QR pregled |
 | `features.maintenance_parts` | true | Skladište održavanje + ugrađeni dijelovi na opremi |
 | `features.moderator_role` | true | Kill-switch delegiranja uloge moderator (BE write guard) |
@@ -106,6 +107,7 @@ Setup wizard postavlja `company.*` i `app.name` preko `SettingsService.upsertVal
 | `features.inventory_count` | `InventoryCountService` (sesije, komiteti, freeze banner, izvještaji) |
 | `features.warehouse_inventory` | `InventoryCountService` (warehouse committees, record/close warehouse lines) |
 | `features.public_equipment_lookup` | `PublicEquipmentService` |
+| `features.mobile_app` | Android klijent (start gate); nema novih write API-ja |
 | `notifications.enabled` | `NotificationsService` |
 | `features.organization` | `OrgUnitsService` |
 | `features.locations` | `LocationsService` |

@@ -20,6 +20,7 @@ export const PUBLIC_FEATURE_DEFAULTS: Record<string, boolean> = {
   'features.inventory_count': true,
   'features.my_equipment': true,
   'features.qr_scanner': true,
+  'features.mobile_app': true,
   'features.public_equipment_lookup': true,
   'features.maintenance_parts': true,
   'features.equipment_catalog': true,

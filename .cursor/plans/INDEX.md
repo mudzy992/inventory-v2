@@ -45,7 +45,13 @@ otvoren · 🗄 specifikacija/plan (implementacija se prati drugdje).
 | `guard_audit_matrice/` (HANDOFF) + `guard_audit_matrice_*.plan.md` | 🟡 kod ✅, staging smoke otvoren |
 | `onboarding_i_qr_public_*` | ✅ |
 
-## E. Frontend / UX / performanse
+## E. Frontend / UX / performanse / mobile
+
+| Plan | Status |
+|------|--------|
+| `mobile-expo/` | 🟡 implementacija Android klijenta |
+
+## F. Frontend / UX / performanse
 
 | Plan | Status |
 |------|--------|

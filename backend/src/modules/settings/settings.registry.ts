@@ -382,6 +382,16 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     group: 'modules',
   }),
   def({
+    key: 'features.mobile_app',
+    scope: 'public',
+    valueType: 'boolean',
+    defaultValue: true,
+    label: 'Mobilna aplikacija',
+    description:
+      'Dozvoljava Evidens Android klijentu da se koristi. Isključeno: mobilna app prikazuje poruku da je klijent onemogućen.',
+    group: 'modules',
+  }),
+  def({
     key: 'features.public_equipment_lookup',
     scope: 'public',
     valueType: 'boolean',

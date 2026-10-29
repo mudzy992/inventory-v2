@@ -12,6 +12,10 @@ export interface SettingUiMetadata {
 }
 
 export const SETTINGS_UI_METADATA: Record<string, SettingUiMetadata> = {
+  'features.mobile_app': {
+    detail:
+      'Samo Android klijent. Isključeno: mobilna app se ne može koristiti. Web i API ostaju nepromijenjeni.',
+  },
   'transfer.generation.enabled': {
     detail:
       'Samo generisanje prenosnica. Isključeno: prenosi opreme i dalje rade bez dokumenata. Za potpuni blok prenosa isključite modul „Zaduženja i prenosi”.',
