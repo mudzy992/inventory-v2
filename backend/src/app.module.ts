@@ -27,6 +27,7 @@ import { MaintenancePartsModule } from './modules/maintenance-parts/maintenance-
 import { EquipmentCatalogModule } from './modules/equipment-catalog/equipment-catalog.module';
 import { EmployeeRelocationModule } from './modules/employee-relocation/employee-relocation.module';
 import { NavModule } from './modules/nav/nav.module';
+import { MailModule } from './modules/mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { QueuesModule } from './queues/bullmq.module';
