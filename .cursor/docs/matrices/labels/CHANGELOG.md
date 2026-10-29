@@ -1,5 +1,8 @@
 # Changelog — labels
 
+## 2026-10-29
+
+- Ispravljena štampa naljepnica iz liste „Sva oprema": modal se više ne puni presjekom čekiranih ID-jeva i trenutno učitane stranice. Svi čekirani komadi se rješavaju redoslijedom selekcije — učitani iz trenutne stranice, a ostali pojedinačno kroz `GET /equipment/:id`. „Odaberi sve" sada dodaje/uklanja samo trenutnu stranicu i ne briše selekciju sa drugih stranica/filtera.
 ## 2026-10-28 (3)
 
 - Audit sadržaja naljepnice prema specifikaciji (QR → naziv opreme → kategorija → serijski → inventurni): naziv opreme je sada `stockLot.productName` na **svim** formatima (prije se na naljepnicama < 26 mm nije štampao — F-20/F-01/F-10/F-40!), dva toggle-a za naziv spojena u jedan (`showEquipmentName`, migracija starih postavki), inventurni broj zaključan kao obavezan (uklonjen toggle, `sanitize` ga forsira na `true`).

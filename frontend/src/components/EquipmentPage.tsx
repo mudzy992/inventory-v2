@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore, useRefreshData } from '../useStore';
 import { updateEquipmentApi } from '../api/data-api';
-import { fetchEquipmentPageApi, fetchEquipmentSummaryApi, exportEquipmentCsvApi, type EquipmentSummary } from '../api/equipment-api';
+import { fetchEquipmentApi, fetchEquipmentPageApi, fetchEquipmentSummaryApi, exportEquipmentCsvApi, type EquipmentSummary } from '../api/equipment-api';
 import { usePaginatedList } from '../hooks/usePaginatedList';
 import { ApiError } from '../api/client';
 import { useToast } from '../contexts/toast-context';
@@ -33,6 +33,7 @@ import {
   InventoryFreezeActionHint,
   useInventoryFreezeActive,
 } from './inventory-count/inventory-freeze-action-hint';
+import { resolveSelectedEquipment } from '../helpers/equipment-selection.util';
 import { useNavigate } from 'react-router-dom';
 import { pageIdToPath } from '../routes/app-routes';
 import { PageTabs } from './ui/page-tabs';
@@ -57,6 +58,8 @@ export function EquipmentPage() {
   const [editing, setEditing] = useState<Equipment | null>(null);
   const [viewItemId, setViewItemId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [labelItems, setLabelItems] = useState<Equipment[]>([]);
+  const [loadingLabels, setLoadingLabels] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const admin = isAdmin();
   const evidenticar = isEvidenticar();
@@ -162,6 +165,39 @@ export function EquipmentPage() {
   const filtered = list.items;
   const search = list.search;
   const setSearch = list.setSearch;
+
+  async function openLabelPrint() {
+    if (selectedIds.size === 0 || loadingLabels) {
+      return;
+    }
+    setLoadingLabels(true);
+    try {
+      const resolvedItems = await resolveSelectedEquipment(
+        selectedIds,
+        filtered,
+        async (id) => {
+          try {
+            return await fetchEquipmentApi(id);
+          } catch {
+            return null;
+          }
+        },
+      );
+      if (resolvedItems.length === 0) {
+        toastError('Odabranu opremu nije moguće učitati za štampu naljepnica.');
+        return;
+      }
+      if (resolvedItems.length < selectedIds.size) {
+        toastError(
+          `Učitano je ${resolvedItems.length} od ${selectedIds.size} odabranih komada opreme. Ostali više nisu dostupni.`,
+        );
+      }
+      setLabelItems(resolvedItems);
+      setShowLabels(true);
+    } finally {
+      setLoadingLabels(false);
+    }
+  }
 
   const selectedCategory = state.categories.find(c => c.id === fCategoryId);
   const isSpecFieldLocked = (field: CategoryField): boolean =>
@@ -273,10 +309,12 @@ export function EquipmentPage() {
             {labelsEnabled && selectedIds.size > 0 && (
               <button
                 type="button"
-                onClick={() => setShowLabels(true)}
-                className="flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                onClick={() => void openLabelPrint()}
+                disabled={loadingLabels}
+                className="flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium disabled:opacity-50"
               >
-                <Printer size={16} /> Štampaj naljepnice ({selectedIds.size})
+                <Printer size={16} />{' '}
+                {loadingLabels ? 'Učitavam naljepnice…' : `Štampaj naljepnice (${selectedIds.size})`}
               </button>
             )}
           </div>
@@ -471,11 +509,15 @@ export function EquipmentPage() {
                       type="checkbox"
                       checked={filtered.length > 0 && filtered.every((eq) => selectedIds.has(eq.id))}
                       onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedIds(new Set(filtered.map((eq) => eq.id)));
-                        } else {
-                          setSelectedIds(new Set());
-                        }
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) {
+                            filtered.forEach((eq) => next.add(eq.id));
+                          } else {
+                            filtered.forEach((eq) => next.delete(eq.id));
+                          }
+                          return next;
+                        });
                       }}
                       aria-label="Odaberi sve"
                     />
@@ -595,9 +637,12 @@ export function EquipmentPage() {
 
       {labelsEnabled && showLabels && (
         <LabelPrintSheet
-          items={filtered.filter((eq) => selectedIds.has(eq.id))}
+          items={labelItems}
           categories={state.categories}
-          onClose={() => setShowLabels(false)}
+          onClose={() => {
+            setShowLabels(false);
+            setLabelItems([]);
+          }}
         />
       )}
 
