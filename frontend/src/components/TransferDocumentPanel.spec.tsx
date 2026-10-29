@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { TransferDocumentPanel } from './TransferDocumentPanel';
 
 // Panel cita efektivne postavke (auth), toast i socket kontekste; u unit
@@ -21,6 +21,22 @@ vi.mock('../contexts/toast-context', () => ({
 vi.mock('../contexts/SocketContext', () => ({
   useNotifications: () => ({ isConnected: false }),
   useDocumentJobUpdates: () => undefined,
+}));
+
+vi.mock('../store', () => ({
+  isAdmin: () => true,
+  isEvidenticar: () => false,
+  isModerator: () => false,
+}));
+
+vi.mock('../api/mail-api', () => ({
+  sendTransferEmailApi: vi.fn(async () => ({
+    id: 'log-1',
+    status: 'sent',
+    to: 'primaoc@firma.ba',
+    subject: 'Prenosnica PR-2026-001',
+    attachment: 'PR-2026-001.pdf',
+  })),
 }));
 
 const mockTransfer = {
@@ -59,5 +75,37 @@ describe('TransferDocumentPanel design contract', () => {
     );
     expect(screen.getByText(/Eksplicitna napomena/)).toBeInTheDocument();
     expect(screen.queryByText(/Napomena iz zapisa prenosnice/)).not.toBeInTheDocument();
+  });
+
+  it('sends the transfer document by email with to/cc/bcc fields', async () => {
+    render(
+      <TransferDocumentPanel
+        transfer={mockTransfer as any}
+        allowSign={false}
+        inventoryMode={false}
+      />,
+    );
+    expect(screen.getByText('Pošalji prenosnicu e-poštom')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('primaoc@firma.ba'), {
+      target: { value: 'primaoc@firma.ba' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('kopija@firma.ba'), {
+      target: { value: 'kopija@firma.ba' },
+    });
+    fireEvent.click(screen.getByText('Pošalji email s prenosnicom'));
+    expect(
+      await screen.findByText(/Email je poslan na primaoc@firma\.ba \(prilog: PR-2026-001\.pdf\)/),
+    ).toBeInTheDocument();
+  });
+
+  it('hides the email section in inventory mode', () => {
+    render(
+      <TransferDocumentPanel
+        transfer={mockTransfer as any}
+        allowSign={false}
+        inventoryMode={true}
+      />,
+    );
+    expect(screen.queryByText('Pošalji prenosnicu e-poštom')).not.toBeInTheDocument();
   });
 });

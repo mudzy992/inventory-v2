@@ -1,7 +1,7 @@
 {
   "version": 1,
   "provider": "postgresql",
-  "schemaSha256": "ff6beccea1343df5d9de98f1a364725ced392ad297982bbe3a9dbfec05be3572",
+  "schemaSha256": "8a25c69d085d58e4b7261bc8326776491df52f591db826b8a7a4f33808c1f69c",
   "migrations": [
     {
       "name": "20260822185741_init_postgres",
@@ -30,6 +30,10 @@
     {
       "name": "20261025210000_add_transfer_docx_generation_state",
       "sha256": "b6a8a00ec52892802f77450ea05501a3c40002fc6389753fb144fc32c8b2da2d"
+    },
+    {
+      "name": "20261029120000_add_mail_module",
+      "sha256": "c7ce0359939f979401d1e58a87f74794fa85e474110664c36d73a20cfc9dde9c"
     }
   ],
   "notes": "Regenerate with `npm run prisma:manifest` AFTER adding a reviewed SQL migration. CI (`test:integration:migration-drift`) rejects rewritten migration files, unmanifested migrations and schema.prisma changes without a manifest update."

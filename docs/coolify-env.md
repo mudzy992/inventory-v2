@@ -34,6 +34,10 @@ SETUP_TOKEN=<min-16-znakova>
 
 # --- Auth ---
 JWT_SECRET=<min-32-znaka-generisati-novo>
+# Opciono: poseban ključ za šifrovanje SMTP lozinke u bazi (AES-256-GCM).
+# Ako nije postavljen, ključ se derivira iz JWT_SECRET (rotacija JWT_SECRET-a
+# tada zahtijeva ponovni unos SMTP lozinke u Postavke → E-pošta).
+MAIL_CONFIG_SECRET=<min-32-znaka-generisati-novo>
 JWT_ACCESS_TTL=15m
 JWT_REFRESH_TTL=7d
 

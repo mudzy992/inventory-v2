@@ -66,6 +66,7 @@ import { UuidParamPipe } from './common/pipes/uuid-param.pipe';
     TransfersModule,
     UploadsModule,
     NotificationsModule,
+    MailModule,
   ],
   providers: [{ provide: APP_PIPE, useClass: UuidParamPipe }],
 })

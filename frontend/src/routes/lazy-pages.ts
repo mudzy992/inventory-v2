@@ -35,6 +35,10 @@ export const LazyMyEquipmentPage = lazyPage(() => PAGE_LOADERS['my-equipment']()
 export const LazyQRScannerPage = lazyPage(() => PAGE_LOADERS['qr-scanner'](), 'QRScannerPage');
 export const LazyUserManagementPage = lazyPage(() => PAGE_LOADERS['user-management'](), 'UserManagementPage');
 export const LazySettingsPage = lazyPage(() => PAGE_LOADERS.settings(), 'SettingsPage');
+export const LazyMailSettingsPage = lazyPage(
+  () => import('../components/settings/mail-settings-page'),
+  'MailSettingsPage',
+);
 export const LazyPublicEquipmentPage = lazyPage(
   () => import('../components/public-equipment-page'),
   'PublicEquipmentPage',

@@ -36,6 +36,7 @@ operativni korak otvoren · ⬜ nije implementirano · 🗄 historijsko (ne dira
 | 18 | Performanse listi (paginacija, prefetch, scope keš) | zajednički utils | liste svih stranica | `list-performance` | 🟡 kod ✅, ručni QA otvoren |
 | 19 | Navigacija po ulozi | `nav` | routes/guards | `roles-access` | ✅ |
 | 20 | Health / metrike / observability | `health` (9+ periodičnih signala) | — | — | ✅ |
+| 21 | E-pošta (SMTP Gmail/O365/custom, template-i, slanje prenosnice s prilogom) | `mail` | MailSettingsPage (`/settings/email`), TransferDocumentPanel | `mail` | ✅ 2026-10-29 |
 
 Sve matrice: 22 modula u [.cursor/docs/matrices/](../.cursor/docs/matrices/INDEX.md)
 (svaki `MATRIX.md` + `CHANGELOG.md`) + [GUARDS_REGISTRY.md](../.cursor/docs/matrices/GUARDS_REGISTRY.md) (636 linija).

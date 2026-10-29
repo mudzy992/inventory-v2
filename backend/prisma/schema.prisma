@@ -98,6 +98,17 @@ enum NotificationOutboxStatus {
   delivered
 }
 
+enum MailProvider {
+  gmail
+  office365
+  custom
+}
+
+enum EmailLogStatus {
+  sent
+  failed
+}
+
 enum NotificationType {
   transfer_pending
   transfer_signed_upload_pending
@@ -1354,6 +1365,63 @@ model NotificationOutbox {
   @@index([status, nextAttemptAt], map: "notification_outbox_status_next_attempt_idx")
   @@index([createdAt])
   @@map("notification_outbox")
+}
+
+model MailConfiguration {
+  id                String       @id @default("default") @db.VarChar(36)
+  enabled           Boolean      @default(false)
+  provider          MailProvider @default(custom)
+  host              String       @default("") @db.VarChar(255)
+  port              Int          @default(587)
+  secure            Boolean      @default(false)
+  username          String       @default("") @db.VarChar(255)
+  passwordEncrypted String?      @db.Text
+  fromEmail         String       @default("") @db.VarChar(255)
+  fromName          String       @default("") @db.VarChar(255)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@map("mail_configurations")
+}
+
+model EmailTemplate {
+  id          String   @id @default(uuid())
+  key         String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(160)
+  description String?  @db.Text
+  subject     String   @db.VarChar(300)
+  bodyHtml    String   @db.Text
+  bodyText    String   @db.Text
+  variables   String   @db.Text
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  logs EmailLog[]
+
+  @@map("email_templates")
+}
+
+model EmailLog {
+  id            String         @id @default(uuid())
+  templateKey   String?        @db.VarChar(80)
+  toAddresses   String         @db.Text
+  ccAddresses   String?        @db.Text
+  bccAddresses  String?        @db.Text
+  subject       String         @db.VarChar(300)
+  status        EmailLogStatus @default(sent)
+  error         String?        @db.Text
+  transferId    String?        @db.VarChar(36)
+  sentByUserId  String?        @db.VarChar(36)
+  templateId    String?
+  createdAt     DateTime       @default(now())
+
+  template EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([transferId])
+  @@index([status])
+  @@map("email_logs")
 }
 
 model SavedFilter {

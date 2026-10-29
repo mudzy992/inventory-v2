@@ -25,6 +25,7 @@ Detaljni guard audit (preconditions, BE/FE status, poruke): [GUARDS_REGISTRY.md]
 | `disposal-commission` | [disposal-commission/MATRIX.md](./disposal-commission/MATRIX.md) | Komisija rashoda, glasanje |
 | `notifications` | [notifications/MATRIX.md](./notifications/MATRIX.md) | In-app notifikacije, realtime |
 | `labels` | [labels/MATRIX.md](./labels/MATRIX.md) | QR / label generisanje |
+| `mail` | [mail/MATRIX.md](./mail/MATRIX.md) | SMTP (Gmail/O365/custom), email template-i, slanje prenosnice |
 | `list-performance` | [list-performance/MATRIX.md](./list-performance/MATRIX.md) | Paginacija, prefetch |
 | `install-setup` | [install-setup/MATRIX.md](./install-setup/MATRIX.md) | First-run setup |
 | `setup-onboarding` | [setup-onboarding/MATRIX.md](./setup-onboarding/MATRIX.md) | Onboarding / početno podešavanje |

@@ -17,6 +17,7 @@ import {
   LazyOrganizationPage,
   LazyQRScannerPage,
   LazyRegistrarStockPage,
+  LazyMailSettingsPage,
   LazySettingsPage,
   LazyTransfersPage,
   LazyUserManagementPage,
@@ -89,6 +90,10 @@ export const AppRouter = ({ onLogout }: AppRouterProps) => (
           element={<LazyRoutePage pageId={pageId} Page={Page} />}
         />
       ))}
+      <Route
+        path="/settings/email"
+        element={<LazyRoutePage pageId="settings" Page={LazyMailSettingsPage} />}
+      />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   </Layout>

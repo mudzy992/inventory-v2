@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Mail, Search } from 'lucide-react';
 import { fetchPublicSettingsApi } from '../../api/public-settings-api';
 import { fetchPrivateSettingsApi, patchSettingApi, type SettingDto } from '../../api/settings-api';
 import {
@@ -26,6 +27,7 @@ const isVisibleSettingRow = (row: SettingDto): boolean =>
   row.adminEditable || row.display === 'info' || row.display === 'deprecated';
 
 export const SettingsPage = () => {
+  const navigate = useNavigate();
   const { refresh: refreshPublic, patchLocal } = usePublicSettings();
   const { refresh: refreshAdmin } = useAdminSettings();
   const { toastSuccess, toastError } = useToast();
@@ -143,6 +145,19 @@ export const SettingsPage = () => {
         title="Postavke"
         description="Modularna konfiguracija aplikacije. Zavisne opcije se automatski onemogućavaju dok nadređena postavka nije uključena."
       />
+      <div className={`${cardClass} flex flex-wrap items-center justify-between gap-3 border-gray-100 px-4 py-3`}>
+        <div className="text-sm text-gray-600">
+          <p className="font-medium text-gray-800">E-pošta (SMTP)</p>
+          <p>SMTP server (Gmail, Microsoft 365 ili custom), email template-i i dnevnik slanja.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/settings/email')}
+          className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-700"
+        >
+          <Mail size={14} /> Otvori postavke e-pošte
+        </button>
+      </div>
       {isLoading ? (
         <p className="text-sm text-gray-500">Učitavanje...</p>
       ) : (

@@ -1,7 +1,9 @@
-import { CheckCircle, Download, Eye, FileText, RefreshCw, Upload } from 'lucide-react';
+import { CheckCircle, Download, Eye, FileText, Mail, RefreshCw, Send, Upload } from 'lucide-react';
 import type { InventorySessionStatus } from '../api/inventory-api';
 import { apiRequest, fetchAuthenticatedBlob, getApiBaseUrl } from '../api/client';
 import { signTransferApi, uploadTransferDocumentApi } from '../api/data-api';
+import { sendTransferEmailApi } from '../api/mail-api';
+import { validateRecipientFields } from './settings/mail-form.util';
 import type { TransferRecord } from '../types';
 import {
   buildInventoryTransferSteps,
@@ -73,6 +75,11 @@ export const TransferDocumentPanel = ({
   const [hasGeneratedPdf, setHasGeneratedPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [hasRealtimeDocumentUpdate, setHasRealtimeDocumentUpdate] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailCc, setEmailCc] = useState('');
+  const [emailBcc, setEmailBcc] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSentInfo, setEmailSentInfo] = useState<string | null>(null);
   const refreshStatusRef = useRef<() => void>(() => undefined);
   const resolvedNotes = notes ?? transfer.notes ?? null;
   const isDrawer = layout === 'drawer';
@@ -87,7 +94,40 @@ export const TransferDocumentPanel = ({
     setHasGeneratedPdf(false);
     setPdfError(null);
     setHasRealtimeDocumentUpdate(false);
+    setEmailTo('');
+    setEmailCc('');
+    setEmailBcc('');
+    setEmailSentInfo(null);
   }, [transfer.id]);
+
+  const canSendEmail =
+    !inventoryMode &&
+    transfer.status !== 'cancelled' &&
+    (isAdmin() || isEvidenticar() || isModerator());
+
+  const handleSendEmail = async () => {
+    const validation = validateRecipientFields({ to: emailTo, cc: emailCc, bcc: emailBcc });
+    if (validation) {
+      toastError(validation);
+      return;
+    }
+    setSendingEmail(true);
+    try {
+      const result = await sendTransferEmailApi(transfer.id, {
+        to: emailTo,
+        cc: emailCc || undefined,
+        bcc: emailBcc || undefined,
+      });
+      setEmailSentInfo(
+        `Email je poslan na ${result.to} (prilog: ${result.attachment}).`,
+      );
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Greška pri slanju emaila';
+      toastError(message);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   useEffect(() => {
     // Realtime streams are not replayed on reconnect; require a fresh event
@@ -510,11 +550,71 @@ export const TransferDocumentPanel = ({
     </>
   );
 
+  const emailSection = canSendEmail ? (
+    <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+      <div className="flex items-center gap-2 text-xs font-medium text-gray-800">
+        <Mail size={14} /> Pošalji prenosnicu e-poštom
+      </div>
+      <p className="text-[11px] text-gray-500">
+        Primaoci dobijaju obavještenje da je prenos izvršen, uz prenosnicu kao prilog
+        (PDF, a ako konverzija još traje onda DOCX obrazac). Više adresa razdvojite zarezom.
+      </p>
+      <div className="grid gap-2 md:grid-cols-3">
+        <label className="text-[11px] text-gray-600">
+          Za (email) *
+          <input
+            type="text"
+            value={emailTo}
+            onChange={(event) => setEmailTo(event.target.value)}
+            placeholder="primaoc@firma.ba"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+          />
+        </label>
+        <label className="text-[11px] text-gray-600">
+          Cc
+          <input
+            type="text"
+            value={emailCc}
+            onChange={(event) => setEmailCc(event.target.value)}
+            placeholder="kopija@firma.ba"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+          />
+        </label>
+        <label className="text-[11px] text-gray-600">
+          Bcc
+          <input
+            type="text"
+            value={emailBcc}
+            onChange={(event) => setEmailBcc(event.target.value)}
+            placeholder="skrivena-kopija@firma.ba"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void handleSendEmail()}
+          disabled={sendingEmail}
+          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          <Send size={14} /> {sendingEmail ? 'Slanje…' : 'Pošalji email s prenosnicom'}
+        </button>
+        {emailSentInfo ? (
+          <span className="text-[11px] text-green-700" role="status">
+            {emailSentInfo}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  ) : null;
+
   if (isDrawer) {
     return (
       <div className="flex min-h-0 flex-1 flex-col forced-colors:border-2 forced-colors:border-system prefers-contrast:high-contrast prefers-reduced-motion:reduce-motion print:shadow-none print:border-0">
         <div className="shrink-0 border-b border-gray-100 bg-white px-4 py-3 md:px-5">
           <div className="flex flex-wrap items-center gap-2">{actionButtons}</div>
+          {emailSection ? <div className="mt-3">{emailSection}</div> : null}
           {finalizeBlocked ? (
             <p className="mt-2 text-xs text-amber-800">
               Finalizacija nije dostupna dok traje godišnji popis.
@@ -656,6 +756,8 @@ export const TransferDocumentPanel = ({
       ) : null}
 
       <div className="flex flex-wrap gap-2">{actionButtons}</div>
+
+      {emailSection}
 
       {finalizeBlocked ? (
         <p className="text-xs text-amber-800" title="Finalizacija je blokirana dok je sesija popisa aktivna">
