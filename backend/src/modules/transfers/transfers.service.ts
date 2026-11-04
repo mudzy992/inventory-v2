@@ -562,7 +562,7 @@ export class TransfersService {
       });
       await this.notificationsService.enqueueTransferOutboxEventsInTx(
         tx,
-        signed.id,
+        updated.id,
         'signed',
         { notificationsEnabled },
       );
