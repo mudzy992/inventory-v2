@@ -1,3 +1,7 @@
+## 2026-11-04 — Ispravka finalizacije nakon uploada
+
+- Transakcija koristi ID ažurirane prenosnice za outbox notifikacija, umjesto rezultata transakcije prije njegove inicijalizacije. Dodan regresijski test uspješne finalizacije uploadane prenosnice.
+
 ## 2026-07-02 — Manual `{preuzeo}` override na prenosnici
 
 - Novo nullable polje `Transfer.manualPreuzeoLabel` (VARCHAR 255); samo `zaduzenje` / `razduzenje`.

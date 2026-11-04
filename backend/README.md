@@ -66,6 +66,12 @@ Opcionalno: `SETUP_TOKEN` u `.env` — tada POST mora sadržavati `setupToken` u
 | `npm run db:seed:demo` | Demo org/oprema/korisnici |
 | `npm run db:studio` | Prisma Studio |
 
+## Build zavisnosti i sigurnosne nadogradnje
+
+Backend koristi Nest CLI 12 samo kao razvojni/build alat; Nest aplikacija ostaje na verziji 11. Standardni `nest build` i `nest start --watch` koriste TypeScript builder iz `nest-cli.json`. CLI 12 ne uključuje webpack alatni lanac po defaultu; ako se nekad uvede webpack builder, njegove opcionalne zavisnosti i njihovu kompatibilnost treba posebno provjeriti.
+
+`overrides.minimatch` privremeno pinira verziju 11.0.4 zbog GHSA-g3hv-75wg-m249. Ovo je major nadogradnja tranzitivne zavisnosti, pa pri promjeni CLI/ESLint alata treba provjeriti kompatibilnost potrošača i ukloniti override kada svi podrže sigurnu verziju. CI i dalje provodi puni `npm audit --audit-level=low`.
+
 ## Moduli
 
 | Modul | Putanja | Napomena |
